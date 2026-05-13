@@ -4,14 +4,46 @@ This repo is for **people who already have the PC game** and are fine with shell
 
 ## Expected retail zip layout
 
-[`scripts/extract_from_zip.sh`](scripts/extract_from_zip.sh) assumes a **normal Mercenaries 2: World in Flames (PC)** archive. It unzips to a temp dir, then normalizes into `<zip-dir>/output/` (or `--out-dir` / `OUTPUT_DIR`):
+[`scripts/extract_from_zip.sh`](scripts/extract_from_zip.sh) assumes a **normal Mercenaries 2: World in Flames (PC)** archive. It unzips to a temp dir, then normalizes into `<zip-dir>/output/` (or `--out-dir` / `OUTPUT_DIR`).
 
-- **Typical case:** the zip has **one** top-level folder (e.g. the game name); that folder’s **contents** are moved into `output/`, so you do **not** get a duplicate `…/output/Mercenaries 2…/data/`.
-- **Other case:** multiple top-level entries are moved into `output/` as-is.
+**Typical retail zip** (illustrative — folder names and extra dirs vary; the important part is **`data/*.wad`**):
 
-**Hard requirement after normalization:** `output/data/*.wad` must exist. The script aborts with a clear error if `output/data` is missing or contains no `.wad` files.
+```text
+Mercenaries 2 World in Flames.zip
+└── Mercenaries 2 World in Flames/     # single top-level folder (common case)
+    ├── Mercenaries2.exe
+    ├── data/
+    │   ├── shell.wad
+    │   ├── vz.wad
+    │   ├── English.wad
+    │   └── ... (other .wad packs)
+    ├── Precache/
+    ├── SaveGames/
+    └── ... (other install files / dirs)
+```
+
+The script **lifts the contents** of that one folder into `output/`, so you do **not** keep a second nested `Mercenaries 2…/` inside `output/`.
+
+**After unzip + normalize** (what must exist before FFCS runs — same tree if you use `--skip-unzip` on an already-prepared folder):
+
+```text
+<zip-dir>/output/
+├── Mercenaries2.exe
+├── data/
+│   ├── shell.wad
+│   ├── vz.wad
+│   └── ...
+├── Precache/
+└── ...
+```
+
+**Less common zip:** several items at the **root** of the archive (no single wrapper). Those entries are moved into `output/` as-is; you still need **`output/data/*.wad`** when the script finishes that step.
+
+**Hard requirement:** `output/data/*.wad` must exist. The script aborts with a clear error if `output/data` is missing or contains no `.wad` files.
 
 If your distributor’s zip layout differs (e.g. only loose files, or `data` not where the script ends up), unpack or rearrange so **`data/`** sits at **`output/data/`**, or point `--skip-unzip` at a folder you prepared by hand.
+
+Later pipeline steps add **`output/extracted/`** (`ffcs_*`, `batch_*`, `review/`, …); see [`tools/README.md`](tools/README.md).
 
 ## Common issues
 
@@ -70,3 +102,9 @@ Manual load / samples still work via **Manual URLs** and files under **`viewer/p
 ```bash
 pip install -r requirements.txt
 ```
+
+## License
+
+Original **source code and documentation** in this repository are under the **MIT License** — see [LICENSE](LICENSE).
+
+Third-party libraries (Python and npm) and Unreal-related terms are summarized in [NOTICE](NOTICE). This repo does **not** ship Mercenaries 2 game data; bring your own legal copy of the game.

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mercenaries 2 — OBJ preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; background: #111; color: #ddd; }
+    #ui {
+      position: absolute; top: 8px; left: 8px; z-index: 10;
+      background: rgba(30,30,34,.92); padding: 10px 12px; border-radius: 8px;
+      font-size: 13px; max-width: min(420px, 96vw); max-height: 90vh; overflow-y: auto;
+    }
+    #ui label { display: block; margin: 6px 0; }
+    #ui input[type="file"] { max-width: 100%; }
+    #status { margin: 8px 0 0; font-size: 12px; opacity: .85; white-space: pre-wrap; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    a { color: #8cf; }
+    #parts-panel { margin-top: 8px; max-height: 30vh; overflow-y: auto; font-size: 12px; }
+    #parts-panel label { margin: 2px 0; cursor: pointer; display: block; }
+    #parts-panel label:hover { background: rgba(255,255,255,.07); }
+    .preset-btn {
+      display: inline-block; margin: 2px 3px; padding: 3px 8px;
+      background: #335; border: 1px solid #557; border-radius: 4px; cursor: pointer;
+      font-size: 11px; color: #aac;
+    }
+    .preset-btn:hover { background: #446; }
+    .preset-btn.active { background: #558; border-color: #88c; color: #fff; }
+    #lod-controls { margin-top: 8px; padding-top: 6px; border-top: 1px solid #444; }
+    #lod-controls label { display: inline-block; margin: 0 8px 0 0; cursor: pointer; }
+    .section-label { font-weight: 600; margin: 8px 0 4px; font-size: 12px; opacity: .7; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <strong>Mercs2 mesh preview</strong>
+    <label>OBJ file <input type="file" id="objFile" accept=".obj,text/plain" /></label>
+    <label>Albedo / preview texture (PNG/JPG, optional) <input type="file" id="texFile" accept="image/*" /></label>
+    <div id="tex-selector" style="display:none">
+      <div class="section-label">Diffuse textures</div>
+      <select id="tex-select" style="width:100%;font-size:12px;margin-bottom:4px"><option value="">(color only)</option></select>
+      <label style="font-size:11px"><input type="checkbox" id="tex-flip-v" /> Flip V</label>
+    </div>
+    <p id="status">Choose an extracted <code>mesh.obj</code>. Orbit: left-drag rotate, right-drag pan, wheel zoom.</p>
+    <p style="font-size:11px;margin:0">Deep link: <code>?obj=...</code> or <code>?manifest=.../submeshes/index.json</code></p>
+    <div id="damage-controls" style="display:none">
+      <div class="section-label">Switch state</div>
+      <label style="display:inline-block;margin-right:10px;cursor:pointer">
+        <input type="radio" name="damageFilter" value="0" checked /> Side 0
+      </label>
+      <label style="display:inline-block;margin-right:10px;cursor:pointer">
+        <input type="radio" name="damageFilter" value="1" /> Side 1
+      </label>
+      <label style="display:inline-block;cursor:pointer">
+        <input type="radio" name="damageFilter" value="all" /> Both
+      </label>
+    </div>
+    <div id="lod-controls" style="display:none">
+      <div class="section-label">LOD level</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;opacity:.7">High</span>
+        <input type="range" id="lod-slider" min="0" max="0" value="0" style="flex:1" />
+        <span style="font-size:11px;opacity:.7">Low</span>
+        <span id="lod-label" style="font-size:12px;min-width:24px;text-align:center">L0</span>
+      </div>
+    </div>
+    <div id="presets-bar" style="display:none"></div>
+    <div id="parts-panel"></div>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+    import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
+
+    const status = document.getElementById("status");
+    const partsPanel = document.getElementById("parts-panel");
+    const presetsBar = document.getElementById("presets-bar");
+    const lodControls = document.getElementById("lod-controls");
+    const damageControls = document.getElementById("damage-controls");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a1e);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 5000);
+    camera.position.set(2.5, 1.8, 2.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0x9ec8ff, 0x444422, 0.85));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(4, 10, 6);
+    scene.add(dir);
+    scene.add(new THREE.GridHelper(20, 40, 0x444444, 0x333333));
+
+    let root = null;
+    let partGroups = [];
+    let partMeta = [];
+    let hasLodData = false;
+    let availableTextures = [];
+    let activeTexture = null;
+    let manifestBaseDir = "";
+
+    function disposeRoot() {
+      if (!root) return;
+      root.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          const m = o.material;
+          if (Array.isArray(m)) m.forEach((x) => x.dispose?.());
+          else m.dispose?.();
+        }
+      });
+      scene.remove(root);
+      root = null;
+      partGroups = [];
+      partMeta = [];
+      hasLodData = false;
+      hasDamageData = false;
+      currentDamageFilter = "intact";
+      availableTextures = [];
+      activeTexture = null;
+      manifestBaseDir = "";
+      textureNameToUrl = {};
+      perMaterialMode = false;
+      partsPanel.innerHTML = "";
+      presetsBar.style.display = "none";
+      lodControls.style.display = "none";
+      damageControls.style.display = "none";
+      document.getElementById("tex-selector").style.display = "none";
+    }
+
+    function fitCameraToObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z, 0.5);
+      const dist = maxDim * 1.8 / Math.tan((camera.fov * Math.PI) / 360);
+      controls.target.copy(center);
+      camera.position.copy(center.clone().add(new THREE.Vector3(dist * 0.55, dist * 0.35, dist * 0.55)));
+      camera.near = Math.max(0.001, maxDim / 2000);
+      camera.far = Math.max(5000, maxDim * 50);
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+
+    const partColors = [
+      0xc8c8d0, 0xe8a060, 0x60c8e8, 0x80e880, 0xe880c0,
+      0xd0d060, 0x8080e8, 0xe86060, 0x60e8b0, 0xc0a0e0,
+    ];
+
+    const materialColors = {
+      0: 0xc8c8d0, 1: 0xd0a858, 2: 0x404040, 3: 0x60c8e8,
+      4: 0xe8a060, 5: 0x80e880, 8: 0x88bbdd, 9: 0xe880c0,
+      10: 0x88bbdd, 11: 0xb0b0c0, 12: 0xe86060, 13: 0xc0a0e0,
+    };
+
+    function makeMaterial(colorIdx, entry = null, texture = null) {
+      if (entry && entry.transparent) {
+        const opts = {
+          color: texture ? 0xffffff : (materialColors[entry.material_index] || 0x88bbdd),
+          metalness: 0.0,
+          roughness: 0.1,
+          transparent: true,
+          opacity: texture ? 0.5 : 0.25,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        };
+        if (texture) opts.map = texture;
+        return new THREE.MeshPhysicalMaterial(opts);
+      }
+      const matIdx = entry ? entry.material_index : null;
+      const color = texture ? 0xffffff
+        : (matIdx != null && materialColors[matIdx] != null
+          ? materialColors[matIdx]
+          : partColors[colorIdx % partColors.length]);
+      const cat = entry ? classifyPart(entry) : null;
+      const needsOffset = cat === "accessory" || cat === "wheel";
+      const opts = {
+        color,
+        metalness: texture ? 0.05 : 0.15,
+        roughness: texture ? 0.8 : 0.65,
+        side: THREE.DoubleSide,
+        polygonOffset: needsOffset,
+        polygonOffsetFactor: needsOffset ? -1 : 0,
+        polygonOffsetUnits: needsOffset ? -1 : 0,
+      };
+      if (texture) opts.map = texture;
+      return new THREE.MeshStandardMaterial(opts);
+    }
+
+    async function loadObjText(text, colorIdx = 0, entry = null, texture = null) {
+      const loader = new OBJLoader();
+      const obj = loader.parse(text);
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          const hasNormals = !!child.geometry.getAttribute('normal');
+          if (!hasNormals) {
+            child.geometry = BufferGeometryUtils.mergeVertices(child.geometry, 1e-4);
+            child.geometry.computeVertexNormals();
+          }
+          child.material = makeMaterial(colorIdx, entry, texture);
+        }
+      });
+      return obj;
+    }
+
+    async function loadSingleObj(text) {
+      disposeRoot();
+      root = await loadObjText(text, 0);
+      scene.add(root);
+      fitCameraToObject(root);
+      const box = new THREE.Box3().setFromObject(root);
+      const sz = box.getSize(new THREE.Vector3());
+      status.textContent = `Loaded mesh. Size: ${sz.x.toFixed(2)} x ${sz.y.toFixed(2)} x ${sz.z.toFixed(2)}`;
+    }
+
+    function classifyPart(entry) {
+      if (entry.is_vehicle_lod) return "vehicle_lod";
+      if (entry.transparent) return "glass";
+      const bb = entry.decoded_bbox;
+      if (!bb || bb.length < 6) return "other";
+      const ex = bb[3] - bb[0], ey = bb[4] - bb[1], ez = bb[5] - bb[2];
+      const cx = (bb[0] + bb[3]) / 2, cy = (bb[1] + bb[4]) / 2;
+      const maxE = Math.max(ex, ey, ez);
+      const minE = Math.min(ex, ey, ez);
+      if (maxE < 0.9 && minE > 0.15 && Math.abs(ey - ez) < 0.15 && cy < 0.6) return "wheel";
+      if (maxE > 3.0) return "body";
+      if (maxE > 1.5) return "panel";
+      return "accessory";
+    }
+
+    function getDamageState(entry) {
+      return entry.damage_state || "shared";
+    }
+
+    function lodGroupMaxRank() {
+      const maxRank = {};
+      for (const e of partMeta) {
+        const g = e.lod_group;
+        if (g == null) continue;
+        maxRank[g] = Math.max(maxRank[g] || 0, e.lod_rank || 0);
+      }
+      return maxRank;
+    }
+
+    let currentLodRank = 0;
+    let globalMaxRank = 0;
+    let currentDamageFilter = "0";
+    let hasDamageData = false;
+
+    function isPartDefault(entry, lodTargetRank, damageFilter) {
+      const ds = getDamageState(entry);
+
+      if (hasDamageData && damageFilter !== "all" && ds.startsWith("switch_")) {
+        const side = ds.split("_").pop();
+        if (side !== damageFilter) return false;
+      }
+
+      if (!hasLodData) return true;
+
+      const maxRanks = lodGroupMaxRank();
+      const rank = entry.lod_rank ?? 0;
+      const group = entry.lod_group;
+      const groupMax = group != null ? (maxRanks[group] || 0) : 0;
+      if (entry.is_vehicle_lod) {
+        return lodTargetRank >= globalMaxRank && rank === Math.min(lodTargetRank, groupMax);
+      }
+      return rank === Math.min(lodTargetRank, groupMax);
+    }
+
+    function applyFilters() {
+      for (let i = 0; i < partGroups.length; i++) {
+        const entry = partMeta[i] || {};
+        const on = isPartDefault(entry, currentLodRank, currentDamageFilter);
+        partGroups[i].visible = on;
+        const cb = partsPanel.querySelector(`input[data-idx="${i}"]`);
+        if (cb) cb.checked = on;
+      }
+    }
+
+    function applyLodFilter(targetRank) {
+      currentLodRank = targetRank;
+      applyFilters();
+    }
+
+    function buildPartsUI() {
+      partsPanel.innerHTML = "";
+      presetsBar.innerHTML = "";
+      if (partGroups.length < 2) { presetsBar.style.display = "none"; return; }
+      presetsBar.style.display = "block";
+
+      hasLodData = partMeta.some(e => e.lod_group != null && e.lod_rank != null);
+      hasDamageData = partMeta.some(e => e.damage_state && e.damage_state !== "shared");
+      const maxRanks = lodGroupMaxRank();
+      const numLodGroups = Object.values(maxRanks).filter(r => r > 0).length;
+
+      if (hasDamageData) {
+        const dc = document.getElementById("damage-controls");
+        dc.style.display = "block";
+        dc.querySelectorAll("input[name=damageFilter]").forEach(radio => {
+          radio.addEventListener("change", () => {
+            currentDamageFilter = radio.value;
+            applyFilters();
+          });
+        });
+      }
+
+      if (hasLodData && numLodGroups > 0) {
+        lodControls.style.display = "block";
+        globalMaxRank = Math.max(...Object.values(maxRanks), 0);
+        const slider = document.getElementById("lod-slider");
+        const label = document.getElementById("lod-label");
+        slider.max = globalMaxRank;
+        slider.value = 0;
+        label.textContent = "L0";
+        slider.addEventListener("input", () => {
+          const rank = parseInt(slider.value, 10);
+          label.textContent = `L${rank}`;
+          applyLodFilter(rank);
+        });
+      }
+
+      const cats = new Set(partMeta.map(e => classifyPart(e)));
+      const presets = [
+        { label: "Show All", fn: () => setAllParts(true) },
+        { label: "Hide All", fn: () => setAllParts(false) },
+      ];
+      if (cats.has("wheel")) presets.push({ label: "Wheels", fn: () => isolateCategory("wheel") });
+      if (cats.has("body")) presets.push({ label: "Body", fn: () => isolateCategory("body") });
+      if (cats.has("panel")) presets.push({ label: "Panels", fn: () => isolateCategory("panel") });
+      if (cats.has("accessory")) presets.push({ label: "Accessories", fn: () => isolateCategory("accessory") });
+      if (cats.has("glass")) presets.push({ label: "Glass", fn: () => isolateCategory("glass") });
+      if (cats.has("vehicle_lod")) presets.push({ label: "Vehicle LODs", fn: () => isolateCategory("vehicle_lod") });
+
+      const presetsLabel = document.createElement("div");
+      presetsLabel.className = "section-label";
+      presetsLabel.textContent = "Filter by type";
+      presetsBar.appendChild(presetsLabel);
+
+      for (const p of presets) {
+        const btn = document.createElement("span");
+        btn.className = "preset-btn";
+        btn.textContent = p.label;
+        btn.onclick = p.fn;
+        presetsBar.appendChild(btn);
+      }
+
+      const panelLabel = document.createElement("div");
+      panelLabel.className = "section-label";
+      panelLabel.textContent = `Parts (${partGroups.length})`;
+      partsPanel.prepend(panelLabel);
+
+      for (let i = 0; i < partGroups.length; i++) {
+        const entry = partMeta[i] || {};
+        const cat = classifyPart(entry);
+        const rank = entry.lod_rank ?? 0;
+        const groupMax = entry.lod_group != null ? (maxRanks[entry.lod_group] || 0) : 0;
+        const lodTag = groupMax > 0 ? ` L${rank}` : "";
+        const ds = getDamageState(entry);
+        const dsTag = hasDamageData && ds !== "shared" ? ` ${ds}` : "";
+        const lbl = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = true;
+        cb.dataset.idx = i;
+        cb.addEventListener("change", () => {
+          partGroups[i].visible = cb.checked;
+        });
+        const verts = entry.vertices || "?";
+        const faces = entry.faces || "?";
+        lbl.appendChild(cb);
+        const matTag = entry.material_index != null ? ` M${entry.material_index}` : "";
+        lbl.append(` #${i} [${cat}${lodTag}${dsTag}${matTag}] ${verts}v ${faces}f`);
+        if (rank > 0) lbl.style.opacity = "0.55";
+        if (entry.transparent) lbl.style.color = "#88ddbb";
+        else if (ds.startsWith("switch_") && ds.endsWith("_1")) lbl.style.color = "#e8a060";
+        else if (ds.startsWith("switch_") && ds.endsWith("_0")) lbl.style.color = "#80c8e8";
+        partsPanel.appendChild(lbl);
+      }
+
+      applyFilters();
+    }
+
+    function setAllParts(vis) {
+      partGroups.forEach((g, i) => {
+        g.visible = vis;
+        const cb = partsPanel.querySelector(`input[data-idx="${i}"]`);
+        if (cb) {
+          cb.checked = vis;
+        }
+      });
+    }
+
+    function isolateCategory(cat) {
+      partGroups.forEach((g, i) => {
+        const entry = partMeta[i] || {};
+        const c = classifyPart(entry);
+        const show = c === cat;
+        g.visible = show;
+        const cb = partsPanel.querySelector(`input[data-idx="${i}"]`);
+        if (cb) {
+          cb.checked = show;
+        }
+      });
+    }
+
+    let textureNameToUrl = {};
+    let perMaterialMode = false;
+
+    async function loadTextureManifest(baseDir) {
+      const texManifestUrl = baseDir + "textures/manifest.json?_t=" + Date.now();
+      try {
+        const res = await fetch(texManifestUrl);
+        if (!res.ok) return;
+        const data = await res.json();
+        const textures = data.textures || [];
+        const fullRes = {};
+        textureNameToUrl = {};
+        for (const t of textures) {
+          if (!t.png) continue;
+          const ms = t.mip_start_logical || 0;
+          fullRes[t.name] = { w: t.width << ms, h: t.height << ms };
+          textureNameToUrl[t.name] = baseDir + "textures/" + t.png;
+        }
+        availableTextures = textures
+          .filter(t => t.png && !t.name.endsWith("_nm") && !t.name.endsWith("_sm"))
+          .map(t => {
+            const fr = fullRes[t.name] || { w: t.width, h: t.height };
+            const tag = fr.w > t.width ? ` [mip of ${fr.w}x${fr.h}]` : "";
+            return { name: t.name, url: baseDir + "textures/" + t.png,
+                     width: t.width, height: t.height, fullW: fr.w, fullH: fr.h, tag };
+          });
+        if (availableTextures.length === 0) return;
+
+        const sel = document.getElementById("tex-select");
+        sel.innerHTML = '<option value="">(color only)</option>';
+        sel.innerHTML += '<option value="__auto__">Auto (per-material)</option>';
+        for (const t of availableTextures) {
+          const opt = document.createElement("option");
+          opt.value = t.url;
+          opt.textContent = `${t.name} (${t.width}x${t.height}${t.tag})`;
+          sel.appendChild(opt);
+        }
+        document.getElementById("tex-selector").style.display = "block";
+
+        // Auto-select per-material mode if texture_diffuse data exists
+        const hasPerMat = partMeta.some(e => e && e.texture_diffuse);
+        if (hasPerMat) {
+          sel.value = "__auto__";
+          perMaterialMode = true;
+          await applyPerMaterialTextures();
+        }
+      } catch { /* no texture manifest available */ }
+    }
+
+    const _texCache = {};
+    async function loadTexture(url) {
+      const flipV = document.getElementById("tex-flip-v").checked;
+      const cacheKey = url + (flipV ? "_fv" : "");
+      if (_texCache[cacheKey]) return _texCache[cacheKey];
+      const tex = await new THREE.TextureLoader().loadAsync(url);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.flipY = flipV;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      _texCache[cacheKey] = tex;
+      return tex;
+    }
+
+    function applyTextureToAllParts(texture) {
+      perMaterialMode = false;
+      activeTexture = texture;
+      for (let i = 0; i < partGroups.length; i++) {
+        const entry = partMeta[i] || {};
+        partGroups[i].traverse((child) => {
+          if (child.isMesh) {
+            if (child.material) child.material.dispose();
+            child.material = makeMaterial(entry.lod_group ?? i, entry, texture);
+          }
+        });
+      }
+    }
+
+    async function applyPerMaterialTextures() {
+      perMaterialMode = true;
+      activeTexture = null;
+      for (let i = 0; i < partGroups.length; i++) {
+        const entry = partMeta[i] || {};
+        const diffuseName = entry.texture_diffuse;
+        const url = diffuseName ? textureNameToUrl[diffuseName] : null;
+        let tex = null;
+        if (url) {
+          try { tex = await loadTexture(url); } catch { /* skip */ }
+        }
+        partGroups[i].traverse((child) => {
+          if (child.isMesh) {
+            if (child.material) child.material.dispose();
+            child.material = makeMaterial(entry.lod_group ?? i, entry, tex);
+          }
+        });
+      }
+    }
+
+    async function loadManifest(manifestUrl) {
+      disposeRoot();
+      status.textContent = "Loading manifest...";
+
+      const baseUrl = manifestUrl.substring(0, manifestUrl.lastIndexOf("/") + 1);
+      manifestBaseDir = baseUrl.substring(0, baseUrl.lastIndexOf("submeshes/"));
+      const res = await fetch(manifestUrl);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const entries = await res.json();
+
+      root = new THREE.Group();
+      let loaded = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const objUrl = baseUrl + entry.file;
+        try {
+          const objRes = await fetch(objUrl);
+          if (!objRes.ok) continue;
+          const text = await objRes.text();
+          const obj = await loadObjText(text, entry.lod_group ?? i, entry);
+          root.add(obj);
+          partGroups.push(obj);
+          partMeta.push(entry);
+          loaded++;
+        } catch { /* skip broken submeshes */ }
+        if (i % 20 === 0) status.textContent = `Loading submeshes... ${i+1}/${entries.length}`;
+      }
+
+      scene.add(root);
+      fitCameraToObject(root);
+      buildPartsUI();
+
+      await loadTextureManifest(manifestBaseDir);
+      const box = new THREE.Box3().setFromObject(root);
+      const sz = box.getSize(new THREE.Vector3());
+      const lodGroups = new Set(entries.filter(e => e.lod_group != null).map(e => e.lod_group)).size;
+      const intactCount = entries.filter(e => e.damage_state === "intact").length;
+      const damagedCount = entries.filter(e => e.damage_state === "damaged").length;
+      const matIndices = new Set(entries.filter(e => e.material_index != null).map(e => e.material_index)).size;
+      const transparentCount = entries.filter(e => e.transparent).length;
+      const dmgInfo = damagedCount > 0 ? `, ${intactCount} intact / ${damagedCount} damaged` : "";
+      const matInfo = matIndices > 0 ? `, ${matIndices} materials` : "";
+      const trInfo = transparentCount > 0 ? `, ${transparentCount} transparent` : "";
+      status.textContent = `Loaded ${loaded}/${entries.length} submeshes (${lodGroups} LOD groups${dmgInfo}${matInfo}${trInfo}). Size: ${sz.x.toFixed(2)} x ${sz.y.toFixed(2)} x ${sz.z.toFixed(2)}`;
+    }
+
+    document.getElementById("objFile").addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      try { await loadSingleObj(await f.text()); }
+      catch (err) { status.textContent = "Failed to load OBJ: " + err; }
+    });
+
+    document.getElementById("texFile").addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f || !root) return;
+      const url = URL.createObjectURL(f);
+      try {
+        const tex = await new THREE.TextureLoader().loadAsync(url);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.flipY = false;
+        root.traverse((child) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshStandardMaterial({
+              map: tex, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide,
+            });
+          }
+        });
+        status.textContent += "\nTexture applied.";
+      } catch (err) { status.textContent += "\nTexture load failed: " + err; }
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("tex-select").addEventListener("change", async (e) => {
+      const url = e.target.value;
+      if (!root) return;
+      if (!url) {
+        applyTextureToAllParts(null);
+        status.textContent = status.textContent.replace(/\nTexture:.*/, "");
+        return;
+      }
+      if (url === "__auto__") {
+        await applyPerMaterialTextures();
+        status.textContent = status.textContent.replace(/\nTexture:.*/, "") + "\nTexture: per-material (auto)";
+        return;
+      }
+      try {
+        const tex = await loadTexture(url);
+        applyTextureToAllParts(tex);
+        const name = availableTextures.find(t => t.url === url)?.name || url;
+        status.textContent = status.textContent.replace(/\nTexture:.*/, "") + `\nTexture: ${name}`;
+      } catch (err) { status.textContent += `\nTexture load failed: ${err}`; }
+    });
+
+    document.getElementById("tex-flip-v").addEventListener("change", async () => {
+      const sel = document.getElementById("tex-select");
+      const url = sel.value;
+      if (!root) return;
+      for (const k of Object.keys(_texCache)) delete _texCache[k];
+      if (url === "__auto__") {
+        await applyPerMaterialTextures();
+        return;
+      }
+      if (!url) return;
+      try {
+        const tex = await loadTexture(url);
+        applyTextureToAllParts(tex);
+      } catch { /* ignore */ }
+    });
+
+    (async function bootFromQuery() {
+      const q = new URLSearchParams(location.search);
+      const manifestPath = q.get("manifest");
+      const objPath = q.get("obj");
+      const texPath = q.get("tex");
+
+      if (manifestPath) {
+        try { await loadManifest(manifestPath); }
+        catch (err) {
+          status.textContent = "Manifest load failed: " + err +
+            "\nStart `python3 -m http.server` from the repo root.";
+        }
+        return;
+      }
+
+      if (!objPath) return;
+      try {
+        status.textContent = "Fetching " + objPath + " ...";
+        const res = await fetch(objPath);
+        if (!res.ok) throw new Error(res.status + " " + res.statusText);
+        await loadSingleObj(await res.text());
+        if (texPath) {
+          status.textContent += "\nLoading texture " + texPath + " ...";
+          const tex = await new THREE.TextureLoader().loadAsync(texPath);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.flipY = false;
+          root.traverse((child) => {
+            if (child.isMesh) {
+              child.material = new THREE.MeshStandardMaterial({
+                map: tex, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide,
+              });
+            }
+          });
+          status.textContent += "\nTexture applied.";
+        }
+      } catch (err) {
+        status.textContent = "Query load failed: " + err +
+          "\nStart `python3 -m http.server` from the repo root.";
+      }
+    })();
+
+    function tick() {
+      requestAnimationFrame(tick);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    tick();
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

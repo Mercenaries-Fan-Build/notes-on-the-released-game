@@ -1,0 +1,36 @@
+Third-party open-source components
+==================================
+
+This repository includes or depends on third-party software that is not
+covered by the MIT license in the LICENSE file. Game binaries and extracted
+assets are not distributed here.
+
+Python (declared in requirements.txt)
+-------------------------------------
+- numpy — BSD-3-Clause (https://pypi.org/project/numpy/)
+- Pillow — permissive license as published on PyPI (see project metadata)
+- pygltflib — MIT License (https://pypi.org/project/pygltflib/)
+
+JavaScript (declared in viewer/package.json)
+---------------------------------------------
+After `npm install`, dependencies live under viewer/node_modules/. Primary
+direct dependencies:
+- three — MIT License
+- vite — MIT License
+
+Transitive npm packages use their own licenses; see viewer/package-lock.json
+and each package’s package.json under node_modules/ for SPDX or license text.
+
+Unreal Engine content
+---------------------
+Files under UnrealEngineGame/ that target or accompany Unreal Engine are
+subject to Epic Games’ Unreal Engine terms when used with Unreal products.
+They are not relicensed as MIT by this repository.
+
+AI-assisted development
+-----------------------
+This repository was produced with the assistance of AI coding tools (for
+example IDE-integrated assistants and model-based code generation). Human
+authors remain responsible for review, correctness of format notes and
+tooling behavior, and compliance with applicable licenses and game-asset
+terms of use.
