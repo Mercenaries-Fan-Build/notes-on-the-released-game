@@ -1,0 +1,13 @@
+node_modules/
+viewer/node_modules/
+viewer/dist/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+Mercenaries 2 World in Flames.zip
+output/
+Mercenaries 2 World in Flames.iso
+SaveGames/
+Model Archives/
+UnrealEngineGame/
