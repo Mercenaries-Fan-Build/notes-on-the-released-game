@@ -57,9 +57,11 @@ These are recurring pitfalls from driving the pipeline, not an exhaustive FAQ.
 
 ## Quick start
 
-From **only** `Mercenaries 2 World in Flames.zip` (creates `<directory-of-zip>/output/` with full extraction by default: **all** `data/*.wad` packs batch-decompressed, then stage 2 → **`extracted/review/`**):
+From **only** `Mercenaries 2 World in Flames.zip` (creates `<directory-of-zip>/output/` with full extraction by default: **all** `data/*.wad` packs batch-decompressed, then stage 2 → **`extracted/review/`**). For **full-resolution textures** (cross-block mip streaming), prefer **`make extract-all ZIP=… OUTPUT=…`**, which builds **`extracted/texture_index.json`** before stage 2; calling **`./scripts/extract_from_zip.sh`** directly still runs stage 2 but **without** that index unless you build it yourself (`make build-texture-index`) and set **`TEXTURE_INDEX`**.
 
 ```bash
+make extract-all ZIP="/path/to/Mercenaries 2 World in Flames.zip" OUTPUT=./output
+# or (same tree, but stage 2 alone will not have a texture index unless you set it up):
 ./scripts/extract_from_zip.sh "/path/to/Mercenaries 2 World in Flames.zip"
 ```
 
