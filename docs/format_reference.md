@@ -167,6 +167,8 @@ Typical path: `<pipeline>/extracted/review/<batch_pack>/<stem>/`
 | `dialog_fragments.json` | `dialog_extractor.py` | Bracket / Generic / UTF-16 key harvest |
 | `level_hints.json` | `level_extractor.py` (optional) | `matrix_candidates`, optional `precache_files` |
 
+Pipeline (optional): **`<pipeline-root>/animations_work/<slug>/mesh_skin.json`** — bone-name harvest + empty skin placeholder from [`tools/hk_skeleton.py`](../tools/hk_skeleton.py) during [`tools/mercs2_anim_pipeline.py`](../tools/mercs2_anim_pipeline.py).
+
 Global: **`texture_index.json`** (repo-relative default under `extracted/`) from `texture_streaming_index.py` — drives `--texture-index` in stage 2 when **`TEXTURE_INDEX`** is set.
 
 ---
@@ -176,3 +178,23 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 - [`tools/README.md`](../tools/README.md) — commands, pipeline, artifact index, env vars.
 - [`docs/game_extractor_notes.md`](game_extractor_notes.md), [`docs/quickbms_notes.md`](quickbms_notes.md) — external tooling workflows.
 - [`UnrealEngineGame/README.md`](../UnrealEngineGame/README.md) — Maracaibo demo list (`maracaibo_asset_list.json`).
+
+---
+
+## 11. Anim group block + Havok 5.5 packfile (skeletal pipeline)
+
+**Carving:** [`tools/animgroup_extractor.py`](../tools/animgroup_extractor.py) — each ``output/extracted/batch_*/blocks/*animgroup*.block.bin`` begins with a **record table** (16 bytes per record: ``u32 checksum``, ``u32 magic`` = ``0x18166555``, ``u32 reserved``, ``u32 record_size``), followed by concatenated **UCFX** wrappers. Inside each wrapper the Havok slice starts at the ASCII version token ``Havok-5.5.0-r1``; the tool writes standalone ``record_NNNN.hkx`` bytes plus ``records.json``.
+
+**Packfile:** [`tools/hk_packfile.py`](../tools/hk_packfile.py) parses the three 48-byte section headers (``__classnames__``, ``__types__``, ``__data__``), the hashed classname table, and the **four chained fixup streams** inside ``__data__`` (local → global → virtual → finish, each terminated by ``0xFFFFFFFF`` dword pairs). **Local** fixups are applied to build ``data_patched.bin``. **Global** fixups are optional (``--apply-global``) while pointer semantics are validated against external dumps (hkxcmd). ``packfile.json`` includes ``types_preview`` (hex head of ``__types__``), fixup counts, and a coarse ``data_class_hits_sample`` (u32 hits against classname hashes).
+
+---
+
+## 12. Havok 5.5 skeletal animation compression (Mercenaries 2)
+
+| Class | Module | Status in repo |
+|--------|--------|----------------|
+| ``hkaInterleavedUncompressedAnimation`` | [`tools/hk_anim/interleaved.py`](../tools/hk_anim/interleaved.py) | **Implemented:** ``numTransformTracks`` × ``numFrames`` × 40-byte ``hkQsTransform`` + optional float tracks. |
+| ``hkaDeltaCompressedSkeletalAnimation`` | [`tools/hk_anim/delta.py`](../tools/hk_anim/delta.py) | **Header/meta** (duration, track count, hints); **bitstream** reconstruction still TODO (see HKLib delta path). |
+| ``hkaWaveletSkeletalAnimation`` | [`tools/hk_anim/wavelet.py`](../tools/hk_anim/wavelet.py) | **Placeholder** sinusoidal motion for pipeline validation; coefficient inverse-lifting TODO — debug hook stub in [`tools/hk_anim/_wavelet_debug.py`](../tools/hk_anim/_wavelet_debug.py). |
+
+**Emit / import:** [`tools/mercs2_anim_pipeline.py`](../tools/mercs2_anim_pipeline.py) → [`tools/anim_gltf_export.py`](../tools/anim_gltf_export.py) (``pygltflib`` skeletal **.glb**). UE5 bundle copies into ``ue5_import/animations/`` and lists clips in ``metadata/manifest.json`` (``tools/ue5_export.py``).

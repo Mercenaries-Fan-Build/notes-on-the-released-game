@@ -5,12 +5,13 @@
 # Usage:
 #   ./scripts/stage2_parallel.sh /path/to/pipeline-root [jobs]
 #
-# jobs defaults to max(1, hw.ncpu - 4). Pass a second argument to override (e.g. 8).
+# jobs defaults to min(48, hw.ncpu) when unset (full machine use; cap avoids RAM thrash on huge core counts).
+# Pass a second argument to override (e.g. 8). Set STAGE2_JOBS via Makefile / env for the same effect.
 #
 # Env (same as stage2_review_extract.sh; PYTHON defaults to .venv if present):
-#   PYTHON, MESH_FORMAT, TEXTURE_PNG, TEXTURE_INDEX, HAVOK_CONVEX_OBJ,
+#   PYTHON, MESH_FORMAT, TEXTURE_PNG, TEXTURE_INDEX (Makefile review-all sets this automatically), HAVOK_CONVEX_OBJ,
 #   STAGE2_SKIP_UCFX, STAGE2_SKIP_MESH, STAGE2_SKIP_TEX, STAGE2_SKIP_HAVOK,
-#   STAGE2_DIALOG, STAGE2_LEVEL, STAGE2_EMBEDDED_AUDIO, STAGE2_GLTF
+#   STAGE2_DIALOG, STAGE2_LEVEL, STAGE2_EMBEDDED_AUDIO, STAGE2_GLTF, STAGE2_ANIM
 #
 
 set -uo pipefail
@@ -22,11 +23,8 @@ _ncpu="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 8)"
 if [[ -n "${2:-}" ]]; then
   JOBS="$2"
 else
-  if [[ "$_ncpu" -gt 4 ]]; then
-    JOBS=$((_ncpu - 4))
-  else
-    JOBS=1
-  fi
+  JOBS="$_ncpu"
+  [[ "$JOBS" -gt 48 ]] && JOBS=48
 fi
 [[ "$JOBS" -lt 1 ]] && JOBS=1
 [[ -d "$PIPELINE_ROOT" ]] || die "not a directory: $PIPELINE_ROOT"
@@ -49,8 +47,9 @@ GLTF="$REPO_ROOT/tools/gltf_exporter.py"
 DIALOG="$REPO_ROOT/tools/dialog_extractor.py"
 LEVEL="$REPO_ROOT/tools/level_extractor.py"
 PWS="$REPO_ROOT/tools/pws_extractor.py"
+ANIM="$REPO_ROOT/tools/mercs2_anim_pipeline.py"
 
-for t in "$UCFX" "$MESH" "$TEX" "$HAV" "$GLTF" "$DIALOG" "$LEVEL" "$PWS"; do
+for t in "$UCFX" "$MESH" "$TEX" "$HAV" "$GLTF" "$DIALOG" "$LEVEL" "$PWS" "$ANIM"; do
   [[ -f "$t" ]] || die "missing $t"
 done
 
@@ -171,6 +170,13 @@ export STAGE2_EMBEDDED_AUDIO="${STAGE2_EMBEDDED_AUDIO:-0}"
 export STAGE2_GLTF="${STAGE2_GLTF:-1}"
 
 printf '%s\n' "${bins[@]}" | xargs -P "$JOBS" -I {} bash -c 'process_one "$@"' _ {}
+
+if [[ "${STAGE2_ANIM:-0}" == "1" ]]; then
+  echo "STAGE2_ANIM=1 → mercs2_anim_pipeline.py --pipeline-root $PIPELINE_ROOT" | tee -a "$LOG"
+  "$PYTHON" "$ANIM" --pipeline-root "$PIPELINE_ROOT" --filter all >>"$LOG" 2>&1 || {
+    echo "warning: mercs2_anim_pipeline failed (see $LOG)" >&2
+  }
+fi
 
 INDEX="$REVIEW/stage2_parallel_index_${RUN_ID}.txt"
 {

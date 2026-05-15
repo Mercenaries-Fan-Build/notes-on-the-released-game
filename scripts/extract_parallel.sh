@@ -6,15 +6,23 @@
 # Usage:
 #   ./scripts/extract_parallel.sh output/extracted/ffcs_vz [JOBS]
 #
-# JOBS defaults to (ncpu - 2) to leave headroom. Set SKIP_EXISTING=1 to skip done blocks.
+# JOBS defaults to min(32, CPU count). Set SKIP_EXISTING=1 to skip done blocks.
+# Prefer extract_all_from_paths.sh (default bulk sges: one Python, one mmap) for
+# full packs; this script is a thin parallel wrapper for ad-hoc runs.
 
 set -uo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
 
 FFCS_DIR="${1:?usage: $0 <ffcs-dir> [jobs]}"
-JOBS="${2:-$(( $(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4) - 2 ))}"
-[[ "$JOBS" -lt 1 ]] && JOBS=1
+_ncpu="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
+if [[ -n "${2:-}" ]]; then
+  JOBS="$2"
+else
+  JOBS="$_ncpu"
+  [[ "$JOBS" -gt 32 ]] && JOBS=32
+  [[ "$JOBS" -lt 1 ]] && JOBS=1
+fi
 
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 
@@ -60,7 +68,8 @@ echo "Log: $LOG"
 extract_one() {
     local idx="$1" line="$2"
     local safe
-    safe=$(echo "$line" | tr '\\' '/' | tr -c 'A-Za-z0-9._-' '_')
+    # Must match scripts/extract_all_from_paths.sh filename sanitization.
+    safe=$(echo "$line" | tr '\\' '/' | sed 's|^\./||; s|/|__|g' | sed 's|[^A-Za-z0-9._-]|_|g')
     local out_bin="$BLOCK_DIR/$(printf '%05d' "$idx")_${safe}.bin"
 
     if [[ "$SKIP_EXISTING" == "1" ]] && [[ -f "$out_bin" ]]; then

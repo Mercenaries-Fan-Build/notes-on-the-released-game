@@ -11,7 +11,7 @@
 #     data/*.wad          (game files — single-root zips are merged here, no extra game-named folder)
 #     extracted/ffcs_*    (FFCS slices)
 #     extracted/batch_*   (batch sges outputs when enabled)
-#     extracted/review/   (stage 2: ucfx / mesh / textures / Havok — stage2_parallel.sh by default)
+#     extracted/review/   (stage 2: ucfx / mesh / textures / Havok — Makefile runs build-texture-index then stage2_parallel.sh)
 #
 # Override destination with --out-dir PATH or env OUTPUT_DIR (absolute or relative paths OK).
 #
@@ -23,11 +23,13 @@
 #   --decompress-all    Same as default (full); kept for compatibility
 #   --decompress-vz     Only applies with --quick: also batch-decompress vz.wad
 #   --no-decompress     Only FFCS extraction; skip sges batch step
+#   --no-stage2         Skip stage 2 here (Makefile extract-all runs build-texture-index + review-all after)
 #   --vz-max N          Cap vz batch size (full mode or quick + --decompress-vz)
 #
 # Env:
 #   OUTPUT_DIR          Same as --out-dir if set (default root is <zip-directory>/output)
-#   PYTHON  SKIP_EXISTING  WITH_UCFX  START  MAX  ALLOW_PARTIAL  (passed through to extract_all_from_paths.sh)
+#   PYTHON  SKIP_EXISTING  WITH_UCFX  START  MAX  ALLOW_PARTIAL  EXTRACT_JOBS  (passed through to extract_all_from_paths.sh)
+#           EXTRACT_JOBS: unset/0 = bulk sges (one Python, one mmap); 1 = one subprocess per block; N>1 = bulk (N ignored)
 #           Default: repo .venv/bin/python if present and PYTHON unset, else python3
 #   STAGE2_SEQUENTIAL=1   Run stage 2 one blob at a time (stage2_review_extract.sh) instead of parallel
 #   STAGE2_JOBS=N         Second argument to stage2_parallel.sh (worker count); default is CPU-based

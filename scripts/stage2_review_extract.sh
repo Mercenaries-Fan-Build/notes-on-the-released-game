@@ -25,12 +25,13 @@
 #   STAGE2_SKIP_TEX     1 to skip textures
 #   STAGE2_SKIP_HAVOK   1 to skip havok slices
 #   TEXTURE_PNG         1 (default) pass --png to texture_extractor (needs ffmpeg for PNG)
-#   TEXTURE_INDEX       path to texture_index.json for cross-block mip assembly
+#   TEXTURE_INDEX       path to texture_index.json for cross-block mip assembly (Makefile sets this for review-all)
 #   STAGE2_DIALOG       1 (default) run dialog_extractor per blob
 #   STAGE2_LEVEL        0 (default) run level_extractor per blob (adds JSON hints)
 #   HAVOK_CONVEX_OBJ    1 (default) pass --emit-convex-obj to havok_extractor
 #   STAGE2_EMBEDDED_AUDIO 0 (default) run pws_extractor on each blob for RIFF/Ogg slices (slow)
 #   STAGE2_GLTF         1 (default) emit mesh_scene.gltf (+ .bin) after mesh/textures; 0 to skip (needs pygltflib)
+#   STAGE2_ANIM         0 (default) set to 1 to run mercs2_anim_pipeline.py after all blobs → <pipeline-root>/animations
 #
 
 set -uo pipefail
@@ -55,8 +56,9 @@ GLTF="$REPO_ROOT/tools/gltf_exporter.py"
 DIALOG="$REPO_ROOT/tools/dialog_extractor.py"
 LEVEL="$REPO_ROOT/tools/level_extractor.py"
 PWS="$REPO_ROOT/tools/pws_extractor.py"
+ANIM="$REPO_ROOT/tools/mercs2_anim_pipeline.py"
 
-for t in "$UCFX" "$MESH" "$TEX" "$HAV" "$GLTF" "$DIALOG" "$LEVEL" "$PWS"; do
+for t in "$UCFX" "$MESH" "$TEX" "$HAV" "$GLTF" "$DIALOG" "$LEVEL" "$PWS" "$ANIM"; do
   [[ -f "$t" ]] || die "missing $t"
 done
 
@@ -171,6 +173,13 @@ for binf in "${bins[@]}"; do
     fail=$((fail + 1))
   fi
 done
+
+if [[ "${STAGE2_ANIM:-0}" == "1" ]]; then
+  echo "STAGE2_ANIM=1 → mercs2_anim_pipeline.py --pipeline-root $PIPELINE_ROOT" | tee -a "$LOG"
+  "$PYTHON" "$ANIM" --pipeline-root "$PIPELINE_ROOT" --filter all >>"$LOG" 2>&1 || {
+    echo "warning: mercs2_anim_pipeline failed (see $LOG)" >&2
+  }
+fi
 
 INDEX="$REVIEW/stage2_index_${RUN_ID}.txt"
 {
