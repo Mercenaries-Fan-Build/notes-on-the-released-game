@@ -251,6 +251,84 @@ run_import()
 '''
 
 
+IMPORT_SKELETAL_SCRIPT = '''# Mercs2 — skeletal GLBs from ``mercs2_anim_pipeline`` via Interchange (UE 5.x).
+# Editor Preferences → Python: enable plugins; set BUNDLE_ROOT to this ``ue5_import`` folder.
+import json
+import os
+import unreal
+
+BUNDLE_ROOT = r"__BUNDLE_ROOT__"
+DEST_ANIM = "/Game/Mercs2/Animations"
+
+
+def _ensure_dest():
+    if not unreal.EditorAssetLibrary.does_directory_exist(DEST_ANIM):
+        unreal.EditorAssetLibrary.make_directory(DEST_ANIM)
+
+
+def _import_glb(src, dest, name):
+    try:
+        ic = unreal.InterchangeManager.get_interchange_manager_scripted()
+        source = unreal.InterchangeSourceData()
+        source.set_filename(src)
+        params = unreal.ImportAssetParameters()
+        params.is_automated = True
+        params.destination_name = name
+        params.replace_existing = True
+        result = ic.import_asset(dest, source, params)
+        if result:
+            return True
+    except Exception as exc:
+        unreal.log_warning(f"Interchange failed for {name} ({exc}), trying AssetImportTask")
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", src)
+    task.set_editor_property("destination_path", dest)
+    task.set_editor_property("destination_name", name)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("automated", True)
+    task.set_editor_property("save", True)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    return bool(task.get_objects())
+
+
+def run_import_skeletal(limit=None):
+    man_path = os.path.join(BUNDLE_ROOT, "metadata", "manifest.json")
+    if not os.path.isfile(man_path):
+        unreal.log_warning(f"import_skeletal_assets: missing {man_path}")
+        return
+    with open(man_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    sets = data.get("animation_sets") or data.get("skeletal_meshes") or []
+    if not sets:
+        unreal.log("import_skeletal_assets: no animation_sets in manifest.json")
+        return
+    _ensure_dest()
+    n = 0
+    for entry in sets:
+        if limit is not None and n >= limit:
+            break
+        rel = entry.get("animations_glb") or entry.get("glb")
+        if not rel:
+            continue
+        src = os.path.normpath(os.path.join(BUNDLE_ROOT, rel.replace("/", os.sep)))
+        if not os.path.isfile(src):
+            unreal.log_warning("missing glb: " + src)
+            continue
+        slug = entry.get("slug") or os.path.splitext(os.path.basename(src))[0]
+        dest = f"{DEST_ANIM}/{slug}"
+        if not unreal.EditorAssetLibrary.does_directory_exist(dest):
+            unreal.EditorAssetLibrary.make_directory(dest)
+        if _import_glb(src, dest, slug):
+            unreal.log("imported skeletal glb: " + slug)
+            n += 1
+        else:
+            unreal.log_warning("failed skeletal glb: " + slug)
+
+
+run_import_skeletal()
+'''
+
+
 def collect_review(pipeline_root: Path) -> list[dict[str, object]]:
     review = pipeline_root / "extracted" / "review"
     if not review.is_dir():
@@ -268,8 +346,10 @@ def collect_review(pipeline_root: Path) -> list[dict[str, object]]:
             stem_path = stem_dir
             obj = next(stem_dir.glob("mesh.obj"), None)
             gltf = next(stem_dir.glob("mesh.gltf"), None)
+            scene_glb = stem_dir / "mesh_scene.glb"
             scene_gltf = stem_dir / "mesh_scene.gltf"
             has_scene = scene_gltf.is_file()
+            has_glb = scene_glb.is_file()
             dds = None
             td = stem_dir / "textures"
             if td.is_dir():
@@ -309,6 +389,7 @@ def collect_review(pipeline_root: Path) -> list[dict[str, object]]:
                     "stem_path": str(stem_path.resolve()),
                     "mesh_obj": str(obj) if obj else None,
                     "mesh_gltf": str(gltf) if gltf else None,
+                    "mesh_scene_glb": str(scene_glb) if has_glb else None,
                     "mesh_scene_gltf": str(scene_gltf) if has_scene else None,
                     "texture_sample": str(dds) if dds else None,
                     "havok_manifest": str(hav) if hav.is_file() else None,
@@ -343,8 +424,15 @@ def _write_bundled(
         stem_path = Path(str(a["stem_path"]))
         per: dict[str, object] = {"id": aid, "pack": a["pack"], "stem": a["stem"]}
 
+        glb = a.get("mesh_scene_glb")
+        if glb:
+            gp = Path(str(glb))
+            if gp.is_file():
+                shutil.copy2(gp, adir / "mesh_scene.glb")
+                per["mesh_scene_glb"] = "mesh_scene.glb"
+
         scene = a.get("mesh_scene_gltf")
-        if scene:
+        if scene and not glb:
             sp = Path(str(scene))
             if sp.is_file():
                 shutil.copy2(sp, adir / "mesh_scene.gltf")
@@ -393,6 +481,8 @@ def _write_bundled(
         master_assets.append(
             {
                 "id": aid,
+                "pack": a["pack"],
+                "stem": a["stem"],
                 "bundle_dir": str((assets_root / aid).relative_to(ue)),
                 "manifest": "manifest.json",
                 "ue_folder": per["ue_folder"],
@@ -400,6 +490,58 @@ def _write_bundled(
         )
 
     return master_assets
+
+
+def bundle_skeletal_animations(pipeline_root: Path, ue: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Copy ``<pipeline-root>/animations/<slug>/<slug>.glb`` into ``<ue>/animations/<slug>.glb`` and
+    build manifest rows for ``skeletal_meshes`` / ``animation_sets``.
+    """
+    anim_root = pipeline_root / "animations"
+    skeletal_meshes: list[dict[str, Any]] = []
+    animation_sets: list[dict[str, Any]] = []
+    if not anim_root.is_dir():
+        return skeletal_meshes, animation_sets
+    dest = ue / "animations"
+    dest.mkdir(parents=True, exist_ok=True)
+    work_root = pipeline_root / "animations_work"
+    for sub in sorted(anim_root.iterdir()):
+        if not sub.is_dir():
+            continue
+        slug = sub.name
+        glb = sub / f"{slug}.glb"
+        if not glb.is_file():
+            continue
+        rel_glb = f"animations/{slug}.glb"
+        shutil.copy2(glb, dest / f"{slug}.glb")
+        clip_count: int | None = None
+        man_w = work_root / slug / "manifest.json"
+        if man_w.is_file():
+            try:
+                mj: Any = json.loads(man_w.read_text(encoding="utf-8"))
+                if isinstance(mj, dict) and mj.get("clips") is not None:
+                    clip_count = int(mj["clips"])
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                pass
+        bone_count: int | None = None
+        mesh_skin = work_root / slug / "mesh_skin.json"
+        if mesh_skin.is_file():
+            try:
+                sj: Any = json.loads(mesh_skin.read_text(encoding="utf-8"))
+                if isinstance(sj, dict) and sj.get("bone_count") is not None:
+                    bone_count = int(sj["bone_count"])
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                pass
+        row = {
+            "slug": slug,
+            "glb": rel_glb,
+            "animations_glb": rel_glb,
+            "clip_count": clip_count,
+            "bone_count": bone_count,
+        }
+        skeletal_meshes.append(dict(row))
+        animation_sets.append(dict(row))
+    return skeletal_meshes, animation_sets
 
 
 def _write_flat(
@@ -484,6 +626,12 @@ def main() -> int:
         default="bundled",
         help="bundled: self-contained folder per asset under assets/<id>/ (default). flat: legacy layout.",
     )
+    ap.add_argument(
+        "--ue-project",
+        type=Path,
+        default=None,
+        help="Path to UE project root (e.g. UnrealEngineGame/). Import scripts go to Content/Python/.",
+    )
     args = ap.parse_args()
 
     assets = collect_review(args.pipeline_root)
@@ -535,6 +683,9 @@ def main() -> int:
         "save_knowledge_path": str(know) if know else None,
         "label_tokens_count": len(label_tokens),
     }
+    sk_mesh, anim_sets = bundle_skeletal_animations(Path(args.pipeline_root), ue)
+    master["skeletal_meshes"] = sk_mesh
+    master["animation_sets"] = anim_sets
     if vr_data is not None:
         (variants / "variant_registry.json").write_text(json.dumps(vr_data, indent=2), encoding="utf-8")
     if saves_data is not None:
@@ -543,14 +694,31 @@ def main() -> int:
     man_path = meta / "manifest.json"
     man_path.write_text(json.dumps(master, indent=2), encoding="utf-8")
 
-    py_path = ue / "import_assets.py"
+    ue_project = args.ue_project
+    if ue_project is None:
+        candidate = repo_root / "UnrealEngineGame"
+        if (candidate / "Content").is_dir():
+            ue_project = candidate
+    if ue_project is not None:
+        py_dir = Path(ue_project).resolve() / "Content" / "Python"
+    else:
+        py_dir = ue
+
+    py_dir.mkdir(parents=True, exist_ok=True)
+
+    py_path = py_dir / "import_assets.py"
     py_path.write_text(IMPORT_SCRIPT.replace("__BUNDLE_ROOT__", str(ue.resolve())), encoding="utf-8")
+
+    skel_py = py_dir / "import_skeletal_assets.py"
+    skel_py.write_text(IMPORT_SKELETAL_SCRIPT.replace("__BUNDLE_ROOT__", str(ue.resolve())), encoding="utf-8")
 
     mat_src = Path(__file__).resolve().parent / "ue5_material_import.py"
     if mat_src.is_file():
-        shutil.copy2(mat_src, ue / "ue5_material_import.py")
+        shutil.copy2(mat_src, py_dir / "ue5_material_import.py")
 
     print(f"Wrote {len(manifest_assets)} assets -> {ue} ({args.layout})")
+    if py_dir != ue:
+        print(f"Import scripts -> {py_dir}")
     return 0
 
 

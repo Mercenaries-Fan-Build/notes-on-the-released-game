@@ -53,6 +53,8 @@ Stage 2 alone (e.g. legacy `output/batch_*` next to `ffcs_*`):
 ./scripts/stage2_review_extract.sh /path/to/pipeline-root
 ```
 
+Set **`STAGE2_ANIM=1`** to run **[`tools/mercs2_anim_pipeline.py`](mercs2_anim_pipeline.py)** after all blobs (writes ``<pipeline-root>/animations/<slug>/<slug>.glb`` from ``*animgroup*.block.bin``).
+
 ## Asset scanning
 
 ```bash
@@ -87,7 +89,7 @@ High-level paths (default `OUTPUT=./output`):
 - `output/ffcs_vz/`, `output/ffcs_shell/`, … — FFCS extraction + `paths.txt`.
 - `output/extracted/batch_*/blocks/*.bin` — decompressed `sges` blocks.
 - `output/extracted/review/<batch_pack>/<stem>/` — stage 2 per-asset tree (see table below).
-- `output/extracted/texture_index.json` — global texture hash index (`texture_streaming_index.py`); consumed when **`TEXTURE_INDEX`** is set in stage 2.
+- `output/extracted/texture_index.json` — global texture hash index (`texture_streaming_index.py` + **`make build-texture-index`**); **`make review-all`** / **`make extract-all`** pass it as **`TEXTURE_INDEX`** so stage 2 assembles full mip chains.
 - `output/knowledge/saves.json` — `make extract-saves`.
 - `output/variant_registry.json` — `make variants`.
 - `output/ecs_manifest.json` — `mercs2_ecs_manifest.py`.
@@ -140,7 +142,7 @@ Each path in `paths.txt` maps to the **n-th** `sges` magic in `data.bin`. Payloa
 
 ### Batch extraction (all `paths.txt` entries)
 
-`scripts/extract_all_from_paths.sh` walks **every non-empty line** in `paths.txt` and calls `sges_decompress.py --index` with the same numbering as the tool (index *n* = *n*-th path = *n*-th `sges` block). Outputs go to `output/batch_vz/`, `output/batch_shell/`, etc. The `vz` pack lists thousands of paths—use `--max`, `START`/`MAX`, or `SKIP_EXISTING=1` instead of a full pass unless you intend to fill disk.
+`scripts/extract_all_from_paths.sh` walks **every non-empty line** in `paths.txt` and maps each line to the same index as the tool (index *n* = *n*-th path = *n*-th `sges` block). By default it uses **bulk mode** (`sges_decompress.py --bulk-out-dir`): one Python process opens `data.bin` once, scans for all `sges` headers once, and writes every block (fast for large packs like **vz**). Set **`EXTRACT_JOBS=1`** for the legacy **one Python process per block** (`--index` per line; slow; debugging only). Outputs go to `output/batch_vz/`, `output/batch_shell/`, etc. The `vz` pack lists thousands of paths—use `--max`, `START`/`MAX`, or `SKIP_EXISTING=1` instead of a full pass unless you intend to fill disk.
 
 ```bash
 chmod +x scripts/extract_all_from_paths.sh
@@ -168,11 +170,9 @@ Scans decompressed blobs for `UCFX`, `MESH`, `GEOM`, `INDX`, `DXT*`, and Havok-r
 
 `texture_extractor.py` walks **UCFX** `NAME`/`INFO`/`BODY` for DXT1/3/5 (with mip tails). **`--legacy-raw-dxt`** re-enables the old raw FourCC scan (debug only).
 
-**Lightweight preview:** [`mercs2_preview.html`](mercs2_preview.html) — load `mesh.obj` + optional PNG (use `python3 -m http.server` if ES modules fail on `file://`).
+**Mesh preview:** Use the Vite app in [`viewer/`](../viewer/) (`npm run dev`). It lists stage-2 review outputs, loads OBJ / glTF / DDS, and when `submeshes/index.json` is present shows **Submesh inspection** in the sidebar (LOD, damage variants, per-part toggles, textures from `textures/manifest.json`).
 
-Deep link modes:
-- **Single OBJ:** `?obj=/output/.../mesh.obj` (optional `&tex=/output/.../name.png`)
-- **Manifest (per-submesh):** `?manifest=/output/.../submeshes/index.json` — loads each submesh as its own toggleable group. The sidebar provides per-part checkboxes and preset buttons to isolate **Wheels**, **Body**, **Panels**, or **Accessories** based on bbox heuristics.
+Optional dev-server deep link: append `?manifest=/__review__/batch_*/<stem>/submeshes/index.json` (URL-encoded as needed) to load that manifest on startup. Single meshes use **Manual URLs** in the sidebar or click an asset without `[submeshes]`.
 
 ### `mesh_extractor.py`
 
@@ -184,7 +184,7 @@ Deep link modes:
 
 | Flag | Description |
 |------|-------------|
-| `--per-submesh-obj` | Emit `submeshes/NNNN.obj` + `submeshes/index.json` next to `--out`. Each file is one PRMG draw-call, pre-transformed to world space. The `index.json` records per-part bbox, world translation, vertex/face counts, and HIER node index. Use with `mercs2_preview.html?manifest=…` for per-part toggles. |
+| `--per-submesh-obj` | Emit `submeshes/NNNN.obj` + `submeshes/index.json` next to `--out`. Each file is one PRMG draw-call, pre-transformed to world space. The `index.json` records per-part bbox, world translation, vertex/face counts, and HIER node index. Open the asset in [`viewer/`](../viewer/) (listed as `[submeshes]`) or use `?manifest=…` on the dev server. |
 | `--lod {keep-all,dedupe-bbox,highest-poly-per-bbox}` | LOD / damage-variant culling (default `keep-all`). `dedupe-bbox` keeps the first submesh per unique bbox-center+extent key. `highest-poly-per-bbox` keeps only the highest face-count variant per group — typically reduces vertex count ~35% while keeping the best LOD. |
 
 Optional archive regression / sanity:
@@ -213,6 +213,8 @@ From repo root (see root **`Makefile`**):
 - **`make extract-video`** — `OUTPUT/data/Movies/*.bik` → MP4 (needs **ffmpeg**).
 - **`make variants`** — `paths.txt` → `OUTPUT/variant_registry.json` (override file with **`VARIANT_PATH=`**).
 - **`make export-ue5`** / **`make ue5-bundle`** — copy review assets → `OUTPUT/ue5_import/` + `metadata/manifest.json` + stub `import_assets.py`.
+- **`make category-samples`** — `tools/select_category_samples.py` over the bundle: classifies every asset (vehicles → tank / boat / van / truck / car / heli …, buildings → skyscraper / apartment / outpost / segment …, characters → civ / pmc / faction, props / roads / world) and picks **one representative mesh per leaf** (highest vertex count with real geometry). Writes **`OUTPUT/ue5_import/category_samples.json`** including viewer deep-links so each pick opens in `npm run dev` with a single click. Override picks-per-leaf with **`TOP=N`** and the viewer origin with **`VIEWER_BASE=`**; supply your own classification table via **`--categories path/to/categories.json`** ( `[[ "name", ["regex", …] ], …]`).
+- **`make sample-bundle`** — same as `category-samples` but also copies the picked `assets/<id>/` bundles into **`OUTPUT/ue5_import_samples/`** with a fresh `metadata/manifest.json` (and the import scripts), giving a ~few-dozen-asset UE5 import for smoke-testing without dragging in all ~11k.
 - **`make all ZIP=…`** — `extract-all` + saves + audio + video + `ue5-bundle`.
 - **`make full-pipeline ZIP=…`** — **`clean`** then the same chain as **`all`**.
 
@@ -235,7 +237,8 @@ See script headers for the full list. Common variables:
 | `STAGE2_LEVEL` | `0` | Run level extractor per blob (slow); emits **`level_hints.json`**. |
 | `HAVOK_CONVEX_OBJ` | `1` | Emit convex hull OBJ stubs from Havok blobs. |
 | `STAGE2_EMBEDDED_AUDIO` | `0` | Run `pws_extractor` on each `.bin` for embedded RIFF/Ogg (very slow). |
-| `TEXTURE_INDEX` | *(unset)* | Path to **`texture_index.json`**; enables **`--texture-index`** on mesh + texture steps (`shared_textures.json` when applicable). |
+| `STAGE2_JOBS` | **auto** (`min(48, CPU count)` via `stage2_parallel.sh`) | Parallel blobs per wave; set explicitly to cap load (e.g. `STAGE2_JOBS=8`). |
+| `TEXTURE_INDEX` | **auto-set** by **`make review-all`** / **`make extract-all`** | Path to **`texture_index.json`**; enables **`--texture-index`** on mesh + texture steps (`shared_textures.json` when applicable). |
 | `STAGE2_GLTF` | `1` | Emit **`mesh_scene.gltf`** (+ `.bin`) via `gltf_exporter.py`. Set `0` to skip. |
 | `STAGE2_SKIP_UCFX` | `0` | Skip `ucfx_parser` / `ucfx.json`. |
 | `STAGE2_SKIP_MESH` | `0` | Skip mesh extraction. |
@@ -243,7 +246,7 @@ See script headers for the full list. Common variables:
 | `STAGE2_SKIP_HAVOK` | `0` | Skip Havok extraction. |
 | `MESH_FORMAT` | `obj` | Mesh output format (`obj` or `gltf`). |
 
-Batch path extraction (`scripts/extract_all_from_paths.sh`): **`WITH_UCFX=1`** writes **`extracted/batch_*/ucfx_manifests/*.json`**; **`ALLOW_PARTIAL=1`** continues after per-block failures. See script headers for **`EXTRACT_OUT_ROOT`**, **`START`**, **`MAX`**, **`SKIP_EXISTING`**, **`PYTHON`**.
+Batch path extraction (`scripts/extract_all_from_paths.sh`): default **bulk** sges (`sges_decompress.py --bulk-out-dir`, one mmap + one scan). **`EXTRACT_JOBS=1`** forces per-block subprocesses. **`WITH_UCFX=1`** writes **`extracted/batch_*/ucfx_manifests/*.json`** (bulk runs `ucfx_parser` per block in-process); **`ALLOW_PARTIAL=1`** continues after per-block failures. See script headers for **`EXTRACT_OUT_ROOT`**, **`START`**, **`MAX`**, **`SKIP_EXISTING`**, **`PYTHON`**.
 
 **`level_extractor.py --precache-root`** adds **`precache_files`** to **`level_hints.json`** when run manually; stage 2 does not pass it by default.
 

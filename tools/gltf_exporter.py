@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build a glTF 2.0 scene from Mercenaries 2 review output (submeshes + textures + optional mesh.meta)."""
+"""Build a glTF 2.0 scene from Mercenaries 2 review output (submeshes + textures + optional mesh.meta).
+
+Supports two output formats:
+  --format gltf  (default for viewer): mesh_scene.gltf + mesh_scene.bin + textures/*.png
+  --format glb   (UE5 import):         mesh_scene.glb  (single self-contained binary, textures embedded;
+                                       optional root scale via --glb-root-scale, default 1)
+"""
 
 from __future__ import annotations
 
@@ -165,6 +171,33 @@ def _resolve_texture_file(texture_dir: Path, base_name: str) -> Path | None:
     return None
 
 
+def _read_image_bytes_for_glb(path: Path) -> tuple[bytes, str]:
+    """Return (bytes, mimeType) for embedding in a GLB bufferView.
+
+    UE's glTF importer reliably loads embedded ``image/png`` and ``image/jpeg``.
+    Embedded DDS is often ignored, which yields white materials — so we transcode
+    DDS to PNG via Pillow when needed.
+    """
+    from io import BytesIO
+
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return path.read_bytes(), "image/png"
+    if suffix in (".jpg", ".jpeg"):
+        return path.read_bytes(), "image/jpeg"
+    if suffix == ".dds":
+        from PIL import Image
+
+        img = Image.open(path)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue(), "image/png"
+    raw = path.read_bytes()
+    return raw, "image/png"
+
+
 def _tangent_vec4(
     txyz: tuple[float, float, float] | None,
     n: tuple[float, float, float],
@@ -192,8 +225,17 @@ def export_review_to_gltf(
     stem: str | None = None,
     submeshes_dir: Path | None = None,
     textures_dir: Path | None = None,
+    output_format: str = "gltf",
+    glb_root_scale: float = 1.0,
 ) -> Path:
-    """Write ``out_gltf`` + sibling ``.bin`` from submeshes + textures directories."""
+    """Write ``out_gltf`` (+ sibling ``.bin`` for gltf format) from submeshes + textures directories.
+
+    *output_format*: ``"gltf"`` (separate files) or ``"glb"`` (single binary with embedded textures).
+
+    *glb_root_scale*: uniform scale on the scene root node for ``glb`` only (default ``1.0``).
+    Unreal's glTF importer already applies meters-to-editor scaling; baking ``100`` in the
+    file was effectively double-scaling. Set this only if you have a deliberate reason.
+    """
     sub_dir = (submeshes_dir or review_dir / "submeshes").resolve()
     tex_dir = (textures_dir or review_dir / "textures").resolve()
     idx_path = sub_dir / "index.json"
@@ -282,7 +324,7 @@ def export_review_to_gltf(
         b.extend(b"\x00" * pad)
         return len(b)
 
-    mesh_node_indices: list[int] = []
+    primitives_l: list[Primitive] = []
 
     for i, ent in enumerate(entries):
         obj_path = sub_dir / str(ent.get("file", f"{i:04d}.obj"))
@@ -291,6 +333,7 @@ def export_review_to_gltf(
         pos, nrm, _, uvs, faces = _parse_obj(obj_path)
         if not faces:
             continue
+
         sm = submeshes_meta[i] if submeshes_meta and i < len(submeshes_meta) else {}
         tang_meta = sm.get("tangents") if isinstance(sm.get("tangents"), list) else None
         tangents: list[tuple[float, float, float, float]] = []
@@ -409,30 +452,41 @@ def export_review_to_gltf(
         if mat_id is not None:
             prim_kw["material"] = mat_id
         prim = Primitive(**prim_kw)
-        mesh_idx = len(meshes_l)
-        meshes_l.append(Mesh(primitives=[prim]))
+        # One glTF Mesh with many primitives → UE imports a single StaticMesh with
+        # multiple sections (material slots). Per-submesh Meshes produced separate
+        # assets and no recognizable whole-vehicle shape in the Content Browser.
+        primitives_l.append(prim)
 
-        trans = ent.get("world_translation")
-        rot = None
-        if sm:
-            rot = sm.get("world_rotation_3x3")
-        if rot is None and isinstance(ent.get("world_rotation_3x3"), list):
-            rot = ent.get("world_rotation_3x3")
-        mat = _finite_matrix(_node_matrix_from_hier(trans if isinstance(trans, list) else None, rot))
-        node = Node(name=f"submesh_{i}", mesh=mesh_idx)
-        if mat is not None:
-            node.matrix = mat
-        mesh_node_indices.append(len(nodes_l))
-        nodes_l.append(node)
+    if not primitives_l:
+        raise ValueError("no submesh OBJ geometry to export")
 
-    root_children = list(range(len(mesh_node_indices)))
-    # Shift indices: root is last
+    meshes_l.append(Mesh(primitives=primitives_l))
+    # Single child node for the combined mesh (index 0).
+    nodes_l.append(Node(name="geometry", mesh=0))
+
+    root_children = [0]
     root_idx = len(nodes_l)
-    root = Node(name=stem, children=root_children)
+    root_kw: dict[str, Any] = {"name": stem, "children": root_children}
+    if output_format == "glb" and glb_root_scale != 1.0:
+        s = float(glb_root_scale)
+        root_kw["scale"] = [s, s, s]
+    root = Node(**root_kw)
     nodes_l.append(root)
 
-    if not meshes_l:
-        raise ValueError("no submesh OBJ geometry to export")
+    if output_format == "glb":
+        for img in images_l:
+            if img.uri and not img.uri.startswith("data:"):
+                img_path = tex_dir.parent / img.uri
+                if img_path.is_file():
+                    img_data, mime = _read_image_bytes_for_glb(img_path)
+                    pad4(blob)
+                    img_off = len(blob)
+                    blob.extend(img_data)
+                    bv_idx = len(buffer_views)
+                    buffer_views.append(BufferView(buffer=0, byteOffset=img_off, byteLength=len(img_data)))
+                    img.bufferView = bv_idx
+                    img.mimeType = mime
+                    img.uri = None
 
     gltf = GLTF2(
         asset=Asset(version="2.0", generator="mercs2_gltf_exporter"),
@@ -448,7 +502,11 @@ def export_review_to_gltf(
         accessors=accessors,
     )
     gltf.set_binary_blob(bytes(blob))
-    gltf.save(str(out_gltf))
+
+    if output_format == "glb":
+        gltf.save_binary(str(out_gltf))
+    else:
+        gltf.save(str(out_gltf))
     return out_gltf
 
 
@@ -457,14 +515,29 @@ def main() -> int:
     ap.add_argument("--review-dir", type=Path, help="Review output dir (contains submeshes/, textures/)")
     ap.add_argument("--submesh-dir", type=Path, help="Alternate: submeshes directory (requires --texture-dir)")
     ap.add_argument("--texture-dir", type=Path, help="Textures directory when using --submesh-dir")
-    ap.add_argument("--out", type=Path, required=True, help="Output .gltf path")
+    ap.add_argument("--out", type=Path, required=True, help="Output .gltf or .glb path")
     ap.add_argument("--stem", type=str, default=None, help="Root node name (default: review dir name)")
+    ap.add_argument(
+        "--format",
+        choices=("gltf", "glb"),
+        default="gltf",
+        help="gltf: separate .gltf+.bin+textures (viewer). glb: single binary with embedded textures (UE5).",
+    )
+    ap.add_argument(
+        "--glb-root-scale",
+        type=float,
+        default=1.0,
+        help="Uniform root node scale for --format glb only (default: 1). Rarely needed.",
+    )
     args = ap.parse_args()
     out = args.out.resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
+    fmt = args.format
     if args.review_dir:
         rd = args.review_dir.resolve()
-        export_review_to_gltf(rd, out, stem=args.stem)
+        export_review_to_gltf(
+            rd, out, stem=args.stem, output_format=fmt, glb_root_scale=args.glb_root_scale
+        )
     elif args.submesh_dir and args.texture_dir:
         sub = args.submesh_dir.resolve()
         tex = args.texture_dir.resolve()
@@ -474,10 +547,15 @@ def main() -> int:
             stem=args.stem,
             submeshes_dir=sub,
             textures_dir=tex,
+            output_format=fmt,
+            glb_root_scale=args.glb_root_scale,
         )
     else:
         ap.error("need --review-dir or both --submesh-dir and --texture-dir")
-    print(f"Wrote {out} + {out.with_suffix('.bin').name}")
+    if fmt == "glb":
+        print(f"Wrote {out}")
+    else:
+        print(f"Wrote {out} + {out.with_suffix('.bin').name}")
     return 0
 
 
