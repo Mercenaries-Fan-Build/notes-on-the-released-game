@@ -36,8 +36,15 @@ mercenaries-game/
 │   ├── placement_data_format.md Complete placement record specification
 │   ├── vz_state_analysis.md     State overlay layer analysis
 │   └── game_data_analysis.md    Game data directory walkthrough
-├── UnrealEngineGame/       UE5 project (5.7)
-│   └── Content/Python/     Editor automation scripts (import, populate, setup)
+├── game-scripts/           UE5 Editor Python scripts (import, populate, setup)
+│   ├── mercs2_data_layers.py  Shared Data Layer helpers
+│   ├── setup_project.py       Project setup (plugins, directories, map)
+│   ├── import_world.py        Import all world mesh GLBs
+│   ├── import_pmc_base.py     Import PMC base mesh GLBs
+│   ├── populate_world.py      Place 62k+ world entities + lights + Data Layers
+│   ├── populate_pmc_base.py   Place PMC base entities + lights + Data Layers
+│   └── fix_map_errors.py      Post-populate cleanup utility
+├── UnrealEngineGame/       UE5 project (5.7) — content only, no scripts
 ├── viewer/                 Three.js web viewer for review assets (Vite + npm)
 ├── output/                 Pipeline output root (generated, not committed)
 │   ├── extracted/          Decompressed blocks + review tree
@@ -66,6 +73,8 @@ Run via `make` targets. Each stage depends on the previous:
 8. [UE5 Editor]    import_mercs2.py → populate_maracaibo.py
 ```
 
+After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_res_terrain` UCFX tiles into one `mesh_scene.glb`; `game-scripts/import_world.py` discovers it like other GLBs, and `populate_world.py` places it once at the origin and skips `lrterrain_r*_c*` tile placements.
+
 ### Key make targets
 
 | Target | Purpose |
@@ -73,6 +82,7 @@ Run via `make` targets. Each stage depends on the previous:
 | `make venv` | Create `.venv`, install requirements.txt |
 | `make extract-all ZIP=... OUTPUT=./output` | Full extraction from retail zip |
 | `make review-all OUTPUT=./output` | Rebuild texture index + stage 2 |
+| `make extract-terrain OUTPUT=./output` | Merge `low_res_terrain` tiles → `review/batch_vz/.../mesh_scene.glb` (needs `batch_vz/blocks/`) |
 | `make regen-maracaibo-glbs OUTPUT=./output` | Regenerate GLBs for Maracaibo subset |
 | `make ue5-bundle OUTPUT=./output` | variants + animations + export-ue5 |
 | `make filter-maracaibo OUTPUT=./output` | Maracaibo asset filter |
@@ -108,27 +118,38 @@ STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 make review-all OUTPUT=./output  # skip al
 - Use `struct.unpack_from` for binary parsing, `pathlib.Path` for file paths
 - Dependencies: `numpy`, `Pillow`, `pygltflib` (see `requirements.txt`)
 
-### UE5 Scripts
+### UE5 Editor Scripts
 
-- Located in `UnrealEngineGame/Content/Python/`
+- Located in `game-scripts/` at the **repo root** (not inside `UnrealEngineGame/Content/`)
+  - Kept outside the UE project so they survive project rebuilds / deletes
 - Use the `unreal` module (UE Editor Python API)
-- Run via Editor: **Edit → Run Python Script** or **Tools → Execute Python Script**
+- Run via Editor: **Tools → Execute Python Script**, browse to `game-scripts/` path
+  - Example: `py "/path/to/mercenaries-game/game-scripts/populate_world.py"`
 - Target UE 5.7; Interchange importer for glTF/GLB
+- Scripts add `game-scripts/` to `sys.path` at startup for local imports (`mercs2_data_layers`)
+
+#### UE 5.7 Python quirks (verified)
+
+- **`DataLayerInstanceWithAsset`** does **not** expose `data_layer_label` as a settable property
+- **`DataLayerEditorSubsystem.get_data_layer_instance(asset)`** can throw the same error
+- **`set_parent_data_layer`** can also throw — use `_safe_set_parent_data_layer` wrapper
+- **`PointLightComponent.light_color`** requires **`unreal.Color`** (uint8 sRGB), not `LinearColor`
 
 #### Two populate workflows
 
 | Workflow | Import script | Populate script | Data source |
 |----------|--------------|-----------------|-------------|
-| **Maracaibo demo** | `import_mercs2.py` | `populate_maracaibo.py` | `maracaibo_asset_list.json` + `maracaibo_placements.json` |
 | **PMC base testbed** | `import_pmc_base.py` | `populate_pmc_base.py` | `pmc_base_asset_list.json` + `placements/pmc_base.json` + `pmc_base_streaming_groups.json` |
 | **Full world** | `import_world.py` | `populate_world.py` | All GLBs in `review/` + `layers_static.json` + `all_vz_state.json` |
 
 Full-world populate handles visibility layers:
 - `layers_static` → always visible (base world).
+- Merged **`low_res_terrain`** (from `make extract-terrain`) → one `StaticMeshActor` at origin when imported; `lrterrain_r*_c*` placements are skipped (geometry is already world-space in the mesh).
 - `vz_state` pristine → visible (default pre-war look).
 - `vz_state` ruined/destroyed → placed **hidden** (togglable in Outliner).
 - `vz_state` staging/mission → placed **hidden**.
-- Particles, lights, triggers → skipped (no mesh representation).
+- Particles, triggers → skipped (no mesh representation).
+- ECS `LightObject` entities → spawn as `PointLight` actors.
 
 ### Shell Scripts
 
@@ -262,9 +283,10 @@ Then open a few GLBs in the Three.js viewer (`make viewer`) to confirm geometry 
 ### After changing UE5 import scripts
 
 1. Regenerate GLBs if needed
-2. In UE5 Editor, run `import_mercs2.py` on a small subset
-3. Spot-check imported StaticMesh silhouettes in the viewport
-4. Run `populate_maracaibo.py` and verify actor placement
+2. In UE5 Editor, run `game-scripts/setup_project.py` first (creates directories)
+3. Run `game-scripts/import_world.py` on a small subset
+4. Spot-check imported StaticMesh silhouettes in the viewport
+5. Run `game-scripts/populate_world.py` and verify actor placement
 
 ### After changing format parsers
 
@@ -301,4 +323,12 @@ make ue5-bundle OUTPUT=./output
 make regen-maracaibo-glbs OUTPUT=./output
 ```
 
-For UE5: open `UnrealEngineGame/` in Unreal Engine 5.7, enable Editor Python, then run the Content/Python scripts in order (setup → import → populate).
+For UE5: open `UnrealEngineGame/` in Unreal Engine 5.7, enable Editor Python + Interchange plugins, then run scripts from `game-scripts/` in order:
+
+```
+1. setup_project.py    — create content directories, verify plugins
+2. import_world.py     — import mesh GLBs from extraction output
+3. populate_world.py   — place 62k+ entities with Data Layers + lights
+```
+
+Run via **Tools → Execute Python Script** or the output log `py` command with the full path to the script.

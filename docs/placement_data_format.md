@@ -79,6 +79,7 @@ Each COMP block has an `info` child containing the component type name. Key type
 | **IntersectionToIntersection** | Road network connections |
 | **RoadIntersection** | Road junction definitions |
 | **DangerousBuilding** | Buildings that can collapse |
+| **LowResTerrainObject** | Maps each `lrterrain_rXX_cYY` entity to its mesh asset hash (see §2.9) |
 
 ### 2.5 Transform Record Format (42 bytes)
 
@@ -115,7 +116,49 @@ The `schm` payload_stride is verified to match across all non-Transform COMPs. T
 
 Within each UCFX sub-block, the Name COMP and Transform COMP both use the same u32 entity keys. Entities are matched **by key** — Name records contain `[u32_le key][entity_name_string 0xKEY\x00][\x00 pad]` and Transform records contain `[u32_le key][38 bytes position/rotation]`. The decoder emits both `entity_id` (as `0xKEY` hex string) and `entity_name` (the bare name portion) on each placement record.
 
-### 2.8 Verified Statistics
+### 2.9 LowResTerrainObject COMP — tile→mesh mapping
+
+VERIFIED 2026-05-16 from `00029_blocks__VZ__layers_static_P000_Q3.block.bin`.
+
+Sub-block 13 of `layers_static` contains the placement metadata for the 400
+`lrterrain_rXX_cYY` entities that form Maracaibo's 20×20 low-resolution
+terrain grid. Alongside the standard `Name` and `Transform` COMPs, it carries
+a `LowResTerrainObject` COMP whose `data` payload is exactly **400 records of
+12 bytes** in row-major grid order:
+
+```
+Offset  Size  Type     Field             Description
+------  ----  -------  ----------------  -----------------------------------
++0x00   4     uint32   entity_key        Same key used by Name/Transform COMPs
++0x04   4     uint32   mesh_hash         Asset hash; matches TOC.hash1 in
+                                          the low_res_terrain_P000_Q3 block
++0x08   4     uint32   scene_object_id   Sequential per-record id (opaque)
+```
+
+The records are authored in lrterrain row-major order: record `i` is the
+mesh assignment for cell `(row=i//20, col=i%20)`. The `entity_key` numeric
+range overlaps with other entities in the same sub-block (other COMPs use
+intermediate keys), so it must NOT be used as a positional offset — the
+list index of the record IS the (row, col).
+
+The `mesh_hash` is the unique mesh asset hash and matches the per-tile
+`hash1` field in the TOC of `03121_blocks__VZ__low_res_terrain_P000_Q3.block.bin`
+(see `format_reference.md`). 399 of 400 hashes match exactly; the remaining
+record corresponds to the one unused TOC slot (one tile in the world is
+referenced by a different mechanism — the missing cell can be filled by
+the unique unused file index as a deterministic fallback).
+
+Decoded by `tools/terrain_extractor.py:_read_lrterrain_object_records` and
+used to drive the `lrterrain_rXX_cYY` → mesh-file-index mapping for terrain
+extraction. Recovers the correct world layout for all 400 tiles without
+seam-matching. Note that 11% of inter-tile edges align to <5m under this
+mapping (with several at <0.05m, confirming exact correctness on those
+pairs); the remainder show up to ~400m residual mismatch because each tile
+is authored in its own bbox-centred local frame and the raw mesh boundaries
+were not designed to be C0-continuous (the original engine likely stitches
+them at runtime via skirts or material blending).
+
+### 2.10 Verified Statistics
 
 - **62,624 placement records** extracted from Transform COMP data sections
 - **60,136 entity names** matched by entity key from Name COMP data sections

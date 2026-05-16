@@ -201,6 +201,10 @@ Optional dev-server deep link: append `?manifest=/__review__/batch_*/<stem>/subm
 | `--per-submesh-obj` | Emit `submeshes/NNNN.obj` + `submeshes/index.json` next to `--out`. Each file is one PRMG draw-call, pre-transformed to world space. The `index.json` records per-part bbox, world translation, vertex/face counts, and HIER node index. Open the asset in [`viewer/`](../viewer/) (listed as `[submeshes]`) or use `?manifest=…` on the dev server. |
 | `--lod {keep-all,dedupe-bbox,highest-poly-per-bbox}` | LOD / damage-variant culling (default `keep-all`). `dedupe-bbox` keeps the first submesh per unique bbox-center+extent key. `highest-poly-per-bbox` keeps only the highest face-count variant per group — typically reduces vertex count ~35% while keeping the best LOD. |
 
+### `terrain_extractor.py`
+
+**`low_res_terrain_P000_Q3.block.bin`** packs ~400 UCFX tiles with **GEOM → STRM/IBUF** but **no PRMG**, so `mesh_extractor.py` cannot emit triangles. This CLI walks each UCFX container with `_parse_prmg_body` + `decode_submesh`, merges via `merge_submeshes`, writes `submeshes/0000.obj` + **`mesh_scene.glb`** (via `gltf_exporter.export_review_to_gltf`). Run **`make extract-terrain OUTPUT=./output`** after stage 2 (needs `$(OUTPUT)/extracted/batch_vz/blocks/`).
+
 Optional archive regression / sanity:
 
 ```bash

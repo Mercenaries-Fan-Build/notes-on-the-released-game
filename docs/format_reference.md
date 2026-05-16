@@ -202,3 +202,219 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 | ``hkaWaveletSkeletalAnimation`` | [`tools/hk_anim/wavelet.py`](../tools/hk_anim/wavelet.py) | **Placeholder** sinusoidal motion for pipeline validation; coefficient inverse-lifting TODO — debug hook stub in [`tools/hk_anim/_wavelet_debug.py`](../tools/hk_anim/_wavelet_debug.py). |
 
 **Emit / import:** [`tools/mercs2_anim_pipeline.py`](../tools/mercs2_anim_pipeline.py) → [`tools/anim_gltf_export.py`](../tools/anim_gltf_export.py) (``pygltflib`` skeletal **.glb**). UE5 bundle copies into ``ue5_import/animations/`` and lists clips in ``metadata/manifest.json`` (``tools/ue5_export.py``).
+
+---
+
+## 13. low_res_terrain block + lrterrain tile lookup
+
+**Tool:** [`tools/terrain_extractor.py`](../tools/terrain_extractor.py)
+
+`03121_blocks__VZ__low_res_terrain_P000_Q3.block.bin` (≈7 MB) packs the
+20×20 Maracaibo low-resolution terrain grid as **401 UCFX containers**
+indexed by a leading 16-byte-per-entry TOC:
+
+| Entry | Field | Notes |
+|-------|-------|-------|
+| `[0]` | `count` u32 | Total TOC entry count (= 401) |
+| `[1..400]` | `(size, hash1, hash2, 0)` u32×4 | Per-tile UCFX byte-size (`size`), per-tile **mesh asset hash** (`hash1`), constant `hash2 = 0x1602815c` |
+
+The 401 UCFX containers are laid out back-to-back after the TOC:
+- 400 are terrain tile meshes (each `INFO + MTRL + GEOM(BNDS+PRMT+STRM+IBUF)`,
+  no `PRMG`); their TOC byte-deltas match the inter-UCFX spacing exactly.
+- 1 is a special 3-chunk container (`NAME="vz_lrterrain" + INFO + BODY`)
+  carrying the **shared DXT1 terrain texture** (`vz_lrterrain.dds`), not a
+  tile lookup table.
+
+**Tile → (row, col):** the TOC has no positional metadata. The mapping is
+in `layers_static` sub-block 13 via the `LowResTerrainObject` COMP — see
+[`docs/placement_data_format.md` §2.9](placement_data_format.md). 400 records
+of `(entity_key, mesh_hash, scene_object_id)` in row-major order; the
+record's **list index** is the (row, col) and `mesh_hash` matches the TOC's
+per-tile `hash1`. `tools/terrain_extractor.py` uses this mapping
+(`grid_source = "metadata_lookup"` in `mesh.meta.json`) and falls back to
+seam-matching only if the `layers_static` blob is unavailable.
+
+**Vertex format per tile:** STRM `data` is a flat vertex buffer (no PRMG row);
+stride is `vb_len // n_verts` (typically 16 B = pos f16×3 + UV f16×2 + 2 B
+pad). Positions are decoded as **f16 vec3** in tile-local space (≈±200 m on
+X/Z, ymin/ymax per the tile's BNDS chunk). Each tile's BNDS is 40 B holding
+`bbox_center.xyz, radius, bbox_min.xyz, bbox_max.xyz`. After local decode,
+vertices are offset to the world placement of the matching `lrterrain_rXX_cYY`
+(centers at `(-3800 + col*400, 0, -3800 + row*400)`).
+
+### 13.1 TOC entry 0 is a real tile slot, entry 224 is a dummy
+
+Two structural quirks of the retail PC `low_res_terrain` TOC that matter for
+correct tile routing:
+
+1. **TOC entry 0 is dual-purpose.** Its first u32 stores the count (`= 401`)
+   but its second u32 is a valid mesh `hash1` for a real tile (cell
+   `(17, 9)` in the retail build). Earlier extractor code that iterated
+   `range(1, n_entries)` skipped entry 0's hash and routed `(17, 9)` to the
+   unused TOC entry's mesh via a "unique-unused-index" fallback.
+2. **TOC entry 224 is a dummy.** Its `u2` is `0xf011157a` (every other tile
+   entry has `0x1602815c`) and its `hash1` does not appear in any
+   `LowResTerrainObject` record. The UCFX container at the entry's expected
+   offset has `u3 = 3` (vs the normal `u3 = 12`), so
+   `iter_ucfx_containers()` filters it out via its `u3 < 10` threshold. The
+   400 "real" UCFX iter indices therefore correspond to TOC entries
+   `{0, 1..223, 225..400}`, with index shift `−1` past the dummy.
+
+`tools/terrain_extractor.py::_read_low_res_terrain_toc()` implements the
+correct mapping by walking the cumulative TOC offsets, skipping any entry
+whose UCFX is filtered out, and emitting `hash1 → iter_index` for the rest.
+
+### 13.2 Tile-local axis convention
+
+Each tile mesh is authored centered at the origin with X/Z ∈ `[−200, 200]`.
+**Row index increases with world Z** (placement
+`center_z = −3800 + row × 400`). The tile-local face naming used by
+`_edge_samples` is unusual: `"N"` is the `z = +TILE_HALF` face and `"S"` is
+the `z = −TILE_HALF` face, i.e. the labels are **inverted relative to the
+row convention**. For the seam between tiles `(r, c)` and `(r + 1, c)`, the
+correct pairing is:
+
+- Upper tile (smaller r, smaller world Z) world-south face = local
+  `z = +TILE_HALF` = code label `"N"`.
+- Lower tile (larger r, larger world Z) world-north face = local
+  `z = −TILE_HALF` = code label `"S"`.
+
+So adjacency pairs are `(a."E", b."W")` for column adjacency and
+`(a."N", b."S")` for row adjacency. Comparing `a."S"` to `b."N"` instead
+(as earlier versions of `terrain_extractor.py`, `probe_terrain_offsets.py`
+and `solve_terrain_offsets.py` did) compares two non-adjacent faces 800 m
+apart in world Z and produces nonsense residuals (the metric appeared as
+"92 m mean seam" before the fix; the true value is ≈ 2 mm).
+
+### 13.3 Seam continuity verdict
+
+With both bugs above resolved, the source tile meshes are **already
+seam-continuous**: mean per-edge mismatch ≈ 0.002 m, max ≈ 0.68 m, no
+per-tile offset solve required. `mesh.meta.json` records this with
+`transform_source: "none_source_seam_continuous"`.
+
+Twenty cells are placeholder "open-water" tiles authored as a single quad
+(`vertex_count = 4`, `triangle_count = 2`, `dy = 0`). They sit on the outer
+map rim (col 0, col 19, row 19, plus a few coastal-cutout interior cells —
+e.g. `(9, 15)`). Because their edges only contribute the two corner
+along-coord buckets, they fail the `≥ 3 matched buckets` threshold most
+solvers use and appear "disconnected" in seam graphs. They are listed in
+`mesh.meta.json::ocean_tile_iter_indices`; downstream importers should
+keep them at world Y = 0 (sea level) without further transform.
+
+### 13.4 Terrain texture pipeline
+
+The `low_res_terrain` block ships exactly **one** texture: `vz_lrterrain`,
+a 2048×2048 DXT1 atlas covering the entire 8 000 × 8 000 m continent. It
+is referenced by every merged tile via a planar XZ projection synthesized
+at merge time (the source vertex stream carries no UVs).
+
+#### 13.4.1 UV convention (Case 4 — generated)
+
+Per-vertex UV layout in the source tile mesh: **none.** The 16-byte
+vertex stride decomposes as `f16 pos.xyz (6) + f16 w (2) + f16 normal.xyz
+(6) + f16 pad (2)`; values at byte offset 8 are unit-length normals, not
+UVs. This rules out all three documented "case 1/2/3" UV conventions —
+there is nothing to remap from.
+
+`tools/terrain_extractor.py::_world_xz_to_uv` synthesizes UVs from world
+position:
+
+```
+u = (world_x - WORLD_MIN_M) / WORLD_SPAN_M  =  (world_x + 4000) / 8000
+v = (world_z - WORLD_MIN_M) / WORLD_SPAN_M  =  (world_z + 4000) / 8000
+```
+
+V-flip is **off**. The orientation was decided by a spatial test rather
+than by visual inspection (the lrterrain atlas is intentionally dim and
+hard to read directly):
+
+| Test | No flip | V-flip |
+|------|---------|--------|
+| Pearson(elevation, sampled luma) over all 400 tiles | **+0.447** | −0.535 |
+| Brightest texture quadrant maps to highest-elevation world quadrant | yes (UV-NW & UV-NE both bright; world rows 0–9 are the high range) | no — highest world quadrant lands on the dimmest UV-SW corner |
+
+Both magnitudes are moderate — the master texture is a tinted-albedo map
+rather than a heightmap, so the elevation/luma correlation is loose —
+but only the **no-flip** orientation has the geographically correct sign
+(mountains brighter than ocean, not the reverse). `output/terrain_uv_convention.json`
+and `output/terrain_texture_validation.json` record the per-tile probes.
+
+#### 13.4.2 Aux texture entries in the TOC
+
+The TOC has 401 entries:
+
+- entry 0 stores the count in its first u32 *and* a real mesh hash in its
+  second u32 (see §13.1) — it iterates as a normal mesh tile;
+- entries 1..400 except entry 224 are mesh tiles (`u3 = 12`, chunks
+  `INFO/GEOM/STRM/IBUF/MTRL`); 400 mesh tiles total;
+- **entry 224 is the texture entry** (`u3 = 3`, chunks `INFO/NAME/DXT1`,
+  payload contains the literal name `vz_lrterrain` followed by the DXT1
+  pixel data). It is filtered out of the mesh iteration by
+  `iter_ucfx_containers` because of the `u3 < 10` guard.
+
+The aux-texture walk (`tools/terrain_extractor.py::_walk_terrain_toc_aux_textures`)
+runs a file-wide DXT/BC signature scan and a per-entry NAME-chunk probe.
+For the retail PC build the result is:
+
+```
+mesh_count        = 399  (mesh-shaped entries minus entry 224 itself
+                          and entry 0 which the codec does iterate)
+named_entries     = 2    (both reference vz_lrterrain — entry 224 and
+                          its 12 124-byte stub at TOC index 223 whose
+                          payload bleeds into entry 224's NAME chunk
+                          due to the way the size field is laid out)
+aux_entries       = 0    (no NAME other than vz_lrterrain)
+signature_scan    = {DXT1: 1, DXT3: 0, DXT5: 0, DX10: 0, BC4: 0, BC5: 0}
+```
+
+**Conclusion**: the low-LOD merged terrain has only a diffuse atlas — no
+embedded normal, specular, gloss, AO, or height map. Higher-fidelity
+per-cell terrain ships separately as `vz_terrainglobal_r##_c##` textures
+(174 918 B each, in `c30NNN` cell blocks) and is out of scope for the
+merged low-LOD bake.
+
+#### 13.4.3 Why the GLB embeds the texture
+
+`tools/gltf_exporter.py` emits the master texture into a GLB `bufferView`
+(MIME `image/png`) rather than as a sibling URI:
+
+- UE 5.7's Interchange importer reliably picks up embedded PNGs and
+  binds them to the material slot during import. URI references require
+  the file to be co-located at import time and tend to break when the
+  GLB is moved.
+- A self-contained GLB is the only artifact the rest of the pipeline
+  needs to ship to UE — there is no sibling-PNG copy step in
+  `regen_maracaibo_glbs` or `populate_world.py`.
+- DXT1 is transcoded to PNG before embedding because UE's importer
+  treats embedded DDS as opaque binary and yields a white material.
+
+The terrain material asks for `metallicFactor = 0`, `roughnessFactor = 1`,
+`baseColorFactor = [1, 1, 1, 1]`, `doubleSided = false` — wired through
+the per-entry overrides supported by `tools/gltf_exporter.py` (read from
+`submeshes/index.json` keys `metallic_factor` / `roughness_factor` /
+`base_color_factor` / `double_sided`).
+
+#### 13.4.4 Multi-channel material support (forward-compat)
+
+`tools/gltf_exporter.py` accepts the full glTF PBR channel set even
+though lrterrain only populates `texture_diffuse`. The `index.json`
+keys, in order of resolution priority, are:
+
+| index.json key | glTF slot | Notes |
+|----------------|-----------|-------|
+| `texture_diffuse` | `pbr.baseColorTexture` | sRGB 4-channel |
+| `texture_normal` | `material.normalTexture` | tangent-space, 2-channel reconstruction supported by UE |
+| `texture_metallic_roughness` | `pbr.metallicRoughnessTexture` | glTF-spec packing: G = roughness, B = metallic, R = AO (when shared) |
+| `texture_occlusion` | `material.occlusionTexture` | R-channel AO |
+| `texture_emissive` | `material.emissiveTexture` | sRGB |
+| `texture_specular` | `material.extras.mercs2_specularTextureIndex` | retained for legacy Mercenaries 2 specular workflow |
+
+When a 2008-era specular map needs to be converted to the glTF MR
+packing, the recommended remap is `roughness = 1.0 − specular_intensity`
+written into the G channel of a freshly-generated 8-bit RGBA PNG, with
+R = 255 (or AO if available) and B = 0 (terrain non-metallic). The
+build then sets `texture_metallic_roughness` to the converted PNG name.
+This conversion is **not** performed for lrterrain because no specular
+source exists in this block; the implementation lives in the exporter
+ready to consume it once a source is identified for other materials.

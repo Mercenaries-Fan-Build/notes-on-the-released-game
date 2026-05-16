@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "content_root": "/Game/Mercs2/Data",
+  "enums": {
+    "EWeaponStance": {
+      "path": "/Game/Mercs2/Data/Enums/EWeaponStance",
+      "entries": [
+        "Unarmed",
+        "Pistol",
+        "Rifle",
+        "Heavy"
+      ]
+    },
+    "EFaction": {
+      "path": "/Game/Mercs2/Data/Enums/EFaction",
+      "entries": [
+        "PMC",
+        "VZ",
+        "AN",
+        "UP",
+        "Pirates"
+      ]
+    }
+  },
+  "structs": {
+    "FFactionReputation": {
+      "path": "/Game/Mercs2/Data/Structs/FFactionReputation",
+      "fields": [
+        {
+          "name": "Faction",
+          "type": "byte:EFaction"
+        },
+        {
+          "name": "Reputation",
+          "type": "float",
+          "comment": "-100..+100"
+        }
+      ]
+    },
+    "FWeaponData": {
+      "path": "/Game/Mercs2/Data/Structs/FWeaponData",
+      "fields": [
+        {
+          "name": "Name",
+          "type": "text"
+        },
+        {
+          "name": "Stance",
+          "type": "byte:EWeaponStance"
+        },
+        {
+          "name": "DamagePerShot",
+          "type": "float"
+        },
+        {
+          "name": "MagSize",
+          "type": "int32"
+        },
+        {
+          "name": "ReserveAmmo",
+          "type": "int32"
+        },
+        {
+          "name": "FireRate",
+          "type": "float",
+          "comment": "rounds per minute"
+        },
+        {
+          "name": "Texture",
+          "type": "softobject:Texture2D"
+        }
+      ]
+    },
+    "FMissionObjective": {
+      "path": "/Game/Mercs2/Data/Structs/FMissionObjective",
+      "fields": [
+        {
+          "name": "Title",
+          "type": "text"
+        },
+        {
+          "name": "Description",
+          "type": "text"
+        },
+        {
+          "name": "bCompleted",
+          "type": "bool"
+        },
+        {
+          "name": "Order",
+          "type": "int32"
+        }
+      ]
+    }
+  },
+  "data_tables": {
+    "DT_WeaponData": {
+      "path": "/Game/Mercs2/Data/Tables/DT_WeaponData",
+      "row_struct": "/Game/Mercs2/Data/Structs/FWeaponData",
+      "rows": [
+        {
+          "Name": "Pistol_Sidearm",
+          "Stance": "Pistol",
+          "DamagePerShot": 18.0,
+          "MagSize": 12,
+          "ReserveAmmo": 60,
+          "FireRate": 360.0,
+          "TexturePath": ""
+        },
+        {
+          "Name": "AK74",
+          "Stance": "Rifle",
+          "DamagePerShot": 28.0,
+          "MagSize": 30,
+          "ReserveAmmo": 180,
+          "FireRate": 600.0,
+          "TexturePath": ""
+        },
+        {
+          "Name": "M16",
+          "Stance": "Rifle",
+          "DamagePerShot": 26.0,
+          "MagSize": 30,
+          "ReserveAmmo": 180,
+          "FireRate": 720.0,
+          "TexturePath": ""
+        },
+        {
+          "Name": "M249",
+          "Stance": "Heavy",
+          "DamagePerShot": 24.0,
+          "MagSize": 100,
+          "ReserveAmmo": 400,
+          "FireRate": 800.0,
+          "TexturePath": ""
+        },
+        {
+          "Name": "RPG7",
+          "Stance": "Heavy",
+          "DamagePerShot": 350.0,
+          "MagSize": 1,
+          "ReserveAmmo": 4,
+          "FireRate": 30.0,
+          "TexturePath": ""
+        }
+      ]
+    },
+    "DT_TutorialMission": {
+      "path": "/Game/Mercs2/Data/Tables/DT_TutorialMission",
+      "row_struct": "/Game/Mercs2/Data/Structs/FMissionObjective",
+      "rows": [
+        {
+          "Title": "Make Contact",
+          "Description": "Reach the PMC base and check in with command.",
+          "bCompleted": false,
+          "Order": 0
+        },
+        {
+          "Title": "Gear Up",
+          "Description": "Collect a sidearm and a rifle from the armory.",
+          "bCompleted": false,
+          "Order": 1
+        },
+        {
+          "Title": "Sight In",
+          "Description": "Verify weapons at the firing range — fire each weapon at least once.",
+          "bCompleted": false,
+          "Order": 2
+        },
+        {
+          "Title": "Roll Out",
+          "Description": "Leave PMC base and head into Maracaibo.",
+          "bCompleted": false,
+          "Order": 3
+        }
+      ]
+    }
+  }
+}

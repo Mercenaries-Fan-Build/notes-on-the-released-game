@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs category-samples sample-bundle full-pipeline viewer preview-placements animations animations-validation extract-placements filter-maracaibo-placements build-pmc-base-set extract-demo-ffcs filter-pmc-base regen-pmc-glbs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs category-samples sample-bundle full-pipeline viewer preview-placements animations animations-validation extract-placements filter-maracaibo-placements build-pmc-base-set extract-demo-ffcs filter-pmc-base regen-pmc-glbs extract-terrain
 
 REPO_ROOT := $(abspath .)
 # Prefer repo virtualenv (pygltflib, etc.); override with `make PYTHON=python3 …`.
@@ -79,6 +79,8 @@ help:
 	@echo "                      Filter ue5_import manifest → OUTPUT/maracaibo_asset_list.json (for import_mercs2.py)"
 	@echo "  make regen-maracaibo-glbs OUTPUT=./output [GLB_ROOT_SCALE=1]"
 	@echo "                      Regenerate mesh_scene.glb (embedded textures) for Maracaibo subset"
+	@echo "  make extract-terrain OUTPUT=./output"
+	@echo "                      Merge low_res_terrain UCFX tiles → OUTPUT/extracted/review/batch_vz/.../mesh_scene.glb"
 	@echo "  make animations OUTPUT=./output"
 	@echo "                      Havok animgroup blocks → OUTPUT/animations/<slug>/<slug>.glb (tools/mercs2_anim_pipeline.py)"
 	@echo "  make animations-validation OUTPUT=./output"
@@ -331,6 +333,13 @@ filter-maracaibo:
 regen-maracaibo-glbs: filter-maracaibo filter-maracaibo-placements
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib not available — run make venv" >&2; exit 1)
 	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_maracaibo_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
+
+extract-terrain:
+	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
+	@test -d "$(OUTPUT)/extracted/batch_vz/blocks" || (echo "error: missing $(OUTPUT)/extracted/batch_vz/blocks — run review-all / stage2 first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/terrain_extractor.py" \
+	  --repo-root "$(REPO_ROOT)" \
+	  --extracted-root "$(abspath $(OUTPUT))/extracted"
 
 TOP ?= 1
 VIEWER_BASE ?= http://localhost:5173

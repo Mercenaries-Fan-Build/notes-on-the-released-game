@@ -28,6 +28,7 @@ from pygltflib import (
     Mesh,
     Node,
     NormalMaterialTexture,
+    OcclusionTextureInfo,
     PbrMetallicRoughness,
     Primitive,
     Scene,
@@ -258,8 +259,10 @@ def export_review_to_gltf(
     stem = stem or sub_dir.parent.name
     rel_tex = "textures"
 
-    # Collect material slots -> texture URIs (relative to glTF)
+    # Collect material slots -> texture URIs (relative to glTF) and optional PBR overrides
     mat_to_maps: dict[int, dict[str, str]] = {}
+    mat_to_pbr_overrides: dict[int, dict[str, Any]] = {}
+    mat_to_flags: dict[int, dict[str, Any]] = {}
     for i, ent in enumerate(entries):
         mi = ent.get("material_index")
         if mi is None:
@@ -267,9 +270,15 @@ def export_review_to_gltf(
         mi = int(mi)
         if mi not in mat_to_maps:
             mat_to_maps[mi] = {}
+        # glTF-spec channels: baseColor, normal, metallicRoughness (G=rough,B=metal),
+        # occlusion (R=AO), emissive. Plus our legacy "specular" placeholder kept
+        # behind extras for the UE5 material script importer.
         for key, gl_key in (
             ("texture_diffuse", "baseColor"),
             ("texture_normal", "normal"),
+            ("texture_metallic_roughness", "metallicRoughness"),
+            ("texture_occlusion", "occlusion"),
+            ("texture_emissive", "emissive"),
             ("texture_specular", "specular"),
         ):
             name = ent.get(key)
@@ -279,6 +288,15 @@ def export_review_to_gltf(
                 fpath = _resolve_texture_file(tex_dir, name)
                 if fpath:
                     mat_to_maps[mi][gl_key] = f"{rel_tex}/{fpath.name}"
+        # Optional per-entry PBR factor overrides (e.g. terrain wants matte 1.0).
+        for ovkey in ("metallic_factor", "roughness_factor", "base_color_factor"):
+            if ovkey in ent and mi not in mat_to_pbr_overrides:
+                mat_to_pbr_overrides[mi] = {}
+            if ovkey in ent:
+                mat_to_pbr_overrides[mi][ovkey] = ent[ovkey]
+        for flagkey in ("double_sided", "alpha_mode", "alpha_cutoff"):
+            if flagkey in ent:
+                mat_to_flags.setdefault(mi, {})[flagkey] = ent[flagkey]
 
     blob = bytearray()
     buffer_views: list[BufferView] = []
@@ -302,7 +320,16 @@ def export_review_to_gltf(
 
     mat_index_gltf: dict[int, int] = {}
     for mi, maps in sorted(mat_to_maps.items()):
-        pbr = PbrMetallicRoughness(metallicFactor=0.0, roughnessFactor=0.6)
+        ov = mat_to_pbr_overrides.get(mi, {})
+        pbr_kw: dict[str, Any] = {
+            "metallicFactor": float(ov.get("metallic_factor", 0.0)),
+            "roughnessFactor": float(ov.get("roughness_factor", 0.6)),
+        }
+        if "base_color_factor" in ov:
+            bcf = ov["base_color_factor"]
+            if isinstance(bcf, (list, tuple)) and len(bcf) == 4:
+                pbr_kw["baseColorFactor"] = [float(x) for x in bcf]
+        pbr = PbrMetallicRoughness(**pbr_kw)
         mat = Material(name=f"M{mi}", pbrMetallicRoughness=pbr)
         if "baseColor" in maps:
             ti = ensure_image(maps["baseColor"])
@@ -310,12 +337,28 @@ def export_review_to_gltf(
         if "normal" in maps:
             ti = ensure_image(maps["normal"])
             mat.normalTexture = NormalMaterialTexture(index=ti, texCoord=0)
-        # Specular: glTF core has no slot; keep name in extras for UE script
+        if "metallicRoughness" in maps:
+            ti = ensure_image(maps["metallicRoughness"])
+            pbr.metallicRoughnessTexture = TextureInfo(index=ti, texCoord=0)
+        if "occlusion" in maps:
+            ti = ensure_image(maps["occlusion"])
+            mat.occlusionTexture = OcclusionTextureInfo(index=ti, texCoord=0)
+        if "emissive" in maps:
+            ti = ensure_image(maps["emissive"])
+            mat.emissiveTexture = TextureInfo(index=ti, texCoord=0)
+        # Specular: glTF core has no slot; keep name in extras for UE script.
         if "specular" in maps:
             ti = ensure_image(maps["specular"])
             if mat.extras is None:
                 mat.extras = {}
             mat.extras["mercs2_specularTextureIndex"] = int(ti)
+        flags = mat_to_flags.get(mi, {})
+        if "double_sided" in flags:
+            mat.doubleSided = bool(flags["double_sided"])
+        if "alpha_mode" in flags:
+            mat.alphaMode = str(flags["alpha_mode"])
+        if "alpha_cutoff" in flags:
+            mat.alphaCutoff = float(flags["alpha_cutoff"])
         mat_index_gltf[mi] = len(materials_l)
         materials_l.append(mat)
 
