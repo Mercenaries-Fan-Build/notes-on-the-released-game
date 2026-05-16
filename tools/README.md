@@ -25,6 +25,20 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 `mercs2_ffcs_extract.py` writes `manifest.json`, raw `*.bin` slices (`indx.bin`, `data.bin`, …), and `paths.txt`
 (path-like strings discovered inside `PTHS`).
 
+### PMC base / ECS / Lua (added 2026-05)
+
+| Script | Purpose |
+|--------|---------|
+| [`build_pmc_base_block_set.py`](build_pmc_base_block_set.py) | `output/pmc_base_block_set.json` — PMC stems + HQ bbox |
+| [`ucfx_ecs_codec.py`](ucfx_ecs_codec.py) | ECS `COMP` blob harvest helpers |
+| [`ecs_metadata_extract.py`](ecs_metadata_extract.py) | `ecs_components.json` + merge into placements |
+| [`aset_decoder.py`](aset_decoder.py) | `block_dependency_graph.json` from `aset.bin` |
+| [`lua_script_chunks.py`](lua_script_chunks.py) | Split `scripts_vz` `LuaQ` chunks + PMC string harvest |
+| [`filter_pmc_base.py`](filter_pmc_base.py) | `pmc_base_asset_list.json`, `placements/pmc_base.json`, streaming groups |
+| [`regen_pmc_base_glbs.py`](regen_pmc_base_glbs.py) | Regenerate GLBs for PMC asset list |
+
+Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, `regen-pmc-glbs` (see `make help`).
+
 ## From retail zip (full pipeline)
 
 Place `Mercenaries 2 World in Flames.zip` anywhere; run (flags must appear **before** the zip path):

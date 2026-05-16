@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs category-samples sample-bundle full-pipeline viewer animations animations-validation
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs category-samples sample-bundle full-pipeline viewer preview-placements animations animations-validation extract-placements filter-maracaibo-placements build-pmc-base-set extract-demo-ffcs filter-pmc-base regen-pmc-glbs
 
 REPO_ROOT := $(abspath .)
 # Prefer repo virtualenv (pygltflib, etc.); override with `make PYTHON=python3 …`.
@@ -83,6 +83,19 @@ help:
 	@echo "                      Havok animgroup blocks → OUTPUT/animations/<slug>/<slug>.glb (tools/mercs2_anim_pipeline.py)"
 	@echo "  make animations-validation OUTPUT=./output"
 	@echo "                      Scan OUTPUT/animations and write OUTPUT/animations/_validation.json (no block reprocess)"
+	@echo "  make extract-placements OUTPUT=./output"
+	@echo "                      Extract placement data from layers_static + vz_state → output/placements/"
+	@echo "                      (+ ECS merge, ASET decode, pmc_base_block_set.json)"
+	@echo "  make build-pmc-base-set OUTPUT=./output"
+	@echo "                      Write output/pmc_base_block_set.json (needs placements first)"
+	@echo "  make extract-demo-ffcs"
+	@echo "                      FFCS-slice demo vz.wad → output_demo/extracted/ffcs_vz_demo/ (see docs/demo_corpus.md)"
+	@echo "  make filter-pmc-base OUTPUT=./output"
+	@echo "                      PMC subset manifests → pmc_base_asset_list.json + placements/pmc_base.json"
+	@echo "  make regen-pmc-glbs OUTPUT=./output"
+	@echo "                      Regenerate mesh_scene.glb for PMC base asset list"
+	@echo "  make filter-maracaibo-placements OUTPUT=./output"
+	@echo "                      Filter placements to Maracaibo area → output/placements/maracaibo_placements.json"
 	@echo "  make ue5-bundle   variants + animations + export-ue5 (after extract-all / review-all)"
 	@echo "  make category-samples OUTPUT=./output [TOP=N]"
 	@echo "                      Pick one representative mesh per category → OUTPUT/ue5_import/category_samples.json"
@@ -96,6 +109,7 @@ help:
 	@echo "          # Faster if only glTF failed: STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 STAGE2_SKIP_TEX=1 \\"
 	@echo "          #   STAGE2_SKIP_HAVOK=1 STAGE2_DIALOG=0 make review-all OUTPUT=./output"
 	@echo "          make extract-saves extract-audio extract-video ue5-bundle OUTPUT=./output   # if not done yet"
+	@echo "  make preview-placements OUTPUT=./output   # viewer dev server + placement map (MERCS2_PLACEMENTS_ROOT)"
 	@echo "  make viewer       npm install + dev server (asset viewer)"
 	@echo "  make extract-iso  Prints ISO/locale extraction hints (mount ISO yourself)"
 	@echo "  make clean OUTPUT=./output"
@@ -234,6 +248,78 @@ animations-validation:
 
 ue5-bundle: export-ue5
 
+extract-placements:
+	@test -d "$(OUTPUT)/extracted/batch_vz/blocks" || (echo "error: $(OUTPUT)/extracted/batch_vz/blocks missing — run extract-all first" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/placements/vz_state"
+	@echo "Extracting placements from layers_static..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/placement_extractor.py" \
+	  "$(OUTPUT)/extracted/batch_vz/blocks/00029_blocks__VZ__layers_static_P000_Q3.block.bin" \
+	  -o "$(OUTPUT)/placements/layers_static.json"
+	@echo "Extracting placements from vz_state blocks (batch)..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/placement_extractor.py" \
+	  --batch "$(OUTPUT)/extracted/batch_vz/blocks/" \
+	  --filter vz_state \
+	  -o "$(OUTPUT)/placements/vz_state/all_vz_state.json"
+	@echo "ECS COMP harvest + merge (see tools/ecs_metadata_extract.py)..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/ecs_metadata_extract.py" \
+	  --layers-static-bin "$(OUTPUT)/extracted/batch_vz/blocks/00029_blocks__VZ__layers_static_P000_Q3.block.bin" \
+	  --vz-state-dir "$(OUTPUT)/extracted/batch_vz/blocks" \
+	  --out-ecs "$(OUTPUT)/placements/ecs_components.json" \
+	  --merge-layers-static-json "$(OUTPUT)/placements/layers_static.json" \
+	  --merge-vz-state-json "$(OUTPUT)/placements/vz_state/all_vz_state.json"
+	@echo "ASET decode → block_dependency_graph.json..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/aset_decoder.py" \
+	  --aset "$(OUTPUT)/extracted/ffcs_vz/aset.bin" \
+	  --texture-index "$(OUTPUT)/extracted/texture_index.json" \
+	  --out "$(OUTPUT)/block_dependency_graph.json"
+	@echo "PMC base block inventory..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_pmc_base_block_set.py" \
+	  --ffcs-paths "$(OUTPUT)/extracted/ffcs_vz/paths.txt" \
+	  --layers-static "$(OUTPUT)/placements/layers_static.json" \
+	  --out "$(OUTPUT)/pmc_base_block_set.json"
+	@echo "Lua script chunk split + PMC string harvest..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/lua_script_chunks.py" \
+	  --scripts-bin "$(OUTPUT)/extracted/batch_vz/blocks/03197_blocks__VZ__scripts_vz_P000_Q3.block.bin" \
+	  --out-dir "$(OUTPUT)/lua_chunks/scripts_vz" \
+	  --harvest-json "$(OUTPUT)/placements/pmc_lua_string_harvest.json" \
+	  --harvest-csv "$(OUTPUT)/placements/pmc_lua_string_harvest.csv"
+	@echo "Placement extraction complete → $(OUTPUT)/placements/"
+
+build-pmc-base-set:
+	@test -f "$(OUTPUT)/placements/layers_static.json" || (echo "error: run make extract-placements first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_pmc_base_block_set.py" \
+	  --ffcs-paths "$(OUTPUT)/extracted/ffcs_vz/paths.txt" \
+	  --layers-static "$(OUTPUT)/placements/layers_static.json" \
+	  --out "$(OUTPUT)/pmc_base_block_set.json"
+
+extract-demo-ffcs:
+	@mkdir -p "$(REPO_ROOT)/output_demo/extracted"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/mercs2_ffcs_extract.py" \
+	  "$(REPO_ROOT)/Mercenaries 2 World in Flames DEMO/data/vz.wad" \
+	  --out "$(REPO_ROOT)/output_demo/extracted/ffcs_vz_demo"
+
+filter-pmc-base:
+	@test -f "$(OUTPUT)/ue5_import/metadata/manifest.json" || (echo "error: missing $(OUTPUT)/ue5_import — run make ue5-bundle" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/filter_pmc_base.py" \
+	  --pmc-set "$(OUTPUT)/pmc_base_block_set.json" \
+	  --manifest "$(OUTPUT)/ue5_import/metadata/manifest.json" \
+	  --layers-static "$(OUTPUT)/placements/layers_static.json" \
+	  --vz-state "$(OUTPUT)/placements/vz_state/all_vz_state.json" \
+	  --out-assets "$(OUTPUT)/pmc_base_asset_list.json" \
+	  --out-placements "$(OUTPUT)/placements/pmc_base.json" \
+	  --out-streaming "$(OUTPUT)/pmc_base_streaming_groups.json"
+
+regen-pmc-glbs: filter-pmc-base
+	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
+	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_pmc_base_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
+
+filter-maracaibo-placements: extract-placements
+	@echo "Filtering placements to Maracaibo area..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/filter_maracaibo_placements.py" \
+	  --layers-static "$(OUTPUT)/placements/layers_static.json" \
+	  --vz-state-dir "$(OUTPUT)/placements/vz_state/" \
+	  --out "$(OUTPUT)/placements/maracaibo_placements.json"
+
 filter-maracaibo:
 	@test -f "$(OUTPUT)/ue5_import/metadata/manifest.json" || \
 	  (echo "error: missing $(OUTPUT)/ue5_import/metadata/manifest.json — run make ue5-bundle first" >&2; exit 1)
@@ -242,7 +328,7 @@ filter-maracaibo:
 	  --review-root "$(OUTPUT)/extracted/review" \
 	  --out "$(OUTPUT)/maracaibo_asset_list.json"
 
-regen-maracaibo-glbs: filter-maracaibo
+regen-maracaibo-glbs: filter-maracaibo filter-maracaibo-placements
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib not available — run make venv" >&2; exit 1)
 	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_maracaibo_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
 
@@ -275,6 +361,7 @@ full-pipeline:
 	$(MAKE) extract-saves OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-audio OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-video OUTPUT="$(OUTPUT)"
+	$(MAKE) extract-placements OUTPUT="$(OUTPUT)"
 	$(MAKE) ue5-bundle OUTPUT="$(OUTPUT)"
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
 
@@ -284,9 +371,15 @@ all:
 	$(MAKE) extract-saves OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-audio OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-video OUTPUT="$(OUTPUT)"
+	$(MAKE) extract-placements OUTPUT="$(OUTPUT)"
 	$(MAKE) ue5-bundle OUTPUT="$(OUTPUT)"
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
 
 viewer:
 	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
 	cd "$(REPO_ROOT)/viewer" && npm install && npm run dev
+
+# Placement / region preview (serves output/placements/*.json via MERCS2_PLACEMENTS_ROOT).
+preview-placements:
+	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
+	cd "$(REPO_ROOT)/viewer" && npm install && MERCS2_PLACEMENTS_ROOT="$(abspath $(OUTPUT))/placements" npm run dev -- --open /placement-preview.html

@@ -52,6 +52,10 @@ Tables are **not** parsed as Lua; strings are matched with regex. Output keys in
 
 `PTHS` yields `paths.txt` path-like strings (see `dump_paths_from_pths`).
 
+**ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows).
+
+**ECS `COMP` harvest:** [`docs/ecs_components.md`](ecs_components.md) — [`tools/ucfx_ecs_codec.py`](../tools/ucfx_ecs_codec.py) + [`tools/ecs_metadata_extract.py`](../tools/ecs_metadata_extract.py) → `output/placements/ecs_components.json` and merged `ecs` keys on placement JSON when `make extract-placements` runs.
+
 ---
 
 ## 3. `sges` compressed block
