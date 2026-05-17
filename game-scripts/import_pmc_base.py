@@ -31,8 +31,11 @@ if TYPE_CHECKING:
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 REVIEW_ROOT = os.path.join(REPO_ROOT, "output", "extracted", "review")
 CONTENT_BASE = "/Game/Mercs2"
-PMC_MESH_ROOT = f"{CONTENT_BASE}/Meshes/PMCBase"
-ASSET_LIST = os.path.join(REPO_ROOT, "output", "pmc_base_asset_list.json")
+PMC_MESH_ROOT = os.environ.get("MERCS2_MESH_ROOT", f"{CONTENT_BASE}/Meshes/PMCBase")
+ASSET_LIST = os.environ.get(
+    "MERCS2_ASSET_LIST",
+    os.path.join(REPO_ROOT, "output", "pmc_base_asset_list.json"),
+)
 
 # ---------------------------------------------------------------------------
 # Helpers

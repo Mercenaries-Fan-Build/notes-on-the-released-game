@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "enum": {
+    "path": "/Game/Data/EWeatherState",
+    "entries": [
+      "Clear",
+      "Cloudy",
+      "Rainy",
+      "Stormy"
+    ]
+  },
+  "struct": {
+    "path": "/Game/Data/FWeatherStateParams",
+    "fields": [
+      {
+        "name": "FogDensity",
+        "type": "float"
+      },
+      {
+        "name": "FogInscatteringColor",
+        "type": "LinearColor"
+      },
+      {
+        "name": "CloudCoverageFactor",
+        "type": "float",
+        "comment": "0..1 cloud density scalar"
+      },
+      {
+        "name": "SunIntensity",
+        "type": "float"
+      },
+      {
+        "name": "SunTemperature",
+        "type": "float",
+        "comment": "Kelvin"
+      },
+      {
+        "name": "RainEmissionRate",
+        "type": "float",
+        "comment": "particles per second"
+      },
+      {
+        "name": "WindSpeed",
+        "type": "float",
+        "comment": "m/s"
+      },
+      {
+        "name": "PostProcessExposure",
+        "type": "float",
+        "comment": "EV"
+      },
+      {
+        "name": "PostProcessSaturation",
+        "type": "float",
+        "comment": "0..2"
+      }
+    ]
+  },
+  "data_table": {
+    "path": "/Game/Data/DT_WeatherStates",
+    "row_struct": "/Game/Data/FWeatherStateParams",
+    "rows": [
+      {
+        "RowName": "Clear",
+        "FogDensity": 0.02,
+        "FogInscatteringColor": {
+          "R": 0.88,
+          "G": 0.8,
+          "B": 0.62,
+          "A": 1.0
+        },
+        "CloudCoverageFactor": 0.1,
+        "SunIntensity": 8.0,
+        "SunTemperature": 5800.0,
+        "RainEmissionRate": 0.0,
+        "WindSpeed": 1.0,
+        "PostProcessExposure": 0.0,
+        "PostProcessSaturation": 1.05
+      },
+      {
+        "RowName": "Cloudy",
+        "FogDensity": 0.04,
+        "FogInscatteringColor": {
+          "R": 0.72,
+          "G": 0.7,
+          "B": 0.62,
+          "A": 1.0
+        },
+        "CloudCoverageFactor": 0.55,
+        "SunIntensity": 5.0,
+        "SunTemperature": 6200.0,
+        "RainEmissionRate": 0.0,
+        "WindSpeed": 3.0,
+        "PostProcessExposure": -0.3,
+        "PostProcessSaturation": 0.95
+      },
+      {
+        "RowName": "Rainy",
+        "FogDensity": 0.06,
+        "FogInscatteringColor": {
+          "R": 0.55,
+          "G": 0.58,
+          "B": 0.62,
+          "A": 1.0
+        },
+        "CloudCoverageFactor": 0.85,
+        "SunIntensity": 2.5,
+        "SunTemperature": 6500.0,
+        "RainEmissionRate": 1500.0,
+        "WindSpeed": 6.0,
+        "PostProcessExposure": -0.6,
+        "PostProcessSaturation": 0.85
+      },
+      {
+        "RowName": "Stormy",
+        "FogDensity": 0.08,
+        "FogInscatteringColor": {
+          "R": 0.32,
+          "G": 0.36,
+          "B": 0.42,
+          "A": 1.0
+        },
+        "CloudCoverageFactor": 1.0,
+        "SunIntensity": 1.0,
+        "SunTemperature": 7000.0,
+        "RainEmissionRate": 4000.0,
+        "WindSpeed": 12.0,
+        "PostProcessExposure": -1.0,
+        "PostProcessSaturation": 0.75
+      }
+    ]
+  },
+  "blueprint": {
+    "path": "/Game/World/BP_WeatherController",
+    "parent": "Actor"
+  },
+  "level_actors": {
+    "PostProcessVolume": "PP_Weather_Global",
+    "WeatherController": "WeatherController"
+  }
+}

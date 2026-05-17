@@ -309,7 +309,7 @@ def configure_directional_light() -> unreal.Actor | None:
         SUN_LABELS,
         "AtmosphericLight_World",
         spawn_location=unreal.Vector(0.0, 0.0, 50000.0),
-        spawn_rotation=unreal.Rotator(168.0, -59.0, 0.0),
+        spawn_rotation=unreal.Rotator(roll=0.0, pitch=168.0, yaw=-59.0),
     )
     if sun is None:
         _err("  could not locate or spawn DirectionalLight")
@@ -363,10 +363,14 @@ def run() -> None:
             _log(f"  {type(a).__name__:<28} {label}")
 
     try:
-        unreal.EditorLevelLibrary.save_current_level()
+        unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
         _log("Saved current level.")
-    except Exception as exc:
-        _warn(f"save_current_level failed: {exc}")
+    except Exception:
+        try:
+            unreal.EditorLevelLibrary.save_current_level()
+            _log("Saved current level.")
+        except Exception as exc:
+            _warn(f"save_current_level failed: {exc}")
 
     _log("=" * 70)
     _log("Done. Run setup_water.py next.")

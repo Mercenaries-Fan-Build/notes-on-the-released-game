@@ -10,14 +10,15 @@ Strategy:
      (placed at the world origin by ``populate_world.py``). Fail loud if it
      can't be located.
   2. Read placements from ``output/placements/layers_static.json`` and look
-     for a coastal landmark by ``entity_name`` (parque_central, pmc, airport,
-     dock, barrancas, fortin) with elevation Y in the [0, 50] m band so we
-     don't spawn under the ocean or up a mountain.
+     for a coastal landmark by ``entity_name`` with elevation Y in the
+     [-20, 80] m band.  If none found, use the PMC base area coordinates.
   3. Convert the chosen game-space (Y-up, metres) coordinate to UE world
      space (Z-up, centimetres) using the same convention as ``populate_world``
      (``game_to_ue(x, y, z) -> Vector(x*100, z*100, y*100)``).
-  4. Line trace from +600 m above to -300 m below at the chosen XZ to find
+  4. Line trace from +600 m above to -300 m below at the chosen XY to find
      the actual terrain Z, then add 200 cm of ground clearance.
+     **Errors out** if the trace misses — run ``setup_terrain_collision.py``
+     first (``setup_all.py`` does this automatically).
   5. Spawn or move a ``APlayerStart`` actor (only one) and set rotation so
      the spawn faces the world origin.
 
@@ -59,20 +60,27 @@ LANDMARK_PATTERNS: tuple[str, ...] = (
     "barrancas",
     "parque_central",
     "pmc_base",
+    "pmc_hq",
     "airport",
     "fortin",
     "dock",
+    "helipad",
+    "gas_station",
+    "bridge",
+    "warehouse",
+    "tower",
 )
 
-ELEVATION_BAND_MIN_M = 0.0
-ELEVATION_BAND_MAX_M = 50.0
+ELEVATION_BAND_MIN_M = -20.0
+ELEVATION_BAND_MAX_M = 80.0
 
 TRACE_START_Z_CM = 60_000.0
 TRACE_END_Z_CM = -30_000.0
 GROUND_CLEARANCE_CM = 200.0
 
-FALLBACK_GAME_X = 0.0
-FALLBACK_GAME_Z = 0.0
+PMC_GAME_X = 2647.0
+PMC_GAME_Y = 10.0
+PMC_GAME_Z = -951.0
 
 
 def _log(msg: str) -> None:
@@ -209,7 +217,7 @@ def _trace_terrain_z(
             True,
         )
     except Exception as exc:
-        _warn(f"line_trace_single failed: {exc}")
+        _err(f"line_trace_single raised: {exc}")
         return None
 
     out_hit = None
@@ -232,6 +240,58 @@ def _trace_terrain_z(
             return float(out_hit.location.z)
         except Exception:
             return None
+
+
+def _dump_collision_diagnostics(terrain: unreal.StaticMeshActor) -> None:
+    """Log detailed collision info to help diagnose why the line trace missed."""
+    _err("--- COLLISION DIAGNOSTICS ---")
+
+    try:
+        origin = unreal.Vector()
+        extent = unreal.Vector()
+        terrain.get_actor_bounds(False, origin, extent)
+        _err(
+            f"  terrain bbox: origin=({origin.x:.1f}, {origin.y:.1f}, {origin.z:.1f}), "
+            f"extent=({extent.x:.1f}, {extent.y:.1f}, {extent.z:.1f})"
+        )
+        _err(f"  terrain Z range: {origin.z - extent.z:.1f} to {origin.z + extent.z:.1f}")
+    except Exception as exc:
+        _err(f"  could not read terrain bounds: {exc}")
+
+    try:
+        comp = terrain.static_mesh_component
+        if comp is not None:
+            try:
+                profile = comp.get_collision_profile_name()
+                _err(f"  collision profile: {profile}")
+            except Exception:
+                _err("  collision profile: <could not read>")
+            try:
+                enabled = comp.get_collision_enabled()
+                _err(f"  collision enabled: {enabled}")
+            except Exception:
+                _err("  collision enabled: <could not read>")
+            try:
+                mesh = comp.get_editor_property("static_mesh")
+                if mesh is not None:
+                    try:
+                        flag = mesh.get_editor_property("collision_trace_flag")
+                        _err(f"  collision_trace_flag: {flag}")
+                    except Exception:
+                        _err("  collision_trace_flag: <could not read>")
+            except Exception:
+                pass
+    except Exception as exc:
+        _err(f"  could not inspect component: {exc}")
+
+    _err("--- END DIAGNOSTICS ---")
+    _err(
+        "The line trace could not find the terrain surface. This usually means "
+        "setup_terrain_collision.py has not run yet, or the collision settings "
+        "did not take effect. In setup_all.py, terrain_collision runs before "
+        "player_start — if you're running scripts manually, run "
+        "setup_terrain_collision.py first, then re-run this script."
+    )
 
 
 def _find_existing_player_start(actors: list[unreal.Actor]) -> unreal.PlayerStart | None:
@@ -304,33 +364,32 @@ def run() -> None:
     pick = _pick_landmark_spawn(placements)
     if pick is not None:
         landmark_name, gx, gy, gz = pick
-        spawn_source = f"landmark '{landmark_name}'"
+        _log(f"  landmark match: '{landmark_name}' at game ({gx:.1f}, {gy:.2f}, {gz:.1f})")
     else:
-        landmark_name = "fallback"
-        gx, gy, gz = FALLBACK_GAME_X, 0.0, FALLBACK_GAME_Z
-        spawn_source = "fallback (map centre)"
-        _warn("No landmark in [0,50] m elevation band; falling back to map centre.")
+        landmark_name = "PMC base area"
+        gx, gy, gz = PMC_GAME_X, PMC_GAME_Y, PMC_GAME_Z
+        _log(f"  no landmark matched; using PMC base area ({gx:.1f}, {gy:.2f}, {gz:.1f})")
 
     ue_xyz = _game_to_ue(gx, gy, gz)
     ue_x_cm, ue_y_cm = ue_xyz.x, ue_xyz.y
+    _log(f"  UE XY: ({ue_x_cm:.1f}, {ue_y_cm:.1f})")
 
     hit_z_cm = _trace_terrain_z(world, ue_x_cm, ue_y_cm)
     if hit_z_cm is None:
-        _warn(
-            "Line trace did not hit the terrain - "
-            "is collision configured? Run setup_terrain_collision.py and "
-            "re-run. Using the placement Y as a best-effort fallback."
+        _err(
+            f"Line trace from Z={TRACE_START_Z_CM:.0f} to Z={TRACE_END_Z_CM:.0f} "
+            f"at UE ({ue_x_cm:.1f}, {ue_y_cm:.1f}) did not hit any surface."
         )
-        spawn_z_cm = ue_xyz.z + GROUND_CLEARANCE_CM
-        hit_z_str = "no hit"
-    else:
-        spawn_z_cm = hit_z_cm + GROUND_CLEARANCE_CM
-        hit_z_str = f"{hit_z_cm:.1f} cm"
+        _dump_collision_diagnostics(terrain)
+        return
+
+    spawn_z_cm = hit_z_cm + GROUND_CLEARANCE_CM
+    _log(f"  line trace hit terrain at Z={hit_z_cm:.1f}, spawn Z={spawn_z_cm:.1f}")
 
     spawn_loc = unreal.Vector(ue_x_cm, ue_y_cm, spawn_z_cm)
 
     yaw_to_origin_deg = math.degrees(math.atan2(-ue_y_cm, -ue_x_cm))
-    spawn_rot = unreal.Rotator(0.0, 0.0, yaw_to_origin_deg)
+    spawn_rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_to_origin_deg)
 
     actors = _all_level_actors()
     existing = _find_existing_player_start(actors)
@@ -346,7 +405,7 @@ def run() -> None:
     else:
         ps_actor = _spawn_player_start(world, spawn_loc, spawn_rot)
         if ps_actor is None:
-            _err("Spawning PlayerStart failed - aborting.")
+            _err("Spawning PlayerStart failed — aborting.")
             return
         try:
             ps_actor.set_actor_label("PlayerStart_Mattias")
@@ -357,13 +416,13 @@ def run() -> None:
     _save_current_level()
 
     _log(
-        f"Spawn source: {spawn_source}; "
-        f"game (x={gx:.1f}, y={gy:.2f}, z={gz:.1f}) m; "
-        f"UE world ({spawn_loc.x:.1f}, {spawn_loc.y:.1f}, {spawn_loc.z:.1f}) cm; "
-        f"trace hit Z = {hit_z_str}; yaw->origin = {yaw_to_origin_deg:.1f} deg"
+        f"Spawn: '{landmark_name}'; "
+        f"game ({gx:.1f}, {gy:.2f}, {gz:.1f}) m; "
+        f"UE ({spawn_loc.x:.1f}, {spawn_loc.y:.1f}, {spawn_loc.z:.1f}); "
+        f"trace Z={hit_z_cm:.1f}; yaw={yaw_to_origin_deg:.1f} deg"
     )
     _log("=" * 70)
-    _log("Done. Run setup_terrain_collision.py if the player falls through the world.")
+    _log("Done.")
     _log("=" * 70)
 
 

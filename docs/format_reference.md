@@ -318,27 +318,28 @@ UVs. This rules out all three documented "case 1/2/3" UV conventions —
 there is nothing to remap from.
 
 `tools/terrain_extractor.py::_world_xz_to_uv` synthesizes UVs from world
-position:
+position (planar XZ over the 8 000 m continent):
 
 ```
-u = (world_x - WORLD_MIN_M) / WORLD_SPAN_M  =  (world_x + 4000) / 8000
-v = (world_z - WORLD_MIN_M) / WORLD_SPAN_M  =  (world_z + 4000) / 8000
+u = (world_x + 4000) / 8000
+v_raw = (world_z + 4000) / 8000
+v = 1 - v_raw   when _TEXTURE_V_FLIP is True (retail default)
 ```
 
-V-flip is **off**. The orientation was decided by a spatial test rather
-than by visual inspection (the lrterrain atlas is intentionally dim and
-hard to read directly):
+The `vz_lrterrain` atlas is authored D3D9-style (V=0 at image top = game
+north / high Z). Raw planar projection maps south (low Z) to low V (image
+bottom), so synthesis applies `v = 1 - v` via `_TEXTURE_V_FLIP = True`.
+The PNG is **not** rotated at load time.
 
-| Test | No flip | V-flip |
-|------|---------|--------|
-| Pearson(elevation, sampled luma) over all 400 tiles | **+0.447** | −0.535 |
-| Brightest texture quadrant maps to highest-elevation world quadrant | yes (UV-NW & UV-NE both bright; world rows 0–9 are the high range) | no — highest world quadrant lands on the dimmest UV-SW corner |
+`make extract-terrain` writes `mesh_scene.glb` via
+`_build_terrain_glb` (pygltflib), **not** via `gltf_exporter`. That path
+embeds the synthesized UVs as-is (no second `convert_uvs_d3d_to_gltf`) but
+**does** apply the same LH→RH position/normal Z-negate and triangle winding
+flip as `gltf_exporter`, so the merged mesh at the origin actor aligns with
+`game_to_ue` placements like other imported GLBs.
 
-Both magnitudes are moderate — the master texture is a tinted-albedo map
-rather than a heightmap, so the elevation/luma correlation is loose —
-but only the **no-flip** orientation has the geographically correct sign
-(mountains brighter than ocean, not the reverse). `output/terrain_uv_convention.json`
-and `output/terrain_texture_validation.json` record the per-tile probes.
+Regular meshes with UVs baked in the vertex buffer use `gltf_exporter`'s
+`convert_uvs_d3d_to_gltf` for the D3D9 V-flip.
 
 #### 13.4.2 Aux texture entries in the TOC
 
@@ -376,8 +377,9 @@ merged low-LOD bake.
 
 #### 13.4.3 Why the GLB embeds the texture
 
-`tools/gltf_exporter.py` emits the master texture into a GLB `bufferView`
-(MIME `image/png`) rather than as a sibling URI:
+`tools/terrain_extractor.py::_build_terrain_glb` emits the master texture
+into a GLB `bufferView` (MIME `image/png`) rather than as a sibling URI
+(the debug OBJ path still references `submeshes/index.json` for tooling):
 
 - UE 5.7's Interchange importer reliably picks up embedded PNGs and
   binds them to the material slot during import. URI references require

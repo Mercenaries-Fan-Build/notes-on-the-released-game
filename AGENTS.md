@@ -134,6 +134,7 @@ STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 make review-all OUTPUT=./output  # skip al
 - **`DataLayerEditorSubsystem.get_data_layer_instance(asset)`** can throw the same error
 - **`set_parent_data_layer`** can also throw — use `_safe_set_parent_data_layer` wrapper
 - **`PointLightComponent.light_color`** requires **`unreal.Color`** (uint8 sRGB), not `LinearColor`
+- **`unreal.Rotator()` constructor** takes positional args as `(roll, pitch, yaw)` — **not** `(pitch, yaw, roll)`. Always use keyword arguments: `unreal.Rotator(roll=r, pitch=p, yaw=y)` to avoid silent misassignment
 
 #### Two populate workflows
 
@@ -169,8 +170,12 @@ Full-world populate handles visibility layers:
 
 ### Coordinate System
 
-- Source mesh data is **Y-up** (matches glTF spec); UE5 imports it correctly as Z-up
-- **Do not apply coordinate swizzles** in the exporter pipeline
+- Source mesh data is **left-handed Y-up** (D3D9 game space): X East–West, Y elevation, Z North–South
+- **glTF export** (`tools/gltf_exporter.py`) writes game LH coordinates directly into GLB (no Z-negate, no winding flip). Only the **V texture coordinate** is flipped (`v = 1 - v`, D3D9 V=0-top → glTF V=0-bottom). UE Interchange's Y-up→Z-up import handles the basis change automatically, producing the same result as `game_to_ue`.
+- **UV convention**: D3D9 uses V=0 at top of texture; glTF uses V=0 at bottom. The V-flip in `convert_uvs_d3d_to_gltf` handles this centrally in the exporter
+- **Placements** stay in game LH metres; `game_to_ue` maps `(x, y, z)` → UE `(100·x, 100·z, 100·y)` with **no** Z negate
+- **Rotations**: Binary record stores a **unit quaternion** `(qx, qy, qz, qw)` at offsets +0x14..+0x20. For Y-axis rotation: `qy = sin(yaw/2)`, `qw = cos(yaw/2)`. UE yaw = `-(2 * atan2(qy, qw))` in degrees (game CW+ vs UE CCW+ when viewed from above). ~16% of entities have non-trivial pitch/roll (tires, rocks, poles). Full quaternions use `game_quat_to_ue_rotator_deg()` which swaps qY↔qZ, decomposes to (pitch, yaw, roll), and negates yaw. Both in `tools/mercs2_coords.py`. **Always use keyword args** with `unreal.Rotator(roll=, pitch=, yaw=)` — positional order is `(roll, pitch, yaw)`.
+- Do **not** add extra axis swizzles in mesh_extractor or populate scripts
 - Coordinate range: X ≈ ±3900, Y ≈ -103 to +393 (elevation), Z ≈ ±3900
 
 ### Units
@@ -184,7 +189,7 @@ Full-world populate handles visibility layers:
 - **FFCS**: `.wad` container (magic `FFCS`, 5 chunk types: INDX, DATA, CSUM, ASET, PTHS)
 - **sges**: Compressed blocks (raw deflate, `zlib` windowBits `-15`, multi-segment)
 - **UCFX**: Decompressed asset container (CHDR/COMP/GEOM/MESH/PRMG/STRM/IBUF/MTRL/...)
-- **Placement**: UCFX → CHDR → COMP/flgs chunks; 42-byte records with XYZ + rotation
+- **Placement**: UCFX → CHDR → COMP/flgs chunks; 42-byte records with XYZ + unit quaternion (qx, qy, qz, qw)
 
 ### World Data
 
@@ -221,6 +226,8 @@ Within `layers_static`, **~37%** are vegetation/rocks, **~10%** street furniture
 - DDS → PNG transcoding for GLB embedding (via ffmpeg or Pillow)
 - Texture streaming index (`texture_index.json`) enables cross-block mip assembly
 - UE Interchange importer handles material assignment from glTF
+- **UV V-flip**: D3D9 stores V=0 at image top; glTF expects V=0 at bottom. `gltf_exporter.py` applies `v = 1.0 - v` via `convert_uvs_d3d_to_gltf` for all meshes. Do **not** add extra V-flips in mesh_extractor or other upstream stages
+- **Terrain UV + GLB**: `make extract-terrain` writes `mesh_scene.glb` directly via `terrain_extractor._build_terrain_glb` (no `gltf_exporter` round-trip). Synthesized terrain UVs use `_TEXTURE_V_FLIP = True` in `_world_xz_to_uv` (atlas top = game south / low Z; verified by placement density correlation). The atlas PNG is not rotated. GLB positions are written in **game LH coordinates directly** (no Z-negate, no winding flip) — UE Interchange's Y-up→Z-up swap produces the correct world alignment with `game_to_ue` placements at the origin actor. This differs from building meshes which use local-origin geometry and apply Z-negate.
 
 ### Animations
 
@@ -232,7 +239,7 @@ Within `layers_static`, **~37%** are vegetation/rocks, **~10%** street furniture
 
 ## Common Pitfalls
 
-1. **Don't apply coordinate swizzles** — mesh data is already Y-up; the exporter emits correct glTF without any axis swapping. Adding swizzles will produce mirrored or rotated geometry.
+1. **Don't add extra coordinate swizzles** — ALL meshes (buildings AND terrain) write game LH coordinates directly into GLB. UE Interchange handles the Y-up→Z-up basis swap. Only the UV V-flip (`v = 1 - v`) is applied for the D3D9→glTF texture convention. Do NOT add Z-negates or winding flips anywhere in the mesh pipeline.
 
 2. **Don't trust Q-tier labels for LOD quality** — `P000_Q3` is not always "highest quality." Use bounding box volume or vertex count to pick the best variant per asset.
 
@@ -249,6 +256,8 @@ Within `layers_static`, **~37%** are vegetation/rocks, **~10%** street furniture
 7. **Stage 2 env vars** control what gets rebuilt — set `STAGE2_SKIP_*=1` to skip already-completed steps when resuming.
 
 8. **`full-pipeline` runs `clean` first** — use `make review-all` or individual targets to resume without deleting progress.
+
+9. **`unreal.Rotator()` positional arg order is `(roll, pitch, yaw)`** — not `(pitch, yaw, roll)` as the C++ `FRotator` constructor uses. Always use keyword args: `unreal.Rotator(roll=r, pitch=p, yaw=y)`.
 
 ---
 

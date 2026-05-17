@@ -30,28 +30,48 @@
       <p style="font-size:11px;line-height:1.45;opacity:0.88;margin:0 0 10px">
         Top-down <strong>X / Z</strong> (game space, meters). Data from
         <code>/api/placements-maracaibo.json</code> (see <code>MERCS2_PLACEMENTS_ROOT</code>).
-        <a href="/">← Asset viewer</a>
+        <a href="/">← Asset viewer</a> · <a href="/placement-bbox.html">Bbox &amp; rotation QA</a>
       </p>
+      <h2>Dataset</h2>
+      <label>Source
+        <select id="dataSource" style="width:100%;margin-top:4px;padding:6px;background:#222;border:1px solid #444;color:#eee;border-radius:4px">
+          <option value="maracaibo">maracaibo_placements.json</option>
+          <option value="layers_static">layers_static.json (full world)</option>
+        </select>
+      </label>
       <h2>Filters</h2>
       <label><input type="checkbox" id="cbLs" checked /> layers_static</label>
       <label><input type="checkbox" id="cbVz" checked /> vz_state</label>
       <label>Source substring</label>
       <input type="text" id="srcFilter" placeholder="e.g. mar_city" />
       <h2>Bbox overlay</h2>
-      <p style="font-size:10px;opacity:0.8;margin:0 0 6px">Drag rectangle corners (handles) to tune; values update export.</p>
-      <label>x_min <input type="text" id="bx0" /></label>
-      <label>x_max <input type="text" id="bx1" /></label>
-      <label>z_min <input type="text" id="bz0" /></label>
-      <label>z_max <input type="text" id="bz1" /></label>
-      <label>y_min <input type="text" id="by0" /></label>
-      <label>y_max <input type="text" id="by1" /></label>
-      <button type="button" id="btnExport">Copy filter CLI args</button>
-      <textarea id="exportOut" rows="4" readonly style="margin-top:8px"></textarea>
+      <p style="font-size:10px;opacity:0.8;margin:0 0 6px">Drag edges/corners on the map, or type values below. Shift+drag on map to draw a new bbox.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;margin-bottom:6px">
+        <label style="font-size:10px">x_min <input type="text" id="bx0" style="width:100%" /></label>
+        <label style="font-size:10px">x_max <input type="text" id="bx1" style="width:100%" /></label>
+        <label style="font-size:10px">z_min <input type="text" id="bz0" style="width:100%" /></label>
+        <label style="font-size:10px">z_max <input type="text" id="bz1" style="width:100%" /></label>
+        <label style="font-size:10px">y_min <input type="text" id="by0" style="width:100%" /></label>
+        <label style="font-size:10px">y_max <input type="text" id="by1" style="width:100%" /></label>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button type="button" id="btnExport" style="flex:1">Copy CLI args</button>
+        <button type="button" id="btnReset" style="flex:0 0 auto;background:#6a3030">Reset bbox</button>
+      </div>
+      <div style="font-size:10px;opacity:0.7;margin-top:4px" id="bboxInfo"></div>
+      <textarea id="exportOut" rows="3" readonly style="margin-top:6px"></textarea>
       <h2>Selection</h2>
       <div id="detail">Click a dot…</div>
       <h2>3D spot-check</h2>
       <label><input type="checkbox" id="cb3d" /> Show GLB preview (first available mesh_scene.glb)</label>
       <p style="font-size:10px;opacity:0.78;margin:6px 0 0">Uses review URLs; same scale as game (Y-up in Three).</p>
+      <p style="font-size:10px;opacity:0.78;margin:8px 0 0">
+        Dot colors: <span style="color:#e8d040">■</span> light
+        <span style="color:#888">■</span> cell prop
+        <span style="color:#6ad46a">■</span> hero cluster
+        <span style="color:#4a9fe8">■</span> other static
+        <span style="color:#e8a040">■</span> vz_state
+      </p>
     </aside>
     <div id="mapWrap">
       <div id="mapHint">Wheel zoom · drag pan · drag bbox handles to edit region</div>

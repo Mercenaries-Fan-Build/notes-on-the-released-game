@@ -20,6 +20,8 @@ The dev server merges `output/review`, `output/extracted/review`, and optional `
 
 **Placement / region map:** open [`placement-preview.html`](./placement-preview.html) (or run `make preview-placements OUTPUT=./output` from the repo root). It loads `/api/placements-maracaibo.json` (set `MERCS2_PLACEMENTS_ROOT` to your `output/placements` directory if it is not under the default `../output/placements`). Use the bbox fields + “Copy filter CLI args” to tune `tools/filter_maracaibo_placements.py`. Optional Three.js GLB spot-check uses `/api/maracaibo-glbs.json` + the first `mesh_scene.glb` from review roots.
 
+**Placement bbox & rotation QA:** open [`placement-bbox.html`](./placement-bbox.html) (or `make preview-placement-bbox OUTPUT=./output`). Define named bounding boxes, filter entities inside them, inspect/edit rotation (`rotation_y_deg`, `rot_sin`/`rot_cos`, quaternions) and position overrides (persisted in `localStorage`). Default dataset is `pmc_base.json`; also supports `maracaibo_placements.json` and `layers_static.json` via `/api/placements-catalog.json`.
+
 Assets that include `submeshes/index.json` appear with a **`[submeshes]`** suffix; clicking one opens **Submesh inspection** (LOD slider, switch-state / damage filters, part-type presets, per-part visibility, and optional `textures/manifest.json` diffuse selection). You can also open a manifest directly with `?manifest=/__review__/batch_*/stem/submeshes/index.json`.
 
 The bundled `public/models/sample.obj` is a tiny heuristic extract for smoke-testing the pipeline.

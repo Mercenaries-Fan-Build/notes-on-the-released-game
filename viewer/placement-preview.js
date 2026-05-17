@@ -12,6 +12,29 @@ const exportOut = document.getElementById('exportOut')
 const cbLs = document.getElementById('cbLs')
 const cbVz = document.getElementById('cbVz')
 const srcFilter = document.getElementById('srcFilter')
+const dataSource = document.getElementById('dataSource')
+
+/** @typedef {'light' | 'cell_prop' | 'hero' | 'other'} PlacementKind */
+
+/** @param {object} p */
+function classifyPlacement(p) {
+  if (p.ecs?.LightObject) return 'light'
+  const ent = (p.entity_name || '').toLowerCase()
+  if (/^road\b|_env_|_plant|_rock|_tree|_palm|_bush|_foliage|_foliage/.test(ent)) return 'cell_prop'
+  if (/pmcoutpost|_veh_|_bld_|helicopter|boat_|skyscraper/.test(ent)) return 'hero'
+  return 'other'
+}
+
+/** @param {object} p */
+function dotColor(p) {
+  const bt = p.block_type || ''
+  if (bt === 'vz_state') return '#e8a040'
+  const kind = classifyPlacement(p)
+  if (kind === 'light') return '#e8d040'
+  if (kind === 'cell_prop') return '#666888'
+  if (kind === 'hero') return '#6ad46a'
+  return '#4a9fe8'
+}
 const bboxInputs = {
   x_min: document.getElementById('bx0'),
   x_max: document.getElementById('bx1'),
@@ -32,18 +55,37 @@ let dragging = false
 let dragStart = null
 let lastPan = null
 
+const PAD = 40
+
 function worldToScreen(x, z) {
-  const pad = 40
-  const w = canvas.width - pad * 2
-  const h = canvas.height - pad * 2
+  const w = canvas.width - PAD * 2
+  const h = canvas.height - PAD * 2
   const spanX = Math.max(1e-6, world.maxX - world.minX)
   const spanZ = Math.max(1e-6, world.maxZ - world.minZ)
   const cx = (x - world.minX) / spanX
   const cz = (z - world.minZ) / spanZ
-  const px = pad + cx * w * zoom + panX
-  const py = pad + cz * h * zoom + panZ
+  const px = PAD + (1 - cx) * w * zoom + panX
+  const py = PAD + (1 - cz) * h * zoom + panZ
   return { px, py }
 }
+
+function screenToWorld(px, py) {
+  const w = canvas.width - PAD * 2
+  const h = canvas.height - PAD * 2
+  const spanX = Math.max(1e-6, world.maxX - world.minX)
+  const spanZ = Math.max(1e-6, world.maxZ - world.minZ)
+  const cx = 1 - (px - panX - PAD) / (w * zoom)
+  const cz = 1 - (py - panZ - PAD) / (h * zoom)
+  return {
+    x: world.minX + cx * spanX,
+    z: world.minZ + cz * spanZ,
+  }
+}
+
+// --- Bbox handle dragging ---
+const HANDLE_RADIUS = 7
+let bboxDragMode = null // 'corner-tl' | 'corner-tr' | 'corner-bl' | 'corner-br' | 'edge-l' | 'edge-r' | 'edge-t' | 'edge-b' | 'draw' | null
+let bboxDrawStart = null
 
 function computeWorldBounds(pts) {
   let minX = Infinity
@@ -100,24 +142,82 @@ function draw() {
   const bx1 = parseFloat(bboxInputs.x_max.value)
   const bz0 = parseFloat(bboxInputs.z_min.value)
   const bz1 = parseFloat(bboxInputs.z_max.value)
-  if ([bx0, bx1, bz0, bz1].every((n) => Number.isFinite(n))) {
+  const bboxValid = [bx0, bx1, bz0, bz1].every((n) => Number.isFinite(n))
+  if (bboxValid) {
     const c1 = worldToScreen(bx0, bz0)
     const c2 = worldToScreen(bx1, bz1)
+    const rx = Math.min(c1.px, c2.px)
+    const ry = Math.min(c1.py, c2.py)
+    const rw = Math.abs(c2.px - c1.px)
+    const rh = Math.abs(c2.py - c1.py)
+
+    // Fill with translucent overlay
+    ctx.fillStyle = 'rgba(106, 212, 106, 0.06)'
+    ctx.fillRect(rx, ry, rw, rh)
     ctx.strokeStyle = '#6ad46a'
     ctx.lineWidth = 2
-    ctx.strokeRect(
-      Math.min(c1.px, c2.px),
-      Math.min(c1.py, c2.py),
-      Math.abs(c2.px - c1.px),
-      Math.abs(c2.py - c1.py),
-    )
+    ctx.strokeRect(rx, ry, rw, rh)
+
+    // Draw corner handles
+    const corners = [
+      { px: rx, py: ry },
+      { px: rx + rw, py: ry },
+      { px: rx, py: ry + rh },
+      { px: rx + rw, py: ry + rh },
+    ]
+    for (const c of corners) {
+      ctx.fillStyle = '#6ad46a'
+      ctx.beginPath()
+      ctx.arc(c.px, c.py, HANDLE_RADIUS, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+
+    // Edge midpoints
+    const edges = [
+      { px: rx + rw / 2, py: ry },
+      { px: rx + rw / 2, py: ry + rh },
+      { px: rx, py: ry + rh / 2 },
+      { px: rx + rw, py: ry + rh / 2 },
+    ]
+    for (const e of edges) {
+      ctx.fillStyle = '#4a9fe8'
+      ctx.beginPath()
+      ctx.arc(e.px, e.py, 5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 1
+      ctx.stroke()
+    }
+
+    // Dimension labels
+    const spanXWorld = Math.abs(bx1 - bx0)
+    const spanZWorld = Math.abs(bz1 - bz0)
+    ctx.fillStyle = '#6ad46a'
+    ctx.font = '10px system-ui'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${spanXWorld.toFixed(0)}m`, rx + rw / 2, ry - 8)
+    ctx.save()
+    ctx.translate(rx - 8, ry + rh / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.fillText(`${spanZWorld.toFixed(0)}m`, 0, 0)
+    ctx.restore()
+    ctx.textAlign = 'left'
   }
 
+  let nLight = 0
+  let nCell = 0
+  let nHero = 0
   for (const p of filtered) {
     const pos = p.position || {}
     const { px, py } = worldToScreen(pos.x ?? 0, pos.z ?? 0)
-    const bt = p.block_type || ''
-    ctx.fillStyle = bt === 'vz_state' ? '#e8a040' : '#4a9fe8'
+    const kind = classifyPlacement(p)
+    if (kind === 'light') nLight += 1
+    else if (kind === 'cell_prop') nCell += 1
+    else if (kind === 'hero') nHero += 1
+    ctx.fillStyle = dotColor(p)
     ctx.beginPath()
     ctx.arc(px, py, 1.2, 0, Math.PI * 2)
     ctx.fill()
@@ -125,7 +225,67 @@ function draw() {
 
   ctx.fillStyle = '#888'
   ctx.font = '11px system-ui'
-  ctx.fillText(`points: ${filtered.length} / ${placements.length}`, 8, 16)
+  ctx.fillText(
+    `points: ${filtered.length} / ${placements.length}  lights:${nLight}  cell:${nCell}  hero:${nHero}`,
+    8,
+    16,
+  )
+
+  // Compass rose — mirrors UE top-down viewport (180-rotated game coords)
+  const roseCx = w - 56
+  const roseCy = h - 56
+  const armLen = 28
+  ctx.globalAlpha = 0.85
+
+  ctx.strokeStyle = '#e05050'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(roseCx, roseCy)
+  ctx.lineTo(roseCx - armLen, roseCy)
+  ctx.stroke()
+  ctx.fillStyle = '#e05050'
+  ctx.font = 'bold 11px system-ui'
+  ctx.textAlign = 'right'
+  ctx.fillText('UE +X', roseCx - armLen - 3, roseCy + 4)
+  ctx.textAlign = 'left'
+
+  ctx.strokeStyle = '#50e050'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(roseCx, roseCy)
+  ctx.lineTo(roseCx, roseCy - armLen)
+  ctx.stroke()
+  ctx.fillStyle = '#50e050'
+  ctx.fillText('UE +Y', roseCx + 5, roseCy - armLen + 4)
+
+  ctx.strokeStyle = '#e05050'
+  ctx.lineWidth = 1
+  ctx.setLineDash([3, 3])
+  ctx.beginPath()
+  ctx.moveTo(roseCx, roseCy)
+  ctx.lineTo(roseCx + armLen, roseCy)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  ctx.strokeStyle = '#50e050'
+  ctx.lineWidth = 1
+  ctx.setLineDash([3, 3])
+  ctx.beginPath()
+  ctx.moveTo(roseCx, roseCy)
+  ctx.lineTo(roseCx, roseCy + armLen)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  ctx.fillStyle = '#fff'
+  ctx.beginPath()
+  ctx.arc(roseCx, roseCy, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#6080cc'
+  ctx.font = '9px system-ui'
+  ctx.fillText('UE +Z = height', roseCx - 22, roseCy + armLen + 14)
+
+  ctx.globalAlpha = 1.0
 }
 
 function pickPlacement(clientX, clientY) {
@@ -146,31 +306,159 @@ function pickPlacement(clientX, clientY) {
   return best
 }
 
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect()
+  return {
+    sx: ((e.clientX - rect.left) / rect.width) * canvas.width,
+    sy: ((e.clientY - rect.top) / rect.height) * canvas.height,
+  }
+}
+
+function hitTestBboxHandle(sx, sy) {
+  const bx0 = parseFloat(bboxInputs.x_min.value)
+  const bx1 = parseFloat(bboxInputs.x_max.value)
+  const bz0 = parseFloat(bboxInputs.z_min.value)
+  const bz1 = parseFloat(bboxInputs.z_max.value)
+  if (![bx0, bx1, bz0, bz1].every((n) => Number.isFinite(n))) return null
+
+  const c1 = worldToScreen(bx0, bz0)
+  const c2 = worldToScreen(bx1, bz1)
+  const rx = Math.min(c1.px, c2.px)
+  const ry = Math.min(c1.py, c2.py)
+  const rw = Math.abs(c2.px - c1.px)
+  const rh = Math.abs(c2.py - c1.py)
+
+  const corners = [
+    { mode: 'corner-tl', px: rx, py: ry },
+    { mode: 'corner-tr', px: rx + rw, py: ry },
+    { mode: 'corner-bl', px: rx, py: ry + rh },
+    { mode: 'corner-br', px: rx + rw, py: ry + rh },
+  ]
+  for (const c of corners) {
+    if (Math.hypot(sx - c.px, sy - c.py) <= HANDLE_RADIUS + 2) return c.mode
+  }
+  const edges = [
+    { mode: 'edge-t', px: rx + rw / 2, py: ry },
+    { mode: 'edge-b', px: rx + rw / 2, py: ry + rh },
+    { mode: 'edge-l', px: rx, py: ry + rh / 2 },
+    { mode: 'edge-r', px: rx + rw, py: ry + rh / 2 },
+  ]
+  for (const e of edges) {
+    if (Math.hypot(sx - e.px, sy - e.py) <= 7) return e.mode
+  }
+  return null
+}
+
 canvas.addEventListener('mousedown', (e) => {
+  const { sx, sy } = canvasCoords(e)
+
+  // Shift+drag draws a brand new bbox
+  if (e.shiftKey) {
+    bboxDragMode = 'draw'
+    bboxDrawStart = screenToWorld(sx, sy)
+    return
+  }
+
+  // Check bbox handles
+  const hit = hitTestBboxHandle(sx, sy)
+  if (hit) {
+    bboxDragMode = hit
+    canvas.style.cursor = 'grabbing'
+    return
+  }
+
+  // Otherwise: pan
   dragging = true
   dragStart = { x: e.clientX, y: e.clientY }
   lastPan = { panX, panZ }
 })
-window.addEventListener('mouseup', () => {
+
+window.addEventListener('mouseup', (e) => {
+  if (bboxDragMode === 'draw' && bboxDrawStart) {
+    const { sx, sy } = canvasCoords(e)
+    const end = screenToWorld(sx, sy)
+    bboxInputs.x_min.value = Math.min(bboxDrawStart.x, end.x).toFixed(1)
+    bboxInputs.x_max.value = Math.max(bboxDrawStart.x, end.x).toFixed(1)
+    bboxInputs.z_min.value = Math.min(bboxDrawStart.z, end.z).toFixed(1)
+    bboxInputs.z_max.value = Math.max(bboxDrawStart.z, end.z).toFixed(1)
+    updateBboxInfo()
+    draw()
+  }
+  bboxDragMode = null
+  bboxDrawStart = null
   dragging = false
+  canvas.style.cursor = 'crosshair'
 })
+
 window.addEventListener('mousemove', (e) => {
-  if (!dragging || !dragStart || !lastPan) return
-  const dx = e.clientX - dragStart.x
-  const dy = e.clientY - dragStart.y
-  panX = lastPan.panX + dx
-  panZ = lastPan.panZ + dy
-  draw()
+  const { sx, sy } = canvasCoords(e)
+
+  if (bboxDragMode && bboxDragMode !== 'draw') {
+    const w = screenToWorld(sx, sy)
+    // Depending on which handle, update appropriate bbox field
+    if (bboxDragMode.includes('l') || bboxDragMode === 'corner-tl' || bboxDragMode === 'corner-bl') {
+      // Screen left = higher game X after 180 flip, so this is x_max
+      bboxInputs.x_max.value = w.x.toFixed(1)
+    }
+    if (bboxDragMode.includes('r') || bboxDragMode === 'corner-tr' || bboxDragMode === 'corner-br') {
+      bboxInputs.x_min.value = w.x.toFixed(1)
+    }
+    if (bboxDragMode.includes('t') || bboxDragMode === 'corner-tl' || bboxDragMode === 'corner-tr') {
+      bboxInputs.z_max.value = w.z.toFixed(1)
+    }
+    if (bboxDragMode.includes('b') || bboxDragMode === 'corner-bl' || bboxDragMode === 'corner-br') {
+      bboxInputs.z_min.value = w.z.toFixed(1)
+    }
+    updateBboxInfo()
+    draw()
+    return
+  }
+
+  if (bboxDragMode === 'draw' && bboxDrawStart) {
+    const end = screenToWorld(sx, sy)
+    bboxInputs.x_min.value = Math.min(bboxDrawStart.x, end.x).toFixed(1)
+    bboxInputs.x_max.value = Math.max(bboxDrawStart.x, end.x).toFixed(1)
+    bboxInputs.z_min.value = Math.min(bboxDrawStart.z, end.z).toFixed(1)
+    bboxInputs.z_max.value = Math.max(bboxDrawStart.z, end.z).toFixed(1)
+    draw()
+    return
+  }
+
+  if (dragging && dragStart && lastPan) {
+    const dx = e.clientX - dragStart.x
+    const dy = e.clientY - dragStart.y
+    panX = lastPan.panX + dx
+    panZ = lastPan.panZ + dy
+    draw()
+    return
+  }
+
+  // Update cursor based on hover
+  const hit = hitTestBboxHandle(sx, sy)
+  if (hit) {
+    if (hit.includes('corner')) canvas.style.cursor = 'move'
+    else if (hit === 'edge-l' || hit === 'edge-r') canvas.style.cursor = 'ew-resize'
+    else canvas.style.cursor = 'ns-resize'
+  } else {
+    canvas.style.cursor = 'crosshair'
+  }
 })
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault()
+  const { sx, sy } = canvasCoords(e)
+  const worldBefore = screenToWorld(sx, sy)
   const f = e.deltaY > 0 ? 0.92 : 1.08
   zoom = Math.min(40, Math.max(0.2, zoom * f))
+  // Zoom toward cursor position
+  const afterScreen = worldToScreen(worldBefore.x, worldBefore.z)
+  panX += sx - afterScreen.px
+  panZ += sy - afterScreen.py
   draw()
 })
 
 canvas.addEventListener('click', (e) => {
+  if (bboxDragMode) return
   const p = pickPlacement(e.clientX, e.clientY)
   if (!p) {
     detailEl.textContent = 'No point near click.'
@@ -178,6 +466,25 @@ canvas.addEventListener('click', (e) => {
   }
   detailEl.textContent = JSON.stringify(p, null, 2)
 })
+
+function updateBboxInfo() {
+  const bx0 = parseFloat(bboxInputs.x_min.value)
+  const bx1 = parseFloat(bboxInputs.x_max.value)
+  const bz0 = parseFloat(bboxInputs.z_min.value)
+  const bz1 = parseFloat(bboxInputs.z_max.value)
+  const infoEl = document.getElementById('bboxInfo')
+  if (![bx0, bx1, bz0, bz1].every((n) => Number.isFinite(n))) {
+    infoEl.textContent = ''
+    return
+  }
+  const count = filtered.filter((p) => {
+    const pos = p.position || {}
+    const x = pos.x ?? 0
+    const z = pos.z ?? 0
+    return x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1
+  }).length
+  infoEl.textContent = `${count} placements inside bbox`
+}
 
 function syncBboxInputs(bbox) {
   if (!bbox) return
@@ -207,10 +514,20 @@ document.getElementById('btnExport').addEventListener('click', async () => {
 })
 
 for (const el of Object.values(bboxInputs)) {
-  el.addEventListener('change', draw)
+  el.addEventListener('change', () => {
+    updateBboxInfo()
+    draw()
+  })
 }
 
+document.getElementById('btnReset').addEventListener('click', () => {
+  for (const el of Object.values(bboxInputs)) el.value = ''
+  updateBboxInfo()
+  draw()
+})
+
 ;[cbLs, cbVz, srcFilter].forEach((el) => el.addEventListener('input', applyFilters))
+dataSource.addEventListener('change', load)
 
 function resizeCanvas() {
   const wrap = canvas.parentElement
@@ -222,14 +539,16 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas)
 
 async function load() {
-  const res = await fetch('/api/placements-maracaibo.json')
+  const useFull = dataSource.value === 'layers_static'
+  const url = useFull ? '/api/placements-layers-static.json' : '/api/placements-maracaibo.json'
+  const res = await fetch(url)
   if (!res.ok) {
     detailEl.textContent = `Failed to load placements: ${res.status} ${await res.text()}`
     return
   }
   const data = await res.json()
-  placements = data.placements || []
-  syncBboxInputs(data.bbox)
+  placements = Array.isArray(data) ? data : data.placements || []
+  if (data.bbox) syncBboxInputs(data.bbox)
   applyFilters()
   exportCli()
 }

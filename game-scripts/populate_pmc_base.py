@@ -33,7 +33,17 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
-import mercs2_data_layers as m2dl
+import importlib as _importlib
+import mercs2_actor_utils as actor_utils; _importlib.reload(actor_utils)
+import mercs2_data_layers as m2dl; _importlib.reload(m2dl)
+import mercs2_mesh_utils as mesh_utils; _importlib.reload(mesh_utils)
+import mercs2_vz_taxonomy as vz_tax; _importlib.reload(vz_tax)
+
+_TOOLS_DIR_EARLY = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "tools")
+if _TOOLS_DIR_EARLY not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR_EARLY)
+import mercs2_coords as _mercs2_coords_mod; _importlib.reload(_mercs2_coords_mod)
+from mercs2_coords import game_yaw_to_ue_yaw_deg, game_quat_to_ue_rotator_deg
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -50,7 +60,6 @@ PMC_MESH_ROOT: str = f"{CONTENT_BASE}/Meshes/PMCBase"
 
 GAME_TO_UE: float = 100.0
 DEDUP_CELL_SIZE_UE: float = 50.0
-QUAT_NON_YAW_WARN_THRESHOLD: float = 0.08
 
 LOG_PREFIX = "[PMCPopulate]"
 
@@ -108,9 +117,25 @@ _GENERIC_SEGMENT_RE: re.Pattern[str] = re.compile(
 )
 
 _BLOCK_FOLDER_RE: re.Pattern[str] = re.compile(
-    r"^\d+_blocks__VZ__(.+?)(?:_P\d+_Q\d+)?\.block$",
+    r"^(?:\d+_blocks__VZ__)?(.+?)(?:_P\d+_Q\d+)?(?:\.block|_block)?$",
     re.IGNORECASE,
 )
+
+
+def _placement_game_xyz(p: dict) -> tuple[float, float, float]:
+    """Read game-space position from placement JSON (dict or legacy flat keys)."""
+    pos = p.get("position")
+    if isinstance(pos, dict):
+        return (
+            float(pos.get("x", 0.0)),
+            float(pos.get("y", 0.0)),
+            float(pos.get("z", 0.0)),
+        )
+    return (
+        float(p.get("position_x", 0.0)),
+        float(p.get("position_y", 0.0)),
+        float(p.get("position_z", 0.0)),
+    )
 
 
 def _canonical_from_path(mesh_path: str) -> str:
@@ -214,31 +239,45 @@ def _spawn_actor_at(
 
 
 def placement_to_rotator(p: dict) -> unreal.Rotator:
-    """Convert a placement record's rotation fields to a UE Rotator.
+    """Convert a placement record's rotation to a UE Rotator (pitch, yaw, roll).
 
-    layers_static uses sin/cos pairs; vz_state uses sin-only.
-    Both encode yaw around the Y axis (game space) → Z axis (UE space).
+    Priority: full quaternion > rotation_y_rad > rotation_y_sin > legacy rot_sin/rot_cos.
+    The binary stores a unit quaternion; qy=sin(yaw/2), qw=cos(yaw/2).
     """
-    rot_sin = p.get("rotation_sin", p.get("rotation_y", 0.0))
-    rot_cos = p.get("rotation_cos", None)
+    # Full quaternion (new extraction format with all 4 components)
+    if "rotation_quat_w" in p:
+        qx = float(p.get("rotation_quat_x", 0.0))
+        qy = float(p.get("rotation_quat_y", 0.0))
+        qz = float(p.get("rotation_quat_z", 0.0))
+        qw = float(p.get("rotation_quat_w", 1.0))
+        pitch, yaw, roll = game_quat_to_ue_rotator_deg(qx, qy, qz, qw)
+        return unreal.Rotator(roll=roll, pitch=pitch, yaw=yaw)
 
-    if rot_cos is not None:
-        yaw_rad = math.atan2(float(rot_sin), float(rot_cos))
-    else:
-        sin_val = max(-1.0, min(1.0, float(rot_sin)))
-        yaw_rad = math.asin(sin_val)
+    # Pre-computed yaw (half-angle aware in newer extractions)
+    if "rotation_y_rad" in p:
+        yaw_ue = game_yaw_to_ue_yaw_deg(float(p["rotation_y_rad"]))
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    qx = abs(float(p.get("rotation_quat_x", p.get("rotation_0", 0.0))))
-    qz = abs(float(p.get("rotation_quat_z", p.get("rotation_1", 0.0))))
-    if qx > QUAT_NON_YAW_WARN_THRESHOLD or qz > QUAT_NON_YAW_WARN_THRESHOLD:
-        eid = p.get("entity_id", "?")
-        _warn(
-            f"Non-yaw quaternion components (qx={qx:.4f}, qz={qz:.4f}) "
-            f"on entity {eid} — pitch/roll ignored"
-        )
+    # vz_state: single sin(yaw)
+    if "rotation_y_sin" in p:
+        s = float(p["rotation_y_sin"])
+        c = float(p.get("rotation_y_cos", math.sqrt(max(0.0, 1.0 - s * s))))
+        yaw_rad = math.atan2(s, c)
+        yaw_ue = game_yaw_to_ue_yaw_deg(yaw_rad)
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    yaw_deg = math.degrees(yaw_rad)
-    return unreal.Rotator(0.0, yaw_deg, 0.0)
+    # Legacy: rot_sin/rot_cos are quaternion half-angles
+    if "rot_sin" in p and "rot_cos" in p:
+        yaw_rad = 2.0 * math.atan2(float(p["rot_sin"]), float(p["rot_cos"]))
+        yaw_ue = game_yaw_to_ue_yaw_deg(yaw_rad)
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
+
+    # Legacy: rotation_y_deg (old format, potentially rounded)
+    if "rotation_y_deg" in p:
+        yaw_ue = game_yaw_to_ue_yaw_deg(math.radians(float(p["rotation_y_deg"])))
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
+
+    return unreal.Rotator(roll=0.0, pitch=0.0, yaw=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -351,30 +390,22 @@ def place_mesh(
     folder: str,
     data_layer: Optional[unreal.DataLayerInstance],
     editor_hidden: bool,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> Optional[unreal.Actor]:
-    """Spawn a StaticMeshActor with the given transform."""
-    mesh_asset = unreal.EditorAssetLibrary.load_asset(mesh_path)
-    if mesh_asset is None:
-        return None
-
-    actor = _spawn_actor_at(unreal.StaticMeshActor, loc, rot)
-    if actor is None:
-        return None
-
-    smc = actor.static_mesh_component
-    if smc is not None:
-        smc.set_static_mesh(mesh_asset)
-
-    actor.set_actor_location(loc, False, False)
-    actor.set_actor_rotation(rot, False)
-    actor.set_actor_scale3d(scale)
-    actor.set_actor_label(label)
-    actor.set_folder_path(folder)
-
-    if editor_hidden:
-        actor.set_is_temporarily_hidden_in_editor(True)
-
-    _add_actor_to_data_layer_if_any(actor, data_layer)
+    """Spawn or update a StaticMeshActor with a stable Outliner label."""
+    actor, _created = actor_utils.place_or_update_static_mesh(
+        _spawn_actor_at,
+        mesh_path,
+        loc,
+        rot,
+        scale,
+        label,
+        folder,
+        data_layer,
+        editor_hidden,
+        label_index=label_index,
+    )
     return actor
 
 
@@ -394,41 +425,41 @@ def place_light_from_placement(
     folder: str,
     data_layer: Optional[unreal.DataLayerInstance],
     editor_hidden: bool,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> Optional[unreal.Actor]:
-    """Spawn a PointLight from a placement with ecs.LightObject data."""
-    x = float(p.get("position_x", 0.0))
-    y = float(p.get("position_y", 0.0))
-    z = float(p.get("position_z", 0.0))
-    loc = game_to_ue(x, y, z)
-    rot = unreal.Rotator(0.0, 0.0, 0.0)
-
-    actor = _spawn_actor_at(unreal.PointLight, loc, rot)
-    if actor is None:
-        return None
-
+    """Spawn or update a PointLight from a placement with ecs.LightObject data."""
     ecs = p.get("ecs", {})
     light_obj = ecs.get("LightObject", {})
+    if not light_obj and not str(p.get("entity_name", "")).lower().startswith("light_"):
+        return None
 
-    r = float(light_obj.get("r", light_obj.get("color_r", 1.0)))
-    g = float(light_obj.get("g", light_obj.get("color_g", 1.0)))
-    b = float(light_obj.get("b", light_obj.get("color_b", 1.0)))
+    x, y, z = _placement_game_xyz(p)
+    loc = game_to_ue(x, y, z)
+
+    r = float(light_obj.get("r", light_obj.get("light_color_r", light_obj.get("color_r", 1.0))))
+    g = float(light_obj.get("g", light_obj.get("light_color_g", light_obj.get("color_g", 1.0))))
+    b = float(light_obj.get("b", light_obj.get("light_color_b", light_obj.get("color_b", 1.0))))
     color = _point_light_color_from_ecs(r, g, b)
+    radius = float(
+        light_obj.get("light_radius", light_obj.get("radius", light_obj.get("attenuation_radius", 500.0)))
+    )
+    intensity = float(
+        light_obj.get("light_intensity", light_obj.get("intensity", light_obj.get("brightness", 5000.0)))
+    )
 
-    light_comp = actor.point_light_component
-    if light_comp is not None:
-        light_comp.set_light_color(color)
-        radius = float(light_obj.get("radius", light_obj.get("attenuation_radius", 500.0)))
-        light_comp.set_editor_property("attenuation_radius", radius * GAME_TO_UE)
-        intensity = float(light_obj.get("intensity", light_obj.get("brightness", 5000.0)))
-        light_comp.set_editor_property("intensity", intensity)
-
-    actor.set_actor_label(label)
-    actor.set_folder_path(folder)
-
-    if editor_hidden:
-        actor.set_is_temporarily_hidden_in_editor(True)
-
-    _add_actor_to_data_layer_if_any(actor, data_layer)
+    actor, _created = actor_utils.place_or_update_point_light(
+        _spawn_actor_at,
+        loc,
+        color,
+        intensity,
+        radius * GAME_TO_UE,
+        label,
+        folder,
+        data_layer,
+        editor_hidden,
+        label_index=label_index,
+    )
     return actor
 
 
@@ -438,6 +469,44 @@ def _add_actor_to_data_layer_if_any(
 ) -> None:
     """Delegate to m2dl for data layer assignment."""
     m2dl.add_actor_to_data_layer_if_any(actor, data_layer)
+
+
+def _load_pmc_bbox() -> tuple[float, float, float, float] | None:
+    """PMC base bbox from output/pmc_base_streaming_groups.json (game metres)."""
+    path = os.path.join(REPO_ROOT, "output", "pmc_base_streaming_groups.json")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        bb = doc.get("bbox_game_units", {})
+        lo = bb.get("min", {})
+        hi = bb.get("max", {})
+        return (
+            float(lo.get("x", 0)),
+            float(lo.get("z", 0)),
+            float(hi.get("x", 0)),
+            float(hi.get("z", 0)),
+        )
+    except Exception:
+        return None
+
+
+def _pmc_bbox_filter(bbox: tuple[float, float, float, float] | None):
+    """Return a filter that keeps placements inside the PMC base XZ bbox."""
+    if bbox is None:
+        return None
+    x0, z0, x1, z1 = bbox
+
+    def _inside(p: dict) -> bool:
+        xyz = _placement_game_xyz(p)
+        if xyz is None:
+            return False
+        x, _, z = xyz
+        return x0 <= x <= x1 and z0 <= z <= z1
+
+    return _inside
+
 
 
 # ---------------------------------------------------------------------------
@@ -450,115 +519,82 @@ _VZ_STATE_SRC_RE: re.Pattern[str] = re.compile(
 )
 
 
-def _pmc_vz_parent_label_from_source_lower(source_lower: str) -> str:
-    """Determine the parent data layer label for a vz_state source.
-
-    Returns PMC_VZ_Pristine, PMC_VZ_Destroyed, PMC_VZ_Staging, etc.
-    """
-    if "_pristine" in source_lower:
-        return "PMC_VZ_Pristine"
-    if "_destroyed" in source_lower or "_ruined" in source_lower:
-        return "PMC_VZ_Destroyed"
-    if "_staging" in source_lower or "_combat" in source_lower:
-        return "PMC_VZ_Staging"
-    if "_defenses" in source_lower:
-        return "PMC_VZ_Defenses"
-    if "_captured" in source_lower:
-        return "PMC_VZ_Captured"
-
-    for act in ("_act1", "_act2", "_act3"):
-        if act in source_lower:
-            return f"PMC_VZ_Act{act[-1]}"
-
-    return "PMC_VZ_Other"
-
-
-def _pmc_vz_child_data_layer_label(source: str) -> tuple[str, str]:
-    """Return (parent_label, child_label) for a vz_state source.
-
-    Both use the PMC_ prefix to avoid collision with world layers.
-    """
-    source_lower = source.lower()
-    parent = _pmc_vz_parent_label_from_source_lower(source_lower)
-
-    m = _VZ_STATE_SRC_RE.search(source)
-    suffix = m.group(1) if m else source_lower
-    child = f"PMC_{sanitize_name(suffix)}"
-
-    return parent, child
+def _pmc_ensure_data_layer_cached(
+    label: str,
+    cache: dict[str, Optional[unreal.DataLayerInstance]],
+    *,
+    parent: Optional[unreal.DataLayerInstance] = None,
+) -> Optional[unreal.DataLayerInstance]:
+    if label not in cache:
+        cache[label] = m2dl.get_or_create_data_layer_instance(
+            label,
+            parent=parent,
+            asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        )
+    return cache[label]
 
 
 def _build_pmc_vz_source_data_layers(
     vz_sources: set[str],
 ) -> dict[str, unreal.DataLayerInstance]:
-    """Create data layer hierarchy for all vz_state sources.
-
-    Returns a mapping from source string → DataLayerInstance.
-    """
-    parent_cache: dict[str, Optional[unreal.DataLayerInstance]] = {}
+    """Create PMC Act/Region/Overlay data layer hierarchy."""
+    layer_cache: dict[str, Optional[unreal.DataLayerInstance]] = {}
     source_to_layer: dict[str, unreal.DataLayerInstance] = {}
 
     for source in sorted(vz_sources):
-        parent_label, child_label = _pmc_vz_child_data_layer_label(source)
-
-        if parent_label not in parent_cache:
-            parent_inst = m2dl.get_or_create_data_layer_instance(
-                parent_label,
-                asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        parent_label, region_label, leaf_label = vz_tax.pmc_data_layer_hierarchy(source)
+        parent_inst = _pmc_ensure_data_layer_cached(parent_label, layer_cache)
+        parent_for_leaf = parent_inst
+        if region_label:
+            parent_for_leaf = _pmc_ensure_data_layer_cached(
+                region_label, layer_cache, parent=parent_inst,
             )
-            parent_cache[parent_label] = parent_inst
-
-        parent_inst = parent_cache[parent_label]
-
-        child_inst = m2dl.get_or_create_data_layer_instance(
-            child_label,
-            parent=parent_inst,
-            asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        leaf = _pmc_ensure_data_layer_cached(
+            leaf_label, layer_cache, parent=parent_for_leaf,
         )
-        if child_inst is not None:
-            source_to_layer[source] = child_inst
+        if leaf is not None:
+            source_to_layer[source] = leaf
 
-    _log(
-        f"Created {len(source_to_layer)} vz_state data layers "
-        f"under {len(parent_cache)} parent groups"
-    )
+    _log(f"Created {len(source_to_layer)} PMC vz_state data layers")
     return source_to_layer
 
 
 def _apply_pmc_vz_data_layer_initial_states(
     source_to_layer: dict[str, unreal.DataLayerInstance],
 ) -> None:
-    """Set initial loaded/visible states for vz data layers.
-
-    Pristine layers are loaded+visible; destroyed/staging/mission layers
-    are loaded but hidden.
-    """
-    sub = m2dl.data_layer_editor_subsystem()
+    """Set initial states: Act1 + pristine visible; others hidden/unloaded."""
     hidden_sources = _load_streaming_hidden_sources()
 
     for source, layer in source_to_layer.items():
-        source_lower = source.lower()
+        info = vz_tax.parse_overlay_source(source)
+        activated = vz_tax.initial_runtime_activated(info)
         should_hide = (
-            source_lower in hidden_sources
-            or "_destroyed" in source_lower
-            or "_ruined" in source_lower
-            or "_staging" in source_lower
-            or "_combat" in source_lower
-            or "_defenses" in source_lower
+            source in hidden_sources
+            or not activated
+            or info.parent_kind in (
+                "destroyed", "staging", "defenses", "act2", "act3", "contract",
+            )
         )
+        m2dl.configure_data_layer_for_pie(
+            layer,
+            activated=activated and not should_hide,
+            loaded_in_editor=activated,
+        )
+        sub = m2dl.data_layer_editor_subsystem()
+        if sub is not None:
+            try:
+                sub.set_data_layer_is_initially_visible(layer, not should_hide)
+            except Exception:
+                pass
 
-        try:
-            if should_hide:
-                sub.set_data_layer_is_initially_visible(layer, False)
-            else:
-                sub.set_data_layer_is_initially_visible(layer, True)
-        except Exception:
-            pass
-
-        try:
-            sub.set_data_layer_is_loaded_in_editor(layer, True)
-        except Exception:
-            pass
+    m2dl.set_act_parent_states(
+        act_states={
+            1: unreal.DataLayerRuntimeState.ACTIVATED,
+            2: unreal.DataLayerRuntimeState.UNLOADED,
+            3: unreal.DataLayerRuntimeState.UNLOADED,
+        },
+        prefix="PMC_VZ",
+    )
 
 
 def _data_layer_for_placement(
@@ -580,24 +616,20 @@ def _ue_folder_for_placement_pmc(p: dict, vis: str) -> str:
     if not source or "layers_static" in source.lower():
         return "World/PMC/Base"
 
-    source_lower = source.lower()
-    m = _VZ_STATE_SRC_RE.search(source)
-    suffix = m.group(1) if m else source_lower
-
-    if "_pristine" in source_lower:
-        group = "VZ_Pristine"
-    elif "_destroyed" in source_lower or "_ruined" in source_lower:
-        group = "VZ_Destroyed"
-    elif "_staging" in source_lower or "_combat" in source_lower:
-        group = "VZ_Staging"
-    elif "_defenses" in source_lower:
-        group = "VZ_Defenses"
-    elif "_captured" in source_lower:
-        group = "VZ_Captured"
-    else:
-        group = "VZ_Other"
-
-    return f"World/PMC/{group}/{sanitize_name(suffix)}"
+    info = vz_tax.parse_overlay_source(source)
+    if info.act is not None:
+        region = info.region or "Other"
+        return f"World/PMC/Act{info.act}/{region}/{sanitize_name(info.stem)}"
+    group_map = {
+        "pristine": "VZ_Pristine",
+        "destroyed": "VZ_Destroyed",
+        "staging": "VZ_Staging",
+        "defenses": "VZ_Defenses",
+        "captured": "VZ_Captured",
+        "contract": "VZ_Contract",
+    }
+    group = group_map.get(info.parent_kind, "VZ_Other")
+    return f"World/PMC/{group}/{sanitize_name(info.stem)}"
 
 
 # ---------------------------------------------------------------------------
@@ -640,18 +672,8 @@ def run() -> None:
     if world is None:
         return
 
-    # Check for existing PMC actors — skip if already populated
-    existing_actors = m2dl.iter_all_level_actors()
-    for actor in existing_actors:
-        folder = actor.get_folder_path()
-        if isinstance(folder, unreal.Name):
-            folder = str(folder)
-        if folder and str(folder).startswith("World/PMC"):
-            _warn(
-                "Found existing actors in World/PMC — skipping populate. "
-                "Delete the World/PMC folder in the Outliner to re-populate."
-            )
-            return
+    label_index = actor_utils.ActorLabelIndex.build()
+    _log(f"Actor label index: {len(label_index)} existing level actors")
 
     # Load placements
     placements = _load_placements()
@@ -688,7 +710,9 @@ def run() -> None:
     # Place entities
     dedup = SpatialDedup()
     placed_mesh = 0
+    mesh_reused = 0
     placed_light = 0
+    lights_reused = 0
     skipped_no_mesh = 0
     skipped_pattern = 0
     skipped_dedup = 0
@@ -721,11 +745,16 @@ def run() -> None:
 
             if is_light or has_light_obj:
                 label = sanitize_name(entity_name or f"Light_{entity_id}")
+                had_light = actor_utils.actor_exists(label, label_index)
                 actor = place_light_from_placement(
-                    p, label, folder, data_layer, editor_hidden
+                    p, label, folder, data_layer, editor_hidden,
+                    label_index=label_index,
                 )
                 if actor is not None:
-                    placed_light += 1
+                    if had_light:
+                        lights_reused += 1
+                    else:
+                        placed_light += 1
                 continue
 
             mesh_path = resolve_mesh(entity_name, mesh_lookup)
@@ -733,9 +762,7 @@ def run() -> None:
                 skipped_no_mesh += 1
                 continue
 
-            x = float(p.get("position_x", 0.0))
-            y = float(p.get("position_y", 0.0))
-            z = float(p.get("position_z", 0.0))
+            x, y, z = _placement_game_xyz(p)
             loc = game_to_ue(x, y, z)
             rot = placement_to_rotator(p)
             scale = unreal.Vector(1.0, 1.0, 1.0)
@@ -746,16 +773,21 @@ def run() -> None:
                 skipped_dedup += 1
                 continue
 
+            had_mesh = actor_utils.actor_exists(label, label_index)
             place_mesh(
                 mesh_path, loc, rot, scale, label, folder,
                 data_layer, editor_hidden,
+                label_index=label_index,
             )
-            placed_mesh += 1
+            if had_mesh:
+                mesh_reused += 1
+            else:
+                placed_mesh += 1
 
     _log("=" * 60)
     _log("PMC Base Populate — summary")
-    _log(f"  Mesh actors placed:    {placed_mesh}")
-    _log(f"  Light actors placed:   {placed_light}")
+    _log(f"  Mesh actors placed:    {placed_mesh} (updated: {mesh_reused})")
+    _log(f"  Light actors placed:   {placed_light} (updated: {lights_reused})")
     _log(f"  Skipped (no mesh):     {skipped_no_mesh}")
     _log(f"  Skipped (pattern):     {skipped_pattern}")
     _log(f"  Skipped (dedup):       {skipped_dedup}")

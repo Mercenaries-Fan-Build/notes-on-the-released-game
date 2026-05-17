@@ -1,6 +1,7 @@
 """Mercenaries 2 Recreation — Project Setup Script
 
-Run this FIRST in the UE 5.7 Editor (Edit → Run Python Script) to:
+Run this FIRST in the UE 5.7 Editor (Edit → Run Python Script), or use
+``setup_all.py`` to run every setup script in order. This script:
   1. Verify required plugins are enabled (and log instructions if not).
   2. Create or open the main Mercs2World map.
   3. Create the expected Content directory structure for the import pipeline.
@@ -18,9 +19,13 @@ LOG_PREFIX = "[Mercs2Setup]"
 
 REQUIRED_PLUGINS = [
     ("PythonScriptPlugin", "Required to run Editor Python scripts (this script)."),
-    ("DataLayerEditor", "Required for World Partition Data Layers."),
     ("InterchangeEditor", "Required for glTF/GLB import via Interchange."),
+    ("Interchange", "Core Interchange module for glTF/GLB import."),
     ("InterchangeImport", "Required for glTF/GLB import via Interchange."),
+]
+
+OPTIONAL_PLUGINS = [
+    ("DataLayerEditor", "Only needed for World Partition data layers (optional on standard levels)."),
 ]
 
 CONTENT_DIRECTORIES = [
@@ -61,6 +66,12 @@ def ensure_plugins() -> None:
             _warn(f"  MISSING  {plugin_name} — {reason}")
             missing.append((plugin_name, reason))
 
+    for plugin_name, reason in OPTIONAL_PLUGINS:
+        if plugin_name in enabled:
+            _log(f"  OK  {plugin_name} (optional)")
+        else:
+            _warn(f"  optional MISSING  {plugin_name} — {reason}")
+
     if missing:
         _warn(
             "Some plugins are not enabled. Add the following to your .uproject "
@@ -73,7 +84,12 @@ def ensure_plugins() -> None:
 
 
 def create_or_open_map(map_path: str = "/Game/Mercs2/Maps/Mercs2World") -> None:
-    """Create a new World Partition level at *map_path*, or open it if it exists."""
+    """Create a standard (non-World-Partition) level at *map_path*, or open it if it exists.
+
+    We use a regular level (not World Partition) so all placed actors load in PIE
+    without streaming / Data Layer activation issues. Suitable for ~1–2k actors at
+    this stage of the recreation project.
+    """
     _log("--- Setting up map ---")
 
     level_sub = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -82,10 +98,10 @@ def create_or_open_map(map_path: str = "/Game/Mercs2/Maps/Mercs2World") -> None:
         _log(f"Map already exists — opening {map_path}")
         level_sub.load_level(map_path)
     else:
-        _log(f"Creating new World Partition level at {map_path}")
-        level_sub.new_level(map_path, is_partitioned_world=True)
+        _log(f"Creating new level (no World Partition) at {map_path}")
+        level_sub.new_level(map_path, is_partitioned_world=False)
         level_sub.save_current_level()
-        _log("  Saved with World Partition enabled.")
+        _log("  Saved as a standard persistent level.")
 
     _log(f"Active map: {map_path}")
 

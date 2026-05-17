@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(__dirname, 'index.html'),
           placementPreview: path.resolve(__dirname, 'placement-preview.html'),
+          placementBbox: path.resolve(__dirname, 'placement-bbox.html'),
         },
       },
     },

@@ -106,17 +106,57 @@ def _create_widget_blueprint(name: str, package_dir: str) -> unreal.WidgetBluepr
     return wbp  # type: ignore[return-value]
 
 
-def _construct(wbp: unreal.WidgetBlueprint, widget_class: type, name: str) -> unreal.Widget | None:
+def _widget_tree(wbp: unreal.WidgetBlueprint) -> unreal.WidgetTree | None:
+    """Return the blueprint widget tree, or None if the UE Python API cannot access it."""
+    for prop in ("widget_tree", "WidgetTree"):
+        try:
+            tree = wbp.get_editor_property(prop)
+            if tree is not None:
+                return tree  # type: ignore[return-value]
+        except Exception:
+            pass
+        try:
+            tree = getattr(wbp, prop)
+            if tree is not None:
+                return tree  # type: ignore[return-value]
+        except Exception:
+            pass
+    return None
+
+
+def _can_build_widget_tree(wbp: unreal.WidgetBlueprint) -> bool:
+    return _widget_tree(wbp) is not None
+
+
+def _needs_widget_build(wbp: unreal.WidgetBlueprint) -> bool:
+    tree = _widget_tree(wbp)
+    if tree is None:
+        return False
     try:
-        return wbp.widget_tree.construct_widget(widget_class, unreal.Name(name))
+        return tree.root_widget is None
+    except Exception:
+        return False
+
+
+def _construct(wbp: unreal.WidgetBlueprint, widget_class: type, name: str) -> unreal.Widget | None:
+    tree = _widget_tree(wbp)
+    if tree is None:
+        _warn(f"  widget_tree missing on {wbp.get_name()} — cannot construct {name}")
+        return None
+    try:
+        return tree.construct_widget(widget_class, unreal.Name(name))
     except Exception as exc:
         _warn(f"  construct_widget({widget_class.__name__}, {name}) failed: {exc}")
         return None
 
 
 def _set_root(wbp: unreal.WidgetBlueprint, root: unreal.Widget) -> None:
+    tree = _widget_tree(wbp)
+    if tree is None:
+        _warn("  widget_tree missing — cannot set root_widget")
+        return
     try:
-        wbp.widget_tree.set_editor_property("root_widget", root)
+        tree.set_editor_property("root_widget", root)
     except Exception as exc:
         _warn(f"  set root_widget failed: {exc}")
 
@@ -343,10 +383,13 @@ def create_hud_root() -> unreal.WidgetBlueprint | None:
     wbp = _create_widget_blueprint("WBP_HUDRoot", HUD_DIR)
     if wbp is None:
         return None
-    # Only build the tree on first creation; if it already exists we leave the
-    # user's authored layout intact.
-    needs_build = wbp.widget_tree.root_widget is None
-    if needs_build:
+    if not _can_build_widget_tree(wbp):
+        _warn(
+            "  widget_tree not exposed in this UE build — open WBP_HUDRoot in the "
+            "UMG designer if the layout is empty."
+        )
+        return wbp
+    if _needs_widget_build(wbp):
         _build_hud_root(wbp)
         unreal.EditorAssetLibrary.save_asset(HUD_PATH)
     return wbp
@@ -426,10 +469,19 @@ def create_pause_menu() -> unreal.WidgetBlueprint | None:
     wbp = _create_widget_blueprint("WBP_PauseMenu", HUD_DIR)
     if wbp is None:
         return None
-    needs_build = wbp.widget_tree.root_widget is None
-    if needs_build:
+    if not _can_build_widget_tree(wbp):
+        _warn(
+            "  widget_tree not exposed — create WBP_PauseMenu layout manually in UMG "
+            "(Resume/Save/Load/Settings/Quit buttons)."
+        )
+        unreal.EditorAssetLibrary.save_asset(PAUSE_PATH)
+        return wbp
+    if _needs_widget_build(wbp):
         _build_pause_menu(wbp)
         unreal.EditorAssetLibrary.save_asset(PAUSE_PATH)
+    if not unreal.EditorAssetLibrary.does_asset_exist(PAUSE_PATH):
+        _err(f"  WBP_PauseMenu was not saved to {PAUSE_PATH}")
+        return None
     return wbp
 
 
@@ -471,7 +523,7 @@ WBP_PauseMenu — manual wiring:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def run() -> None:
+def run() -> bool:
     _log("=" * 70)
     _log("Mercenaries 2 — Basic HUD scaffolding")
     _log("=" * 70)
@@ -479,16 +531,22 @@ def run() -> None:
     _ensure_directory(UI_ROOT)
     _ensure_directory(HUD_DIR)
 
-    create_hud_root()
-    create_pause_menu()
+    ok = True
+    if create_hud_root() is None:
+        _err("WBP_HUDRoot creation failed")
+        ok = False
+    if create_pause_menu() is None:
+        _err("WBP_PauseMenu creation failed")
+        ok = False
 
     _log("--- Manual follow-up ---")
     for line in HUD_MANUAL_STEPS.strip().splitlines():
         _warn(line)
 
     _log("=" * 70)
-    _log("Done.")
+    _log("Done." if ok else "Finished with errors — see log above.")
     _log("=" * 70)
+    return ok
 
 
 if __name__ == "__main__":

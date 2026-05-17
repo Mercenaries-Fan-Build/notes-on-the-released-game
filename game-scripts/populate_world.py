@@ -33,7 +33,18 @@ if TYPE_CHECKING:
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
-import mercs2_data_layers as m2dl
+import importlib as _importlib
+import mercs2_actor_utils as actor_utils; _importlib.reload(actor_utils)
+import mercs2_data_layers as m2dl; _importlib.reload(m2dl)
+import mercs2_mesh_utils as mesh_utils; _importlib.reload(mesh_utils)
+import mercs2_vz_taxonomy as vz_tax; _importlib.reload(vz_tax)
+
+_TOOLS_DIR_EARLY = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "tools")
+if _TOOLS_DIR_EARLY not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR_EARLY)
+import mercs2_coords as _mercs2_coords_mod
+_importlib.reload(_mercs2_coords_mod)
+from mercs2_coords import game_yaw_to_ue_yaw_deg, game_quat_to_ue_rotator_deg
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -50,6 +61,7 @@ CATEGORY_FOLDERS: dict[str, str] = {
     "road": "Roads",
     "environment": "Environment",
     "world_layer": "WorldLayers",
+    "world_cell": "WorldCells",
     "other": "Other",
 }
 
@@ -63,8 +75,6 @@ WORLD_MIN_Y, WORLD_MAX_Y = -150.0, 450.0
 
 WALL_HEIGHT_UE = 50000.0
 WALL_THICKNESS_UE = 500.0
-
-QUAT_NON_YAW_WARN_THRESHOLD = 0.08
 
 LOG_PREFIX = "[Mercs2World]"
 
@@ -104,9 +114,18 @@ _GENERIC_SEGMENT_RE = re.compile(
 )
 
 _BLOCK_FOLDER_RE = re.compile(
-    r"^(?:a_)?\d+_blocks__vz__(.+?)(?:_p\d{3}_q\d+)?(?:_block)?$",
+    r"^(?:a_)?\d+_blocks__vz__(.+?)(?:_p\d{3}_q\d+)?(?:\.block|_block)?$",
     re.IGNORECASE,
 )
+
+# Props baked into c3 world-cell meshes — skip per-entity mesh spawn when cells are placed.
+_CELL_PROP_ENTITY_RE = re.compile(
+    r"^(_)?(global|jungle|maracaibo|city|outskirt|oil|pmc)_env_|"
+    r"^(_)?(global|jungle)_env_|^road\b|_plant|_rock|_tree|_palm|_bush|_foliage",
+    re.IGNORECASE,
+)
+
+_C3_CELL_ID_RE = re.compile(r"c3(\d{4})", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # vz_state source pattern
@@ -121,7 +140,6 @@ _VZ_STATE_SRC_RE = re.compile(
 # Module-level warning-once flags
 # ---------------------------------------------------------------------------
 
-_warned_quat_non_yaw: bool = False
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -178,16 +196,24 @@ def sanitize_name(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _is_layers_static_placement(p: dict) -> bool:
+    """True for base-world layers_static records (source is a block filename, not a tag)."""
+    if p.get("block_type") == "layers_static":
+        return True
+    source = str(p.get("source", "")).lower()
+    return not source or "layers_static" in source
+
+
 def classify_visibility(p: dict) -> Literal["visible", "hidden", "skip"]:
     """Determine whether a placement should be visible, hidden, or skipped."""
     entity = p.get("entity_name") or ""
     if _SKIP_PATTERNS.search(entity):
         return "skip"
 
-    source = p.get("source", "")
-    if not source or source == "layers_static":
+    if _is_layers_static_placement(p):
         return "visible"
 
+    source = p.get("source", "")
     src_lower = source.lower()
     if "pristine" in src_lower:
         return "visible"
@@ -451,40 +477,51 @@ def _spawn_actor_at(
 
 
 def placement_to_rotator(p: dict) -> unreal.Rotator:
-    """Extract yaw rotation from a placement record and return a Rotator."""
-    global _warned_quat_non_yaw
+    """Convert a placement record's rotation to a UE Rotator (pitch, yaw, roll).
 
-    if "rotation_y_deg" in p:
-        return unreal.Rotator(0.0, float(p["rotation_y_deg"]), 0.0)
+    Priority order:
+    1. Full quaternion (qx, qy, qz, qw) — preserves pitch/roll, highest precision
+    2. rotation_y_rad — pre-computed yaw from extractor (half-angle aware)
+    3. rotation_y_sin — vz_state single-sin encoding (yaw only, sign-ambiguous cos)
 
+    The 42-byte layers_static record stores a unit quaternion at offsets +0x14..+0x20.
+    For pure Y-axis rotation: qy = sin(yaw/2), qw = cos(yaw/2).
+    Full yaw = 2*atan2(qy, qw), already computed in the extractor as rotation_y_rad.
+    """
+    # Prefer full quaternion when all 4 components are available (layers_static)
+    if "rotation_quat_w" in p:
+        qx = float(p.get("rotation_quat_x", 0.0))
+        qy = float(p.get("rotation_quat_y", 0.0))
+        qz = float(p.get("rotation_quat_z", 0.0))
+        qw = float(p.get("rotation_quat_w", 1.0))
+        pitch, yaw, roll = game_quat_to_ue_rotator_deg(qx, qy, qz, qw)
+        return unreal.Rotator(roll=roll, pitch=pitch, yaw=yaw)
+
+    # Pre-computed yaw (half-angle aware, sign handled by game_yaw_to_ue_yaw_deg)
     if "rotation_y_rad" in p:
-        return unreal.Rotator(0.0, math.degrees(float(p["rotation_y_rad"])), 0.0)
+        yaw_ue = game_yaw_to_ue_yaw_deg(float(p["rotation_y_rad"]))
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    if "rot_sin" in p and "rot_cos" in p:
-        yaw_rad = math.atan2(float(p["rot_sin"]), float(p["rot_cos"]))
-        return unreal.Rotator(0.0, math.degrees(yaw_rad), 0.0)
-
+    # vz_state: single sin(yaw) value, cos reconstructed
     if "rotation_y_sin" in p:
         s = float(p["rotation_y_sin"])
         c = float(p.get("rotation_y_cos", math.sqrt(max(0.0, 1.0 - s * s))))
         yaw_rad = math.atan2(s, c)
-        return unreal.Rotator(0.0, math.degrees(yaw_rad), 0.0)
+        yaw_ue = game_yaw_to_ue_yaw_deg(yaw_rad)
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    qx = float(p.get("rotation_quat_x", 0.0))
-    qz = float(p.get("rotation_quat_z", 0.0))
-    qy = float(p.get("rotation_quat_y", 0.0))
-    qw = float(p.get("rotation_quat_w", 1.0))
+    # Legacy: rot_sin/rot_cos are quaternion half-angles
+    if "rot_sin" in p and "rot_cos" in p:
+        yaw_rad = 2.0 * math.atan2(float(p["rot_sin"]), float(p["rot_cos"]))
+        yaw_ue = game_yaw_to_ue_yaw_deg(yaw_rad)
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    if (abs(qx) > QUAT_NON_YAW_WARN_THRESHOLD or abs(qz) > QUAT_NON_YAW_WARN_THRESHOLD):
-        if not _warned_quat_non_yaw:
-            _warn(
-                f"Non-trivial quaternion pitch/roll detected "
-                f"(qx={qx:.3f}, qz={qz:.3f}) — only yaw extracted"
-            )
-            _warned_quat_non_yaw = True
+    # Legacy: rotation_y_deg (old format, potentially rounded)
+    if "rotation_y_deg" in p:
+        yaw_ue = game_yaw_to_ue_yaw_deg(math.radians(float(p["rotation_y_deg"])))
+        return unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw_ue)
 
-    yaw_rad = math.atan2(2.0 * (qw * qy - qx * qz), 1.0 - 2.0 * (qx * qx + qy * qy))
-    return unreal.Rotator(0.0, math.degrees(yaw_rad), 0.0)
+    return unreal.Rotator(roll=0.0, pitch=0.0, yaw=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -516,16 +553,18 @@ class SpatialDedup:
 # ---------------------------------------------------------------------------
 
 
-def find_actor_by_label(label: str) -> unreal.Actor | None:
-    """Search the current level for an actor with the given label."""
-    for actor in m2dl.iter_all_level_actors():
-        if actor.get_actor_label() == label:
-            return actor
-    return None
+def find_actor_by_label(
+    label: str,
+    index: actor_utils.ActorLabelIndex | None = None,
+) -> unreal.Actor | None:
+    return actor_utils.find_actor_by_label(label, index)
 
 
-def actor_exists(label: str) -> bool:
-    return find_actor_by_label(label) is not None
+def actor_exists(
+    label: str,
+    index: actor_utils.ActorLabelIndex | None = None,
+) -> bool:
+    return actor_utils.actor_exists(label, index)
 
 
 def _add_actor_to_data_layer_if_any(
@@ -549,26 +588,22 @@ def place_mesh(
     folder: str,
     data_layer: unreal.DataLayerInstance | None,
     editor_hidden: bool = False,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> unreal.StaticMeshActor | None:
-    """Spawn a StaticMeshActor, configure it, and return it."""
-    actor = _spawn_actor_at(unreal.StaticMeshActor, loc, rot)
-    if actor is None:
-        return None
-
-    mesh = unreal.EditorAssetLibrary.load_asset(mesh_path)
-    if mesh is not None:
-        actor.static_mesh_component.set_static_mesh(mesh)
-
-    actor.set_actor_location(loc, False, False)
-    actor.set_actor_rotation(rot, False)
-    actor.set_actor_scale3d(scale)
-    actor.set_actor_label(label)
-    actor.set_folder_path(folder)
-
-    if editor_hidden:
-        actor.set_is_temporarily_hidden_in_editor(True)
-
-    _add_actor_to_data_layer_if_any(actor, data_layer)
+    """Spawn or update a StaticMeshActor with a stable Outliner label."""
+    actor, _created = actor_utils.place_or_update_static_mesh(
+        _spawn_actor_at,
+        mesh_path,
+        loc,
+        rot,
+        scale,
+        label,
+        folder,
+        data_layer,
+        editor_hidden,
+        label_index=label_index,
+    )
     return actor
 
 
@@ -597,42 +632,37 @@ def place_light_from_placement(
     folder: str,
     data_layer: unreal.DataLayerInstance | None,
     editor_hidden: bool = False,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> unreal.PointLight | None:
-    """Spawn a PointLight from an ECS LightObject record."""
+    """Spawn or update a PointLight from an ECS LightObject record."""
     ecs = p.get("ecs", {})
     light_data = ecs.get("LightObject", {})
     if not light_data:
         return None
 
     loc = placement_to_ue_location(p)
-    rot = unreal.Rotator()
 
-    actor = _spawn_actor_at(unreal.PointLight, loc, rot)
-    if actor is None:
-        return None
+    r = float(light_data.get("r", light_data.get("light_color_r", 1.0)))
+    g = float(light_data.get("g", light_data.get("light_color_g", 1.0)))
+    b = float(light_data.get("b", light_data.get("light_color_b", 1.0)))
+    intensity = float(light_data.get("intensity", light_data.get("light_intensity", 5000.0)))
+    radius = float(
+        light_data.get("attenuation_radius", light_data.get("light_radius", 10.0))
+    )
 
-    comp = actor.point_light_component
-
-    comp.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-
-    r = float(light_data.get("r", 1.0))
-    g = float(light_data.get("g", 1.0))
-    b = float(light_data.get("b", 1.0))
-    comp.set_editor_property("light_color", _point_light_color_from_ecs(r, g, b))
-
-    intensity = float(light_data.get("intensity", 5000.0))
-    comp.set_editor_property("intensity", intensity)
-
-    radius = float(light_data.get("attenuation_radius", 10.0))
-    comp.set_editor_property("attenuation_radius", radius * GAME_TO_UE)
-
-    actor.set_actor_label(label)
-    actor.set_folder_path(folder)
-
-    if editor_hidden:
-        actor.set_is_temporarily_hidden_in_editor(True)
-
-    _add_actor_to_data_layer_if_any(actor, data_layer)
+    actor, _created = actor_utils.place_or_update_point_light(
+        _spawn_actor_at,
+        loc,
+        _point_light_color_from_ecs(r, g, b),
+        intensity,
+        radius * GAME_TO_UE,
+        label,
+        folder,
+        data_layer,
+        editor_hidden,
+        label_index=label_index,
+    )
     return actor
 
 
@@ -645,13 +675,28 @@ def setup_lighting() -> None:
     """Create or find the main scene lighting actors (Sun, Atmosphere, Fog, Sky)."""
     _log("Setting up scene lighting ...")
 
+    def _spawn_editor_actor(
+        actor_class: type, loc: unreal.Vector, rot: unreal.Rotator
+    ) -> unreal.Actor | None:
+        try:
+            sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+            actor = sub.spawn_actor_from_class(actor_class.static_class(), loc, rot)
+            if actor is not None:
+                return actor
+        except Exception:
+            pass
+        try:
+            return unreal.EditorLevelLibrary.spawn_actor_from_class(actor_class, loc, rot)
+        except Exception:
+            return None
+
     # --- Sun (Directional Light) — must exist before atmosphere for sun disc ---
     sun = find_actor_by_label("Sun_Tropical")
     if sun is None:
-        sun = unreal.EditorLevelLibrary.spawn_actor_from_class(
+        sun = _spawn_editor_actor(
             unreal.DirectionalLight,
             unreal.Vector(0.0, 0.0, 50000.0),
-            unreal.Rotator(168.0, -59.0, 0.0),
+            unreal.Rotator(roll=0.0, pitch=168.0, yaw=-59.0),
         )
         if sun is not None:
             sun.set_actor_label("Sun_Tropical")
@@ -672,7 +717,7 @@ def setup_lighting() -> None:
     # --- SkyAtmosphere — needs to exist before SkyLight captures ---
     atmo = find_actor_by_label("Atmosphere_World")
     if atmo is None:
-        atmo = unreal.EditorLevelLibrary.spawn_actor_from_class(
+        atmo = _spawn_editor_actor(
             unreal.SkyAtmosphere,
             unreal.Vector(0.0, 0.0, 0.0),
             unreal.Rotator(),
@@ -687,7 +732,7 @@ def setup_lighting() -> None:
     # --- ExponentialHeightFog — gives ambient scattering and haze ---
     fog = find_actor_by_label("HeightFog_World")
     if fog is None:
-        fog = unreal.EditorLevelLibrary.spawn_actor_from_class(
+        fog = _spawn_editor_actor(
             unreal.ExponentialHeightFog,
             unreal.Vector(0.0, 0.0, 3000.0),
             unreal.Rotator(),
@@ -705,7 +750,7 @@ def setup_lighting() -> None:
     # --- SkyLight — last so it captures atmosphere + fog ---
     sky = find_actor_by_label("SkyLight_World")
     if sky is None:
-        sky = unreal.EditorLevelLibrary.spawn_actor_from_class(
+        sky = _spawn_editor_actor(
             unreal.SkyLight,
             unreal.Vector(0.0, 0.0, 50000.0),
             unreal.Rotator(),
@@ -771,46 +816,50 @@ def _spawn_blocking_wall(
 
 
 def create_boundary_walls(base_world_layer: unreal.DataLayerInstance | None) -> None:
-    """Create N/S/E/W invisible blocking walls at world bounds."""
+    """Create N/S/E/W invisible blocking walls at world bounds.
+
+    UE Vector order is (X, Y, Z) = (game_X*100, game_Z*100, game_Y*100).
+    """
     _log("Creating boundary walls ...")
 
-    cx = (WORLD_MIN_X + WORLD_MAX_X) * 0.5 * GAME_TO_UE
-    cz = (WORLD_MIN_Z + WORLD_MAX_Z) * 0.5 * GAME_TO_UE
-    cy_center = (WORLD_MIN_Y + WORLD_MAX_Y) * 0.5 * GAME_TO_UE
+    # UE axis centers (game→UE: X stays X, game Z→UE Y, game Y→UE Z)
+    ue_center_x = (WORLD_MIN_X + WORLD_MAX_X) * 0.5 * GAME_TO_UE
+    ue_center_y = (WORLD_MIN_Z + WORLD_MAX_Z) * 0.5 * GAME_TO_UE
+    ue_center_z = (WORLD_MIN_Y + WORLD_MAX_Y) * 0.5 * GAME_TO_UE
 
-    width_x = (WORLD_MAX_X - WORLD_MIN_X) * GAME_TO_UE
-    width_z = (WORLD_MAX_Z - WORLD_MIN_Z) * GAME_TO_UE
+    ue_span_x = (WORLD_MAX_X - WORLD_MIN_X) * GAME_TO_UE
+    ue_span_y = (WORLD_MAX_Z - WORLD_MIN_Z) * GAME_TO_UE
 
-    north_z = WORLD_MAX_Z * GAME_TO_UE
-    south_z = WORLD_MIN_Z * GAME_TO_UE
-    east_x = WORLD_MAX_X * GAME_TO_UE
-    west_x = WORLD_MIN_X * GAME_TO_UE
+    ue_north_y = WORLD_MAX_Z * GAME_TO_UE
+    ue_south_y = WORLD_MIN_Z * GAME_TO_UE
+    ue_east_x = WORLD_MAX_X * GAME_TO_UE
+    ue_west_x = WORLD_MIN_X * GAME_TO_UE
 
-    scale_wall_height = WALL_HEIGHT_UE / 100.0
+    scale_height = WALL_HEIGHT_UE / 100.0
     scale_thick = WALL_THICKNESS_UE / 100.0
 
     _spawn_blocking_wall(
         "Wall_North",
-        unreal.Vector(cx, north_z, cy_center),
-        unreal.Vector(width_x / 100.0, scale_thick, scale_wall_height),
+        unreal.Vector(ue_center_x, ue_north_y, ue_center_z),
+        unreal.Vector(ue_span_x / 100.0, scale_thick, scale_height),
         base_world_layer,
     )
     _spawn_blocking_wall(
         "Wall_South",
-        unreal.Vector(cx, south_z, cy_center),
-        unreal.Vector(width_x / 100.0, scale_thick, scale_wall_height),
+        unreal.Vector(ue_center_x, ue_south_y, ue_center_z),
+        unreal.Vector(ue_span_x / 100.0, scale_thick, scale_height),
         base_world_layer,
     )
     _spawn_blocking_wall(
         "Wall_East",
-        unreal.Vector(east_x, cz, cy_center),
-        unreal.Vector(scale_thick, width_z / 100.0, scale_wall_height),
+        unreal.Vector(ue_east_x, ue_center_y, ue_center_z),
+        unreal.Vector(scale_thick, ue_span_y / 100.0, scale_height),
         base_world_layer,
     )
     _spawn_blocking_wall(
         "Wall_West",
-        unreal.Vector(west_x, cz, cy_center),
-        unreal.Vector(scale_thick, width_z / 100.0, scale_wall_height),
+        unreal.Vector(ue_west_x, ue_center_y, ue_center_z),
+        unreal.Vector(scale_thick, ue_span_y / 100.0, scale_height),
         base_world_layer,
     )
 
@@ -820,62 +869,53 @@ def create_boundary_walls(base_world_layer: unreal.DataLayerInstance | None) -> 
 # ---------------------------------------------------------------------------
 
 
-def _vz_parent_label_from_source_lower(source_lower: str) -> str:
-    """Map a lowercase vz_state source name to its parent Data Layer label."""
-    if "pristine" in source_lower:
-        return "VZ_Pristine"
-    if any(t in source_lower for t in ("destroyed", "ruined", "rubble")):
-        return "VZ_Destroyed"
-    if any(t in source_lower for t in ("staging", "defenses")):
-        return "VZ_Staging"
-    if any(t in source_lower for t in ("combat", "act1", "act2", "act3", "mission")):
-        return "VZ_Mission"
-    return "VZ_Other"
-
-
-def _vz_child_data_layer_label(source: str) -> tuple[str, str]:
-    """Return ``(parent_label, child_label)`` for a vz_state source string."""
-    src_lower = source.lower()
-    parent = _vz_parent_label_from_source_lower(src_lower)
-
-    m = _VZ_STATE_SRC_RE.match(source)
-    if m:
-        child = f"VZ_{m.group(2)}"
-    else:
-        child = f"VZ_{sanitize_name(source)}"
-
-    return parent, child
+def _ensure_data_layer_cached(
+    label: str,
+    cache: dict[str, unreal.DataLayerInstance | None],
+    *,
+    parent: unreal.DataLayerInstance | None = None,
+) -> unreal.DataLayerInstance | None:
+    if label not in cache:
+        cache[label] = m2dl.get_or_create_data_layer_instance(
+            label,
+            parent=parent,
+            asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        )
+    return cache[label]
 
 
 def _build_vz_source_data_layers(
     vz_sources: set[str],
 ) -> dict[str, unreal.DataLayerInstance | None]:
-    """Create parent + child DataLayerInstances for each unique vz_state source.
-
-    Returns a dict mapping source string → DataLayerInstance (or None on
-    failure).
-    """
-    parent_cache: dict[str, unreal.DataLayerInstance | None] = {}
+    """Create Act/Region/Overlay DataLayer hierarchy for each vz_state source."""
+    layer_cache: dict[str, unreal.DataLayerInstance | None] = {}
     result: dict[str, unreal.DataLayerInstance | None] = {}
 
     for source in sorted(vz_sources):
-        parent_label, child_label = _vz_child_data_layer_label(source)
+        parent_label, region_label, leaf_label = vz_tax.data_layer_hierarchy(source)
 
-        if parent_label not in parent_cache:
-            parent_cache[parent_label] = m2dl.get_or_create_data_layer_instance(
-                parent_label,
-                asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        parent_inst = _ensure_data_layer_cached(parent_label, layer_cache)
+        parent_for_leaf = parent_inst
+        if region_label:
+            parent_for_leaf = _ensure_data_layer_cached(
+                region_label, layer_cache, parent=parent_inst,
             )
 
-        parent = parent_cache[parent_label]
-        layer = m2dl.get_or_create_data_layer_instance(
-            child_label,
-            parent=parent,
-            asset_package_dir=DL_ASSET_PACKAGE_DIR,
+        result[source] = _ensure_data_layer_cached(
+            leaf_label, layer_cache, parent=parent_for_leaf,
         )
-        result[source] = layer
 
-    _log(f"Created {len(result)} vz_state data layers under {len(parent_cache)} parents")
+    unique_parents = {
+        vz_tax.data_layer_parent_label(vz_tax.parse_overlay_source(s)) for s in vz_sources
+    }
+    unique_regions = {
+        vz_tax.data_layer_region_label(vz_tax.parse_overlay_source(s)) for s in vz_sources
+    }
+    unique_regions.discard(None)
+    _log(
+        f"Created {len(result)} vz_state data layers "
+        f"({len(unique_parents)} parents, {len(unique_regions)} act regions)"
+    )
     return result
 
 
@@ -883,39 +923,47 @@ def _apply_vz_data_layer_initial_states(
     vz_source_to_layer: dict[str, unreal.DataLayerInstance | None],
     vz_placements: list[dict],
 ) -> None:
-    """Set initial loaded_in_editor + visibility for each vz_state data layer.
+    """Set initial runtime state: Act1 + pristine ACTIVATED; Act2/3 and others UNLOADED."""
+    applied_sources: set[str] = set()
+    applied_parents: set[str] = set()
 
-    Pristine layers are loaded; everything else starts unloaded.
-    """
-    sub = m2dl.data_layer_editor_subsystem()
-
-    applied: set[str] = set()
     for p in vz_placements:
         source = p.get("source", "")
-        if source in applied or source not in vz_source_to_layer:
+        if source in applied_sources or source not in vz_source_to_layer:
             continue
         layer = vz_source_to_layer[source]
         if layer is None:
             continue
 
-        src_lower = source.lower()
-        is_pristine = "pristine" in src_lower
+        info = vz_tax.parse_overlay_source(source)
+        activated = vz_tax.initial_runtime_activated(info)
+        m2dl.configure_data_layer_for_pie(
+            layer,
+            activated=activated,
+            loaded_in_editor=activated,
+        )
+        applied_sources.add(source)
 
-        try:
-            sub.set_data_layer_is_loaded_in_editor(layer, is_pristine)
-        except Exception:
-            pass
-        try:
-            state = (
-                unreal.DataLayerRuntimeState.ACTIVATED
-                if is_pristine
-                else unreal.DataLayerRuntimeState.UNLOADED
-            )
-            sub.set_data_layer_runtime_state(layer, state)
-        except Exception:
-            pass
+        parent_label = vz_tax.data_layer_parent_label(info)
+        if parent_label not in applied_parents:
+            parent_inst = m2dl.get_data_layer_by_label(parent_label)
+            if parent_inst is not None:
+                parent_on = info.parent_kind in ("pristine", "act1")
+                m2dl.configure_data_layer_for_pie(
+                    parent_inst,
+                    activated=parent_on,
+                    loaded_in_editor=parent_on,
+                )
+            applied_parents.add(parent_label)
 
-        applied.add(source)
+    m2dl.set_act_parent_states(
+        act_states={
+            1: unreal.DataLayerRuntimeState.ACTIVATED,
+            2: unreal.DataLayerRuntimeState.UNLOADED,
+            3: unreal.DataLayerRuntimeState.UNLOADED,
+        },
+        prefix="VZ",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -923,14 +971,19 @@ def _apply_vz_data_layer_initial_states(
 # ---------------------------------------------------------------------------
 
 
+def _vz_parent_label_from_source(source: str) -> str:
+    """Derive the parent Data Layer label from a vz_state source string."""
+    info = vz_tax.parse_overlay_source(source)
+    return vz_tax.data_layer_parent_label(info)
+
+
 def _ue_folder_for_placement(p: dict) -> str:
     """Return the Outliner folder path for a placement record."""
-    source = p.get("source", "")
-    if not source or source == "layers_static":
+    if _is_layers_static_placement(p):
         return "World/Base"
 
-    src_lower = source.lower()
-    parent = _vz_parent_label_from_source_lower(src_lower)
+    source = p.get("source", "")
+    parent = _vz_parent_label_from_source(source)
 
     m = _VZ_STATE_SRC_RE.match(source)
     child = m.group(2) if m else sanitize_name(source)
@@ -944,10 +997,176 @@ def _data_layer_for_placement(
     vz_source_to_layer: dict[str, unreal.DataLayerInstance | None],
 ) -> unreal.DataLayerInstance | None:
     """Return the appropriate data layer for a placement record."""
-    source = p.get("source", "")
-    if not source or source == "layers_static":
+    if _is_layers_static_placement(p):
         return base_world
+    source = p.get("source", "")
     return vz_source_to_layer.get(source)
+
+
+# ---------------------------------------------------------------------------
+# c3 world-cell placement
+# ---------------------------------------------------------------------------
+
+_TOOLS_DIR = os.path.join(REPO_ROOT, "tools")
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+
+try:
+    import c3_cell_grid as _c3grid
+except ImportError:
+    _c3grid = None  # type: ignore[assignment]
+
+
+def _is_c3_mesh_canonical(canon: str) -> bool:
+    if _c3grid is not None:
+        return _c3grid.is_c3_canonical_name(canon)
+    return bool(_C3_CELL_ID_RE.search(canon))
+
+
+def _is_cell_baked_prop_entity(entity_name: str) -> bool:
+    """Props whose geometry lives inside c3 cell meshes — skip per-entity mesh spawn."""
+    if not entity_name:
+        return False
+    return bool(_CELL_PROP_ENTITY_RE.search(entity_name))
+
+
+def _remove_duplicate_terrain_actors(keep_label: str = "Mercs2_LowResTerrain") -> int:
+    """Delete extra terrain actors from prior populate runs."""
+    removed = 0
+    try:
+        sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        actors = list(sub.get_all_level_actors())
+    except Exception:
+        try:
+            actors = list(unreal.EditorLevelLibrary.get_all_level_actors())
+        except Exception:
+            return 0
+
+    matches = [
+        a for a in actors if actor_utils.get_actor_label(a) == keep_label
+    ]
+    if len(matches) <= 1:
+        return 0
+    for actor in matches[1:]:
+        try:
+            sub.destroy_actor(actor)
+            removed += 1
+        except Exception:
+            pass
+    if removed:
+        _log(f"Removed {removed} duplicate {keep_label} actor(s)")
+    return removed
+
+
+def _ensure_merged_terrain_actor(
+    merged_terrain_mesh: str,
+    base_world: unreal.DataLayerInstance | None,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
+) -> unreal.Actor | None:
+    """Spawn or reuse a single merged low_res_terrain actor at the world origin."""
+    _remove_duplicate_terrain_actors()
+    loc0 = game_to_ue(0.0, 0.0, 0.0)
+    had = actor_utils.actor_exists("Mercs2_LowResTerrain", label_index)
+    actor = place_mesh(
+        merged_terrain_mesh,
+        loc0,
+        unreal.Rotator(),
+        unreal.Vector(1.0, 1.0, 1.0),
+        "Mercs2_LowResTerrain",
+        "Terrain",
+        base_world,
+        False,
+        label_index=label_index,
+    )
+    if actor is not None and had:
+        _log("Reusing existing Mercs2_LowResTerrain at origin")
+    return actor
+
+
+
+def _env_truthy(name: str, default: bool = False) -> bool:
+    val = os.environ.get(name, "")
+    if not val:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def populate_world_cells(
+    mesh_lookup: dict[str, str],
+    base_world: unreal.DataLayerInstance | None,
+    *,
+    label_index: actor_utils.ActorLabelIndex | None = None,
+) -> dict[str, int]:
+    """Place imported c3#### world-cell meshes at decoded grid origins."""
+    if not _env_truthy("MERCS2_POPULATE_WORLD_CELLS", default=False):
+        _log(
+            "World-cell placement skipped (default). Set MERCS2_POPULATE_WORLD_CELLS=1 "
+            "after fix_nanite_world_meshes.py and a stable editor session."
+        )
+        return {"placed": 0, "skipped": 0}
+
+    if _c3grid is None:
+        _warn("c3_cell_grid module not found — skip world-cell placement")
+        return {"placed": 0, "skipped": 0}
+
+    cell_max = _env_int("MERCS2_WORLD_CELLS_MAX", 0)
+    if cell_max > 0:
+        _log(f"World-cell cap: {cell_max} (MERCS2_WORLD_CELLS_MAX)")
+
+    placed = 0
+    skipped = 0
+    dedup_cells: set[int] = set()
+
+    for canon, mesh_path in mesh_lookup.items():
+        if not _is_c3_mesh_canonical(canon):
+            continue
+
+        cell_id = _c3grid.primary_cell_id_from_stem(canon)
+        if cell_id is None:
+            skipped += 1
+            continue
+        if cell_id in dedup_cells:
+            continue
+        dedup_cells.add(cell_id)
+
+        xyz = _c3grid.cell_id_to_world_xyz(cell_id)
+        loc = game_to_ue(xyz[0], xyz[1], xyz[2])
+        label = sanitize_name(f"Cell_c3{cell_id:04d}")
+        actor = place_mesh(
+            mesh_path,
+            loc,
+            unreal.Rotator(),
+            unreal.Vector(1.0, 1.0, 1.0),
+            label,
+            "World/Cells",
+            base_world,
+            False,
+            label_index=label_index,
+        )
+        if actor is not None:
+            placed += 1
+            if cell_max > 0 and placed >= cell_max:
+                _warn(
+                    f"Reached MERCS2_WORLD_CELLS_MAX={cell_max} — "
+                    "increase cap or set 0 for unlimited"
+                )
+                break
+        else:
+            skipped += 1
+
+    _log(f"World cells placed: {placed} (skipped {skipped}, unique cells {len(dedup_cells)})")
+    return {"placed": placed, "skipped": skipped}
 
 
 # ---------------------------------------------------------------------------
@@ -961,6 +1180,8 @@ def populate_placements(
     all_meshes: list[str],
     *,
     merged_terrain_mesh: str | None = None,
+    world_cells_active: bool = False,
+    label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> dict:
     """Place all meshes and lights into the level. Returns stats dict.
 
@@ -975,22 +1196,32 @@ def populate_placements(
         "Mercs2_BaseWorld",
         asset_package_dir=DL_ASSET_PACKAGE_DIR,
     )
+    m2dl.configure_data_layer_for_pie(
+        base_world, activated=True, loaded_in_editor=True,
+    )
 
     vz_sources: set[str] = set()
     for p in all_placements:
-        src = p.get("source", "")
-        if src and src != "layers_static":
-            vz_sources.add(src)
+        if not _is_layers_static_placement(p):
+            src = p.get("source", "")
+            if src:
+                vz_sources.add(src)
 
     vz_source_to_layer = _build_vz_source_data_layers(vz_sources)
     _apply_vz_data_layer_initial_states(
         vz_source_to_layer,
-        [p for p in all_placements if p.get("source", "") != "layers_static"],
+        [p for p in all_placements if not _is_layers_static_placement(p)],
     )
+
+    if label_index is None:
+        label_index = actor_utils.ActorLabelIndex.build()
+        _log(f"Built actor label index ({len(label_index)} existing actors)")
 
     # --- Stats ---
     mesh_placed = 0
+    mesh_reused = 0
     lights_placed = 0
+    lights_reused = 0
     skip_no_mesh = 0
     skip_vis = 0
     skip_dedup = 0
@@ -1005,16 +1236,8 @@ def populate_placements(
     total = len(all_placements)
 
     if merged_terrain_mesh:
-        loc0 = game_to_ue(0.0, 0.0, 0.0)
-        t_actor = place_mesh(
-            merged_terrain_mesh,
-            loc0,
-            unreal.Rotator(0.0, 0.0, 0.0),
-            unreal.Vector(1.0, 1.0, 1.0),
-            "Mercs2_LowResTerrain",
-            "Terrain",
-            base_world,
-            False,
+        t_actor = _ensure_merged_terrain_actor(
+            merged_terrain_mesh, base_world, label_index=label_index,
         )
         if t_actor is not None:
             terrain_merged_placed = 1
@@ -1022,8 +1245,7 @@ def populate_placements(
             by_mesh[merged_terrain_mesh] += 1
             terrain_skipping_active = True
             _log(
-                f"Placed merged low_res_terrain at origin (world-space mesh; "
-                f"re-run make extract-terrain + import if tiles were stacked) → {merged_terrain_mesh}"
+                f"Merged low_res_terrain at origin → {merged_terrain_mesh}"
             )
         else:
             _warn("Merged low_res_terrain actor spawn failed — import mesh_scene.glb via import_world first")
@@ -1062,14 +1284,23 @@ def populate_placements(
             if not dedup.try_occupy(loc):
                 skip_dedup += 1
                 continue
+            had_light = actor_utils.actor_exists(label, label_index)
             light = place_light_from_placement(
                 p, label, folder, data_layer, editor_hidden,
+                label_index=label_index,
             )
             if light is not None:
-                lights_placed += 1
+                if had_light:
+                    lights_reused += 1
+                else:
+                    lights_placed += 1
             continue
 
         # --- Mesh ---
+        if world_cells_active and _is_cell_baked_prop_entity(entity_name):
+            skip_no_mesh += 1
+            continue
+
         mesh_path = resolve_mesh(entity_name, mesh_lookup, all_meshes)
         if mesh_path is None:
             skip_no_mesh += 1
@@ -1080,13 +1311,18 @@ def populate_placements(
             continue
 
         rot = placement_to_rotator(p)
+        had_mesh = actor_utils.actor_exists(label, label_index)
         actor = place_mesh(
             mesh_path, loc, rot,
             unreal.Vector(1.0, 1.0, 1.0),
             label, folder, data_layer, editor_hidden,
+            label_index=label_index,
         )
         if actor is not None:
-            mesh_placed += 1
+            if had_mesh:
+                mesh_reused += 1
+            else:
+                mesh_placed += 1
             by_mesh[mesh_path] += 1
             if sample_mesh_logs < 5:
                 pos = p.get("position", {})
@@ -1101,7 +1337,9 @@ def populate_placements(
     stats = {
         "total": total,
         "mesh_placed": mesh_placed,
+        "mesh_reused": mesh_reused,
         "lights_placed": lights_placed,
+        "lights_reused": lights_reused,
         "skip_vis": skip_vis,
         "skip_no_mesh": skip_no_mesh,
         "skip_dedup": skip_dedup,
@@ -1118,15 +1356,26 @@ def populate_placements(
 # ---------------------------------------------------------------------------
 
 
-def run() -> None:
+def run() -> bool:
     """Populate the full Mercenaries 2 world — main entry point."""
+    import traceback
+
     _log("=" * 60)
     _log("Mercenaries 2 Recreation — Full World Populate")
     _log("=" * 60)
 
+    try:
+        return _run_populate_body()
+    except Exception as exc:
+        _err(f"Populate failed: {exc}")
+        _err(traceback.format_exc())
+        return False
+
+
+def _run_populate_body() -> bool:
     world = m2dl.ensure_mercs2_editor_world_ready(log_title="Mercs2World")
     if world is None:
-        return
+        return False
 
     # --- Base world data layer ---
     base_world = m2dl.get_or_create_data_layer_instance(
@@ -1134,18 +1383,17 @@ def run() -> None:
         asset_package_dir=DL_ASSET_PACKAGE_DIR,
     )
     if base_world is not None:
-        sub = m2dl.data_layer_editor_subsystem()
-        try:
-            sub.set_data_layer_is_loaded_in_editor(base_world, True)
-        except Exception:
-            pass
-        try:
-            sub.set_data_layer_runtime_state(
-                base_world, unreal.DataLayerRuntimeState.ACTIVATED,
-            )
-        except Exception:
-            pass
-        _log("Base world data layer: Mercs2_BaseWorld (loaded + visible)")
+        m2dl.configure_data_layer_for_pie(
+            base_world, activated=True, loaded_in_editor=True,
+        )
+        _log("Base world data layer: Mercs2_BaseWorld (ACTIVATED for PIE)")
+    elif m2dl.world_has_world_partition(world):
+        _warn(
+            "World Partition is on but Mercs2_BaseWorld data layer could not be "
+            "created — actors will not use data layers."
+        )
+    else:
+        _log("Standard level (no World Partition) — data layers skipped")
 
     # --- Lighting ---
     setup_lighting()
@@ -1164,9 +1412,12 @@ def run() -> None:
     _log(f"Sample canonical names: {sample_keys}")
 
     # --- Load placements ---
-    static_path = os.path.join(REPO_ROOT, "output", "placements", "layers_static.json")
+    static_path = os.environ.get(
+        "MERCS2_STATIC_PLACEMENTS",
+        os.path.join(REPO_ROOT, "output", "placements", "layers_static.json"),
+    )
     static_placements = _load_json_placements(static_path)
-    _log(f"Loaded {len(static_placements)} layers_static placements")
+    _log(f"Loaded {len(static_placements)} layers_static placements from {static_path}")
 
     vz_path = os.path.join(REPO_ROOT, "output", "placements", "vz_state", "all_vz_state.json")
     vz_placements = _load_json_placements(vz_path)
@@ -1189,17 +1440,29 @@ def run() -> None:
     else:
         _log("No merged low_res_terrain in project — run `make extract-terrain` then import_world")
 
-    # --- Populate ---
+    label_index = actor_utils.ActorLabelIndex.build()
+    _log(f"Actor label index: {len(label_index)} existing level actors")
+
+    # --- Tier B: c3 world cells ---
+    cell_stats = populate_world_cells(
+        mesh_lookup, base_world, label_index=label_index,
+    )
+    world_cells_active = cell_stats.get("placed", 0) > 0
+
+    # --- Per-record lights + mesh matches ---
     stats = populate_placements(
         all_placements, mesh_lookup, all_meshes,
         merged_terrain_mesh=merged_terrain,
+        world_cells_active=world_cells_active,
+        label_index=label_index,
     )
 
     # --- Summary ---
     _log("=" * 60)
     _log("Populate complete")
-    _log(f"  Meshes placed:   {stats['mesh_placed']}")
-    _log(f"  Lights placed:   {stats['lights_placed']}")
+    _log(f"  World cells:     {cell_stats.get('placed', 0)}")
+    _log(f"  Meshes placed:   {stats['mesh_placed']} (updated: {stats.get('mesh_reused', 0)})")
+    _log(f"  Lights placed:   {stats['lights_placed']} (updated: {stats.get('lights_reused', 0)})")
     _log(f"  Skipped (vis):   {stats['skip_vis']}")
     _log(f"  Skipped (mesh):  {stats['skip_no_mesh']}")
     _log(f"  Skipped (dedup): {stats['skip_dedup']}")
@@ -1217,7 +1480,16 @@ def run() -> None:
         _log("  Top 10 meshes by placement count:")
         for mesh_path, count in top_meshes:
             _log(f"    {count:>5d}  {mesh_path}")
+
+    if m2dl.save_dirty_level_packages():
+        _log("Saved all dirty packages (level + actors).")
+    else:
+        _warn(
+            "Could not auto-save — use File → Save All before Play so actors "
+            "persist to disk."
+        )
     _log("=" * 60)
+    return True
 
 
 if __name__ == "__main__":

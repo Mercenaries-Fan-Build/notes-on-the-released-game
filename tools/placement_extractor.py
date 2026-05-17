@@ -262,10 +262,9 @@ def extract_vz_state_placements(data: bytes, source_file: str = "") -> list[dict
                 "block_type": "vz_state",
                 "entity_id": f"0x{entity_id:08x}",
                 "entity_name": name,
-                "position": {"x": round(x, 3), "y": round(y, 3), "z": round(z, 3)},
-                "rotation_y_sin": round(rot_y, 6),
-                # Offset +4 was previously mislabeled "scale"; it is not a reliable uniform scale.
-                "boot_float": round(boot_f, 6),
+                "position": {"x": x, "y": y, "z": z},
+                "rotation_y_sin": rot_y,
+                "boot_float": boot_f,
                 "boot_u32": f"0x{boot_u32:08x}",
                 "type_hash": f"0x{type_hash:08x}",
             }
@@ -381,29 +380,32 @@ def extract_layers_static_placements(data: bytes, source_file: str = "") -> list
                             x = struct.unpack_from("<f", rec, 4)[0]
                             y = struct.unpack_from("<f", rec, 8)[0]
                             z = struct.unpack_from("<f", rec, 12)[0]
-                            quat_x = struct.unpack_from("<f", rec, 20)[0]
-                            rot_sin = struct.unpack_from("<f", rec, 24)[0]
-                            quat_z = struct.unpack_from("<f", rec, 28)[0]
-                            rot_cos = struct.unpack_from("<f", rec, 32)[0]
+                            qx = struct.unpack_from("<f", rec, 20)[0]
+                            qy = struct.unpack_from("<f", rec, 24)[0]
+                            qz = struct.unpack_from("<f", rec, 28)[0]
+                            qw = struct.unpack_from("<f", rec, 32)[0]
 
                             if is_valid_world_coord(x, y, z):
-                                yaw_rad = math.atan2(rot_sin, rot_cos)
+                                # These 4 floats are a unit quaternion (qx, qy, qz, qw).
+                                # For Y-axis rotation: qy = sin(yaw/2), qw = cos(yaw/2).
+                                # True yaw = 2 * atan2(qy, qw).
+                                yaw_rad = 2.0 * math.atan2(qy, qw)
                                 entry = {
                                     "source": source_file,
                                     "block_type": "layers_static",
                                     "sub_block": si,
                                     "entity_id": f"0x{entity_key:08x}",
                                     "position": {
-                                        "x": round(x, 3),
-                                        "y": round(y, 3),
-                                        "z": round(z, 3),
+                                        "x": x,
+                                        "y": y,
+                                        "z": z,
                                     },
-                                    "rotation_y_rad": round(yaw_rad, 6),
-                                    "rotation_y_deg": round(math.degrees(yaw_rad), 2),
-                                    "rot_sin": round(rot_sin, 6),
-                                    "rot_cos": round(rot_cos, 6),
-                                    "rotation_quat_x": round(quat_x, 6),
-                                    "rotation_quat_z": round(quat_z, 6),
+                                    "rotation_y_rad": yaw_rad,
+                                    "rotation_y_deg": math.degrees(yaw_rad),
+                                    "rotation_quat_x": qx,
+                                    "rotation_quat_y": qy,
+                                    "rotation_quat_z": qz,
+                                    "rotation_quat_w": qw,
                                 }
                                 transform_entries.append(entry)
 

@@ -55,7 +55,8 @@ GAME_MN_BUNDLE = "/Game/Characters/MattiasNilsson"
 GAME_SKELETON_PATH = f"{GAME_MN_BUNDLE}/Textures/mattias-main-export_Skeleton"
 GAME_MESH_PATH = f"{GAME_MN_BUNDLE}/Textures/mattias-main-export"
 
-IMC_DEFAULT_PATH = "/Game/Input/IMC_Default"
+IMC_DEFAULT_PATH = "/Game/Input/IMC_Input_Controls"
+IMC_LEGACY_PATH = "/Game/Input/IMC_Default"
 
 WBP_HUD_PATH = "/Game/UI/HUD/WBP_HUDRoot"
 WBP_PAUSE_PATH = "/Game/UI/HUD/WBP_PauseMenu"
@@ -134,16 +135,33 @@ def _load_asset(path: str) -> object | None:
 def _generated_class(bp: object) -> object | None:
     if bp is None:
         return None
+
+    bp_path = _path_of(bp)
+    if bp_path:
+        asset_name = bp_path.rsplit("/", 1)[-1].split(".")[0]
+        class_path = f"{bp_path}.{asset_name}_C"
+        try:
+            cls = unreal.load_object(None, class_path)
+            if cls is not None:
+                return cls
+        except Exception:
+            pass
+
+    if callable(getattr(bp, "generated_class", None)):
+        try:
+            cls = bp.generated_class()
+            if cls is not None:
+                return cls
+        except Exception:
+            pass
+
     try:
         cls = bp.get_editor_property("generated_class")
         if cls is not None:
             return cls
     except Exception:
         pass
-    try:
-        return bp.generated_class()  # type: ignore[attr-defined]
-    except Exception:
-        return None
+    return None
 
 
 def _get_cdo(bp: object) -> object | None:
@@ -372,13 +390,16 @@ def check_character_blueprint() -> CheckResult:
         return CheckResult("Character", FAIL, "BP_Mattias has no SkeletalMeshComponent (mesh)")
 
     sk_mesh = None
-    try:
-        sk_mesh = mesh_comp.get_editor_property("skeletal_mesh")
-    except Exception:
-        pass
+    for prop in ("skeletal_mesh_asset", "skeletal_mesh"):
+        try:
+            sk_mesh = mesh_comp.get_editor_property(prop)
+            if sk_mesh is not None:
+                break
+        except Exception:
+            pass
     if sk_mesh is None:
         try:
-            sk_mesh = mesh_comp.get_editor_property("skeletal_mesh_asset")
+            sk_mesh = mesh_comp.get_skinned_asset()
         except Exception:
             pass
 
@@ -391,10 +412,13 @@ def check_character_blueprint() -> CheckResult:
         )
 
     anim_class = None
-    try:
-        anim_class = mesh_comp.get_editor_property("anim_class")
-    except Exception:
-        pass
+    for prop in ("anim_blueprint_generated_class", "anim_class"):
+        try:
+            anim_class = mesh_comp.get_editor_property(prop)
+            if anim_class is not None:
+                break
+        except Exception:
+            pass
     extras["anim_class"] = _path_of(anim_class)
     abp = _load_asset(ABP_MATTIAS_PATH)
     expected_abp_cls = _generated_class(abp)
@@ -438,17 +462,23 @@ def check_player_controller() -> CheckResult:
         return CheckResult("PlayerCtl", FAIL, f"BP_PlayerController missing at {BP_PC_PATH}")
 
     imc = _load_asset(IMC_DEFAULT_PATH)
-    extras: dict[str, object] = {"imc_exists": imc is not None}
+    if imc is None:
+        imc = _load_asset(IMC_LEGACY_PATH)
+    extras: dict[str, object] = {
+        "imc_exists": imc is not None,
+        "imc_path": IMC_DEFAULT_PATH if imc is not None else "",
+    }
     if imc is None:
         return CheckResult(
             "PlayerCtl", FAIL,
-            f"IMC_Default missing at {IMC_DEFAULT_PATH} (run setup_player_controller.py)",
+            f"IMC_Input_Controls missing at {IMC_DEFAULT_PATH} "
+            "(run setup_player_controller.py)",
             extras,
         )
     return CheckResult(
         "PlayerCtl", WARN,
-        "BP_PlayerController + IMC_Default exist; verify IMC reference is set on the BP "
-        "(Python cannot inspect graph nodes)",
+        "BP_PlayerController + IMC_Input_Controls exist; verify IMC reference is set "
+        "on the BP (Python cannot inspect graph nodes)",
         extras,
     )
 
@@ -587,7 +617,7 @@ MANUAL_CHECKLIST: tuple[tuple[str, str], ...] = (
     (
         BP_PC_PATH,
         "Add variable DefaultMappingContext (InputMappingContext) and set its "
-        "default to /Game/Input/IMC_Default.",
+        "default to /Game/Input/IMC_Input_Controls.",
     ),
     (
         BP_PC_PATH,
@@ -603,7 +633,7 @@ MANUAL_CHECKLIST: tuple[tuple[str, str], ...] = (
     ),
     (
         IMC_DEFAULT_PATH,
-        "Open IMC_Default and add key mappings: IA_Move <- W/A/S/D (with the "
+        "Open IMC_Input_Controls and add key mappings: IA_Move <- W/A/S/D (with the "
         "Negate / Swizzle modifiers documented by setup_player_controller.py); "
         "IA_Look <- Mouse XY 2D-Axis; IA_Jump <- SpaceBar; IA_Sprint <- "
         "LeftShift; IA_Crouch <- LeftControl (Pressed trigger); "

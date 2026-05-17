@@ -323,6 +323,56 @@ function discoverPlacementsRoot() {
   return null
 }
 
+const PLACEMENT_DATASETS = [
+  { id: 'pmc_base', file: 'pmc_base.json', label: 'pmc_base.json (PMC testbed)' },
+  { id: 'maracaibo', file: 'maracaibo_placements.json', label: 'maracaibo_placements.json' },
+  { id: 'layers_static', file: 'layers_static.json', label: 'layers_static.json (full world)' },
+]
+
+function loadPlacementDataset(root, datasetId) {
+  const row = PLACEMENT_DATASETS.find((d) => d.id === datasetId)
+  if (!row) return { error: 'unknown_dataset', id: datasetId }
+  const fp = path.join(root, row.file)
+  const doc = readJsonIfExists(fp)
+  if (!doc) return { error: 'file_not_found', path: fp, id: datasetId }
+  const placements = Array.isArray(doc) ? doc : doc.placements || []
+  const bbox = doc.bbox || null
+  return {
+    id: datasetId,
+    path: fp,
+    label: row.label,
+    placements,
+    count: placements.length,
+    bbox,
+    meta: {
+      total_placements: doc.total_placements,
+      layers_static_in_bbox: doc.layers_static_in_bbox,
+    },
+  }
+}
+
+function pmcBasePresetBbox() {
+  const fp = path.join(repoRoot(), 'output', 'pmc_base_block_set.json')
+  const doc = readJsonIfExists(fp)
+  if (!doc) return null
+  const b = doc.bbox_game_units
+  if (!b || !b.min || !b.max) return null
+  return {
+    path: fp,
+    name: 'PMC HQ',
+    anchor_entity: doc.anchor_entity,
+    anchor_position: doc.anchor_position,
+    bbox: {
+      x_min: b.min.x,
+      x_max: b.max.x,
+      z_min: b.min.z,
+      z_max: b.max.z,
+      y_min: b.min.y,
+      y_max: b.max.y,
+    },
+  }
+}
+
 function collectMaracaiboGlbUrls() {
   const roots = discoverReviewRoots()
   const listPath = path.join(repoRoot(), 'output', 'maracaibo_asset_list.json')
@@ -410,6 +460,70 @@ function attachReviewMiddleware(server) {
       return
     }
 
+    if (url === '/api/placements-catalog.json') {
+      const root = discoverPlacementsRoot()
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      if (!root) {
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'placements_root_not_found' }))
+        return
+      }
+      const datasets = PLACEMENT_DATASETS.map((d) => {
+        const fp = path.join(root, d.file)
+        return {
+          id: d.id,
+          label: d.label,
+          file: d.file,
+          exists: fs.existsSync(fp),
+          path: fp,
+        }
+      })
+      const defaultRow =
+        datasets.find((d) => d.id === 'pmc_base' && d.exists) ||
+        datasets.find((d) => d.exists) ||
+        datasets[0]
+      res.end(
+        JSON.stringify({
+          placementsRoot: root,
+          defaultId: defaultRow?.id || 'pmc_base',
+          datasets,
+        }),
+      )
+      return
+    }
+
+    if (url.startsWith('/api/placements-dataset.json')) {
+      const q = new URL(req.url, 'http://localhost').searchParams
+      const id = (q.get('id') || 'pmc_base').trim()
+      const root = discoverPlacementsRoot()
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      if (!root) {
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'placements_root_not_found' }))
+        return
+      }
+      const payload = loadPlacementDataset(root, id)
+      if (payload.error) {
+        res.statusCode = 404
+        res.end(JSON.stringify(payload))
+        return
+      }
+      res.end(JSON.stringify(payload))
+      return
+    }
+
+    if (url === '/api/pmc-base-preset.json') {
+      const preset = pmcBasePresetBbox()
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      if (!preset) {
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'pmc_base_block_set_not_found' }))
+        return
+      }
+      res.end(JSON.stringify(preset))
+      return
+    }
+
     if (url === '/api/placements-maracaibo.json') {
       const root = discoverPlacementsRoot()
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -444,7 +558,8 @@ function attachReviewMiddleware(server) {
         res.end(JSON.stringify({ error: 'file_not_found', path: fp }))
         return
       }
-      res.end(JSON.stringify({ path: fp, ...doc }))
+      const placements = Array.isArray(doc) ? doc : doc.placements || []
+      res.end(JSON.stringify({ path: fp, placements, count: placements.length }))
       return
     }
 

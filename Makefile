@@ -12,7 +12,13 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs category-samples sample-bundle full-pipeline viewer preview-placements animations animations-validation extract-placements filter-maracaibo-placements build-pmc-base-set extract-demo-ffcs filter-pmc-base regen-pmc-glbs extract-terrain
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain
+
+# Radius zone around PMC pool building (populate_radius_zone.py in UE).
+RADIUS_ZONE_ID ?= pool_200m
+RADIUS_ZONE_ANCHOR_ID ?= 0x000a3b30
+RADIUS_ZONE_ANCHOR_NAME ?= _pmcoutpost_bld_pool
+RADIUS_ZONE_METRES ?= 200
 
 REPO_ROOT := $(abspath .)
 # Prefer repo virtualenv (pygltflib, etc.); override with `make PYTHON=python3 …`.
@@ -25,6 +31,8 @@ endif
 
 # Uniform glTF root scale for ``make regen-maracaibo-glbs`` (default 1; UE applies glTF unit scaling).
 GLB_ROOT_SCALE ?= 1
+# Parallel workers for ``make regen-all-glbs`` (default 1; set higher for multi-core).
+REGEN_JOBS ?= 1
 
 STAGE2_SEQUENTIAL ?= 0
 STAGE2_JOBS ?=
@@ -79,6 +87,8 @@ help:
 	@echo "                      Filter ue5_import manifest → OUTPUT/maracaibo_asset_list.json (for import_mercs2.py)"
 	@echo "  make regen-maracaibo-glbs OUTPUT=./output [GLB_ROOT_SCALE=1]"
 	@echo "                      Regenerate mesh_scene.glb (embedded textures) for Maracaibo subset"
+	@echo "  make regen-all-glbs OUTPUT=./output [REGEN_JOBS=4]"
+	@echo "                      Regenerate mesh_scene.glb for ALL assets in manifest (skips existing; --force to redo)"
 	@echo "  make extract-terrain OUTPUT=./output"
 	@echo "                      Merge low_res_terrain UCFX tiles → OUTPUT/extracted/review/batch_vz/.../mesh_scene.glb"
 	@echo "  make animations OUTPUT=./output"
@@ -96,6 +106,10 @@ help:
 	@echo "                      PMC subset manifests → pmc_base_asset_list.json + placements/pmc_base.json"
 	@echo "  make regen-pmc-glbs OUTPUT=./output"
 	@echo "                      Regenerate mesh_scene.glb for PMC base asset list"
+	@echo "  make filter-pool-200m OUTPUT=./output"
+	@echo "                      200m zone around pool → output/radius_zones/pool_200m/ (placements + assets)"
+	@echo "  make regen-pool-200m-glbs OUTPUT=./output"
+	@echo "                      Regenerate GLBs for pool 200m zone asset list"
 	@echo "  make filter-maracaibo-placements OUTPUT=./output"
 	@echo "                      Filter placements to Maracaibo area → output/placements/maracaibo_placements.json"
 	@echo "  make ue5-bundle   variants + animations + export-ue5 (after extract-all / review-all)"
@@ -112,6 +126,7 @@ help:
 	@echo "          #   STAGE2_SKIP_HAVOK=1 STAGE2_DIALOG=0 make review-all OUTPUT=./output"
 	@echo "          make extract-saves extract-audio extract-video ue5-bundle OUTPUT=./output   # if not done yet"
 	@echo "  make preview-placements OUTPUT=./output   # viewer dev server + placement map (MERCS2_PLACEMENTS_ROOT)"
+	@echo "  make preview-placement-bbox OUTPUT=./output  # bbox regions + rotation override QA page"
 	@echo "  make viewer       npm install + dev server (asset viewer)"
 	@echo "  make extract-iso  Prints ISO/locale extraction hints (mount ISO yourself)"
 	@echo "  make clean OUTPUT=./output"
@@ -250,6 +265,10 @@ animations-validation:
 
 ue5-bundle: export-ue5
 
+build-vz-act-manifest:
+	@test -f "$(OUTPUT)/placements/vz_state/all_vz_state.json" || (echo "error: run make extract-placements first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_vz_act_manifest.py" --output "$(OUTPUT)/placements/vz_act_layer_manifest.json"
+
 extract-placements:
 	@test -d "$(OUTPUT)/extracted/batch_vz/blocks" || (echo "error: $(OUTPUT)/extracted/batch_vz/blocks missing — run extract-all first" >&2; exit 1)
 	@mkdir -p "$(OUTPUT)/placements/vz_state"
@@ -287,6 +306,13 @@ extract-placements:
 	  --harvest-csv "$(OUTPUT)/placements/pmc_lua_string_harvest.csv"
 	@echo "Placement extraction complete → $(OUTPUT)/placements/"
 
+build-c3-cell-manifest:
+	@test -d "$(OUTPUT)/extracted/review/batch_vz" || (echo "error: run make review-all first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_c3_cell_manifest.py" \
+	  --review-root "$(OUTPUT)/extracted/review/batch_vz" \
+	  --out "$(OUTPUT)/placements/c3_cell_manifest.json" \
+	  --min-vertices 50
+
 build-pmc-base-set:
 	@test -f "$(OUTPUT)/placements/layers_static.json" || (echo "error: run make extract-placements first" >&2; exit 1)
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_pmc_base_block_set.py" \
@@ -315,6 +341,23 @@ regen-pmc-glbs: filter-pmc-base
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
 	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_pmc_base_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
 
+filter-pool-200m:
+	@test -f "$(OUTPUT)/placements/layers_static.json" || (echo "error: run make extract-placements first" >&2; exit 1)
+	@test -f "$(OUTPUT)/ue5_import/metadata/manifest.json" || (echo "error: run make ue5-bundle first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/filter_radius_zone.py" \
+	  --zone-id "$(RADIUS_ZONE_ID)" \
+	  --anchor-entity-id "$(RADIUS_ZONE_ANCHOR_ID)" \
+	  --anchor-entity-name "$(RADIUS_ZONE_ANCHOR_NAME)" \
+	  --radius "$(RADIUS_ZONE_METRES)" \
+	  --output "$(OUTPUT)"
+
+regen-pool-200m-glbs: filter-pool-200m
+	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
+	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_pmc_base_glbs.py" \
+	  --pipeline-root "$(abspath $(OUTPUT))" \
+	  --asset-list "$(abspath $(OUTPUT))/radius_zones/$(RADIUS_ZONE_ID)/asset_list.json" \
+	  --glb-root-scale "$(GLB_ROOT_SCALE)"
+
 filter-maracaibo-placements: extract-placements
 	@echo "Filtering placements to Maracaibo area..."
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/filter_maracaibo_placements.py" \
@@ -333,6 +376,12 @@ filter-maracaibo:
 regen-maracaibo-glbs: filter-maracaibo filter-maracaibo-placements
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib not available — run make venv" >&2; exit 1)
 	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_maracaibo_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
+
+REGEN_FORCE ?=
+regen-all-glbs:
+	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib not available — run make venv" >&2; exit 1)
+	@test -f "$(OUTPUT)/ue5_import/metadata/manifest.json" || (echo "error: missing manifest — run make ue5-bundle first" >&2; exit 1)
+	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_all_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)" --jobs $(REGEN_JOBS) $(if $(REGEN_FORCE),--force,)
 
 extract-terrain:
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
@@ -392,3 +441,7 @@ viewer:
 preview-placements:
 	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
 	cd "$(REPO_ROOT)/viewer" && npm install && MERCS2_PLACEMENTS_ROOT="$(abspath $(OUTPUT))/placements" npm run dev -- --open /placement-preview.html
+
+preview-placement-bbox:
+	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
+	cd "$(REPO_ROOT)/viewer" && npm install && MERCS2_PLACEMENTS_ROOT="$(abspath $(OUTPUT))/placements" npm run dev -- --open /placement-bbox.html

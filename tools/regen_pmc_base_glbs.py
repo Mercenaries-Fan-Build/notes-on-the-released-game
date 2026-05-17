@@ -13,13 +13,19 @@ from pathlib import Path
 def main() -> int:
     ap = argparse.ArgumentParser(description="Regen mesh_scene.glb for PMC base subset")
     ap.add_argument("--pipeline-root", type=Path, required=True)
+    ap.add_argument(
+        "--asset-list",
+        type=Path,
+        default=None,
+        help="Asset list JSON (default: OUTPUT/pmc_base_asset_list.json)",
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--glb-root-scale", type=float, default=1.0)
     args = ap.parse_args()
 
-    asset_list = args.pipeline_root / "pmc_base_asset_list.json"
+    asset_list = args.asset_list or (args.pipeline_root / "pmc_base_asset_list.json")
     if not asset_list.is_file():
-        print(f"error: missing {asset_list} — run: make filter-pmc-base", file=sys.stderr)
+        print(f"error: missing {asset_list} — run filter target first", file=sys.stderr)
         return 1
 
     data = json.loads(asset_list.read_text(encoding="utf-8"))

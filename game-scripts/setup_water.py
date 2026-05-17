@@ -51,8 +51,8 @@ WORLD_BBOX_HALF_M = 4000.0          # terrain bbox half-extent (X/Z)
 OCEAN_HALF_M = 5000.0               # ocean spline polygon half-extent (X/Z)
 WORLD_MIN_Y_M = -167.75             # terrain min elevation
 WORLD_MAX_Y_M = 435.75              # terrain max elevation
-SEA_LEVEL_M = 0.0                   # source-space Y=0 -> UE Z=0
-GLB_M_TO_UE_CM = 100.0
+SEA_LEVEL_UE = -2500.0              # UE Z height for ocean surface (empirical)
+GLB_M_TO_UE_CM = 1.0               # glTF imports at 1:1 metre scale
 
 WATER_FOLDER = "Water"
 
@@ -209,7 +209,7 @@ def _spawn_actor(
 def _ocean_spline_points_cm() -> list[unreal.Vector]:
     """Square polygon centered on the origin, in UE world space (cm)."""
     half = OCEAN_HALF_M * GLB_M_TO_UE_CM
-    z = SEA_LEVEL_M * GLB_M_TO_UE_CM
+    z = SEA_LEVEL_UE
     return [
         unreal.Vector(-half, -half, z),
         unreal.Vector( half, -half, z),
@@ -273,7 +273,7 @@ def configure_ocean() -> unreal.Actor | None:
     if ocean is None:
         ocean = _spawn_actor(
             cls,
-            unreal.Vector(0.0, 0.0, SEA_LEVEL_M * GLB_M_TO_UE_CM),
+            unreal.Vector(0.0, 0.0, SEA_LEVEL_UE),
             unreal.Rotator(),
         )
         if ocean is None:
@@ -293,7 +293,7 @@ def configure_ocean() -> unreal.Actor | None:
         pass
     try:
         ocean.set_actor_location(
-            unreal.Vector(0.0, 0.0, SEA_LEVEL_M * GLB_M_TO_UE_CM), False, False
+            unreal.Vector(0.0, 0.0, SEA_LEVEL_UE), False, False
         )
     except Exception:
         pass
@@ -355,7 +355,7 @@ def _log_ocean_footprint(ocean: unreal.Actor | None) -> None:
     _log("--- Footprint sanity ---")
     _log(
         f"  Ocean spline polygon : {2*half:.0f} m x {2*half:.0f} m, "
-        f"Z = {SEA_LEVEL_M:.1f} m"
+        f"Z = {SEA_LEVEL_UE:.1f} UE"
     )
     _log(
         f"  Terrain bbox         : {2*terrain_half:.0f} m x {2*terrain_half:.0f} m, "
@@ -389,10 +389,14 @@ def run() -> None:
     _log_ocean_footprint(ocean)
 
     try:
-        unreal.EditorLevelLibrary.save_current_level()
+        unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
         _log("Saved current level.")
-    except Exception as exc:
-        _warn(f"save_current_level failed: {exc}")
+    except Exception:
+        try:
+            unreal.EditorLevelLibrary.save_current_level()
+            _log("Saved current level.")
+        except Exception as exc:
+            _warn(f"save_current_level failed: {exc}")
 
     _log("=" * 70)
     _log("Done. Run setup_weather_system.py next.")

@@ -2,6 +2,13 @@
 # -*- coding: utf-8 -*-
 """Build a glTF 2.0 scene from Mercenaries 2 review output (submeshes + textures + optional mesh.meta).
 
+Game meshes are **left-handed Y-up** (D3D9).  This exporter writes positions, normals,
+and face winding directly in game LH coordinates — UE Interchange handles the Y-up to
+Z-up basis change on import, producing the same UE world position as ``game_to_ue``.
+
+The only coordinate transform applied is the **UV V-flip** (D3D9 V=0-top → glTF
+V=0-bottom) via ``convert_uvs_d3d_to_gltf``.
+
 Supports two output formats:
   --format gltf  (default for viewer): mesh_scene.gltf + mesh_scene.bin + textures/*.png
   --format glb   (UE5 import):         mesh_scene.glb  (single self-contained binary, textures embedded;
@@ -16,6 +23,10 @@ import math
 import struct
 from pathlib import Path
 from typing import Any
+
+from mercs2_coords import (
+    convert_uvs_d3d_to_gltf,
+)
 
 from pygltflib import (
     GLTF2,
@@ -111,6 +122,10 @@ def _parse_obj(path: Path) -> tuple[
     elif len(nrm) != len(pos):
         nrm = _expand_face_attribute(pos, faces, nrm, (0.0, 1.0, 0.0), is_uv=False)
 
+    # Write game LH coordinates directly — UE Interchange's Y-up→Z-up swap
+    # handles the basis change. Only the UV V-flip is needed (D3D9 V=0-top → glTF V=0-bottom).
+    uvs = convert_uvs_d3d_to_gltf(uvs)
+
     return pos, nrm, [], uvs, faces
 
 
@@ -135,7 +150,11 @@ def _node_matrix_from_hier(
     trans: list[float] | None,
     rot_3x3: list[list[float]] | None,
 ) -> list[float] | None:
-    """glTF column-major 4x4 from world_translation + row-style rot_3x3 (matches mesh_extractor)."""
+    """glTF column-major 4x4 from world_translation + row-style rot_3x3.
+
+    Game LH coords written directly (no Z-negate) — UE Interchange handles
+    the Y-up→Z-up basis change on import.
+    """
     tx, ty, tz = 0.0, 0.0, 0.0
     if trans and len(trans) >= 3:
         tx, ty, tz = float(trans[0]), float(trans[1]), float(trans[2])
@@ -149,7 +168,6 @@ def _node_matrix_from_hier(
             tx, ty, tz, 1.0,
         ]
     r = rot_3x3
-    # Column-major: columns are (r[0][0],r[1][0],r[2][0]), etc. — matches decode_submesh world apply.
     return [
         float(r[0][0]), float(r[1][0]), float(r[2][0]), 0.0,
         float(r[0][1]), float(r[1][1]), float(r[2][1]), 0.0,
@@ -203,9 +221,10 @@ def _tangent_vec4(
     txyz: tuple[float, float, float] | None,
     n: tuple[float, float, float],
 ) -> tuple[float, float, float, float]:
+    """Build tangent vec4 in game LH space. W=1.0 (LH handedness)."""
     nx, ny, nz = n
     if txyz:
-        tx, ty, tz = txyz
+        tx, ty, tz = float(txyz[0]), float(txyz[1]), float(txyz[2])
         dot = tx * nx + ty * ny + tz * nz
         tx, ty, tz = tx - dot * nx, ty - dot * ny, tz - dot * nz
         ln = math.sqrt(tx * tx + ty * ty + tz * tz) or 1.0

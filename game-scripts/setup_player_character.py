@@ -36,6 +36,59 @@ import unreal
 if TYPE_CHECKING:
     from typing import Any
 
+
+# ---------------------------------------------------------------------------
+# UE 5.7 compatibility helpers
+# ---------------------------------------------------------------------------
+
+def _load_bp_class(bp_path: str) -> unreal.Class | None:
+    """Load the generated UClass from a Blueprint asset path."""
+    asset_name = bp_path.rsplit("/", 1)[-1]
+    class_path = f"{bp_path}.{asset_name}_C"
+    try:
+        cls = unreal.load_object(None, class_path)
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+    bp = unreal.EditorAssetLibrary.load_asset(bp_path)
+    if bp is None:
+        return None
+    if callable(getattr(bp, "generated_class", None)):
+        try:
+            cls = bp.generated_class()
+            if cls is not None:
+                return cls
+        except Exception:
+            pass
+    try:
+        cls = bp.get_editor_property("generated_class")
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+    return None
+
+
+def _set_skinned_asset(mesh_comp: unreal.SkeletalMeshComponent, sk_mesh: unreal.Object) -> bool:
+    """UE 5.7+ compatible setter for SkeletalMeshComponent's mesh asset."""
+    for setter in ("set_skinned_asset", "set_skeletal_mesh"):
+        fn = getattr(mesh_comp, setter, None)
+        if callable(fn):
+            try:
+                fn(sk_mesh)
+                return True
+            except Exception:
+                pass
+    for prop in ("skeletal_mesh_asset", "skeletal_mesh"):
+        try:
+            mesh_comp.set_editor_property(prop, sk_mesh)
+            return True
+        except Exception:
+            pass
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Paths & constants
 # ---------------------------------------------------------------------------
@@ -205,11 +258,31 @@ def _create_animation_blueprint() -> unreal.AnimBlueprint | None:
 # Stage 3 — Character Blueprint
 # ---------------------------------------------------------------------------
 
+def _compile_blueprint(bp: unreal.Blueprint) -> None:
+    lib = getattr(unreal, "BlueprintEditorLibrary", None)
+    if lib is None:
+        return
+    for fn_name in ("compile_blueprint", "recompile_blueprint"):
+        fn = getattr(lib, fn_name, None)
+        if fn is None:
+            continue
+        try:
+            fn(bp)
+            return
+        except Exception as exc:
+            _warn(f"  {fn_name} failed: {exc}")
+            return
+
+
 def _create_character_blueprint() -> unreal.Blueprint | None:
     """Create BP_Mattias deriving from Character with sensible defaults."""
     if unreal.EditorAssetLibrary.does_asset_exist(BP_PATH):
         _log(f"exists {BP_PATH}")
-        return unreal.EditorAssetLibrary.load_asset(BP_PATH)  # type: ignore[return-value]
+        bp = unreal.EditorAssetLibrary.load_asset(BP_PATH)  # type: ignore[assignment]
+        _configure_character_cdo(bp)  # type: ignore[arg-type]
+        _compile_blueprint(bp)  # type: ignore[arg-type]
+        unreal.EditorAssetLibrary.save_asset(BP_PATH)
+        return bp  # type: ignore[return-value]
 
     factory = unreal.BlueprintFactory()
     factory.set_editor_property("parent_class", unreal.Character)
@@ -222,6 +295,7 @@ def _create_character_blueprint() -> unreal.Blueprint | None:
 
     _configure_character_cdo(bp)  # type: ignore[arg-type]
     _attach_camera_components(bp)  # type: ignore[arg-type]
+    _compile_blueprint(bp)  # type: ignore[arg-type]
 
     unreal.EditorAssetLibrary.save_asset(BP_PATH)
     _log(f"created {BP_PATH}")
@@ -230,8 +304,13 @@ def _create_character_blueprint() -> unreal.Blueprint | None:
 
 def _configure_character_cdo(bp: unreal.Blueprint) -> None:
     """Apply CharacterMovement, Mesh, and ABP defaults to the CDO."""
+    bp_class = _load_bp_class(BP_PATH)
+    if bp_class is None:
+        _warn("Could not resolve BP_Mattias generated class for CDO access")
+        return
+
     try:
-        cdo = unreal.get_default_object(bp.generated_class())
+        cdo = unreal.get_default_object(bp_class)
     except Exception as exc:
         _warn(f"Could not access generated CDO: {exc}")
         return
@@ -240,21 +319,35 @@ def _configure_character_cdo(bp: unreal.Blueprint) -> None:
     if mesh is not None:
         sk_mesh = unreal.EditorAssetLibrary.load_asset(GAME_MESH_PATH)
         if sk_mesh is not None:
-            try:
-                mesh.set_skeletal_mesh(sk_mesh)
-            except Exception as exc:
-                _warn(f"  set_skeletal_mesh failed: {exc}")
-        abp = unreal.EditorAssetLibrary.load_asset(ABP_PATH)
-        if abp is not None:
-            try:
-                mesh.set_editor_property(
-                    "anim_class", abp.get_editor_property("generated_class")
-                )
-            except Exception as exc:
-                _warn(f"  set anim_class failed: {exc}")
+            if not _set_skinned_asset(mesh, sk_mesh):
+                _warn("  could not assign skeletal mesh to character mesh component")
+        abp_class = _load_bp_class(ABP_PATH)
+        if abp_class is not None:
+            assigned = False
+            set_anim_fn = getattr(mesh, "set_anim_instance_class", None)
+            if callable(set_anim_fn):
+                try:
+                    set_anim_fn(abp_class)
+                    assigned = True
+                except Exception:
+                    pass
+            if not assigned:
+                for prop in (
+                    "anim_class",
+                    "anim_blueprint_generated_class",
+                    "animation_mode",
+                ):
+                    try:
+                        mesh.set_editor_property(prop, abp_class)
+                        assigned = True
+                        break
+                    except Exception:
+                        pass
+            if not assigned:
+                _warn("  could not set AnimClass on mesh component — set manually in BP_Mattias")
         try:
             mesh.set_relative_location(unreal.Vector(0.0, 0.0, -90.0))
-            mesh.set_relative_rotation(unreal.Rotator(0.0, 0.0, -90.0))
+            mesh.set_relative_rotation(unreal.Rotator(roll=-90.0, pitch=0.0, yaw=0.0))
         except Exception:
             pass
 

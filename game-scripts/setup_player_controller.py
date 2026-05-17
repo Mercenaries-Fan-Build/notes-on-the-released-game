@@ -5,7 +5,7 @@ UE 5.7 Editor Python script that creates:
   - Enhanced Input actions under ``/Game/Input/Actions``
       IA_Move, IA_Look, IA_Jump, IA_Sprint, IA_Crouch,
       IA_Interact, IA_Aim, IA_Fire, IA_SwitchWeapon, IA_OpenPDA
-  - An Input Mapping Context at ``/Game/Input/IMC_Default`` (key bindings are
+  - An Input Mapping Context at ``/Game/Input/IMC_Input_Controls`` (key bindings are
     listed in the run summary for manual binding — Python cannot wire key
     chords into IMC entries via the Python API in 5.7).
   - ``/Game/Characters/Mattias/BP_PlayerController`` (derives from
@@ -37,6 +37,72 @@ import unreal
 if TYPE_CHECKING:
     from typing import Any
 
+
+# ---------------------------------------------------------------------------
+# UE 5.7 compatibility helpers
+# ---------------------------------------------------------------------------
+
+def _load_bp_class(bp_path: str) -> unreal.Class | None:
+    """Load the generated UClass from a Blueprint asset path.
+
+    Tries the ``_C`` suffix approach first (most reliable in 5.7), then
+    falls back to ``generated_class()`` as a method call.
+    """
+    asset_name = bp_path.rsplit("/", 1)[-1]
+    class_path = f"{bp_path}.{asset_name}_C"
+    try:
+        cls = unreal.load_object(None, class_path)
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+
+    bp = unreal.EditorAssetLibrary.load_asset(bp_path)
+    if bp is None:
+        return None
+
+    if callable(getattr(bp, "generated_class", None)):
+        try:
+            cls = bp.generated_class()
+            if cls is not None:
+                return cls
+        except Exception:
+            pass
+
+    try:
+        cls = bp.get_editor_property("generated_class")
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+    return None
+
+
+def _get_world() -> unreal.World | None:
+    """UE 5.7+ compatible world accessor."""
+    try:
+        return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    except Exception:
+        pass
+    try:
+        return unreal.EditorLevelLibrary.get_editor_world()
+    except Exception:
+        return None
+
+
+def _save_level() -> None:
+    """UE 5.7+ compatible level save."""
+    try:
+        unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
+        return
+    except Exception:
+        pass
+    try:
+        unreal.EditorLevelLibrary.save_current_level()
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -45,7 +111,9 @@ LOG_PREFIX = "[Mercs2Input]"
 
 INPUT_ROOT = "/Game/Input"
 ACTIONS_DIR = f"{INPUT_ROOT}/Actions"
-IMC_PATH = f"{INPUT_ROOT}/IMC_Default"
+IMC_NAME = "IMC_Input_Controls"
+IMC_PATH = f"{INPUT_ROOT}/{IMC_NAME}"
+IMC_LEGACY_PATH = f"{INPUT_ROOT}/IMC_Default"
 
 MATTIAS_DIR = "/Game/Characters/Mattias"
 BP_PC_PATH = f"{MATTIAS_DIR}/BP_PlayerController"
@@ -176,6 +244,11 @@ def create_input_mapping_context() -> None:
 
     if unreal.EditorAssetLibrary.does_asset_exist(IMC_PATH):
         _log(f"  exists  {IMC_PATH}")
+    elif unreal.EditorAssetLibrary.does_asset_exist(IMC_LEGACY_PATH):
+        _log(f"  exists  {IMC_LEGACY_PATH} (legacy name — C++ uses {IMC_PATH})")
+        _warn(
+            f"  MANUAL: duplicate or rename to {IMC_PATH} to match Mercs2Character.cpp"
+        )
     else:
         factory_cls = getattr(unreal, "InputMappingContextFactory", None)
         if factory_cls is None:
@@ -187,7 +260,7 @@ def create_input_mapping_context() -> None:
 
         tools = unreal.AssetToolsHelpers.get_asset_tools()
         imc = tools.create_asset(
-            "IMC_Default", INPUT_ROOT, unreal.InputMappingContext, factory_cls()
+            IMC_NAME, INPUT_ROOT, unreal.InputMappingContext, factory_cls()
         )
         if imc is None:
             _err(f"  create_asset failed for {IMC_PATH}")
@@ -195,7 +268,7 @@ def create_input_mapping_context() -> None:
         unreal.EditorAssetLibrary.save_asset(IMC_PATH)
         _log(f"  created {IMC_PATH}")
 
-    _warn("  MANUAL: open IMC_Default and add the following mappings:")
+    _warn(f"  MANUAL: open {IMC_NAME} and add the following mappings:")
     for action_name, key, notes in IMC_BINDINGS:
         notes_str = ("  " + " | ".join(notes)) if notes else ""
         _warn(f"    {action_name:<18} <- {key}{notes_str}")
@@ -241,18 +314,21 @@ def create_game_mode_bp(player_controller_bp: unreal.Blueprint | None) -> unreal
     if bp is None:
         return None
 
+    gm_class = _load_bp_class(BP_GM_PATH)
+    if gm_class is None:
+        _warn("  could not resolve BP_GameMode generated class — skipping CDO config")
+        return bp
+
     try:
-        cdo = unreal.get_default_object(bp.generated_class())
+        cdo = unreal.get_default_object(gm_class)
     except Exception as exc:
         _warn(f"  could not access GameMode CDO: {exc}")
         return bp
 
-    pawn_bp = unreal.EditorAssetLibrary.load_asset(BP_MATTIAS_PATH)
-    if pawn_bp is not None:
+    pawn_class = _load_bp_class(BP_MATTIAS_PATH)
+    if pawn_class is not None:
         try:
-            cdo.set_editor_property(
-                "default_pawn_class", pawn_bp.get_editor_property("generated_class")
-            )
+            cdo.set_editor_property("default_pawn_class", pawn_class)
             _log(f"    default_pawn_class -> {BP_MATTIAS_PATH}")
         except Exception as exc:
             _warn(f"  could not set default_pawn_class: {exc}")
@@ -261,14 +337,15 @@ def create_game_mode_bp(player_controller_bp: unreal.Blueprint | None) -> unreal
               "set DefaultPawnClass on BP_GameMode by hand.")
 
     if player_controller_bp is not None:
-        try:
-            cdo.set_editor_property(
-                "player_controller_class",
-                player_controller_bp.get_editor_property("generated_class"),
-            )
-            _log(f"    player_controller_class -> {BP_PC_PATH}")
-        except Exception as exc:
-            _warn(f"  could not set player_controller_class: {exc}")
+        pc_class = _load_bp_class(BP_PC_PATH)
+        if pc_class is not None:
+            try:
+                cdo.set_editor_property("player_controller_class", pc_class)
+                _log(f"    player_controller_class -> {BP_PC_PATH}")
+            except Exception as exc:
+                _warn(f"  could not set player_controller_class: {exc}")
+        else:
+            _warn("  could not resolve BP_PlayerController generated class")
 
     unreal.EditorAssetLibrary.save_asset(BP_GM_PATH)
     return bp
@@ -284,12 +361,7 @@ def apply_gamemode_to_active_level(game_mode_bp: unreal.Blueprint | None) -> Non
         _warn("  no game mode BP — skipping")
         return
 
-    world = None
-    try:
-        world = unreal.EditorLevelLibrary.get_editor_world()
-    except Exception as exc:
-        _warn(f"  cannot get editor world: {exc}")
-        return
+    world = _get_world()
     if world is None:
         _warn("  no active editor world — open a level and re-run")
         return
@@ -304,21 +376,23 @@ def apply_gamemode_to_active_level(game_mode_bp: unreal.Blueprint | None) -> Non
         _warn("  WorldSettings is None — skipping")
         return
 
-    try:
-        world_settings.set_editor_property(
-            "default_game_mode", game_mode_bp.get_editor_property("generated_class")
-        )
-        _log("  WorldSettings.DefaultGameMode set to BP_GameMode")
-    except Exception as exc:
+    gm_class = _load_bp_class(BP_GM_PATH)
+    if gm_class is not None:
+        try:
+            world_settings.set_editor_property("default_game_mode", gm_class)
+            _log("  WorldSettings.DefaultGameMode set to BP_GameMode")
+        except Exception as exc:
+            _warn(
+                f"  could not write WorldSettings.DefaultGameMode: {exc}. "
+                "MANUAL: in Window > World Settings, set GameMode Override = BP_GameMode."
+            )
+    else:
         _warn(
-            f"  could not write WorldSettings.DefaultGameMode: {exc}. "
+            "  could not resolve BP_GameMode generated class. "
             "MANUAL: in Window > World Settings, set GameMode Override = BP_GameMode."
         )
 
-    try:
-        unreal.EditorLevelLibrary.save_current_level()
-    except Exception:
-        pass
+    _save_level()
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +403,7 @@ PC_MANUAL_STEPS = """
 BP_PlayerController — manual wiring required:
 
   1. Add a variable: DefaultMappingContext (InputMappingContext) — set to
-     /Game/Input/IMC_Default.
+     /Game/Input/IMC_Input_Controls.
   2. Event BeginPlay:
        Get Enhanced Input Local Player Subsystem from PlayerController ->
        Add Mapping Context(DefaultMappingContext, Priority=0)

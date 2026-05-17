@@ -36,6 +36,12 @@ import unreal
 if TYPE_CHECKING:
     from typing import Optional
 
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+import mercs2_mesh_utils as mesh_utils
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -47,12 +53,16 @@ CONTENT_BASE: str = "/Game/Mercs2"
 LOG_PREFIX = "[Mercs2Import]"
 
 _CATEGORY_RULES: list[tuple[str, list[str]]] = [
+    ("WorldCells", ["blocks__vz__c3", "__shared__"]),
     ("Vehicles", ["veh_", "helicopter", "boat_", "jetski"]),
     ("Buildings", ["_bld_", "skyscraper", "apartment", "shack", "warehouse"]),
     ("Roads", ["road"]),
     ("Environment", ["terrain", "env_", "rock", "plant", "tree", "palm", "bush", "foliage"]),
     ("Maracaibo", ["maracaibo"]),
 ]
+
+_MESH_SCENE_GLB = "mesh_scene.glb"
+_MESH_SCENE_GLTF = "mesh_scene.gltf"
 
 _LOD_RE = re.compile(r"^\d+_blocks__VZ__(.+?)_(P\d+)_(Q\d+)\.block$")
 
@@ -80,6 +90,10 @@ def _categorize(mesh_name: str) -> str:
     """Match *mesh_name* (lowercase) against category rules and return the
     target subfolder name, or ``"Other"`` if nothing matches."""
     lower = mesh_name.lower()
+    if re.search(r"blocks__vz__c3\d{4}", lower) or (
+        "__shared__" in lower and re.search(r"c3\d{4}", lower)
+    ):
+        return "WorldCells"
     for category, keywords in _CATEGORY_RULES:
         for kw in keywords:
             if kw in lower:
@@ -251,12 +265,24 @@ def import_glb(
     return objects[0] if objects else None
 
 
+def _disable_nanite_in_import_folder(dest_path: str) -> None:
+    """Interchange often enables Nanite; turn it off for every StaticMesh imported."""
+    if not unreal.EditorAssetLibrary.does_directory_exist(dest_path):
+        return
+    for asset_path in unreal.EditorAssetLibrary.list_assets(
+        dest_path, recursive=True, include_folder=False,
+    ):
+        obj = unreal.EditorAssetLibrary.load_asset(str(asset_path))
+        if isinstance(obj, unreal.StaticMesh):
+            mesh_utils.disable_nanite_on_static_mesh(obj)
+
+
 # ---------------------------------------------------------------------------
 # Discovery & deduplication
 # ---------------------------------------------------------------------------
 
 def discover_glbs() -> list[dict]:
-    """Walk ``REVIEW_ROOT`` two levels deep looking for ``mesh_scene.glb``.
+    """Walk ``REVIEW_ROOT`` two levels deep looking for ``mesh_scene.glb`` / ``.gltf``.
 
     Returns a list of dicts with keys:
         stem, base, pack, glb, category, vol
@@ -274,13 +300,15 @@ def discover_glbs() -> list[dict]:
             block_dir = os.path.join(pack_dir, stem)
             if not os.path.isdir(block_dir):
                 continue
-            glb = os.path.join(block_dir, "mesh_scene.glb")
+            glb = os.path.join(block_dir, _MESH_SCENE_GLB)
+            if not os.path.isfile(glb):
+                glb = os.path.join(block_dir, _MESH_SCENE_GLTF)
             if not os.path.isfile(glb):
                 continue
 
             base = _base_mesh_name(stem) or stem
-            category = _categorize(base)
-            vol = _bbox_volume(glb)
+            category = _categorize(stem)
+            vol = _bbox_volume(glb) if glb.endswith(".glb") else 1.0
 
             entries.append({
                 "stem": stem,
@@ -307,7 +335,15 @@ def _import_flags() -> dict[str, bool]:
         or "--force-terrain" in argv
         or force_all
     )
-    return {"force_all": force_all, "force_terrain": force_terrain}
+    import_world_cells = (
+        os.environ.get("MERCS2_IMPORT_WORLD_CELLS", "").lower() in ("1", "true", "yes")
+        or "--world-cells" in argv
+    )
+    return {
+        "force_all": force_all,
+        "force_terrain": force_terrain,
+        "import_world_cells": import_world_cells,
+    }
 
 
 def _dest_has_static_mesh(dest_path: str) -> bool:
@@ -388,6 +424,16 @@ def run_import(limit: int | None = None) -> None:
         _err("No GLBs found — aborting.")
         return
 
+    if not flags["import_world_cells"]:
+        before = len(entries)
+        entries = [e for e in entries if e.get("category") != "WorldCells"]
+        skipped_cells = before - len(entries)
+        if skipped_cells:
+            _log(
+                f"Skipping {skipped_cells} c3 world-cell GLBs (Nanite pool). "
+                "Set MERCS2_IMPORT_WORLD_CELLS=1 to import them."
+            )
+
     if any("low_res_terrain" in e["glb"].replace("\\", "/").lower() for e in entries):
         _log("Found merged low_res_terrain mesh_scene.glb (from make extract-terrain)")
 
@@ -426,6 +472,7 @@ def run_import(limit: int | None = None) -> None:
 
         obj = import_glb(entry["glb"], dest_path, asset_name)
         if obj is not None:
+            _disable_nanite_in_import_folder(dest_path)
             imported += 1
             if "low_res_terrain" in (entry.get("base") or "").lower():
                 _touch_import_stamp(entry["glb"])

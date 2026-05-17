@@ -93,14 +93,14 @@ Offset  Size  Type     Field            Description
 +0x08   4     float32  position_y       World Y coordinate (elevation)
 +0x0C   4     float32  position_z       World Z coordinate
 +0x10   4     float32  zero_pad         Always 0.0
-+0x14   4     float32  quat_x           Quaternion X (~0 for Y-only rotation)
-+0x18   4     float32  rot_sin          sin(yaw) — Y-axis rotation sine
-+0x1C   4     float32  quat_z           Quaternion Z (~0 for Y-only rotation)
-+0x20   4     float32  rot_cos          cos(yaw) — Y-axis rotation cosine
++0x14   4     float32  quat_x           Quaternion X (pitch/roll component)
++0x18   4     float32  quat_y           Quaternion Y = sin(yaw/2)
++0x1C   4     float32  quat_z           Quaternion Z (pitch/roll component)
++0x20   4     float32  quat_w           Quaternion W = cos(yaw/2)
 +0x24   6     bytes    tail             Near-zero tail bytes
 ```
 
-**Rotation encoding:** The rot_sin and rot_cos fields satisfy `sin² + cos² ≈ 1.0` (VERIFIED across thousands of records). The Y-axis yaw angle can be recovered as `atan2(rot_sin, rot_cos)`. The decoder also exports `rotation_quat_x` and `rotation_quat_z` (offsets +0x14 and +0x1C) for future full basis conversion; when both are ~0, yaw-only is sufficient.
+**Rotation encoding:** The four floats at +0x14..+0x20 form a **unit quaternion** `(qx, qy, qz, qw)`.  VERIFIED: `qx² + qy² + qz² + qw² ≈ 1.0` across all 62k records.  For pure Y-axis rotation, `qy = sin(yaw/2)` and `qw = cos(yaw/2)`, so true yaw = `2 * atan2(qy, qw)`.  ~16% of entities have non-trivial qx/qz (tilted objects with pitch/roll).  The decoder exports all four components as `rotation_quat_x/y/z/w` and pre-computes `rotation_y_rad` (the full yaw angle).
 
 ### 2.6 COMP Record Format (generic)
 
@@ -294,17 +294,56 @@ Z axis:  -3870 to +3800  (North-South)
 
 Units are game-world units (approximately metric scale based on building/entity spacing).
 
+### 5.1 Handedness and transforms (positions + rotations)
+
+**Position transforms:**
+
+| Path | Transform | Notes |
+|------|-----------|-------|
+| Mesh export (game → glTF) | `(x, y, z)` written directly | No Z-negate, no winding flip; only UV V-flip |
+| UE Interchange importer (glTF → UE) | Y-up → Z-up (swaps Y↔Z) | Automatic |
+| Placement (game → UE) | `(x, y, z)` → `(100·x, 100·z, 100·y)` | Same result as mesh import path |
+
+- Game geometry is **left-handed Y-up** (D3D9).
+- `tools/gltf_exporter.py` writes game coordinates directly into the glTF buffer.  The only transform applied is the **UV V-flip** (`v = 1 - v`, D3D9 V=0-top → glTF V=0-bottom) via `convert_uvs_d3d_to_gltf`.
+- UE Interchange's Y-up→Z-up swap produces UE coordinates equivalent to `game_to_ue`.
+- Placement JSON and `game_to_ue` in populate scripts stay in **game LH** metres with `(x, y, z) → UE (100·x, 100·z, 100·y)`.
+
+**Rotation transforms:**
+
+The 42-byte Transform record stores a **unit quaternion** `(qx, qy, qz, qw)` at offsets +0x14..+0x20.  For pure Y-axis rotation: `qy = sin(yaw/2)`, `qw = cos(yaw/2)`.  True yaw = `2 * atan2(qy, qw)`.
+
+VERIFIED: `qx² + qy² + qz² + qw² ≈ 1.0` across all 62k records.  ~16% of records have non-trivial pitch/roll (|qx| > 0.01 or |qz| > 0.01).
+
+| Source | Transform | Destination |
+|--------|-----------|-------------|
+| Game quaternion (qx,qy,qz,qw) | `game_quat_to_ue_rotator_deg(qx,qy,qz,qw)` | UE Rotator (pitch, -yaw, roll) |
+| Game yaw (rad, from `2*atan2(qy,qw)`) | `game_yaw_to_ue_yaw_deg(rad)` → -degrees | UE yaw (around +Z) |
+
+- Both game (LH Y-up) and UE (LH Z-up) are left-handed. The basis swap `(x,y,z)→(x,z,y)` preserves handedness.
+- **Yaw is NEGATED**: game positive yaw (CW looking down +Y) is opposite to UE positive yaw.  UE yaw = -game_yaw.  Empirically verified against PMC HQ, pool, and estate wall landmarks.
+- The quaternion basis swap is: game `(qx, qy, qz, qw)` → UE `(qx, qz, qy, qw)` (swap Y/Z components).
+- Full pitch/roll is preserved in the quaternion path for tilted entities (tires, rocks, poles).
+- Implementation: `tools/mercs2_coords.py` → `game_yaw_to_ue_yaw_deg()`, `game_quat_to_ue_rotator_deg()`.
+
+### 5.2 vz_state Data Layers
+
+Overlay taxonomy and UE Data Layer labels: `game-scripts/mercs2_vz_taxonomy.py`.  
+Manifest: `output/placements/vz_act_layer_manifest.json` (from `tools/build_vz_act_manifest.py`).
+
 ---
 
 ## 6. Rotation Encoding
 
 ### 6.1 layers_static
 
-Uses **sin(θ)/cos(θ) pairs** at record offsets +0x16 and +0x1E:
-- `yaw_radians = atan2(rot_sin, rot_cos)`
-- Identity rotation: rot_sin = 0.0, rot_cos = 1.0
+Stores a **unit quaternion** `(qx, qy, qz, qw)` at offsets +0x14, +0x18, +0x1C, +0x20:
+- For pure Y-axis rotation: `qy = sin(yaw/2)`, `qw = cos(yaw/2)`
+- True yaw = `2 * atan2(qy, qw)`
+- Identity rotation: qx=0, qy=0, qz=0, qw=1
 
-VERIFIED: `sin² + cos² ≈ 1.0` across all extracted records.
+VERIFIED: `qx² + qy² + qz² + qw² ≈ 1.0` across all 62,624 extracted records.
+~16% of records have non-trivial pitch/roll (tilted objects: tires, rocks, telephone poles).
 
 ### 6.2 vz_state
 
@@ -380,7 +419,26 @@ vz.wad (2.57 GB)
        │    └─ COMP[data] → entity name ↔ ID mappings
        │    └─ flgs section → 42-byte records → 3,501 placements
        │
-       ├─ c3XXXX cells (9,467 files) — geometry/terrain only, NO placements
+       ├─ c3XXXX cells (9,467 files) — per-cell baked geometry (props/roads/buildings in-cell)
        │
        └─ Other (vz_base, vz_mar_roads, assets, etc.)
 ```
+
+---
+
+## 10. UE5 populate strategy (two-tier model)
+
+`game-scripts/populate_world.py` uses three tiers — do **not** spawn one StaticMesh per
+`layers_static` `entity_name` for world fill:
+
+| Tier | Source | UE5 action |
+|------|--------|------------|
+| **B — c3 cells** | `c3####` / `c3####-c####-c####-__shared__` blocks with `mesh_scene.gltf` | One `StaticMeshActor` per imported cell at grid origin (`tools/c3_cell_grid.py`) |
+| **A — hero blocks** | `*_veh_*`, `*_bld_*`, `pmcoutpost_*` GLBs | One actor per block at centroid of placement records whose names share the block prefix |
+| **C — placements JSON** | `layers_static` + `vz_state` | Point lights (ECS `LightObject`), skip env props when Tier B is active, vz overlays on data layers |
+
+Grid decode for Tier B: `c3####` IDs map linearly to a 100×100 grid over the world XZ
+extent (see `tools/c3_cell_grid.py`). Cell meshes use `import_world.py` →
+`/Game/Mercs2/Meshes/WorldCells` (accepts `mesh_scene.gltf` when `.glb` is absent).
+
+PMC base uses `populate_pmc_base.py` + `import_pmc_base.py` for the outpost compound.

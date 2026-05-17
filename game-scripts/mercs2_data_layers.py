@@ -33,20 +33,47 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 _warned_data_layer_parent_skipped: bool = False
 _warned_no_world_data_layers: bool = False
+_warned_no_data_layer_subsystem: bool = False
 
 
 # ---------------------------------------------------------------------------
 # Subsystem / world accessors
 # ---------------------------------------------------------------------------
 
-def data_layer_editor_subsystem() -> unreal.DataLayerEditorSubsystem:
-    """Return the DataLayerEditorSubsystem singleton."""
-    return unreal.get_editor_subsystem(unreal.DataLayerEditorSubsystem)
+def data_layer_editor_subsystem() -> Optional[unreal.DataLayerEditorSubsystem]:
+    """Return the DataLayerEditorSubsystem singleton, or None if the plugin is off."""
+    try:
+        return unreal.get_editor_subsystem(unreal.DataLayerEditorSubsystem)
+    except Exception:
+        return None
 
 
 def iter_all_level_actors() -> list[unreal.Actor]:
     """Return every actor in the current editor level."""
-    return unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
+    merged: list[unreal.Actor] = []
+    seen: set[int] = set()
+
+    def _extend(batch: object) -> None:
+        try:
+            for actor in batch:  # type: ignore[union-attr]
+                oid = id(actor)
+                if oid in seen:
+                    continue
+                seen.add(oid)
+                merged.append(actor)
+        except TypeError:
+            pass
+
+    try:
+        sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        _extend(sub.get_all_level_actors())
+    except Exception:
+        pass
+    try:
+        _extend(unreal.EditorLevelLibrary.get_all_level_actors())
+    except Exception:
+        pass
+    return merged
 
 
 def get_world_data_layers_actor() -> Optional[unreal.Actor]:
@@ -59,6 +86,10 @@ def get_world_data_layers_actor() -> Optional[unreal.Actor]:
 
 def get_editor_world() -> Optional[unreal.World]:
     """Return the current editor world, or None on failure."""
+    try:
+        return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    except Exception:
+        pass
     try:
         return unreal.EditorLevelLibrary.get_editor_world()
     except Exception:
@@ -198,9 +229,18 @@ def get_or_create_data_layer_instance(
     new instance using DataLayerCreationParameters with a backing
     DataLayerAsset.
     """
-    global _warned_no_world_data_layers
+    global _warned_no_world_data_layers, _warned_no_data_layer_subsystem
 
     sub = data_layer_editor_subsystem()
+    if sub is None:
+        if not _warned_no_data_layer_subsystem:
+            unreal.log_warning(
+                "[Mercs2DataLayers] DataLayerEditorSubsystem unavailable — enable "
+                "the DataLayerEditor plugin or ignore data layers on non-WP maps."
+            )
+            _warned_no_data_layer_subsystem = True
+        return None
+
     asset_name = _sanitize_data_layer_asset_name(label)
 
     # Try lookup by original label
@@ -267,4 +307,134 @@ def add_actor_to_data_layer_if_any(
     if data_layer is None:
         return
     sub = data_layer_editor_subsystem()
+    if sub is None:
+        return
     sub.add_actor_to_data_layer(actor, data_layer)
+
+
+def set_data_layer_initial_runtime_state(
+    layer: Optional[unreal.DataLayerInstance],
+    state: unreal.DataLayerRuntimeState,
+) -> None:
+    """Persist the Data Layer state that PIE/runtime reads (not editor-only overrides)."""
+    if layer is None:
+        return
+    try:
+        layer.set_editor_property("initial_runtime_state", state)
+    except Exception as exc:
+        unreal.log_warning(
+            f"[Mercs2DataLayers] Could not set initial_runtime_state on "
+            f"'{layer}': {exc}"
+        )
+
+
+def configure_data_layer_for_pie(
+    layer: Optional[unreal.DataLayerInstance],
+    *,
+    activated: bool,
+    loaded_in_editor: bool | None = None,
+) -> None:
+    """Set editor + persisted runtime state so actors on this layer appear in PIE."""
+    if layer is None:
+        return
+    runtime_state = (
+        unreal.DataLayerRuntimeState.ACTIVATED
+        if activated
+        else unreal.DataLayerRuntimeState.UNLOADED
+    )
+    set_data_layer_initial_runtime_state(layer, runtime_state)
+    sub = data_layer_editor_subsystem()
+    if sub is None:
+        return
+    if loaded_in_editor is not None:
+        try:
+            sub.set_data_layer_is_loaded_in_editor(layer, loaded_in_editor)
+        except Exception:
+            pass
+    try:
+        sub.set_data_layer_runtime_state(layer, runtime_state)
+    except Exception:
+        pass
+
+
+def world_has_world_partition(world: unreal.World) -> bool:
+    """Return True if *world* uses World Partition."""
+    get_wp = getattr(world, "get_world_partition", None)
+    if not callable(get_wp):
+        return False
+    try:
+        return get_wp() is not None
+    except Exception:
+        return False
+
+
+def get_data_layer_by_label(label: str) -> Optional[unreal.DataLayerInstance]:
+    """Return an existing Data Layer instance by label, or None."""
+    sub = data_layer_editor_subsystem()
+    if sub is None:
+        return None
+    try:
+        return sub.get_data_layer_from_label(unreal.Name(label))
+    except Exception:
+        return None
+
+
+def _set_runtime_state_on_layer(
+    layer: unreal.DataLayerInstance,
+    state: unreal.DataLayerRuntimeState,
+    *,
+    recursive: bool = False,
+) -> bool:
+    """Set runtime state via DataLayerManager (UE 5.7+) or editor subsystem fallback."""
+    try:
+        mgr_cls = getattr(unreal, "DataLayerManager", None)
+        if mgr_cls is not None:
+            mgr = unreal.DataLayerManager.get_data_layer_manager(unreal.EditorLevelLibrary.get_editor_world())
+            if mgr is not None:
+                fn = getattr(mgr, "set_data_layer_instance_runtime_state", None)
+                if callable(fn):
+                    return bool(fn(layer, state, recursive))
+    except Exception:
+        pass
+    sub = data_layer_editor_subsystem()
+    if sub is None:
+        return False
+    try:
+        sub.set_data_layer_runtime_state(layer, state)
+        return True
+    except Exception:
+        return False
+
+
+def set_act_parent_states(
+    act_states: dict[int, unreal.DataLayerRuntimeState],
+    *,
+    prefix: str = "VZ",
+) -> None:
+    """Apply runtime state to VZ_Act1 / VZ_Act2 / VZ_Act3 parent layers (recursive)."""
+    for act, state in sorted(act_states.items()):
+        label = f"{prefix}_Act{act}"
+        layer = get_data_layer_by_label(label)
+        if layer is None:
+            continue
+        set_data_layer_initial_runtime_state(layer, state)
+        activated = state == unreal.DataLayerRuntimeState.ACTIVATED
+        configure_data_layer_for_pie(
+            layer,
+            activated=activated,
+            loaded_in_editor=activated,
+        )
+        _set_runtime_state_on_layer(layer, state, recursive=True)
+
+
+def save_dirty_level_packages() -> bool:
+    """Save all dirty packages (level + external actors). Returns True on success."""
+    try:
+        unreal.EditorLoadingAndSavingUtils.save_dirty_packages(
+            save_map_packages=True,
+            save_content_packages=True,
+        )
+        return True
+    except Exception as exc:
+        unreal.log_warning(f"[Mercs2DataLayers] save_dirty_packages failed: {exc}")
+        return False

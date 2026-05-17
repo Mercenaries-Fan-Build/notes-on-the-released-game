@@ -352,6 +352,130 @@ def create_weather_data_table() -> unreal.DataTable | None:
 
 
 # ---------------------------------------------------------------------------
+# BP_WeatherController — programmatic variables (UE 5.7)
+# ---------------------------------------------------------------------------
+
+_INSTANCE_EDITABLE_VARS = (
+    "CurrentState",
+    "TargetState",
+    "TransitionDuration",
+    "FogActor",
+    "CloudActor",
+    "SunActor",
+    "PostProcessActor",
+    "WeatherTable",
+)
+
+
+def _blueprint_editor_library() -> type | None:
+    return getattr(unreal, "BlueprintEditorLibrary", None)
+
+
+def _set_pin_subcategory_object(
+    pin: unreal.EdGraphPinType, obj: unreal.Object
+) -> None:
+    """Attach enum/struct asset to a byte/struct pin (PascalCase in UE 5.7)."""
+    for prop in ("PinSubCategoryObject", "pin_sub_category_object"):
+        try:
+            pin.set_editor_property(prop, obj)
+            return
+        except Exception:
+            continue
+
+
+def _pin_type_float(bel: type) -> unreal.EdGraphPinType:
+    return bel.get_basic_type_by_name(unreal.Name("real"))
+
+
+def _pin_type_user_enum(bel: type, enum_path: str) -> unreal.EdGraphPinType | None:
+    enum_asset = unreal.EditorAssetLibrary.load_asset(enum_path)
+    if enum_asset is None:
+        return None
+    pin = bel.get_basic_type_by_name(unreal.Name("byte"))
+    _set_pin_subcategory_object(pin, enum_asset)
+    return pin
+
+
+def _pin_type_struct(bel: type, struct_path: str) -> unreal.EdGraphPinType | None:
+    struct_asset = unreal.EditorAssetLibrary.load_asset(struct_path)
+    if struct_asset is None:
+        return None
+    return bel.get_struct_type(struct_asset)
+
+
+def _pin_type_object(bel: type, actor_class: type) -> unreal.EdGraphPinType:
+    return bel.get_object_reference_type(actor_class)
+
+
+def _ensure_weather_blueprint_variables(bp: unreal.Blueprint) -> int:
+    """Add BP variables via BlueprintEditorLibrary so spawn auto-fill can wire actors."""
+    bel = _blueprint_editor_library()
+    if bel is None:
+        _warn(
+            "  BlueprintEditorLibrary unavailable — add FogActor/CloudActor/SunActor/"
+            "PostProcessActor/WeatherTable variables manually on BP_WeatherController."
+        )
+        return 0
+
+    cloud_cls = getattr(unreal, "VolumetricCloud", None)
+    try:
+        specs: list[tuple[str, unreal.EdGraphPinType | None]] = [
+            ("CurrentState", _pin_type_user_enum(bel, ENUM_PATH)),
+            ("TargetState", _pin_type_user_enum(bel, ENUM_PATH)),
+            ("TransitionDuration", _pin_type_float(bel)),
+            ("TransitionAlpha", _pin_type_float(bel)),
+            ("FogActor", _pin_type_object(bel, unreal.ExponentialHeightFog)),
+            (
+                "CloudActor",
+                _pin_type_object(bel, cloud_cls) if cloud_cls is not None else None,
+            ),
+            ("SunActor", _pin_type_object(bel, unreal.DirectionalLight)),
+            ("PostProcessActor", _pin_type_object(bel, unreal.PostProcessVolume)),
+            ("WeatherTable", _pin_type_object(bel, unreal.DataTable)),
+            ("CurrentParams", _pin_type_struct(bel, STRUCT_PATH)),
+            ("TargetParams", _pin_type_struct(bel, STRUCT_PATH)),
+        ]
+    except Exception as exc:
+        _warn(
+            f"  Could not build blueprint variable pin types ({exc}) — add "
+            "FogActor/CloudActor/SunActor/PostProcessActor/WeatherTable manually."
+        )
+        return 0
+
+    added = 0
+    for var_name, pin_type in specs:
+        if pin_type is None:
+            _warn(f"    skip variable {var_name} — type asset missing")
+            continue
+        try:
+            ok = bel.add_member_variable(bp, unreal.Name(var_name), pin_type)
+        except Exception as exc:
+            _warn(f"    add_member_variable({var_name}) failed: {exc}")
+            continue
+        if ok:
+            added += 1
+            _log(f"    added variable {var_name}")
+        else:
+            _log(f"    variable {var_name} already present (or add failed)")
+
+    try:
+        bel.compile_blueprint(bp)
+        _log("  compiled BP_WeatherController")
+    except Exception as exc:
+        _warn(f"  compile_blueprint failed: {exc}")
+
+    for var_name in _INSTANCE_EDITABLE_VARS:
+        try:
+            bel.set_blueprint_variable_instance_editable(
+                bp, unreal.Name(var_name), True,
+            )
+        except Exception:
+            pass
+
+    return added
+
+
+# ---------------------------------------------------------------------------
 # BP_WeatherController
 # ---------------------------------------------------------------------------
 
@@ -375,6 +499,7 @@ def create_weather_controller_blueprint() -> unreal.Blueprint | None:
         _save(BP_PATH)
         _log(f"  created {BP_PATH}")
 
+    _ensure_weather_blueprint_variables(bp)  # type: ignore[arg-type]
     _attach_rain_niagara_component(bp)  # type: ignore[arg-type]
     _save(BP_PATH)
     return bp  # type: ignore[return-value]
@@ -434,7 +559,17 @@ def _attach_rain_niagara_component(bp: unreal.Blueprint) -> None:
     except Exception as exc:
         _warn(f"  add_new_subobject RainEmitter crashed: {exc}")
         return
-    if not handle.is_valid():
+    if handle is None:
+        _warn("  add_new_subobject RainEmitter returned None handle")
+        return
+    valid = True
+    is_valid_fn = getattr(handle, "is_valid", None)
+    if callable(is_valid_fn):
+        try:
+            valid = bool(is_valid_fn())
+        except Exception:
+            valid = True
+    if not valid:
         _warn(f"  add_new_subobject RainEmitter failed: {fail_reason}")
         return
     try:
@@ -572,7 +707,23 @@ def spawn_weather_controller_instance(
         _log("  exists")
         actor = existing
     else:
-        generated_class = bp.get_editor_property("generated_class")
+        generated_class = None
+        asset_name = BP_PATH.rsplit("/", 1)[-1]
+        class_path = f"{BP_PATH}.{asset_name}_C"
+        try:
+            generated_class = unreal.load_object(None, class_path)
+        except Exception:
+            pass
+        if generated_class is None and callable(getattr(bp, "generated_class", None)):
+            try:
+                generated_class = bp.generated_class()
+            except Exception:
+                pass
+        if generated_class is None:
+            try:
+                generated_class = bp.get_editor_property("generated_class")
+            except Exception:
+                pass
         if generated_class is None:
             _err("  BP_WeatherController has no generated class yet (compile it?)")
             return None
@@ -616,6 +767,14 @@ def spawn_weather_controller_instance(
             actor.set_editor_property(prop_name, value)
             set_any = True
             _log(f"  set {prop_name} -> {value.get_name() if hasattr(value, 'get_name') else value}")
+            continue
+        except Exception:
+            pass
+        try:
+            soft_path = unreal.SoftObjectPath(value.get_path_name())
+            actor.set_editor_property(prop_name, soft_path)
+            set_any = True
+            _log(f"  set {prop_name} (soft) -> {soft_path}")
         except Exception as exc:
             _warn(
                 f"  could not auto-fill {prop_name} ({exc}); MANUAL: set it on "
@@ -694,18 +853,25 @@ Weather system — manual follow-up checklist:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def run() -> None:
+def run() -> bool:
+    import traceback
+
     _log("=" * 70)
     _log("Mercenaries 2 — Weather state machine scaffold")
     _log("=" * 70)
 
-    create_weather_enum()
-    create_weather_struct()
-    dt = create_weather_data_table()
-    bp = create_weather_controller_blueprint()
-    pp = ensure_post_process_volume()
-    spawn_weather_controller_instance(bp, pp, dt)
-    write_weather_schema_manifest()
+    try:
+        create_weather_enum()
+        create_weather_struct()
+        dt = create_weather_data_table()
+        bp = create_weather_controller_blueprint()
+        pp = ensure_post_process_volume()
+        spawn_weather_controller_instance(bp, pp, dt)
+        write_weather_schema_manifest()
+    except Exception as exc:
+        _err(f"Weather setup failed: {exc}")
+        _err(traceback.format_exc())
+        return False
 
     _log("--- Manual follow-up ---")
     for line in _BP_VARIABLE_SPEC.strip().splitlines():
@@ -716,14 +882,19 @@ def run() -> None:
         _warn(line)
 
     try:
-        unreal.EditorLevelLibrary.save_current_level()
+        unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
         _log("Saved current level.")
-    except Exception as exc:
-        _warn(f"save_current_level failed: {exc}")
+    except Exception:
+        try:
+            unreal.EditorLevelLibrary.save_current_level()
+            _log("Saved current level.")
+        except Exception as exc:
+            _warn(f"save_current_level failed: {exc}")
 
     _log("=" * 70)
     _log("Done. Finish the BP_WeatherController event graph in the editor.")
     _log("=" * 70)
+    return True
 
 
 if __name__ == "__main__":

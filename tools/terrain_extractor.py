@@ -10,8 +10,9 @@ This tool reuses :func:`ucfx_mesh_codec._parse_prmg_body` on each GEOM child sli
 (which matches the flat ``STRM``/``IBUF`` layout) and :func:`decode_submesh` for
 vertices + triangle strips, then merges all tiles via :func:`merge_submeshes`.
 
-Outputs a review-style folder with ``submeshes/*.obj`` + ``mesh_scene.glb`` via
-:func:`gltf_exporter.export_review_to_gltf`.
+Outputs ``mesh_scene.glb`` directly via :func:`_build_terrain_glb` (pygltflib),
+bypassing the OBJ text intermediate and gltf_exporter's LH→RH + D3D9 UV transforms.
+An OBJ is still written as a debug artifact.
 """
 from __future__ import annotations
 
@@ -26,7 +27,6 @@ _REPO_TOOLS = Path(__file__).resolve().parent
 if str(_REPO_TOOLS) not in sys.path:
     sys.path.insert(0, str(_REPO_TOOLS))
 
-from gltf_exporter import export_review_to_gltf  # noqa: E402
 from ucfx_mesh_codec import (  # noqa: E402
     _iter_geom_child_row_slices,
     _parse_prmg_body,
@@ -51,9 +51,15 @@ _WORLD_MIN_M = -4000.0
 _WORLD_SPAN_M = 8000.0
 # Master texture (block-local sidecar) — see docs/format_reference.md §13.4.
 _MASTER_TEXTURE_BASENAME = "vz_lrterrain"
-# When True, V is flipped (v = 1 - v_world). Off by default; set via convention JSON
-# / validation step. See output/terrain_uv_convention.json.
-_TEXTURE_V_FLIP = False
+# Atlas image top (pixel row 0) = game SOUTH (low Z, -4000).
+# Atlas image bottom (pixel row 2047) = game NORTH (high Z, +4000).
+# Verified by placement density correlation (r=+0.28 original orientation).
+#
+# glTF UV convention: v=0 = image bottom, v=1 = image top.
+# Raw planar projection: v = (z+4000)/8000 → v=0 at south, v=1 at north.
+# That maps south to image bottom — WRONG (south is image top).
+# V-flip: v = 1 - (z+4000)/8000 → v=1 at south (image top) ✓, v=0 at north (image bottom) ✓.
+_TEXTURE_V_FLIP = True
 # Edge samples within this distance (m) of ±200 local X/Z for seam matching.
 # Source vertices land dead-on ±200 (verified); 0.5 m tolerance prevents
 # near-edge interior vertices from polluting the per-edge bucket profile.
@@ -821,6 +827,199 @@ def _load_master_texture(block_dir: Path) -> Path:
     return png
 
 
+def _build_terrain_glb(
+    out_path: Path,
+    verts: list[tuple[float, float, float]],
+    faces: list[tuple[int, int, int]],
+    uvs: list[tuple[float, float]],
+    texture_png: Path | None = None,
+) -> None:
+    """Write a GLB directly from terrain geometry — no OBJ round-trip.
+
+    Vertices are game LH world metres (merged tile offsets). UVs are synthesized in
+    ``_world_xz_to_uv`` (including ``_TEXTURE_V_FLIP``) and are written as-is.
+
+    Unlike building meshes which use local-origin geometry, terrain has world-space
+    coordinates baked in and is placed at UE origin. We write game coords directly
+    (no Z-negate, no winding flip) because UE Interchange's Y-up→Z-up swap produces
+    the same result as ``game_to_ue``: game (x,y,z) → glTF (x,y,z) → UE (x,z,y).
+    """
+    import math as _math
+
+    from pygltflib import (
+        GLTF2,
+        Accessor,
+        Asset,
+        Buffer,
+        BufferView,
+        Image as GLTFImage,
+        Material,
+        Mesh,
+        Node,
+        PbrMetallicRoughness,
+        Primitive,
+        Scene,
+        Texture,
+        TextureInfo,
+    )
+
+    FLOAT = 5126
+    UNSIGNED_INT = 5125
+
+    export_verts = list(verts)
+    export_faces = list(faces)
+
+    blob = bytearray()
+    buffer_views: list[BufferView] = []
+    accessors: list[Accessor] = []
+
+    def _pad4(b: bytearray) -> None:
+        pad = (-len(b)) % 4
+        b.extend(b"\x00" * pad)
+
+    # --- Smooth-shaded normals computed in game LH space (no RH conversion) ---
+    export_normals: list[tuple[float, float, float]] = [(0.0, 1.0, 0.0)] * len(verts)
+    normal_accum: list[list[float]] = [[0.0, 0.0, 0.0] for _ in range(len(verts))]
+    for a, b, c in faces:
+        ax, ay, az = verts[a]
+        bx, by, bz = verts[b]
+        cx, cy, cz = verts[c]
+        e1 = (bx - ax, by - ay, bz - az)
+        e2 = (cx - ax, cy - ay, cz - az)
+        nx = e1[1] * e2[2] - e1[2] * e2[1]
+        ny = e1[2] * e2[0] - e1[0] * e2[2]
+        nz = e1[0] * e2[1] - e1[1] * e2[0]
+        for vi in (a, b, c):
+            normal_accum[vi][0] += nx
+            normal_accum[vi][1] += ny
+            normal_accum[vi][2] += nz
+    for i, nacc in enumerate(normal_accum):
+        ln = _math.sqrt(nacc[0] ** 2 + nacc[1] ** 2 + nacc[2] ** 2)
+        if ln > 1e-12:
+            export_normals[i] = (nacc[0] / ln, nacc[1] / ln, nacc[2] / ln)
+
+    # --- Indices (uint32) ---
+    idx_bytes = bytearray()
+    max_idx = 0
+    for a, b, c in export_faces:
+        idx_bytes.extend(struct.pack("<III", a, b, c))
+        max_idx = max(max_idx, a, b, c)
+    _pad4(blob)
+    idx_off = len(blob)
+    blob.extend(idx_bytes)
+    bv_idx = len(buffer_views)
+    buffer_views.append(BufferView(buffer=0, byteOffset=idx_off, byteLength=len(idx_bytes), target=34963))
+    acc_idx = len(accessors)
+    accessors.append(Accessor(
+        bufferView=bv_idx, byteOffset=0, componentType=UNSIGNED_INT,
+        count=len(faces) * 3, type="SCALAR", max=[max_idx], min=[0],
+    ))
+
+    # --- Helper to push a vertex attribute ---
+    def _push_attr(data_bytes: bytes, count: int, ctype: int, atype: str,
+                   mins: list[float], maxs: list[float]) -> int:
+        _pad4(blob)
+        off = len(blob)
+        blob.extend(data_bytes)
+        bv = len(buffer_views)
+        buffer_views.append(BufferView(buffer=0, byteOffset=off, byteLength=len(data_bytes), target=34962))
+        ac = len(accessors)
+        acc_kw: dict = {
+            "bufferView": bv, "byteOffset": 0, "componentType": ctype,
+            "count": count, "type": atype,
+        }
+        if all(_math.isfinite(x) for x in mins + maxs):
+            acc_kw["min"] = mins
+            acc_kw["max"] = maxs
+        accessors.append(Accessor(**acc_kw))
+        return ac
+
+    # --- Positions (RH glTF) ---
+    pos_bytes = b"".join(struct.pack("<fff", x, y, z) for x, y, z in export_verts)
+    acc_pos = _push_attr(
+        pos_bytes, len(export_verts), FLOAT, "VEC3",
+        [min(v[j] for v in export_verts) for j in range(3)],
+        [max(v[j] for v in export_verts) for j in range(3)],
+    )
+
+    # --- Normals (RH glTF) ---
+    nrm_bytes = b"".join(struct.pack("<fff", *n) for n in export_normals)
+    acc_nrm = _push_attr(
+        nrm_bytes, len(export_normals), FLOAT, "VEC3",
+        [min(n[j] for n in export_normals) for j in range(3)],
+        [max(n[j] for n in export_normals) for j in range(3)],
+    )
+
+    # --- UVs (synthesized with _TEXTURE_V_FLIP; no exporter V-flip) ---
+    uv_bytes = b"".join(struct.pack("<ff", u, v) for u, v in uvs)
+    acc_uv = _push_attr(
+        uv_bytes, len(uvs), FLOAT, "VEC2",
+        [min(u[j] for u in uvs) for j in range(2)],
+        [max(u[j] for u in uvs) for j in range(2)],
+    )
+
+    # --- Material + Texture ---
+    materials_l: list[Material] = []
+    textures_l: list[Texture] = []
+    images_l: list[GLTFImage] = []
+    mat_idx: int | None = None
+
+    if texture_png and texture_png.is_file():
+        _pad4(blob)
+        img_off = len(blob)
+        img_data = texture_png.read_bytes()
+        blob.extend(img_data)
+        bv_img = len(buffer_views)
+        buffer_views.append(BufferView(buffer=0, byteOffset=img_off, byteLength=len(img_data)))
+        images_l.append(GLTFImage(bufferView=bv_img, mimeType="image/png"))
+        textures_l.append(Texture(source=0))
+        materials_l.append(Material(
+            name="terrain_diffuse",
+            pbrMetallicRoughness=PbrMetallicRoughness(
+                baseColorTexture=TextureInfo(index=0),
+                metallicFactor=0.0,
+                roughnessFactor=1.0,
+            ),
+        ))
+        mat_idx = 0
+    else:
+        materials_l.append(Material(
+            name="terrain_untextured",
+            pbrMetallicRoughness=PbrMetallicRoughness(
+                baseColorFactor=[0.5, 0.5, 0.5, 1.0],
+                metallicFactor=0.0,
+                roughnessFactor=1.0,
+            ),
+        ))
+        mat_idx = 0
+
+    # --- Primitive + Mesh + Nodes ---
+    prim = Primitive(
+        attributes={"POSITION": acc_pos, "NORMAL": acc_nrm, "TEXCOORD_0": acc_uv},
+        indices=acc_idx,
+        material=mat_idx,
+    )
+    mesh = Mesh(primitives=[prim])
+    geom_node = Node(name="terrain", mesh=0)
+    root_node = Node(name="LowResTerrain", children=[0])
+
+    gltf = GLTF2(
+        asset=Asset(version="2.0", generator="mercs2_terrain_extractor"),
+        scenes=[Scene(nodes=[1])],
+        scene=0,
+        nodes=[geom_node, root_node],
+        meshes=[mesh],
+        materials=materials_l,
+        textures=textures_l if textures_l else None,
+        images=images_l if images_l else None,
+        buffers=[Buffer(byteLength=len(blob))],
+        bufferViews=buffer_views,
+        accessors=accessors,
+    )
+    gltf.set_binary_blob(bytes(blob))
+    gltf.save_binary(str(out_path))
+
+
 def extract_merged_terrain(
     data: bytes,
     layers_static_blob: Path | None = None,
@@ -1008,7 +1207,7 @@ def main() -> int:
         print(f"error: no merged geometry — stats={json.dumps(stats, indent=2)}", file=sys.stderr)
         return 2
 
-    # Master texture must exist on disk so gltf_exporter can embed it into the GLB.
+    # Master texture PNG is embedded directly into mesh_scene.glb by _build_terrain_glb.
     try:
         master_png = _load_master_texture(out_review)
         master_texture_status = f"ok:{master_png.name}"
@@ -1025,8 +1224,7 @@ def main() -> int:
 
     _write_obj(sub_dir / "0000.obj", verts, faces, uvs=uvs if master_png else None)
 
-    # Material index 0 → diffuse=vz_lrterrain. gltf_exporter resolves the texture
-    # file via tex_dir/<name>.{png,dds} and embeds the bytes into the GLB.
+    # Material index 0 → diffuse=vz_lrterrain (for debug OBJ / index.json only).
     if master_png:
         index = [{
             "file": "0000.obj",
@@ -1079,13 +1277,7 @@ def main() -> int:
 
     if not args.no_glb:
         glb_out = out_review / "mesh_scene.glb"
-        export_review_to_gltf(
-            out_review,
-            glb_out,
-            stem=out_review.name,
-            output_format="glb",
-            glb_root_scale=1.0,
-        )
+        _build_terrain_glb(glb_out, verts, faces, uvs, texture_png=master_png)
         print(f"wrote {glb_out}")
 
     if stats.get("tiles_failed_count"):
