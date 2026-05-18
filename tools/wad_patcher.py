@@ -359,6 +359,7 @@ def cmd_patch_script(
     script_name: str,
     *,
     corrupt_csum: bool = False,
+    corrupt_data: bool = False,
     lua_bytecode_path: Path | None = None,
     ucfx_payload_path: Path | None = None,
     no_backup: bool = False,
@@ -468,6 +469,26 @@ def cmd_patch_script(
                 return 1
             struct.pack_into("<I", modified, csum_off + 4, 0xDEADBEEF)
 
+        elif corrupt_data:
+            entry_start = target_entry["offset"]
+            entry_end = target_entry["offset"] + target_entry["size"] - 8
+            chunk = modified[entry_start:entry_end]
+            luaq_rel = chunk.find(LUAQ_SIG)
+            if luaq_rel < 0:
+                print("ERROR: No LuaQ signature in target UCFX chunk", file=sys.stderr)
+                return 1
+            flip_abs = entry_start + luaq_rel + 16
+            old_byte = modified[flip_abs]
+            new_byte = old_byte ^ 0xFF
+            modified[flip_abs] = new_byte
+            print(f"\nFlipped bytecode byte at offset 0x{flip_abs:x}: 0x{old_byte:02X} → 0x{new_byte:02X}")
+
+            csum_off = target_entry["csum_offset"]
+            ucfx_data = bytes(modified[entry_start:csum_off])
+            new_csum = crc32_mercs2(ucfx_data)
+            struct.pack_into("<I", modified, csum_off + 4, new_csum)
+            print(f"Recomputed CSUM: 0x{stored_csum:08X} → 0x{new_csum:08X}")
+
         elif lua_bytecode_path is not None:
             if not lua_bytecode_path.is_file():
                 print(f"ERROR: Lua bytecode file not found: {lua_bytecode_path}", file=sys.stderr)
@@ -545,7 +566,7 @@ def cmd_patch_script(
             print(f"  New CSUM:    0x{new_csum:08X}")
 
         else:
-            print("ERROR: No modification specified (use --corrupt-csum, --lua-bytecode, or --ucfx-payload)", file=sys.stderr)
+            print("ERROR: No modification specified (use --corrupt-csum, --corrupt-data, --lua-bytecode, or --ucfx-payload)", file=sys.stderr)
             return 1
 
         print(f"\nRecompressing ({len(modified):,} bytes)...")
@@ -673,6 +694,8 @@ def main() -> int:
                     help="Target script name (substring match)")
     ap.add_argument("--corrupt-csum", action="store_true",
                     help="Set the target script's CSUM to 0xDEADBEEF")
+    ap.add_argument("--corrupt-data", action="store_true",
+                    help="Flip one bytecode byte and recompute CSUM (test content modification)")
     ap.add_argument("--lua-bytecode", type=Path,
                     help="Replace script's LuaQ bytecode with this file")
     ap.add_argument("--ucfx-payload", type=Path,
@@ -723,13 +746,14 @@ def main() -> int:
         return cmd_list_scripts(wad_path)
 
     if args.script:
-        if not (args.corrupt_csum or args.lua_bytecode or args.ucfx_payload):
-            ap.error("--script requires one of: --corrupt-csum, --lua-bytecode, --ucfx-payload")
+        if not (args.corrupt_csum or args.corrupt_data or args.lua_bytecode or args.ucfx_payload):
+            ap.error("--script requires one of: --corrupt-csum, --corrupt-data, --lua-bytecode, --ucfx-payload")
 
         return cmd_patch_script(
             wad_path,
             args.script,
             corrupt_csum=args.corrupt_csum,
+            corrupt_data=args.corrupt_data,
             lua_bytecode_path=args.lua_bytecode,
             ucfx_payload_path=args.ucfx_payload,
             no_backup=args.no_backup,
