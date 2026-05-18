@@ -24,39 +24,93 @@
 
 ## 1. DRM / Copy Protection
 
-### 1.1 SecuROM
+### 1.1 SecuROM v7
 
-Mercenaries 2 PC ships with **SecuROM** copy protection plus EA online activation.
+Mercenaries 2 PC ships with **SecuROM v7** copy protection plus EA online activation.
 Evidence:
 
 - The demo's help files (`Support/EA Help/en-us/Error_Message/_CD_DVD_Emulation_Software_Detected_.htm`) explicitly reference SecuROM, including instructions for generating `AnalysisLog.sr0` diagnostic files and emailing `support@securom.com`.
 - `GL.ini` (UTF-16 LE, 240 KB) is the DRM launcher configuration — see §1.2 below.
+- PDB path embedded in executables: `D:\vfdev-SecuROM-DRM_7_38\SecuROM_DRM\Wrapper\wrapper.pdb`
 
-#### PE section signatures
+#### Version identification (confirmed via binary analysis)
 
-SecuROM embeds two distinctive PE sections in the protected executable:
+| Executable | SecuROM Version | PDB Build Path |
+|-----------|----------------|----------------|
+| Demo (`Merc2-Demo.exe`, 16.3 MB) | v7.38 | `SecuROM-DRM_7_38` |
+| Retail v1.0 (`Mercenaries2.exe`, 16.1 MB) | v7.37 | `SecuROM-DRM_7_37` |
+| Update v1.1 (`Mercenaries2.exe`, 51.4 MB) | v7.38 | `SecuROM-DRM_7_38` |
+| Cracked (from ISO `Crack/`) | v7.37 (patched) | `SecuROM-DRM_7_37` |
 
-| Section | Purpose |
-|---------|---------|
-| `.cms_t` | Encrypted loader / code entry |
-| `.cms_d` | Data entry |
+#### PE section layout (SecuROM v7 specific)
 
-#### Byte-level detection signatures
+SecuROM v7 uses a different section scheme from earlier versions (v4-v5 used `.cms_t`/`.cms_d`):
 
-| Signature bytes | Meaning |
-|-----------------|---------|
-| `41 64 64 44 03 00 00 00` | SecuROM v4+ marker |
-| `CA DD DD AC 03` | SecuROM v5+ marker |
-| `4D 61 30 57 79 47 31 6B 6D` (`"Ma0WyG1km"`) | Anti-disassembly junk after function prologues in `.cms_t` |
-| `_and_play.dll\0drm_pagui_doit` | SecuROM launcher/activation DLL string references |
+| Section | Raw Size | Purpose |
+|---------|----------|---------|
+| `Stext` | 3.3–6.5 MB | Encrypted/compressed game code (decompressed at runtime) |
+| `Sitext` | 28 KB | SecuROM initialization code (**entry point lives here**) |
+| `Srdata` | 360–368 KB | SecuROM read-only data |
+| `Sdata` | 876–884 KB | SecuROM mutable data |
+| `Sidata` | 24 KB | SecuROM import data |
+| `.securom` | 1.3–20 MB | SecuROM protection engine, activation data, PA URLs |
 
-#### How SecuROM works (high level)
+The original/demo exes have `Stext` compressed (~50% of virtual size). The cracked exe has `Stext` fully decompressed (RawSize = VirtSize), eliminating the need for SecuROM's decompression routine.
 
-- Replaces the EXE's original entry point with the `.cms_t` loader.
-- Proxies Windows API calls through security-check stubs before forwarding to the real API.
-- Encrypts code sections; decrypted at runtime using keys derived from disc validation.
-- Performs anti-debugging checks to prevent reaching the Original Entry Point (OEP).
-- Runs periodic "spot checks" via memory-mapped files created by the launcher.
+#### How SecuROM v7 works (confirmed by binary analysis)
+
+1. **Entry point hijack**: The PE entry point is in `Sitext`, not `.text`. SecuROM takes control before any game code runs.
+2. **Code encryption**: Portions of the game's `.text` section are encrypted into `Stext`. At runtime, SecuROM decrypts/decompresses them back.
+3. **Named event authentication**: SecuROM creates a named Win32 Event (`v7_XXXX` where XXXX derives from PID ⊕ magic constant `0x19EA3FD3`). The presence of this event signals successful authentication.
+4. **Callback verification**: A function pointer (at VA `0xB054D4` in the full game) is called periodically; SecuROM's handler validates authentication state.
+5. **Anti-debugging**: Standard anti-debug checks prevent reaching the Original Entry Point (OEP).
+6. **Online activation**: URLs to `securom.com` PA servers embedded in `.securom` section.
+
+#### The bypass mechanism (ISO `Crack/` directory)
+
+The ISO contains two files in `Crack/`:
+
+| File | Size | Purpose |
+|------|------|---------|
+| `Mercenaries2.exe` | 51 MB | Patched exe (entry point moved to OEP in `.text`) |
+| `cruise.dll` | 8 KB | SecuROM event emulator DLL |
+
+**Patched EXE changes:**
+- Entry point moved from `Sitext` (VA `0x1C87A10`) to `.text` (VA `0xB04C2E` = game's OEP)
+- Small stub patched at the OEP that: (1) saves/replaces SecuROM's verification callback, (2) calls `LoadLibraryA("cruise.dll")`, (3) jumps to original init code
+- A conditional hook at VA `0xB04C44` intercepts SecuROM's verification calls: if the call signature matches SecuROM's expected pattern, returns OK; otherwise passes through to the original handler
+- SECURITY directory (Authenticode signature) removed
+- `Stext` section pre-decompressed (no runtime decompression needed)
+- New `reloaded` section (816 bytes) — crack team signature
+
+**cruise.dll DllMain pseudocode** (fully reverse-engineered):
+```c
+BOOL DllMain(HINSTANCE hDll, DWORD reason, LPVOID reserved) {
+    HMODULE hMsvcr = LoadLibraryA("msvcr71.dll");
+    sprintf_fn = GetProcAddress(hMsvcr, "sprintf");
+    DWORD pid = GetCurrentProcessId();
+    DWORD token = pid ^ 0x19EA3FD3;  // SecuROM v7 magic constant
+    sprintf(buffer, "v7_%04d", token);
+    CreateEventA(NULL, TRUE, TRUE, buffer);  // Named event = "authenticated"
+    return TRUE;
+}
+```
+
+The DLL has **no exports** — it only has DllMain. It creates the named event that SecuROM's remaining stub code checks for, spoofing successful authentication.
+
+**Combined bypass effect:**
+1. EXE starts at OEP (skips SecuROM's Sitext initialization entirely)
+2. `cruise.dll` is loaded, creates the authentication event
+3. The patched callback hook intercepts any remaining SecuROM verification calls
+4. Game runs without disc/activation checks
+
+#### What SecuROM does NOT protect
+
+**Critical for modding:** SecuROM v7 does NOT check game data files:
+- No WAD/bin file references in any SecuROM section
+- No file integrity APIs (beyond what SecuROM uses for its own activation data)
+- The `.securom` section contains only `CreateFileA`, `ReadFile`, `GetFileSizeEx` for its OWN internal files
+- SecuROM's architecture is exclusively exe-protection
 
 ### 1.2 `GL.ini` — DRM Launcher Configuration
 
@@ -89,7 +143,13 @@ Error codes of interest for modding:
 
 ### 1.3 Why DRM Does NOT Block Data-File Modding
 
-SecuROM protection wraps the **executable** (`Mercenaries2.exe`, 17 MB), not the game data files. The `.wad` archives, `.block` files, and UCFX containers use Pandemic Studios' proprietary formats with their own integrity mechanisms (see §4), but these are **independent** of SecuROM.
+**Confirmed via binary analysis:** SecuROM protection wraps the **executable** only. Evidence:
+
+1. **No WAD/bin file references** in any SecuROM section (`.securom`, `Stext`, `Sitext`, `Srdata`, `Sdata`, `Sidata`)
+2. **`vz.bin` is not referenced by filename** in any executable (demo, original, cracked, or update v1.1)
+3. **`vz.wad` is referenced only in game code** (`.text` section at `"%s\vz.wad"` pattern — the engine's WAD loader, not SecuROM)
+4. **SecuROM's file I/O imports** (`CreateFileA`, `ReadFile`) in the `.securom` section are for its own activation data, not game assets
+5. **The bypass (cruise.dll) has no effect on WAD loading** — it only spoofs the authentication event
 
 The game data files use:
 - **FFCS** container format (not encrypted, not DRM-protected)
@@ -97,6 +157,39 @@ The game data files use:
 - **UCFX** chunk containers (plaintext 4-byte ASCII tags, standard binary structures)
 
 None of these layers involve SecuROM. Data modification requires understanding Pandemic's formats but does not require defeating copy protection.
+
+### 1.4 Demo SecuROM: Full Protection Present
+
+The demo (`Merc2-Demo.exe`, 16.3 MB) has **full SecuROM v7.38** — it is NOT a lighter or stripped-down version:
+- Entry point is in `Sitext` (SecuROM takes control first)
+- All 7 SecuROM sections present with same architecture as retail
+- Authenticode signature in SECURITY directory
+- Online activation URLs to `securom.com` embedded
+- Sony VXD driver references (`sony_ssm.vxd`, `sony_ssm.sys`)
+
+**Implication for demo modding:** If the demo's black screen is caused by SecuROM failing (e.g., activation expired), the game would typically show an error dialog or crash immediately — it would NOT load and then black-screen during gameplay. A black screen during WAD loading is almost certainly the game engine's own validation failing, not SecuROM.
+
+### 1.5 Modder's Guide: Working With SecuROM
+
+For modders who need to test modified WAD files:
+
+**You do NOT need to bypass SecuROM to mod data files.** SecuROM checks:
+- ✅ Executable integrity (modifying the EXE triggers SecuROM)
+- ✅ Disc presence or activation status
+- ❌ WAD file contents (never checked by SecuROM)
+- ❌ `vz.bin` contents (never checked by SecuROM)
+- ❌ Any file in `data/` directory
+
+**If the game won't launch at all** (SecuROM blocks startup):
+- The crack files bypass all SecuROM checks
+- The mechanism: patched entry point + `cruise.dll` creating the auth event
+- This removes disc/activation requirements but has zero effect on data file validation
+
+**If the game launches but shows black screen with modded data:**
+- This is the game ENGINE's validation, not SecuROM
+- Check FFCS CSUM (CRC-32) per-block checksums
+- Check FFCS INDX entries for consistency
+- The engine uses `"%s\vz.wad"` format to open WADs — path must be correct
 
 ---
 
