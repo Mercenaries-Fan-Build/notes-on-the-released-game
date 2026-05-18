@@ -218,11 +218,11 @@ def generate_cruise_dll() -> bytes:
     """Generate a minimal cruise.dll that creates the SecuROM spoof event.
 
     The DLL's entry point does:
-      1. LoadLibraryA("USER32.dll")
-      2. GetProcAddress(hUser32, "wsprintfA") -> store pointer
+      1. LoadLibraryA("msvcr71.dll")
+      2. GetProcAddress(hMsvcr71, "sprintf") -> store pointer
       3. GetCurrentProcessId()
       4. XOR result with 0x19EA3FD3
-      5. wsprintfA(buf, "v7_%04d", xored_pid)
+      5. sprintf(buf, "v7_%04d", xored_pid)
       6. CreateEventA(NULL, TRUE, TRUE, buf)  — manual-reset, initially signaled
       7. Return TRUE
 
@@ -234,37 +234,38 @@ def generate_cruise_dll() -> bytes:
     Architecture matches the known-good cruise.dll from the original crack:
     - Only imports from KERNEL32.dll (GetCurrentProcessId, GetProcAddress,
       LoadLibraryA, CreateEventA)
-    - Resolves wsprintfA dynamically via LoadLibraryA + GetProcAddress
+    - Resolves sprintf dynamically via LoadLibraryA("msvcr71.dll") + GetProcAddress
     - Includes a .reloc section for proper base relocation
     - Uses IMAGE_BASE 0x00400000 with 4 sections (CODE/DATA/.idata/.reloc)
+    - Matches original byte-for-byte in code, data, imports, and relocations
     """
     IMAGE_BASE = 0x00400000
     SECTION_ALIGN = 0x1000
     FILE_ALIGN = 0x200
 
-    # --- Layout ---
-    # Headers:      file 0x000..0x3FF (0x400 bytes), RVA 0
-    # CODE section: file 0x400..0x5FF (0x200 bytes), RVA 0x1000
-    # DATA section: file 0x600..0xBFF (0x600 bytes), RVA 0x2000
-    # .idata:       file 0xC00..0xDFF (0x200 bytes), RVA 0x3000
-    # .reloc:       file 0xE00..0xFFF (0x200 bytes), RVA 0x4000
-    # Total file: 0x1000 (4096 bytes)
+    # --- Layout (matches known-good 8KB original) ---
+    # Headers:      file 0x000..0x5FF (0x600 bytes, padded), RVA 0
+    # CODE section: file 0x600..0x7FF (0x200 bytes), RVA 0x1000
+    # DATA section: file 0x800..0xDFF (0x600 bytes), RVA 0x2000
+    # .idata:       file 0xE00..0xFFF (0x200 bytes), RVA 0x3000
+    # .reloc:       file 0x1000..0x11FF (0x200 bytes), RVA 0x4000
+    # Total file: 0x1200 padded to 0x2000 (8192 bytes)
     # SizeOfImage: 0x5000
 
     CODE_RVA = 0x1000
-    CODE_FILE = 0x400
+    CODE_FILE = 0x600
     DATA_RVA = 0x2000
-    DATA_FILE = 0x600
+    DATA_FILE = 0x800
     IDATA_RVA = 0x3000
-    IDATA_FILE = 0xC00
+    IDATA_FILE = 0xE00
     RELOC_RVA = 0x4000
-    RELOC_FILE = 0xE00
+    RELOC_FILE = 0x1000
 
     # Virtual addresses for data references
     FMT_VA = IMAGE_BASE + DATA_RVA + 0x000       # "v7_%04d"
     BUF_VA = IMAGE_BASE + DATA_RVA + 0x008       # sprintf output buffer
-    USERDLL_VA = IMAGE_BASE + DATA_RVA + 0x408   # "USER32.dll"
-    SPRINTF_NAME_VA = IMAGE_BASE + DATA_RVA + 0x414  # "wsprintfA"
+    MSVCDLL_VA = IMAGE_BASE + DATA_RVA + 0x408   # "msvcr71.dll"
+    SPRINTF_NAME_VA = IMAGE_BASE + DATA_RVA + 0x414  # "sprintf"
     SPRINTF_PTR_VA = IMAGE_BASE + DATA_RVA + 0x41C   # stored function pointer
 
     # IAT layout in .idata (RVA 0x3000):
@@ -281,23 +282,25 @@ def generate_cruise_dll() -> bytes:
     dos_header[0:2] = b"MZ"
     struct.pack_into("<H", dos_header, 2, 0x50)   # e_cblp (last page bytes)
     struct.pack_into("<H", dos_header, 4, 2)      # e_cp (pages)
+    struct.pack_into("<H", dos_header, 6, 0)      # e_crlc (relocations)
     struct.pack_into("<H", dos_header, 8, 4)      # e_minalloc
     struct.pack_into("<H", dos_header, 0xA, 0x0F) # e_maxalloc
-    struct.pack_into("<H", dos_header, 0x10, 0xFFFF)  # e_ss
-    struct.pack_into("<H", dos_header, 0x14, 0xB8)    # e_sp
-    struct.pack_into("<H", dos_header, 0x18, 0x40)    # e_lfarlc
-    struct.pack_into("<H", dos_header, 0x1A, 0x1A)    # (padding for std layout)
-    struct.pack_into("<I", dos_header, 0x3C, 0x100)   # e_lfanew -> PE header
+    struct.pack_into("<H", dos_header, 0xC, 0xFFFF)   # e_ss
+    struct.pack_into("<H", dos_header, 0x10, 0x00B8)   # e_csum
+    struct.pack_into("<H", dos_header, 0x18, 0x40)     # e_ovno
+    struct.pack_into("<H", dos_header, 0x1A, 0x001A)   # e_res[0]
+    struct.pack_into("<I", dos_header, 0x3C, 0x100)    # e_lfanew -> PE header
 
     # --- COFF header ---
     pe_sig = b"PE\x00\x00"
     coff_header = bytearray(20)
     struct.pack_into("<H", coff_header, 0, 0x14C)    # Machine: i386
     struct.pack_into("<H", coff_header, 2, 4)        # NumberOfSections
-    struct.pack_into("<I", coff_header, 4, 0)        # TimeDateStamp
+    struct.pack_into("<I", coff_header, 4, 0x6CE4388B)  # TimeDateStamp (matches original)
     struct.pack_into("<H", coff_header, 16, 224)     # SizeOfOptionalHeader (PE32)
-    # Characteristics: EXECUTABLE_IMAGE | 32BIT_MACHINE | DLL | RELOCS_STRIPPED=0
-    struct.pack_into("<H", coff_header, 18, 0x210E)
+    # Characteristics: matches original (EXECUTABLE_IMAGE|LINE_NUMS_STRIPPED|
+    # LOCAL_SYMS_STRIPPED|BYTES_REVERSED_LO|32BIT_MACHINE|DLL|BYTES_REVERSED_HI)
+    struct.pack_into("<H", coff_header, 18, 0xA18E)
 
     # --- Optional header (PE32, 224 bytes) ---
     opt_header = bytearray(224)
@@ -324,9 +327,9 @@ def generate_cruise_dll() -> bytes:
     struct.pack_into("<I", opt_header, 92, 16)       # NumberOfRvaAndSizes
 
     # Data directories (16 × 8 = 128 bytes within opt_header[96:])
-    # [1] Import: RVA=0x3000, Size=0x28 (1 IDT entry + null = 2×20=40)
+    # [1] Import: RVA=0x3000, Size=0xA6 (matches original)
     struct.pack_into("<I", opt_header, 96 + 1 * 8, IDATA_RVA)
-    struct.pack_into("<I", opt_header, 96 + 1 * 8 + 4, 0x28)
+    struct.pack_into("<I", opt_header, 96 + 1 * 8 + 4, 0xA6)
     # [5] BaseReloc: RVA=0x4000, Size=0x20
     struct.pack_into("<I", opt_header, 96 + 5 * 8, RELOC_RVA)
     struct.pack_into("<I", opt_header, 96 + 5 * 8 + 4, 0x20)
@@ -366,10 +369,10 @@ def generate_cruise_dll() -> bytes:
     struct.pack_into("<I", sections, 140, RELOC_FILE)  # PointerToRawData
     struct.pack_into("<I", sections, 156, 0x50000040)  # CNT_INITIALIZED_DATA|MEM_DISCARDABLE|MEM_READ
 
-    # --- Assemble headers (pad to 0x400) ---
+    # --- Assemble headers (pad to 0x600 to match original layout) ---
     headers = dos_header + pe_sig + coff_header + opt_header + sections
-    assert len(headers) <= 0x400, f"Headers too large: {len(headers)} > 0x400"
-    headers += b"\x00" * (0x400 - len(headers))
+    assert len(headers) <= 0x600, f"Headers too large: {len(headers)} > 0x600"
+    headers += b"\x00" * (0x600 - len(headers))
 
     # --- CODE section (file 0x400, RVA 0x1000) ---
     # Entry point code — no DLL_PROCESS_ATTACH check (matches known-good).
@@ -383,9 +386,9 @@ def generate_cruise_dll() -> bytes:
 
     i = 0
 
-    # push offset USERDLL_VA  ("USER32.dll")
+    # push offset MSVCDLL_VA  ("msvcr71.dll")
     code[i] = 0x68
-    struct.pack_into("<I", code, i + 1, USERDLL_VA)
+    struct.pack_into("<I", code, i + 1, MSVCDLL_VA)
     relocs.append(i + 1)
     i += 5
 
@@ -395,7 +398,7 @@ def generate_cruise_dll() -> bytes:
     code[i] = 0xE8
     i += 5  # placeholder for relative offset
 
-    # push offset SPRINTF_NAME_VA  ("wsprintfA")
+    # push offset SPRINTF_NAME_VA  ("sprintf")
     code[i] = 0x68
     struct.pack_into("<I", code, i + 1, SPRINTF_NAME_VA)
     relocs.append(i + 1)
@@ -527,9 +530,9 @@ def generate_cruise_dll() -> bytes:
     data_sec = bytearray(0x600)
     data_sec[0x000:0x008] = b"v7_%04d\x00"
     # Buffer at 0x008..0x020 (left zeroed)
-    data_sec[0x408:0x408 + 11] = b"USER32.dll\x00"
-    data_sec[0x414:0x414 + 10] = b"wsprintfA\x00"
-    # wsprintfA function pointer at 0x41C (left zeroed, filled at runtime)
+    data_sec[0x408:0x408 + 12] = b"msvcr71.dll\x00"
+    data_sec[0x414:0x414 + 8] = b"sprintf\x00"
+    # sprintf function pointer at 0x41C (left zeroed, filled at runtime)
 
     # --- .idata section (file 0xC00, RVA 0x3000, 0x200 bytes) ---
     idata_sec = bytearray(0x200)
@@ -597,9 +600,10 @@ def generate_cruise_dll() -> bytes:
     for idx, entry in enumerate(reloc_entries):
         struct.pack_into("<H", reloc_sec, 8 + idx * 2, entry)
 
-    # --- Assemble final image ---
+    # --- Assemble final image (pad to 8192 bytes to match original) ---
     dll_image = headers + code + data_sec + idata_sec + reloc_sec
-    assert len(dll_image) == 0x1000, f"DLL image size mismatch: {len(dll_image):#x}"
+    assert len(dll_image) == 0x1200, f"DLL image size mismatch: {len(dll_image):#x} != 0x1200"
+    dll_image += b"\x00" * (0x2000 - len(dll_image))
 
     return bytes(dll_image)
 
