@@ -1,0 +1,49 @@
+# Mercenaries 2 — Windows Test Environment (dockur/windows)
+#
+# Runs Windows 7 in a Docker container for verifying:
+#   - SecuROM crack works (patched EXE + cruise.dll)
+#   - Game launches with DirectX 9
+#   - vz-patch.wad loads DLC content
+#
+# Usage:
+#   make test-windows                  # start the container
+#   make test-windows-down             # stop and remove
+#
+# Access:
+#   Browser (noVNC):  http://<host>:8006
+#   RDP client:       <host>:3389
+#
+# Prerequisites:
+#   - Linux host with KVM support (/dev/kvm)
+#   - Patched files in ./output/patched/ (run: make crack-game RETAIL_EXE=...)
+#   - DLC WAD in ./output/data/vz-patch.wad (run: make dlc-port DLC_RAR=...)
+#   - Game install files in ./output/game-install/ (copy from retail disc/zip)
+
+services:
+  windows:
+    image: dockurr/windows
+    container_name: mercs2-win7-test
+    environment:
+      VERSION: "7u"
+      RAM_SIZE: "8G"
+      CPU_CORES: "4"
+      DISK_SIZE: "64G"
+      USERNAME: "mercs2"
+      PASSWORD: "mercs2"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8006:8006"
+      - "3389:3389"
+    volumes:
+      - ./output:/shared
+      - ./test-env/oem:/oem
+      - mercs2_win7_data:/storage
+    stop_grace_period: 120s
+    restart: "no"
+
+volumes:
+  mercs2_win7_data:
