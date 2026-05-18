@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port crack-game
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -433,6 +433,26 @@ full-pipeline:
 	$(MAKE) extract-placements OUTPUT="$(OUTPUT)"
 	$(MAKE) ue5-bundle OUTPUT="$(OUTPUT)"
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
+
+# ---- SecuROM Removal (Retail → Cracked) ----
+
+SECUROM_PATCH ?= $(REPO_ROOT)/tools/patches/mercs2_v1.1_securom_bypass.bspatch
+RETAIL_EXE ?=
+
+crack-game:
+	@test -n "$(RETAIL_EXE)" || (echo "error: set RETAIL_EXE=path/to/Mercenaries2.exe (your retail v1.1 install)" >&2; exit 1)
+	@test -f "$(RETAIL_EXE)" || (echo "error: retail exe not found at $(RETAIL_EXE)" >&2; exit 1)
+	@test -f "$(SECUROM_PATCH)" || (echo "error: patch file not found at $(SECUROM_PATCH)" >&2; exit 1)
+	@"$(PYTHON)" -c "import bsdiff4" 2>/dev/null || (echo "error: bsdiff4 not available — run: .venv/bin/pip install bsdiff4" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/patched"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/apply_securom_patch.py" \
+	  "$(RETAIL_EXE)" \
+	  --patch "$(SECUROM_PATCH)" \
+	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
+	@echo ""
+	@echo "Done! Copy these to your game install directory:"
+	@echo "  $(OUTPUT)/patched/Mercenaries2.exe"
+	@echo "  $(OUTPUT)/patched/cruise.dll"
 
 # ---- Xbox 360 DLC Port ----
 

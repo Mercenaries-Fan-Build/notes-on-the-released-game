@@ -10,22 +10,22 @@ Demo approach (v7.38 — disc-check only):
   2. Inject cruise.dll import (creates the expected Win32 Event)
   3. Patch the .rdata timer constant (900.0 → 0.0) to disable demo timer
 
-Retail approach (v7.37 — disc-check + Product Activation):
-  SecuROM v7.37 adds Product Activation (PA) on top of disc check.
-  PA validates registry keys, activation files, and may phone home to dead
-  servers. We bypass everything using a "text transplant" from the pre-cracked
-  executable:
-  1. Copy decrypted .text section from the cracked exe into the original
-  2. Redirect entry point to the Original Entry Point (OEP) in .text
-  3. Zero Security directory and PE checksum
-  4. Inject cruise.dll import (handles inline trigger Event checks)
-  SecuROM's stub never executes → no PA check → game runs immediately.
+Retail approach (v7.37 — binary patch, preferred):
+  Use `tools/apply_securom_patch.py` which applies a bsdiff binary patch
+  transforming the retail v1.1 EXE directly into the working version.
+  No external donor EXE required — only the patch file (in tools/patches/).
+
+  Alternatively, the legacy --donor flow transplants the decrypted .text
+  from a pre-cracked executable (deprecated — use apply_securom_patch.py).
 
 Usage:
   # Demo (works standalone):
   python3 tools/remove_securom.py <demo_exe> [--output <patched_exe>] [--timer <seconds>]
 
-  # Retail (requires cracked exe as donor for decrypted .text):
+  # Retail (preferred — use the patch-based tool):
+  python3 tools/apply_securom_patch.py <retail_v1.1_exe> [-o <output>]
+
+  # Retail (legacy — requires cracked exe as donor):
   python3 tools/remove_securom.py <retail_exe> --donor <cracked_exe> [--output <patched>]
 
   # Analysis only:
@@ -34,11 +34,10 @@ Usage:
 Requirements:
   - cruise.dll must be placed next to the patched exe for it to run
   - The script generates cruise.dll if --generate-cruise is passed
-  - Retail patching requires the pre-cracked donor exe (51 MB) for .text data
 
 Example:
   python3 tools/remove_securom.py "Mercenaries 2 World in Flames DEMO/Merc2-Demo.exe"
-  python3 tools/remove_securom.py Mercs2.exe --donor CRACK/Mercenaries2.exe -o Mercs2-Patched.exe
+  python3 tools/apply_securom_patch.py Mercs2.exe -o Mercs2-Patched.exe
 """
 from __future__ import annotations
 
@@ -803,6 +802,11 @@ def detect_exe_type(pe: PEInfo) -> str:
         if text_sec and text_sec.raw_size == RETAIL_TEXT_SIZE:
             return "retail"
         return "demo"
+    if ep_sec and ep_sec.name == ".securom" and pe.has_securom():
+        text_sec = next((s for s in pe.sections if s.name == ".text"), None)
+        if text_sec and text_sec.raw_size == RETAIL_TEXT_SIZE:
+            return "retail"
+        return "demo"
     return "unknown"
 
 
@@ -948,11 +952,27 @@ def patch_retail_exe(input_path: Path, output_path: Path, donor_path: Path,
                 off += 20
 
         if rdata_idt_entries:
-            # Write new IDT into .securom padding
+            # Find usable padding in .securom — try virt_size gap first, then
+            # fall back to zero-space after the existing IDT null terminator
             padding_file = securom_sec.raw_addr + securom_sec.virt_size
             padding_file = (padding_file + 15) & ~15
             padding_rva = securom_sec.virt_addr + (padding_file - securom_sec.raw_addr)
             space_avail = (securom_sec.raw_addr + securom_sec.raw_size) - padding_file
+
+            if space_avail <= 0 or padding_rva >= pe.size_of_image:
+                # No gap after virt_size — use space after existing IDT entries
+                import_rva_orig = read_u32(data, pe.data_dir_offset + 1 * 8)
+                if securom_sec.contains_rva(import_rva_orig):
+                    idt_file_off = securom_sec.rva_to_file(import_rva_orig)
+                    scan = idt_file_off
+                    while scan + 20 <= len(data):
+                        if read_u32(data, scan) == 0 and read_u32(data, scan + 12) == 0:
+                            break
+                        scan += 20
+                    scan += 20  # skip null terminator
+                    padding_file = (scan + 15) & ~15
+                    padding_rva = securom_sec.virt_addr + (padding_file - securom_sec.raw_addr)
+                    space_avail = (securom_sec.raw_addr + securom_sec.raw_size) - padding_file
 
             # Space: entries + cruise.dll entry + null terminator + dll name + IAT/OFT
             needed = (len(rdata_idt_entries) + 2) * 20 + 32
@@ -1134,7 +1154,8 @@ def main() -> None:
         exe_type = detect_exe_type(pe)
         print(f"\nDetected type: {exe_type}")
         if exe_type == "retail":
-            print("  → Use --donor <cracked_exe> to patch this retail executable")
+            print("  → Use: python3 tools/apply_securom_patch.py <this_exe> -o <output>")
+            print("    Or:  make crack-game RETAIL_EXE=<this_exe>")
         elif exe_type == "demo":
             print("  → Can be patched directly (no donor needed)")
         elif exe_type == "cracked":
@@ -1152,11 +1173,13 @@ def main() -> None:
 
     if exe_type == "retail":
         if not args.donor:
-            print("ERROR: Retail exe requires a donor (pre-cracked) executable.")
-            print("       Use: --donor <path_to_cracked_Mercenaries2.exe>")
+            print("ERROR: Retail exe detected. Use the patch-based tool instead:")
             print()
-            print("       The donor is the 51 MB pre-cracked exe with decrypted .text.")
-            print("       It can be found in the CRACK/ directory of the game ISO.")
+            print("  python3 tools/apply_securom_patch.py <retail_v1.1_exe> -o <output>")
+            print()
+            print("  Or via make: make crack-game RETAIL_EXE=<path>")
+            print()
+            print("  (Legacy --donor mode is still supported if you have the cracked exe)")
             sys.exit(1)
 
         donor_path = Path(args.donor)
