@@ -4,12 +4,17 @@
 Inverse of ``sges_decompress.py``. Takes raw decompressed block data and
 produces a valid sges-compressed block that the game engine can load.
 
-Format:
-  - 16-byte header: ``sges`` magic + u16 major + u16 minor (segment count)
+Format (version 4, as used by the retail/demo engine):
+  - 16-byte header: ``sges`` magic + u16 major + u16 segment_count
     + u32 total_uncompressed + u32 total_compressed
-  - Segment table: ``minor`` entries × 8 bytes (u32 compressed_size, u32 uncompressed_size)
-  - Zero-padding to 16-byte alignment
-  - Compressed payload: raw deflate segments back-to-back
+  - Segment table: segment_count × 8 bytes per entry:
+      u16 compressed_size
+      u16 uncompressed_size (0 for full-size segments, actual size for the last/short segment)
+      u32 absolute_offset   (1-indexed byte position within the block where this segment starts)
+  - Compressed payload: raw deflate segments, each starting at a 16-byte aligned offset
+    within the block, with zero-padding between segments for alignment.
+  - total_compressed = align_to_16(last_segment_offset + last_segment_compressed_size)
+    i.e., the total block size rounded up to a 16-byte boundary.
 
 Usage:
   python3 tools/sges_compress.py input.block.bin output.sges.bin
@@ -20,7 +25,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import math
 import struct
 import sys
 import zlib
@@ -30,9 +34,14 @@ SGES_MAGIC = b"sges"
 DEFAULT_SEGMENT_SIZE = 65536
 
 
+def align16(x: int) -> int:
+    """Round x up to the next 16-byte boundary."""
+    return ((x + 15) // 16) * 16
+
+
 def sges_data_offset(num_segments: int) -> int:
     """Byte offset where compressed payload starts (16-byte aligned)."""
-    return math.ceil((16 + num_segments * 8) / 16) * 16
+    return align16(16 + num_segments * 8)
 
 
 def compress_segment(data: bytes, level: int = 6) -> bytes:
@@ -76,8 +85,28 @@ def compress_sges(
     num_segments = len(segments)
     data_start = sges_data_offset(num_segments)
 
-    total_c = sum(len(c) for c, _ in segments)
+    # Build payload with 16-byte aligned segment starts.
+    # Track absolute offsets (0-indexed) for the segment table.
+    payload_parts: list[bytes] = []
+    seg_offsets_0: list[int] = []  # 0-indexed absolute offset of each segment
+    current_pos = data_start
 
+    for compressed_data, _uncomp_size in segments:
+        seg_offsets_0.append(current_pos)
+        payload_parts.append(compressed_data)
+        current_pos += len(compressed_data)
+        # Pad to 16-byte alignment for the next segment
+        padding = align16(current_pos) - current_pos
+        if padding > 0:
+            payload_parts.append(b"\x00" * padding)
+            current_pos += padding
+
+    # total_c = total block size rounded up to 16-byte boundary
+    # The raw end is at the last segment's start + its compressed size (no trailing padding needed)
+    last_seg_end = seg_offsets_0[-1] + len(segments[-1][0])
+    total_c = align16(last_seg_end)
+
+    # Build header
     header = struct.pack("<4sHHII",
                          SGES_MAGIC,
                          major,
@@ -85,17 +114,34 @@ def compress_sges(
                          total_u,
                          total_c)
 
+    # Build segment table: (u16 comp_size, u16 uncomp_size, u32 offset_1indexed) per segment
     seg_table = b""
-    for compressed_data, uncompressed_size in segments:
-        seg_table += struct.pack("<II", len(compressed_data), uncompressed_size)
+    for i, (compressed_data, uncompressed_size) in enumerate(segments):
+        comp_sz = len(compressed_data)
+        # uncomp_size field: 0 for full-size segments, actual size for the last (short) segment
+        if uncompressed_size == segment_size:
+            uncomp_field = 0
+        else:
+            uncomp_field = uncompressed_size
+        abs_offset_1 = seg_offsets_0[i] + 1  # 1-indexed
+        seg_table += struct.pack("<HHI", comp_sz, uncomp_field, abs_offset_1)
 
     header_and_table = header + seg_table
     padding_needed = data_start - len(header_and_table)
     padded_header = header_and_table + b"\x00" * padding_needed
 
-    payload = b"".join(c for c, _ in segments)
+    # Assemble: padded header + payload (with inter-segment alignment padding)
+    # But remove trailing padding after last segment (total_c handles the extent)
+    payload_bytes = b"".join(payload_parts)
+    # Trim trailing padding that we added after the last segment
+    actual_payload_needed = last_seg_end - data_start
+    payload_bytes = payload_bytes[:actual_payload_needed]
+    # Pad the entire block to total_c
+    block = padded_header + payload_bytes
+    if len(block) < total_c:
+        block += b"\x00" * (total_c - len(block))
 
-    return padded_header + payload
+    return block
 
 
 def verify_roundtrip(original: bytes, compressed: bytes) -> bool:
@@ -120,13 +166,13 @@ def verify_roundtrip(original: bytes, compressed: bytes) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Compress data into Mercenaries 2 sges block format")
     ap.add_argument("input", type=Path, help="Decompressed .block.bin file")
-    ap.add_argument("output", type=Path, help="Output .sges.bin file")
+    ap.add_argument("output", type=Path, nargs="?", help="Output .sges.bin file")
     ap.add_argument("--segment-size", type=int, default=DEFAULT_SEGMENT_SIZE,
                     help=f"Max uncompressed bytes per segment (default {DEFAULT_SEGMENT_SIZE})")
     ap.add_argument("--level", type=int, default=6,
                     help="Compression level 1-9 (default 6)")
-    ap.add_argument("--major", type=int, default=1,
-                    help="sges major version (default 1)")
+    ap.add_argument("--major", type=int, default=4,
+                    help="sges major version (default 4)")
     ap.add_argument("--verify", action="store_true",
                     help="Verify round-trip after compression")
     ap.add_argument("--info", action="store_true",
@@ -138,24 +184,28 @@ def main() -> int:
         if data[:4] != SGES_MAGIC:
             print("Not an sges file", file=sys.stderr)
             return 1
-        major, minor = struct.unpack_from("<HH", data, 4)
+        major, seg_count = struct.unpack_from("<HH", data, 4)
         total_u, total_c = struct.unpack_from("<II", data, 8)
-        data_off = sges_data_offset(minor)
-        print(f"sges v{major}.{minor}")
-        print(f"  Segments:     {minor}")
+        data_off = sges_data_offset(seg_count)
+        print(f"sges v{major}, {seg_count} segments")
         print(f"  Uncompressed: {total_u:,} bytes")
-        print(f"  Compressed:   {total_c:,} bytes")
-        print(f"  Ratio:        {total_c/total_u*100:.1f}%")
+        print(f"  Block size:   {total_c:,} bytes (total_c)")
         print(f"  Data offset:  0x{data_off:x}")
-        for i in range(minor):
+        for i in range(seg_count):
             off = 16 + i * 8
-            cs, us = struct.unpack_from("<II", data, off)
-            print(f"  Segment {i}: compressed={cs:,} uncompressed={us:,}")
+            cs = struct.unpack_from("<H", data, off)[0]
+            us = struct.unpack_from("<H", data, off + 2)[0]
+            abs_off = struct.unpack_from("<I", data, off + 4)[0]
+            us_str = f"{us:,}" if us > 0 else "(default 65536)"
+            print(f"  Segment {i}: comp={cs:,}  uncomp={us_str}  offset={abs_off} (0x{abs_off:X})")
         return 0
 
     if not args.input.is_file():
         print(f"Input file not found: {args.input}", file=sys.stderr)
         return 1
+
+    if args.output is None:
+        ap.error("output is required when not using --info")
 
     uncompressed = args.input.read_bytes()
     print(f"Input: {args.input} ({len(uncompressed):,} bytes)")
@@ -171,8 +221,8 @@ def main() -> int:
     args.output.write_bytes(compressed)
 
     ratio = len(compressed) / len(uncompressed) * 100
-    major, minor = struct.unpack_from("<HH", compressed, 4)
-    print(f"Output: {args.output} ({len(compressed):,} bytes, {minor} segments, {ratio:.1f}% ratio)")
+    _major, seg_count = struct.unpack_from("<HH", compressed, 4)
+    print(f"Output: {args.output} ({len(compressed):,} bytes, {seg_count} segments, {ratio:.1f}% ratio)")
 
     if args.verify:
         if not verify_roundtrip(uncompressed, compressed):
