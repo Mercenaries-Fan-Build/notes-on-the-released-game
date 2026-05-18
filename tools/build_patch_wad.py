@@ -54,13 +54,16 @@ from ffcs_wad import FFCSChunk, dump_paths_from_pths, extract_slice, parse_ffcs 
 from sges_compress import compress_sges  # noqa: E402
 from sges_decompress import decompress_sges_block, find_sges_offsets, parse_sges_header  # noqa: E402
 from wad_patcher import (  # noqa: E402
+    OILCON001_MOD_SOURCE,
     OILCON001_STRING_SWAPS,
     DEMO_QUIT_METHOD,
     DEMO_QUIT_REPLACEMENT,
+    LUAQ_SIG,
     crc32_mercs2,
     get_block_boundaries,
     parse_block_entries,
     get_script_name,
+    _update_block_header_size,
 )
 
 SGES_MAGIC = b"sges"
@@ -430,6 +433,199 @@ def cmd_build_string_mod_patch(
     return 0
 
 
+def apply_bytecode_replacement_to_block(
+    decompressed: bytes,
+    script_name: str,
+    new_bytecode: bytes,
+) -> bytes:
+    """Replace a script's LuaQ bytecode in a decompressed block.
+
+    Finds the named script entry, locates its LuaQ signature, replaces
+    the bytecode, updates the block header's chunk_size, and recomputes
+    the CSUM.  Returns the modified decompressed block.
+    """
+    entries = parse_block_entries(decompressed)
+    target_entry = None
+
+    for entry in entries:
+        name = get_script_name(decompressed, entry)
+        if script_name.lower() in name.lower():
+            target_entry = entry
+            break
+
+    if target_entry is None:
+        available = [get_script_name(decompressed, e) for e in entries]
+        raise ValueError(
+            f"Script '{script_name}' not found. Available: {available[:20]}"
+        )
+
+    target_name = get_script_name(decompressed, target_entry)
+    print(f"  Found script '{target_name}' at UCFX chunk {target_entry['index']}")
+    print(f"    Hash: 0x{target_entry['hash']:08X}, Size: {target_entry['size']:,} bytes")
+
+    entry_start = target_entry["offset"]
+    entry_end = entry_start + target_entry["size"] - 8  # exclude CSUM trailer
+    chunk = decompressed[entry_start:entry_end]
+    luaq_rel = chunk.find(LUAQ_SIG)
+    if luaq_rel < 0:
+        raise ValueError("No LuaQ signature found in target UCFX chunk")
+
+    old_luaq_abs = entry_start + luaq_rel
+    old_bytecode_len = entry_end - old_luaq_abs
+    new_bytecode_len = len(new_bytecode)
+    size_delta = new_bytecode_len - old_bytecode_len
+
+    print(f"    LuaQ at: 0x{old_luaq_abs:x} (entry +{luaq_rel})")
+    print(f"    Old bytecode: {old_bytecode_len:,} bytes")
+    print(f"    New bytecode: {new_bytecode_len:,} bytes")
+    print(f"    Size delta: {size_delta:+,} bytes")
+
+    modified = bytearray(decompressed)
+
+    pre_luaq = bytes(modified[:old_luaq_abs])
+    post_entry = bytes(modified[entry_end + 8:])  # after CSUM trailer
+
+    new_chunk = pre_luaq[entry_start:old_luaq_abs] + new_bytecode
+    new_chunk_size = len(new_chunk) + 8  # +8 for CSUM tag + value
+
+    rebuilt = bytearray(modified[:entry_start])
+    rebuilt.extend(new_chunk)
+    new_csum = crc32_mercs2(bytes(rebuilt[entry_start:]))
+    rebuilt.extend(CSUM_TAG)
+    rebuilt.extend(struct.pack("<I", new_csum))
+    rebuilt.extend(post_entry)
+
+    _update_block_header_size(rebuilt, target_entry["index"], new_chunk_size)
+
+    print(f"    New CSUM: 0x{new_csum:08X}")
+    print(f"    New chunk size: {new_chunk_size:,} bytes (delta {size_delta:+,})")
+
+    return bytes(rebuilt)
+
+
+def compile_lua_source(source: str, luac_path: Path) -> bytes:
+    """Compile Lua source code to bytecode using the Mercs2-compatible luac."""
+    import subprocess
+    import tempfile
+
+    if not luac_path.is_file():
+        raise FileNotFoundError(
+            f"Lua compiler not found at {luac_path}. "
+            f"Build it with: cd lua-5.1.5 && make posix"
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "mod.lua"
+        out = Path(tmp) / "mod.luac"
+        src.write_text(source)
+
+        result = subprocess.run(
+            [str(luac_path), "-o", str(out), str(src)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"luac compilation failed:\n{result.stderr}")
+
+        bytecode = out.read_bytes()
+
+    if bytecode[:4] != b"\x1bLua":
+        raise ValueError("Compiled output has wrong signature")
+
+    print(f"  Compiled: {len(bytecode):,} bytes")
+    print(f"  Header: version=0x{bytecode[4]:02x} "
+          f"int={bytecode[7]} size_t={bytecode[8]} "
+          f"number={bytecode[10]} (float={'yes' if bytecode[11]==0 else 'no'})")
+
+    return bytecode
+
+
+def cmd_build_autocomplete_patch(
+    source_wad: Path,
+    output: Path,
+    *,
+    segment_size: int = 65536,
+    compression_level: int = 6,
+) -> int:
+    """All-in-one: compile auto-complete Lua, replace oilcon001 bytecode, build patch WAD.
+
+    Compiles a minimal Lua script that inherits MrxTaskContract, calls the
+    parent Activated(), then fires a 5-second timer to self:Complete().
+    The compiled bytecode replaces oilcon001's original bytecode in block 1257.
+    """
+    print("Building auto-complete oilcon001 patch WAD...")
+    print(f"  Source WAD: {source_wad}")
+    print(f"  Output:     {output}")
+
+    # Locate luac compiler
+    repo_root = Path(__file__).resolve().parent.parent
+    luac = repo_root / "lua-5.1.5" / "src" / "luac"
+
+    # Step 1: Compile the mod source
+    print("\n[1/5] Compiling auto-complete Lua source...")
+    bytecode = compile_lua_source(OILCON001_MOD_SOURCE, luac)
+
+    # Step 2: Extract block 1257 metadata
+    print("\n[2/5] Extracting block 1257 metadata from original WAD...")
+    meta = extract_block_metadata(source_wad, 1257)
+    print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
+          f"packed={meta['indx_entry']['packed_field']}")
+    print(f"  ASET entries: {meta['aset_entry_count']}")
+    print(f"  PTHS: {meta['pths_string']}")
+    print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
+
+    # Step 3: Decompress block 1257
+    print("\n[3/5] Decompressing block 1257...")
+    compressed_data = meta["compressed_block_data"]
+    decompressed = decompress_sges_block(
+        compressed_data, 0, len(compressed_data)
+    )
+    print(f"  Decompressed: {len(decompressed):,} bytes")
+
+    # Step 4: Replace oilcon001 bytecode
+    print("\n[4/5] Replacing oilcon001 bytecode...")
+    modified = apply_bytecode_replacement_to_block(
+        decompressed, "oilcon001", bytecode
+    )
+    print(f"  Modified block: {len(modified):,} bytes "
+          f"(delta {len(modified) - len(decompressed):+,})")
+
+    # Recompress
+    print("\n  Recompressing with sges (major=4)...")
+    new_sges = compress_sges(
+        modified,
+        segment_size=segment_size,
+        level=compression_level,
+        major=4,
+    )
+    ratio = len(new_sges) / len(modified) * 100
+    print(f"  Compressed: {len(new_sges):,} bytes ({ratio:.1f}%)")
+
+    # Verify roundtrip
+    verify = decompress_sges_block(new_sges, 0, len(new_sges))
+    if verify != modified:
+        print("ERROR: Roundtrip verification failed!", file=sys.stderr)
+        return 1
+    print("  Roundtrip verification OK")
+
+    # Step 5: Build patch WAD
+    print("\n[5/5] Building patch WAD...")
+    patch_wad = build_patch_wad(
+        indx_entry=meta["indx_entry"],
+        aset_entries=meta["aset_entries"],
+        pths_string=meta["pths_string"],
+        compressed_block=new_sges,
+        csum_value=meta["csum_value"],
+    )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(patch_wad)
+    print(f"\n  Wrote: {output} ({len(patch_wad):,} bytes)")
+    print(f"  DATA offset: 0x208000")
+    print(f"  Block pages: {_align_up(len(new_sges), PAGE_SIZE) // PAGE_SIZE}")
+
+    return 0
+
+
 def cmd_build_passthrough_patch(
     source_wad: Path, block_index: int, output: Path,
 ) -> int:
@@ -754,6 +950,9 @@ def main() -> int:
     ap.add_argument("--build-string-mod-patch", action="store_true",
                     help="All-in-one: decompress block 1257, apply string mods, "
                          "recompress, build patch WAD")
+    ap.add_argument("--build-autocomplete-patch", action="store_true",
+                    help="All-in-one: compile auto-complete Lua, replace oilcon001 "
+                         "bytecode in block 1257, build patch WAD")
     ap.add_argument("--validate", action="store_true",
                     help="Validate an existing patch WAD (--output = WAD to validate)")
     ap.add_argument("--passthrough", action="store_true",
@@ -790,6 +989,18 @@ def main() -> int:
         if args.output is None:
             ap.error("--build-string-mod-patch requires --output")
         return cmd_build_string_mod_patch(
+            args.source_wad,
+            args.output,
+            segment_size=args.segment_size,
+            compression_level=args.compression_level,
+        )
+
+    if args.build_autocomplete_patch:
+        if args.source_wad is None:
+            ap.error("--build-autocomplete-patch requires --source-wad")
+        if args.output is None:
+            ap.error("--build-autocomplete-patch requires --output")
+        return cmd_build_autocomplete_patch(
             args.source_wad,
             args.output,
             segment_size=args.segment_size,
