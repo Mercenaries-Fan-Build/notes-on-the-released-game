@@ -366,6 +366,7 @@ def cmd_patch_script(
     dry_run: bool = False,
     segment_size: int = 65536,
     compression_level: int = 6,
+    _bytecode_override: bytes | None = None,
 ) -> int:
     """Patch a specific script within the WAD's scripts_vz block."""
     print(f"Reading WAD: {wad_path}")
@@ -489,12 +490,15 @@ def cmd_patch_script(
             struct.pack_into("<I", modified, csum_off + 4, new_csum)
             print(f"Recomputed CSUM: 0x{stored_csum:08X} → 0x{new_csum:08X}")
 
-        elif lua_bytecode_path is not None:
-            if not lua_bytecode_path.is_file():
+        elif lua_bytecode_path is not None or _bytecode_override is not None:
+            if _bytecode_override is not None:
+                new_bytecode = _bytecode_override
+            elif not lua_bytecode_path.is_file():
                 print(f"ERROR: Lua bytecode file not found: {lua_bytecode_path}", file=sys.stderr)
                 return 1
-            new_bytecode = lua_bytecode_path.read_bytes()
-            if new_bytecode[:4] != LUAQ_SIG:
+            else:
+                new_bytecode = lua_bytecode_path.read_bytes()
+            if new_bytecode[:4] != b"\x1bLua" and new_bytecode[:4] != LUAQ_SIG:
                 print("WARNING: File does not start with LuaQ signature", file=sys.stderr)
 
             entry_start = target_entry["offset"]
@@ -566,7 +570,8 @@ def cmd_patch_script(
             print(f"  New CSUM:    0x{new_csum:08X}")
 
         else:
-            print("ERROR: No modification specified (use --corrupt-csum, --corrupt-data, --lua-bytecode, or --ucfx-payload)", file=sys.stderr)
+            print("ERROR: No modification specified (use --corrupt-csum, --corrupt-data, "
+                  "--lua-bytecode, or --ucfx-payload)", file=sys.stderr)
             return 1
 
         print(f"\nRecompressing ({len(modified):,} bytes)...")
@@ -636,6 +641,92 @@ def cmd_patch_script(
 
     print("Done.")
     return 0
+
+
+# ── Auto-complete oilcon001 contract ──────────────────────────────────
+
+OILCON001_MOD_SOURCE = '''\
+inherit("MrxTaskContract")
+
+function Activated(self)
+ MrxTaskContract.Activated(self)
+ self:Complete()
+end
+
+function Cancel(self)
+end
+
+function Cleanup(self)
+end
+
+function LoadAssets()
+end
+'''
+
+
+def cmd_auto_complete_oilcon001(
+    wad_path: Path,
+    *,
+    no_backup: bool = False,
+    dry_run: bool = False,
+    segment_size: int = 65536,
+    compression_level: int = 6,
+) -> int:
+    """Replace oilcon001 with a script that auto-completes on contract accept.
+
+    Compiles a minimal Lua script that inherits MrxTaskContract, calls the
+    parent Activated(), then immediately calls self:Complete(). The compiled
+    bytecode is injected into the WAD via the standard script-patching pipeline.
+
+    Requires lua-5.1.5/src/luac (the Mercs2-compatible Lua compiler) to be
+    built in the repo root.
+    """
+    import subprocess
+    import tempfile
+
+    repo_root = Path(__file__).resolve().parent.parent
+    luac = repo_root / "lua-5.1.5" / "src" / "luac"
+    if not luac.is_file():
+        print(f"ERROR: Lua compiler not found at {luac}", file=sys.stderr)
+        print("Build it with: cd lua-5.1.5 && make posix", file=sys.stderr)
+        return 1
+
+    print("Auto-Complete OilCon001 — compiling mod...")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "oilcon001_mod.lua"
+        out = Path(tmp) / "oilcon001_mod.luac"
+        src.write_text(OILCON001_MOD_SOURCE)
+
+        result = subprocess.run(
+            [str(luac), "-o", str(out), str(src)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"ERROR: luac compilation failed:\n{result.stderr}", file=sys.stderr)
+            return 1
+
+        bytecode = out.read_bytes()
+        print(f"  Compiled: {len(bytecode):,} bytes")
+
+        if bytecode[:4] != b"\x1bLua":
+            print("ERROR: Compiled output has wrong signature", file=sys.stderr)
+            return 1
+
+        print(f"  Header: version=0x{bytecode[4]:02x} "
+              f"int={bytecode[7]} size_t={bytecode[8]} "
+              f"number={bytecode[10]} (float={'yes' if bytecode[11]==0 else 'no'})")
+
+    return cmd_patch_script(
+        wad_path,
+        "oilcon001",
+        lua_bytecode_path=None,
+        no_backup=no_backup,
+        dry_run=dry_run,
+        segment_size=segment_size,
+        compression_level=compression_level,
+        _bytecode_override=bytecode,
+    )
 
 
 # ── Extend demo timer command ────────────────────────────────────────
@@ -902,6 +993,7 @@ def main() -> int:
             "  %(prog)s --wad vz.wad --script wiftutorialtank --corrupt-csum --dry-run\n"
             "  %(prog)s --wad vz.wad --script wiftutorialtank --lua-bytecode compiled.luac\n"
             "  %(prog)s --wad vz.wad --extend-demo-timer\n"
+            "  %(prog)s --wad vz.wad --auto-complete-oilcon001\n"
             "  %(prog)s vz.wad --index 1257 --sges-file modified.sges.bin --output patched.wad\n"
         ),
     )
@@ -923,6 +1015,9 @@ def main() -> int:
     ap.add_argument("--extend-demo-timer", action="store_true",
                     help="Disable the demo quit function so the 15-minute "
                          "timer expiry no longer boots the player")
+    ap.add_argument("--auto-complete-oilcon001", action="store_true",
+                    help="Replace oilcon001 with a script that auto-completes "
+                         "the contract on accept (proof-of-concept mod)")
     ap.add_argument("--no-backup", action="store_true",
                     help="Skip creating .wad.bak backup before patching")
     ap.add_argument("--dry-run", action="store_true",
@@ -967,6 +1062,15 @@ def main() -> int:
     # ── Unified script commands ──────────────────────────────────
     if args.list_scripts:
         return cmd_list_scripts(wad_path)
+
+    if args.auto_complete_oilcon001:
+        return cmd_auto_complete_oilcon001(
+            wad_path,
+            no_backup=args.no_backup,
+            dry_run=args.dry_run,
+            segment_size=args.segment_size,
+            compression_level=args.compression_level,
+        )
 
     if args.extend_demo_timer:
         return cmd_extend_demo_timer(
@@ -1055,7 +1159,8 @@ def main() -> int:
 
         return 0
 
-    ap.error("Specify --list-scripts, --extend-demo-timer, --script <name>, --list-blocks, or --index <N>")
+    ap.error("Specify --list-scripts, --extend-demo-timer, --auto-complete-oilcon001, "
+             "--script <name>, --list-blocks, or --index <N>")
     return 1
 
 
