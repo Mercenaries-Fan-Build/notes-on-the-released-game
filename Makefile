@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -433,6 +433,18 @@ full-pipeline:
 	$(MAKE) extract-placements OUTPUT="$(OUTPUT)"
 	$(MAKE) ue5-bundle OUTPUT="$(OUTPUT)"
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
+
+# ---- Xbox 360 DLC Port ----
+
+DLC_RAR ?= Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar
+
+dlc-port:
+	@test -f "$(DLC_RAR)" || (echo "error: DLC RAR not found at $(DLC_RAR) — set DLC_RAR=path" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/data/Audios"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/dlc_port.py" \
+	  --x360-rar "$(DLC_RAR)" \
+	  --output "$(OUTPUT)/data/vz-patch.wad" \
+	  --extract-audio "$(OUTPUT)/data/Audios"
 
 all:
 	@test -n "$(ZIP)" || (echo "error: set ZIP, e.g. make all ZIP=./Mercenaries\\ 2\\ World\\ in\\ Flames.zip OUTPUT=./output" >&2; exit 1)
