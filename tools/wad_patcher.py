@@ -638,6 +638,225 @@ def cmd_patch_script(
     return 0
 
 
+# ── Extend demo timer command ────────────────────────────────────────
+
+DEMO_QUIT_METHOD = b"ShowDemoOutroAndQuitToShell"
+DEMO_QUIT_REPLACEMENT = b"_DisabledDemoQuitToShell___"
+
+assert len(DEMO_QUIT_METHOD) == len(DEMO_QUIT_REPLACEMENT)
+
+
+def cmd_extend_demo_timer(
+    wad_path: Path,
+    *,
+    no_backup: bool = False,
+    dry_run: bool = False,
+    segment_size: int = 65536,
+    compression_level: int = 6,
+) -> int:
+    """Extend the demo timer by disabling the ShowDemoOutroAndQuitToShell calls.
+
+    The 15-minute demo timer is hardcoded in the C++ engine (MrxPlayState::
+    StartSessionTimer). When it expires, the engine fires a Lua callback that
+    calls MrxGuiCinematic:ShowDemoOutroAndQuitToShell(), which plays the outro
+    video and boots the player to the main menu.
+
+    This command replaces every occurrence of the method name string in the Lua
+    bytecode constant pool with a same-length nonsense name. When Lua tries to
+    call this non-existent method, the call silently fails (nil method on the
+    object), and the demo continues running.
+
+    Both scripts that invoke this method are patched:
+      - oilcon002  (chunk 77): calls it on mission-complete/dialog-dismiss
+      - wifmissionflow (chunk 78): calls it on demo timer expiry
+    """
+    print(f"Extend Demo Timer — reading WAD: {wad_path}")
+    print(f"Strategy: replace \"{DEMO_QUIT_METHOD.decode()}\" → "
+          f"\"{DEMO_QUIT_REPLACEMENT.decode()}\" in Lua constant pools")
+
+    raw = wad_path.read_bytes()
+    if raw[:4] != b"FFCS":
+        print("ERROR: Not an FFCS WAD file", file=sys.stderr)
+        return 1
+
+    paths = load_wad_paths(wad_path)
+    if not paths:
+        print("ERROR: No paths found in WAD PTHS chunk", file=sys.stderr)
+        return 1
+
+    script_blocks = find_scripts_block_index(paths)
+    if not script_blocks:
+        print("ERROR: No scripts_vz block found", file=sys.stderr)
+        return 1
+
+    arch = parse_ffcs(wad_path)
+    data_chunk = next((c for c in arch.chunks if c.tag == "DATA"), None)
+    if data_chunk is None:
+        print("ERROR: No DATA chunk", file=sys.stderr)
+        return 1
+
+    with open(wad_path, "rb") as f:
+        mm = mmap_mod.mmap(f.fileno(), 0, access=mmap_mod.ACCESS_READ)
+
+    try:
+        boundaries = get_block_boundaries(mm, data_chunk.offset, data_chunk.size)
+
+        target_block_idx: int | None = None
+        target_decompressed: bytes = b""
+        target_block_path: str = ""
+
+        for block_idx, block_path in script_blocks:
+            if block_idx >= len(boundaries):
+                continue
+
+            start, end = boundaries[block_idx]
+            print(f"\nFound {block_path} at block {block_idx} "
+                  f"(WAD offset 0x{start:x}, {end - start:,} bytes compressed)")
+
+            try:
+                decompressed = _decompress_block_at(mm, start, end)
+            except Exception as exc:
+                print(f"  ERROR: Failed to decompress: {exc}", file=sys.stderr)
+                continue
+
+            print(f"  Decompressed: {len(decompressed):,} bytes")
+
+            hit_count = decompressed.count(DEMO_QUIT_METHOD)
+            if hit_count == 0:
+                print(f"  No \"{DEMO_QUIT_METHOD.decode()}\" found — skipping")
+                continue
+
+            print(f"  Found {hit_count} occurrence(s) of \"{DEMO_QUIT_METHOD.decode()}\"")
+            target_block_idx = block_idx
+            target_decompressed = decompressed
+            target_block_path = block_path
+            break
+
+        if target_block_idx is None:
+            print(f"\nERROR: \"{DEMO_QUIT_METHOD.decode()}\" not found in any "
+                  "scripts block", file=sys.stderr)
+            return 1
+
+        modified = bytearray(target_decompressed)
+        entries = parse_block_entries(target_decompressed)
+
+        patch_count = 0
+        affected_entries: list[int] = []
+
+        for entry in entries:
+            entry_start = entry["offset"]
+            entry_body_end = entry["offset"] + entry["size"] - 8
+            chunk = modified[entry_start:entry_body_end]
+
+            hits_in_chunk = chunk.count(DEMO_QUIT_METHOD)
+            if hits_in_chunk == 0:
+                continue
+
+            name = get_script_name(target_decompressed, entry)
+            print(f"\n  Patching chunk {entry['index']} ({name}): "
+                  f"{hits_in_chunk} replacement(s)")
+            affected_entries.append(entry["index"])
+
+            pos = 0
+            while True:
+                idx = chunk.find(DEMO_QUIT_METHOD, pos)
+                if idx < 0:
+                    break
+                abs_off = entry_start + idx
+                modified[abs_off:abs_off + len(DEMO_QUIT_METHOD)] = DEMO_QUIT_REPLACEMENT
+                print(f"    0x{abs_off:06x}: replaced")
+                patch_count += 1
+                pos = idx + len(DEMO_QUIT_METHOD)
+
+            csum_off = entry["csum_offset"]
+            if modified[csum_off:csum_off + 4] != CSUM_TAG:
+                print(f"    WARNING: CSUM tag not found at 0x{csum_off:x}",
+                      file=sys.stderr)
+                continue
+
+            old_csum = struct.unpack_from("<I", modified, csum_off + 4)[0]
+            ucfx_body = bytes(modified[entry_start:csum_off])
+            new_csum = crc32_mercs2(ucfx_body)
+            struct.pack_into("<I", modified, csum_off + 4, new_csum)
+            print(f"    CSUM: 0x{old_csum:08X} → 0x{new_csum:08X}")
+
+        if patch_count == 0:
+            print("\nERROR: No replacements made", file=sys.stderr)
+            return 1
+
+        print(f"\n{patch_count} replacement(s) in {len(affected_entries)} chunk(s)")
+
+        assert target_block_idx is not None
+        block_start, block_end = boundaries[target_block_idx]
+        max_slot_bytes = block_end - block_start
+
+        print(f"\nRecompressing ({len(modified):,} bytes)...")
+        new_sges = compress_sges(
+            bytes(modified),
+            segment_size=segment_size,
+            level=compression_level,
+        )
+        ratio = len(new_sges) / len(modified) * 100
+        print(f"Recompressed: {len(new_sges):,} bytes ({ratio:.1f}%), "
+              f"slot has {max_slot_bytes:,} bytes")
+
+        if len(new_sges) > max_slot_bytes:
+            print(
+                f"\nERROR: Recompressed block is {len(new_sges):,} bytes "
+                f"but slot is only {max_slot_bytes:,} bytes "
+                f"({len(new_sges) - max_slot_bytes:,} over).",
+                file=sys.stderr,
+            )
+            return 1
+
+        spare = max_slot_bytes - len(new_sges)
+        print(f"Fits in slot: {len(new_sges):,} <= {max_slot_bytes:,} "
+              f"({spare:,} bytes to spare)")
+
+        print("Verifying roundtrip...")
+        verify_decomp = decompress_sges_block(new_sges, 0, len(new_sges))
+        if verify_decomp != bytes(modified):
+            print("ERROR: Roundtrip verification failed!", file=sys.stderr)
+            return 1
+        print("Roundtrip OK")
+
+        if dry_run:
+            print(f"\n[DRY RUN] Would patch WAD at offset 0x{block_start:x}")
+            print(f"[DRY RUN] Would write {len(new_sges):,} bytes + "
+                  f"{spare:,} bytes zero-padding")
+            print("[DRY RUN] No files modified.")
+            return 0
+
+        wad_bytes = bytearray(mm[:])
+    finally:
+        mm.close()
+
+    if not no_backup:
+        bak = wad_path.with_suffix(wad_path.suffix + ".bak")
+        if not bak.exists():
+            print(f"Creating backup: {bak}")
+            shutil.copy2(wad_path, bak)
+        else:
+            print(f"Backup already exists: {bak}")
+
+    print(f"Patching WAD at offset 0x{block_start:x}...")
+    wad_bytes[block_start:block_start + len(new_sges)] = new_sges
+    if spare > 0:
+        wad_bytes[block_start + len(new_sges):block_end] = b"\x00" * spare
+
+    try:
+        wad_path.write_bytes(bytes(wad_bytes))
+    except PermissionError:
+        print(f"ERROR: WAD file is read-only: {wad_path}", file=sys.stderr)
+        print("Tip: chmod u+w the file or copy it first.", file=sys.stderr)
+        return 1
+
+    print(f"\nDone. Demo quit function disabled in {patch_count} location(s).")
+    print("The engine's 15-minute timer will still count down, but the quit")
+    print("action will silently fail, allowing play to continue indefinitely.")
+    return 0
+
+
 # ── Legacy list-blocks command ───────────────────────────────────────
 
 def list_blocks(wad_path: Path, paths: list[str] | None = None) -> None:
@@ -682,6 +901,7 @@ def main() -> int:
             "  %(prog)s --wad vz.wad --list-scripts\n"
             "  %(prog)s --wad vz.wad --script wiftutorialtank --corrupt-csum --dry-run\n"
             "  %(prog)s --wad vz.wad --script wiftutorialtank --lua-bytecode compiled.luac\n"
+            "  %(prog)s --wad vz.wad --extend-demo-timer\n"
             "  %(prog)s vz.wad --index 1257 --sges-file modified.sges.bin --output patched.wad\n"
         ),
     )
@@ -700,6 +920,9 @@ def main() -> int:
                     help="Replace script's LuaQ bytecode with this file")
     ap.add_argument("--ucfx-payload", type=Path,
                     help="Replace the entire UCFX chunk body with this file")
+    ap.add_argument("--extend-demo-timer", action="store_true",
+                    help="Disable the demo quit function so the 15-minute "
+                         "timer expiry no longer boots the player")
     ap.add_argument("--no-backup", action="store_true",
                     help="Skip creating .wad.bak backup before patching")
     ap.add_argument("--dry-run", action="store_true",
@@ -744,6 +967,15 @@ def main() -> int:
     # ── Unified script commands ──────────────────────────────────
     if args.list_scripts:
         return cmd_list_scripts(wad_path)
+
+    if args.extend_demo_timer:
+        return cmd_extend_demo_timer(
+            wad_path,
+            no_backup=args.no_backup,
+            dry_run=args.dry_run,
+            segment_size=args.segment_size,
+            compression_level=args.compression_level,
+        )
 
     if args.script:
         if not (args.corrupt_csum or args.corrupt_data or args.lua_bytecode or args.ucfx_payload):
@@ -823,7 +1055,7 @@ def main() -> int:
 
         return 0
 
-    ap.error("Specify --list-scripts, --script <name>, --list-blocks, or --index <N>")
+    ap.error("Specify --list-scripts, --extend-demo-timer, --script <name>, --list-blocks, or --index <N>")
     return 1
 
 
