@@ -11,3 +11,14 @@ Mercenaries 2 World in Flames.iso
 SaveGames/
 Models Archives/
 UnrealEngineGame/
+lua-5.1.5/
+lua-5.1.5.tar.gz
+tools/lua51-mercs2/lua
+tools/lua51-mercs2/luac
+tools/lua51-mercs2/liblua.a
+MattiasNilsson
+MattiasNilssonExport
+Mercenaries 2 World in Flames/
+assets/
+output_demo/
+Mercenaries 2 World in Flames DEMO

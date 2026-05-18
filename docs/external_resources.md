@@ -33,3 +33,7 @@ These sites move; prefer capturing **direct repo links** and **archive.org** sna
 - `tools/aset_decoder.py` — `ASET` row decode → `output/block_dependency_graph.json`.
 
 When upstream tooling disagrees with our byte-level docs, **trust verified hex in `docs/`** and file a minimal repro for upstream.
+
+## Modding deep-dive
+
+- [`docs/modding_deep_dive.md`](modding_deep_dive.md) — comprehensive analysis of DRM (SecuROM), `vz.bin`, three hash layers, Lua bytecode format, CSUM trailers, and a phased modding roadmap.

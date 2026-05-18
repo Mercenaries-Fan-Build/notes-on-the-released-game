@@ -182,9 +182,15 @@ def resolve_mesh(
     entity_name: str,
     lookup: dict[str, str],
 ) -> Optional[str]:
-    """Attempt to resolve an entity name to an imported mesh content path."""
-    name_lower = entity_name.lower().strip()
+    """Resolve an entity name to an imported mesh content path (exact match only).
 
+    Only deterministic normalization is applied — no substring or fuzzy
+    matching.  Returns ``None`` when the entity has no matching imported mesh.
+    """
+    if not entity_name:
+        return None
+
+    name_lower = entity_name.lower().strip()
     if name_lower in lookup:
         return lookup[name_lower]
 
@@ -196,9 +202,9 @@ def resolve_mesh(
     if stripped in lookup:
         return lookup[stripped]
 
-    for key, path in lookup.items():
-        if key in cleaned or cleaned in key:
-            return path
+    stripped_nospace = cleaned.replace(" ", "_").lstrip("_")
+    if stripped_nospace in lookup:
+        return lookup[stripped_nospace]
 
     return None
 

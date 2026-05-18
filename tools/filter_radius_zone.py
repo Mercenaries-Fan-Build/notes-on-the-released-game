@@ -237,6 +237,40 @@ def _hero_canons_from_placements(placements: list[dict]) -> set[str]:
     return {c for c in canons if c not in ("pmcoutpost_bld", "pmcoutpost")}
 
 
+def _find_c3_cell_review_dirs(
+    cell_ids: set[int],
+    review_root: Path,
+) -> list[str]:
+    """Find review block directory paths for c3 cell IDs.
+
+    Returns paths relative to ``review_root`` for cells that exist on disk.
+    Cell IDs are full IDs (e.g. 33883 = 30000 + stem_number).
+    """
+    batch = review_root / "batch_vz"
+    if not batch.is_dir():
+        return []
+
+    import re as _re
+
+    target_tags: set[str] = set()
+    for cid in cell_ids:
+        tag = f"c3{cid - 30000:04d}"
+        target_tags.add(tag)
+
+    found: list[str] = []
+    for d in sorted(batch.iterdir()):
+        if not d.is_dir():
+            continue
+        dl = d.name.lower()
+        for tag in target_tags:
+            if tag in dl and "_p000_" in dl:
+                idx = d / "submeshes" / "index.json"
+                if idx.is_file():
+                    found.append(f"batch_vz/{d.name}")
+                break
+    return found
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Filter placements + assets to a radius zone")
     ap.add_argument("--anchor-entity-id", default="0x000a3b30")
@@ -267,6 +301,13 @@ def main() -> int:
         type=Path,
         default=None,
         help="Default: OUTPUT/ue5_import/metadata/manifest.json",
+    )
+    ap.add_argument(
+        "--review-root",
+        type=Path,
+        default=None,
+        help="Extraction review root (default: OUTPUT/extracted/review). "
+        "Used to locate c3 cell review directories.",
     )
     args = ap.parse_args()
 
@@ -365,6 +406,22 @@ def main() -> int:
     row_i = int((cz - WORLD_MIN_Z) / CELL_SIZE_Z)
     primary_cell = CELL_ID_BASE + row_i * GRID_COLS + col_i
 
+    review_root = (args.review_root or (args.output / "extracted/review")).resolve()
+    c3_review_dirs = _find_c3_cell_review_dirs(cell_ids, review_root)
+
+    # Also find review dirs for hero/compound blocks listed in out_assets
+    hero_review_dirs: list[str] = []
+    batch = review_root / "batch_vz"
+    if batch.is_dir():
+        for a in out_assets:
+            stem = a.get("stem", "")
+            if not stem:
+                continue
+            candidate = batch / stem
+            idx = candidate / "submeshes" / "index.json"
+            if candidate.is_dir() and idx.is_file():
+                hero_review_dirs.append(f"batch_vz/{stem}")
+
     zone_doc = {
         "zone_id": args.zone_id,
         "description": f"{args.radius}m cylinder around {args.anchor_entity_name}",
@@ -378,11 +435,12 @@ def main() -> int:
         "hero_canonicals": sorted(hero_canons),
         "c3_cell_ids": sorted(cell_ids),
         "primary_cell_id": primary_cell,
+        "c3_review_dirs": c3_review_dirs,
+        "hero_review_dirs": hero_review_dirs,
         "paths": {
             "placements": str(placements_path.relative_to(args.output)),
             "asset_list": str(asset_list_path.relative_to(args.output)),
-            "streaming_groups": str(streaming_path.relative_to(args.output),
-            ),
+            "streaming_groups": str(streaming_path.relative_to(args.output)),
         },
         "ue_mesh_root": "/Game/Mercs2/Meshes/RadiusZones/" + args.zone_id.replace("-", "_"),
         "ue_data_layer_dir": "/Game/Mercs2/DataLayers/RadiusZones",
@@ -391,7 +449,8 @@ def main() -> int:
 
     print(
         f"Wrote zone {args.zone_id}: {len(merged)} placements, {len(out_assets)} assets, "
-        f"{len(cell_ids)} c3 cells, {len(hero_canons)} hero meshes → {out_root}",
+        f"{len(cell_ids)} c3 cells, {len(hero_canons)} hero meshes, "
+        f"{len(c3_review_dirs)} c3 review dirs, {len(hero_review_dirs)} hero review dirs → {out_root}",
         flush=True,
     )
     return 0

@@ -1,6 +1,8 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { defineConfig, loadEnv } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 import { reviewAssetsPlugin } from './vite-plugin-review-assets.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -15,16 +17,35 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: '.',
-    plugins: [reviewAssetsPlugin()],
-    server: { port: 5173, open: true },
+    plugins: [vue(), tailwindcss(), reviewAssetsPlugin()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, 'src'),
+        'vue': 'vue/dist/vue.esm-bundler.js',
+      },
+    },
+    server: {
+      port: 5173,
+      open: true,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
+      },
+    },
     preview: { port: 5173 },
     publicDir: 'public',
     build: {
+      chunkSizeWarningLimit: 700,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          placementPreview: path.resolve(__dirname, 'placement-preview.html'),
-          placementBbox: path.resolve(__dirname, 'placement-bbox.html'),
+        },
+        output: {
+          manualChunks: {
+            three: ['three'],
+          },
         },
       },
     },

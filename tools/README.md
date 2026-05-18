@@ -34,6 +34,12 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 | [`ecs_metadata_extract.py`](ecs_metadata_extract.py) | `ecs_components.json` + merge into placements |
 | [`aset_decoder.py`](aset_decoder.py) | `block_dependency_graph.json` from `aset.bin` |
 | [`lua_script_chunks.py`](lua_script_chunks.py) | Split `scripts_vz` `LuaQ` chunks + PMC string harvest |
+| [`lua_roundtrip_test.py`](lua_roundtrip_test.py) | Decompile + recompile LuaQ chunks and verify round-trip |
+| [`sges_compress.py`](sges_compress.py) | Compress data into `sges` block format (inverse of `sges_decompress.py`) |
+| [`wad_patcher.py`](wad_patcher.py) | Splice modified `sges` blocks into FFCS `.wad` files |
+| [`ffcs_csum_analyzer.py`](ffcs_csum_analyzer.py) | Test hash algorithms against FFCS-level CSUM entries |
+| [`csum_enforcement_test.py`](csum_enforcement_test.py) | Prepare CSUM enforcement test (modify trailer + repack WAD) |
+| [`pandemic_hash.py`](pandemic_hash.py) | Pandemic Studios FNV-1a hash (confirmed from Mercs 1 source) |
 | [`filter_pmc_base.py`](filter_pmc_base.py) | `pmc_base_asset_list.json`, `placements/pmc_base.json`, streaming groups |
 | [`regen_pmc_base_glbs.py`](regen_pmc_base_glbs.py) | Regenerate GLBs for PMC asset list |
 

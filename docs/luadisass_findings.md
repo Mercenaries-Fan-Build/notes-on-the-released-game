@@ -15,9 +15,13 @@
 
 - **Optional disassembly:** if `LUADISASS` environment variable points to a working disassembler entry script, `lua_script_chunks.py` attempts to emit `.luaasm` files. **The default Mercs2 tree does not vendor LuaDisAss** (license/size); clone upstream locally and point `LUADISASS` at your checkout.
 
+## Confirmed bytecode format (2026-05-17)
+
+Header analysis of all 114 chunks confirms **standard Lua 5.1** (`\x1bLua` + version `0x51`), LE, `sizeof(int/size_t/Instruction/lua_Number) = 4`, `integral = 0`. The `lua_Number = float (4 bytes)` is non-default and requires custom compiler builds. Full analysis in [`docs/modding_deep_dive.md` §5](modding_deep_dive.md#5-lua-scripting-system).
+
 ## Known gaps / bugs to file upstream after repro
 
-1. **Lua version byte** in `LuaQ` header must be matched to the correct disassembler fork (5.0 vs 5.1 vs custom). Confirm with first-chunk header bytes before batch-disassembling.  
+1. ~~**Lua version byte** in `LuaQ` header must be matched to the correct disassembler fork (5.0 vs 5.1 vs custom). Confirm with first-chunk header bytes before batch-disassembling.~~ **RESOLVED:** Confirmed as Lua 5.1 — see header analysis above.
 2. **Control-flow recovery** on game bytecode may still be partial — treat disassembly as hints, not ground truth.  
 3. **String-only harvest** in-repo is intentionally conservative (regex for PMC / layer / spawn tokens).
 

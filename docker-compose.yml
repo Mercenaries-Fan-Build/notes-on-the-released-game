@@ -1,0 +1,44 @@
+services:
+  db:
+    image: imresamu/postgis-arm64:16-3.5
+    container_name: mercs2-db
+    platform: linux/arm64/v8
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mercs2
+      POSTGRES_PASSWORD: mercs2
+      POSTGRES_DB: mercs2
+    ports:
+      - "5432:5432"
+    volumes:
+      - mercs2_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mercs2"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: mercs2-api
+    restart: unless-stopped
+    platform: linux/arm64/v8
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MERCS2_DATABASE_URL: postgresql+asyncpg://mercs2:mercs2@db:5432/mercs2
+      MERCS2_DATABASE_URL_SYNC: postgresql+psycopg2://mercs2:mercs2@db:5432/mercs2
+      MERCS2_OUTPUT_ROOT: /data/output
+      MERCS2_REVIEW_ROOT: /data/output/extracted/review
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/data/output:ro
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  mercs2_pgdata:

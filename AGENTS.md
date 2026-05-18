@@ -190,6 +190,7 @@ Full-world populate handles visibility layers:
 - **sges**: Compressed blocks (raw deflate, `zlib` windowBits `-15`, multi-segment)
 - **UCFX**: Decompressed asset container (CHDR/COMP/GEOM/MESH/PRMG/STRM/IBUF/MTRL/...)
 - **Placement**: UCFX → CHDR → COMP/flgs chunks; 42-byte records with XYZ + unit quaternion (qx, qy, qz, qw)
+- **CSUM trailer**: CRC-32 (poly 0xEDB88320, init=0, no final XOR) of UCFX header+body. Block file layout: `count(4)` + `count × entry(16)` + chunks; each chunk = `UCFX(8+body)` + `CSUM(8)`. See `docs/format_reference.md` §4.0
 
 ### World Data
 

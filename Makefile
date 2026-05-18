@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -110,6 +110,8 @@ help:
 	@echo "                      200m zone around pool → output/radius_zones/pool_200m/ (placements + assets)"
 	@echo "  make regen-pool-200m-glbs OUTPUT=./output"
 	@echo "                      Regenerate GLBs for pool 200m zone asset list"
+	@echo "  make extract-zone-props OUTPUT=./output"
+	@echo "                      Extract individual submesh prop GLBs for radius zone → output/submesh_glbs/"
 	@echo "  make filter-maracaibo-placements OUTPUT=./output"
 	@echo "                      Filter placements to Maracaibo area → output/placements/maracaibo_placements.json"
 	@echo "  make ue5-bundle   variants + animations + export-ue5 (after extract-all / review-all)"
@@ -349,6 +351,7 @@ filter-pool-200m:
 	  --anchor-entity-id "$(RADIUS_ZONE_ANCHOR_ID)" \
 	  --anchor-entity-name "$(RADIUS_ZONE_ANCHOR_NAME)" \
 	  --radius "$(RADIUS_ZONE_METRES)" \
+	  --review-root "$(OUTPUT)/extracted/review" \
 	  --output "$(OUTPUT)"
 
 regen-pool-200m-glbs: filter-pool-200m
@@ -357,6 +360,14 @@ regen-pool-200m-glbs: filter-pool-200m
 	  --pipeline-root "$(abspath $(OUTPUT))" \
 	  --asset-list "$(abspath $(OUTPUT))/radius_zones/$(RADIUS_ZONE_ID)/asset_list.json" \
 	  --glb-root-scale "$(GLB_ROOT_SCALE)"
+
+extract-zone-props: filter-pool-200m
+	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib — run make venv" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/extract_submesh_glbs.py" \
+	  --asset-list "$(abspath $(OUTPUT))/radius_zones/$(RADIUS_ZONE_ID)/asset_list.json" \
+	  --zone-json "$(abspath $(OUTPUT))/radius_zones/$(RADIUS_ZONE_ID)/zone.json" \
+	  --review-root "$(OUTPUT)/extracted/review" \
+	  --out "$(abspath $(OUTPUT))/submesh_glbs"
 
 filter-maracaibo-placements: extract-placements
 	@echo "Filtering placements to Maracaibo area..."
@@ -445,3 +456,39 @@ preview-placements:
 preview-placement-bbox:
 	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
 	cd "$(REPO_ROOT)/viewer" && npm install && MERCS2_PLACEMENTS_ROOT="$(abspath $(OUTPUT))/placements" npm run dev -- --open /placement-bbox.html
+
+# ---- Docker / Webapp ----
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f
+
+docker-reset:
+	docker compose down -v
+	docker compose up -d
+
+# Run Alembic migrations inside the API container.
+db-migrate:
+	docker compose exec api alembic upgrade head
+
+# Run the ingest CLI inside the API container (output/ is mounted at /data/output).
+db-ingest:
+	docker compose exec api python -m app.ingest.cli --output /data/output
+
+# Start the FastAPI backend (without Docker, needs running Postgres + local deps).
+api:
+	cd "$(REPO_ROOT)/webapp" && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Full webapp stack: start Docker (db + api), then viewer frontend.
+webapp: docker-up
+	@echo "Waiting for API to be ready…"
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		curl -sf http://localhost:8000/api/health > /dev/null 2>&1 && break; \
+		sleep 2; \
+	done
+	cd "$(REPO_ROOT)/viewer" && npm install && npm run dev

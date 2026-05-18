@@ -35,13 +35,11 @@ import importlib as _importlib
 
 import mercs2_actor_utils as actor_utils
 import mercs2_data_layers as m2dl
-import mercs2_hero_placement as hero_placement
 import mercs2_radius_zone as rz
 import mercs2_vz_taxonomy as vz_tax
 
 _importlib.reload(actor_utils)
 _importlib.reload(m2dl)
-_importlib.reload(hero_placement)
 _importlib.reload(rz)
 _importlib.reload(vz_tax)
 
@@ -108,6 +106,78 @@ def _load_zone() -> dict:
         _err("Run: make filter-pool-200m OUTPUT=./output")
         return {}
     return rz.load_zone(zpath)
+
+
+def _load_submesh_prop_index(zone: dict) -> dict[str, str]:
+    """Load submesh_prop_index.json and build a normalized name → GLB path lookup.
+
+    The index maps ``texture_diffuse`` stems to GLB files.  Entity names
+    like ``_global_env_rockjungle03`` typically match a texture stem after
+    stripping the leading ``_`` and lowercasing.  We build several
+    normalised variants for each stem to maximise exact-match coverage.
+    """
+    submesh_glbs_dir = os.environ.get("MERCS2_SUBMESH_GLBS", "")
+    if not submesh_glbs_dir:
+        zone_path = rz.zone_json_path()
+        submesh_glbs_dir = str(rz.output_root(zone_path) / "submesh_glbs")
+
+    index_path = os.path.join(submesh_glbs_dir, "submesh_prop_index.json")
+    if not os.path.isfile(index_path):
+        _log(f"No submesh prop index at {index_path} — submesh resolution disabled")
+        return {}
+
+    with open(index_path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+
+    props = doc.get("props", {})
+    lookup: dict[str, str] = {}
+    for tex_stem, meta in props.items():
+        glb_path = meta.get("glb_path", "")
+        if not glb_path or not os.path.isfile(glb_path):
+            continue
+        ts = tex_stem.lower().strip()
+        lookup[ts] = glb_path
+        stripped = ts.lstrip("_")
+        if stripped != ts:
+            lookup[stripped] = glb_path
+
+    _log(f"Submesh prop index: {len(lookup)} entries from {len(props)} props")
+    return lookup
+
+
+def _resolve_mesh_with_submesh(
+    entity_name: str,
+    mesh_lookup: dict[str, str],
+    submesh_lookup: dict[str, str],
+) -> str | None:
+    """Try standard mesh resolution first, then fall back to submesh prop index.
+
+    No substring/fuzzy matching — only deterministic normalisation.
+    """
+    result = resolve_mesh(entity_name, mesh_lookup)
+    if result is not None:
+        return result
+
+    if not submesh_lookup:
+        return None
+
+    name = entity_name.lower().strip()
+    if name in submesh_lookup:
+        return submesh_lookup[name]
+
+    cleaned = re.sub(r"\s+0x[0-9a-fA-F]+$", "", name).strip()
+    if cleaned in submesh_lookup:
+        return submesh_lookup[cleaned]
+
+    stripped = cleaned.lstrip("_")
+    if stripped in submesh_lookup:
+        return submesh_lookup[stripped]
+
+    no_prefix = re.sub(r"^(global_|jungle_|outskirt_)", "", stripped)
+    if no_prefix != stripped and no_prefix in submesh_lookup:
+        return submesh_lookup[no_prefix]
+
+    return None
 
 
 def _load_zone_placements(zone: dict) -> list[dict]:
@@ -242,74 +312,6 @@ def _build_vz_layers(
     return source_to_layer
 
 
-def _consumed_by_hero(p: dict, hero_canons: set[str]) -> bool:
-    ent = p.get("entity_name") or ""
-    for canon in hero_canons:
-        if hero_placement.entity_matches_hero_canonical(ent, canon):
-            return True
-    return False
-
-
-def _place_hero_blocks(
-    placements: list[dict],
-    mesh_lookup: dict[str, str],
-    hero_canons: set[str],
-    base_world: Optional[unreal.DataLayerInstance],
-    zone_id: str,
-    dedup: SpatialDedup,
-    *,
-    label_index: actor_utils.ActorLabelIndex,
-) -> tuple[int, int, set[str]]:
-    """Place one actor per hero mesh at cluster centroid. Returns (placed, skipped, spawned_canons)."""
-    filter_fn = lambda p: True  # placements file is pre-filtered
-    spawns = hero_placement.compute_hero_block_spawns(
-        placements,
-        {c: mesh_lookup[c] for c in hero_canons if c in mesh_lookup},
-        placement_filter=filter_fn,
-        skip_entity=_should_skip,
-    )
-
-    placed = 0
-    skipped = 0
-    spawned: set[str] = set()
-
-    for canon, centroid in spawns.items():
-        mesh_path = mesh_lookup.get(canon)
-        if mesh_path is None:
-            mesh_path = resolve_mesh(canon, mesh_lookup)
-        if mesh_path is None:
-            _warn(f"No mesh for hero {canon}")
-            skipped += 1
-            continue
-
-        cx, cy, cz, n = centroid
-        loc = game_to_ue(cx, cy, cz)
-        if not dedup.try_place(canon, loc):
-            skipped += 1
-            continue
-
-        rot = unreal.Rotator()
-        for p in placements:
-            if hero_placement.entity_matches_hero_canonical(
-                p.get("entity_name") or "", canon,
-            ):
-                rot = placement_to_rotator(p)
-                break
-
-        label = sanitize_name(canon)
-        folder = f"World/RadiusZones/{zone_id}/Hero"
-        actor = place_mesh(
-            mesh_path, loc, rot, unreal.Vector(1.0, 1.0, 1.0),
-            label, folder, base_world, False,
-            label_index=label_index,
-        )
-        if actor is not None:
-            placed += 1
-            spawned.add(canon)
-            _log(f"Hero {canon} @ ({cx:.1f},{cy:.1f},{cz:.1f}) n={n}")
-
-    return placed, skipped, spawned
-
 
 def _populate_c3_cells(
     zone: dict,
@@ -392,10 +394,7 @@ def run() -> None:
     _log(f"Mesh roots: {mesh_roots}")
     _log(f"Mesh lookup: {len(mesh_lookup)} entries from {len(mesh_paths)} assets")
 
-    hero_canons = set(zone.get("hero_canonicals", []))
-    for canon in list(mesh_lookup.keys()):
-        if re.search(r"bld_|_veh_|pmcoutpost", canon, re.I):
-            hero_canons.add(canon)
+    submesh_lookup = _load_submesh_prop_index(zone)
 
     label_index = actor_utils.ActorLabelIndex.build()
     hidden_sources = _load_streaming_hidden_sources(zone)
@@ -414,10 +413,6 @@ def run() -> None:
     vz_source_to_layer = _build_vz_layers(vz_sources, dl_dir, zone_id) if vz_sources else {}
 
     dedup = SpatialDedup()
-    hero_placed, hero_skip, hero_spawned = _place_hero_blocks(
-        placements, mesh_lookup, hero_canons, base_world, zone_id, dedup,
-        label_index=label_index,
-    )
 
     cells_placed = _populate_c3_cells(
         zone, mesh_lookup, base_world, zone_id, label_index=label_index,
@@ -428,7 +423,6 @@ def run() -> None:
     placed_light = 0
     skipped_no_mesh = 0
     skipped_pattern = 0
-    skipped_hero = 0
     skipped_dedup = 0
     total = len(placements)
 
@@ -439,15 +433,17 @@ def run() -> None:
                 break
             task.enter_progress_frame(1)
 
-            entity_name = str(p.get("entity_name", p.get("name", "")))
+            raw_name = p.get("entity_name") or p.get("name") or ""
+            if raw_name is None:
+                raw_name = ""
+            entity_name = str(raw_name).strip()
             entity_id = str(p.get("entity_id", f"unk_{i}"))
+
+            if not entity_name or entity_name.lower() == "none":
+                entity_name = entity_id
 
             if _should_skip(entity_name):
                 skipped_pattern += 1
-                continue
-
-            if _consumed_by_hero(p, hero_spawned):
-                skipped_hero += 1
                 continue
 
             editor_hidden, vis = _classify_visibility_zone(p, hidden_sources)
@@ -469,7 +465,9 @@ def run() -> None:
                     placed_light += 1
                 continue
 
-            mesh_path = resolve_mesh(entity_name, mesh_lookup)
+            mesh_path = _resolve_mesh_with_submesh(
+                entity_name, mesh_lookup, submesh_lookup,
+            )
             if mesh_path is None:
                 skipped_no_mesh += 1
                 continue
@@ -477,7 +475,7 @@ def run() -> None:
             x, y, z = _placement_game_xyz(p)
             loc = game_to_ue(x, y, z)
             rot = placement_to_rotator(p)
-            label = sanitize_name(f"{entity_name}_{entity_id}" if entity_name else entity_id)
+            label = sanitize_name(f"{entity_name}_{entity_id}" if entity_name != entity_id else entity_id)
             canon = _canonical_from_path(mesh_path)
 
             if not dedup.try_place(canon, loc):
@@ -497,12 +495,10 @@ def run() -> None:
 
     _log("=" * 60)
     _log(f"Zone {zone_id} @ {zone.get('anchor_entity_name')} r={zone.get('radius_m')}m")
-    _log(f"  Hero actors:        {hero_placed} (skip {hero_skip})")
     _log(f"  c3 cells:           {cells_placed}")
-    _log(f"  Prop mesh actors:   {placed_mesh} (updated {mesh_reused})")
+    _log(f"  Mesh actors:        {placed_mesh} (updated {mesh_reused})")
     _log(f"  Lights:             {placed_light}")
     _log(f"  Skip (no mesh):     {skipped_no_mesh}")
-    _log(f"  Skip (hero cluster):{skipped_hero}")
     _log(f"  Skip (pattern):     {skipped_pattern}")
     _log(f"  Skip (dedup):       {skipped_dedup}")
     _log("=" * 60)

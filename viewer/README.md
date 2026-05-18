@@ -1,27 +1,73 @@
-# Mercenaries 2 asset viewer (Three.js)
+# Mercenaries 2 Asset Viewer & Dashboard (Vue 3 SPA)
 
-Development:
+Vue 3 + Vite + Router + Pinia + Tailwind CSS + Three.js
+
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Production build:
+## Production build
 
 ```bash
 npm run build
 npm run preview
 ```
 
-Put exported assets under `public/` (e.g. `public/models/car.obj`, `public/textures/foo.dds`) and enter URLs in the sidebar (`/models/car.obj`).
+## Routes
 
-The dev server merges `output/review`, `output/extracted/review`, and optional `MERCS2_REVIEW_ROOT` paths and serves `/api/review-assets.json`.
+| Path | View | Description |
+|------|------|-------------|
+| `/` | Dashboard | Stats cards, pack breakdown, category distribution, quick links |
+| `/blocks` | Block Browser | Filterable table/grid of all extracted blocks with category badges, content flags, pagination |
+| `/viewer` | Asset Viewer | Three.js 3D viewer for OBJ/glTF/GLB meshes (ported from original `main.js`) |
+| `/placements` | Placement Map | 2D X/Z world map with bbox overlay (ported from `placement-preview.js`) |
+| `/placement-qa` | Placement QA | Named regions, filtered table, rotation/position overrides (ported from `placement-bbox.js`) |
 
-**Placement / region map:** open [`placement-preview.html`](./placement-preview.html) (or run `make preview-placements OUTPUT=./output` from the repo root). It loads `/api/placements-maracaibo.json` (set `MERCS2_PLACEMENTS_ROOT` to your `output/placements` directory if it is not under the default `../output/placements`). Use the bbox fields + “Copy filter CLI args” to tune `tools/filter_maracaibo_placements.py`. Optional Three.js GLB spot-check uses `/api/maracaibo-glbs.json` + the first `mesh_scene.glb` from review roots.
+## Data sources
 
-**Placement bbox & rotation QA:** open [`placement-bbox.html`](./placement-bbox.html) (or `make preview-placement-bbox OUTPUT=./output`). Define named bounding boxes, filter entities inside them, inspect/edit rotation (`rotation_y_deg`, `rot_sin`/`rot_cos`, quaternions) and position overrides (persisted in `localStorage`). Default dataset is `pmc_base.json`; also supports `maracaibo_placements.json` and `layers_static.json` via `/api/placements-catalog.json`.
+The Vite dev server plugin (`vite-plugin-review-assets.js`) serves the same API endpoints as before:
 
-Assets that include `submeshes/index.json` appear with a **`[submeshes]`** suffix; clicking one opens **Submesh inspection** (LOD slider, switch-state / damage filters, part-type presets, per-part visibility, and optional `textures/manifest.json` diffuse selection). You can also open a manifest directly with `?manifest=/__review__/batch_*/stem/submeshes/index.json`.
+- `/api/review-assets.json` — all extracted mesh/texture blocks from `output/review`
+- `/api/placements-*.json` — placement data from `output/placements/`
+- `/api/anim-assets.json` — animation GLBs from `output/animations/`
+- `/__review__/pack/stem/file` — serves review tree files
 
-The bundled `public/models/sample.obj` is a tiny heuristic extract for smoke-testing the pipeline.
+Set `MERCS2_REVIEW_ROOT`, `MERCS2_PLACEMENTS_ROOT`, or `MERCS2_ANIMATIONS_ROOT` in `viewer/.env` to override auto-discovery.
+
+## Architecture
+
+```
+viewer/
+├── index.html              Single entry point
+├── src/
+│   ├── main.js             Vue app bootstrap
+│   ├── App.vue             Root layout + navbar
+│   ├── router.js           Vue Router config
+│   ├── style.css           Tailwind CSS entry
+│   ├── components/         Reusable UI components
+│   │   ├── AppNavbar.vue
+│   │   └── StatCard.vue
+│   ├── views/              Route views
+│   │   ├── DashboardView.vue
+│   │   ├── BlockBrowserView.vue
+│   │   ├── AssetViewerView.vue
+│   │   ├── PlacementPreviewView.vue
+│   │   └── PlacementBboxView.vue
+│   ├── stores/             Pinia stores
+│   │   ├── reviewAssets.js
+│   │   ├── animations.js
+│   │   └── placements.js
+│   └── lib/                Shared logic
+│       ├── three-viewer.js
+│       ├── submesh-inspect.js
+│       └── placement-bbox-store.js
+├── placement-bbox-store.js  Original (re-exported by src/lib)
+├── placement-bbox-map.js    Original (re-exported by src/lib)
+├── vite-plugin-review-assets.js  Vite middleware (unchanged)
+└── vite.config.js           Vue + Tailwind + review plugin
+```
+
+The original vanilla JS files (`main.js`, `placement-preview.js`, `placement-bbox.js`, `submesh-inspect.js`) are preserved at the viewer root for reference but are no longer the entry points.

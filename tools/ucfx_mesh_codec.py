@@ -1264,7 +1264,23 @@ def decode_submesh(
     meta["vertex_format"] = fmt
     meta["vertices_decoded"] = len(verts)
 
-    # Layout: pos_xyz(6) + w(2) + UV(4 f16x2) + normal(6 f16x3) + pad(2) [+ tangent(6 f16x3) + pad(2)]
+    # Vertex layout per stride (all f16/snorm16 formats):
+    #   pos_xyz(6) + w(2) + UV(4 f16x2) @ offset 8, then stride-dependent fields:
+    #   stride 20: normals(6+2pad) @ 12
+    #   stride 24: D3DCOLOR(4) @ 12, normals(6+2pad) @ 16
+    #   stride 28: D3DCOLOR(4) @ 12, extra(4) @ 16, normals(6+2pad) @ 20
+    #   stride 32: D3DCOLOR(4) @ 12, extra(8) @ 16, normals(6+2pad) @ 24
+    #   stride 36: D3DCOLOR(4) @ 12, extra(4) @ 16, normals(6+2pad) @ 20
+    #   stride 40: D3DCOLOR(4) @ 12, extra(4) @ 16, normals(6+2pad) @ 24, tangents(6+2pad) @ 32
+    _VERTEX_ATTR_OFFSETS: dict[int, tuple[int, int | None]] = {
+        20: (12, None),
+        24: (16, None),
+        28: (20, None),
+        32: (24, None),
+        36: (20, None),
+        40: (24, 32),
+    }
+
     if stride >= 12 and fmt.startswith(("f16", "snorm16")):
         uvs: list[tuple[float, float]] = []
         for vi in range(len(verts)):
@@ -1277,11 +1293,14 @@ def decode_submesh(
                 uvs.append((0.0, 0.0))
         meta["uvs"] = uvs
 
-    # Per-vertex normals stored as f16 x 3 at byte offset 12
-    if stride >= 18 and fmt.startswith(("f16", "snorm16")):
+    attr_offsets = _VERTEX_ATTR_OFFSETS.get(stride)
+
+    if attr_offsets is not None and fmt.startswith(("f16", "snorm16")):
+        normal_off, tangent_off = attr_offsets
+
         normals: list[tuple[float, float, float]] = []
         for vi in range(len(verts)):
-            o = vb_abs + vi * stride + 12
+            o = vb_abs + vi * stride + normal_off
             if o + 6 <= len(data):
                 nx = float(struct.unpack_from("<e", data, o)[0])
                 ny = float(struct.unpack_from("<e", data, o + 2)[0])
@@ -1291,19 +1310,18 @@ def decode_submesh(
                 normals.append((0.0, 1.0, 0.0))
         meta["normals"] = normals
 
-    # Per-vertex tangents stored as f16 x 3 at byte offset 20 (28-byte stride only)
-    if stride >= 26 and fmt.startswith(("f16", "snorm16")):
-        tangents: list[tuple[float, float, float]] = []
-        for vi in range(len(verts)):
-            o = vb_abs + vi * stride + 20
-            if o + 6 <= len(data):
-                tx = float(struct.unpack_from("<e", data, o)[0])
-                ty = float(struct.unpack_from("<e", data, o + 2)[0])
-                tz = float(struct.unpack_from("<e", data, o + 4)[0])
-                tangents.append((tx, ty, tz))
-            else:
-                tangents.append((1.0, 0.0, 0.0))
-        meta["tangents"] = tangents
+        if tangent_off is not None:
+            tangents: list[tuple[float, float, float]] = []
+            for vi in range(len(verts)):
+                o = vb_abs + vi * stride + tangent_off
+                if o + 6 <= len(data):
+                    tx = float(struct.unpack_from("<e", data, o)[0])
+                    ty = float(struct.unpack_from("<e", data, o + 2)[0])
+                    tz = float(struct.unpack_from("<e", data, o + 4)[0])
+                    tangents.append((tx, ty, tz))
+                else:
+                    tangents.append((1.0, 0.0, 0.0))
+            meta["tangents"] = tangents
 
     if prmg_bbox is not None:
         meta["prmg_bbox"] = [

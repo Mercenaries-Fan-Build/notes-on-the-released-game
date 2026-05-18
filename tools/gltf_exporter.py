@@ -227,13 +227,17 @@ def _tangent_vec4(
         tx, ty, tz = float(txyz[0]), float(txyz[1]), float(txyz[2])
         dot = tx * nx + ty * ny + tz * nz
         tx, ty, tz = tx - dot * nx, ty - dot * ny, tz - dot * nz
-        ln = math.sqrt(tx * tx + ty * ty + tz * tz) or 1.0
+        ln = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if not ln or math.isnan(ln):
+            ln = 1.0
         tx, ty, tz = tx / ln, ty / ln, tz / ln
     else:
         ax, ay, az = (0.0, 1.0, 0.0) if abs(ny) < 0.9 else (1.0, 0.0, 0.0)
         dot = nx * ax + ny * ay + nz * az
         tx, ty, tz = ax - dot * nx, ay - dot * ny, az - dot * nz
-        ln = math.sqrt(tx * tx + ty * ty + tz * tz) or 1.0
+        ln = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if not ln or math.isnan(ln):
+            ln = 1.0
         tx, ty, tz = tx / ln, ty / ln, tz / ln
     return (tx, ty, tz, 1.0)
 

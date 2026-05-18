@@ -47,12 +47,13 @@ Tables are **not** parsed as Lua; strings are matched with regex. Output keys in
 | Version | u32 after magic |
 | Declared chunk count | u32; **retail files may declare 7** while only **five** 12-byte chunk rows exist before the `0x48` region |
 | Chunk row | 4-byte ASCII tag + **offset** u32 + **meta** u32 (12 bytes per row). **`meta` is not decoded** semantically |
-| `CSUM` | **Hashes**, not a byte span; `size` in manifest is **0** |
-| `INDX`, `DATA`, `ASET`, `PTHS` | Spatial chunks; **inferred byte length** by sorting by offset; `DATA` extends to EOF |
+| `CSUM` | CSUM chunk row `offset` is **NOT a file offset** — it is a hash/identifier (exceeds file size for demo vz.wad, shell.wad, Loading.wad). `meta` gives an entry count (7,018 for retail vz.wad) that does NOT correspond 1:1 to blocks (11,370). Per-UCFX integrity uses CRC-32(init=0) trailers embedded in decompressed block data (see §4.0). The FFCS-level CSUM chunk's actual purpose and storage remain **unknown** |
+| `INDX` | Block index; 12-byte entries: `(page_index, packed_field, flags_and_page_count)`. `page_index × 0x8000` = WAD file offset of the sges block. `flags_and_page_count & 0xFFFF` = number of 32KB pages the block spans |
+| `DATA`, `ASET`, `PTHS` | Spatial chunks; **inferred byte length** by sorting by offset; `DATA` extends to EOF |
 
 `PTHS` yields `paths.txt` path-like strings (see `dump_paths_from_pths`).
 
-**ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows).
+**ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows). Hash algorithm confirmed as **FNV-1a with `|0x20` case suppression** (see [`docs/modding_deep_dive.md` §4.3.1](modding_deep_dive.md) and `tools/pandemic_hash.py`).
 
 **ECS `COMP` harvest:** [`docs/ecs_components.md`](ecs_components.md) — [`tools/ucfx_ecs_codec.py`](../tools/ucfx_ecs_codec.py) + [`tools/ecs_metadata_extract.py`](../tools/ecs_metadata_extract.py) → `output/placements/ecs_components.json` and merged `ecs` keys on placement JSON when `make extract-placements` runs.
 
@@ -84,6 +85,59 @@ The **n-th** `sges` in `data.bin` corresponds to the **n-th** line in `paths.txt
 - **UCFX** root: magic + four u32 header fields (`u0`–`u3`); `data_base = ucfx_off + u0` for child chunks.
 - **Chunk table:** 20-byte rows: 4-byte tag + four u32s (`read_chunk_header`). Tags parsed in mesh path include **GEOM**, **MESH**, **PRMG**, **STRM**, **IBUF**, **INFO**, **MTRL**, **PRMT**, **HIER**, **SWIT**, **NAME**, **BODY** (texture). Others (**CHDR**, **STAT**, **CEXE**, **enum**, **flgt**, **flgs**, **INDX**, …) may appear in **`tag_occurrences`** without a dedicated decoder.
 - **CONTAINER_SENTINEL** `0xFFFFFFFF` on chunk row `u0` marks nested-container boundaries in some walks.
+
+### 4.0 CSUM trailer (per-chunk integrity)
+
+Each UCFX chunk inside a decompressed block file is followed by an 8-byte **CSUM** trailer:
+
+| Offset | Size | Field |
+|--------|------|-------|
+| `+0` | 4 | ASCII tag `CSUM` |
+| `+4` | 4 | u32 LE checksum value |
+
+**Algorithm — CRC-32 (init=0, no final XOR)** (verified against **53,765 chunks across 10,099 block files**):
+
+| Parameter | Value |
+|-----------|-------|
+| Polynomial | `0x04C11DB7` (normal) / `0xEDB88320` (reflected) |
+| Init value | `0x00000000` |
+| Final XOR | `0x00000000` |
+| Reflect in | Yes |
+| Reflect out | Yes |
+
+This uses the standard CRC-32 polynomial (ISO 3309 / ITU-T V.42) but with **init=0** and **no final inversion**. Note: this is neither standard CRC-32 (init=0xFFFFFFFF, xorout=0xFFFFFFFF) nor CRC-32/JAMCRC (init=0xFFFFFFFF, xorout=0x00000000) — it is a custom variant with init=0.
+
+**Input range:** The checksum covers the entire byte range from the start of the `UCFX` tag (inclusive) to the byte immediately before the `CSUM` tag. For multi-chunk block files, each UCFX chunk has its own trailing CSUM that covers only that chunk.
+
+**Block file structure:** `count(4)` + `count × entry(16)` + concatenated chunks. Each header entry is `(name_hash, type_hash, field_c, chunk_size)` as u32 LE. Each chunk is `UCFX_header(8) + UCFX_body(variable) + "CSUM"(4) + checksum(4)`. The `chunk_size` field in the header entry gives the total chunk length including the CSUM trailer.
+
+**Python implementation:**
+
+```python
+import zlib
+
+def crc32_mercs2(data: bytes) -> int:
+    """CRC-32 with init=0, no final XOR (Mercenaries 2 CSUM algorithm)."""
+    # Python zlib internally does: init' = init ^ 0xFFFFFFFF, ..., result ^ 0xFFFFFFFF
+    # So zlib.crc32(data, 0xFFFFFFFF) ^ 0xFFFFFFFF gives table-CRC with init=0, no final XOR
+    return (zlib.crc32(data, 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
+```
+
+Equivalent explicit table implementation:
+
+```python
+def crc32_mercs2_explicit(data: bytes) -> int:
+    table = [0] * 256
+    for i in range(256):
+        c = i
+        for _ in range(8):
+            c = (c >> 1) ^ 0xEDB88320 if c & 1 else c >> 1
+        table[i] = c
+    crc = 0
+    for b in data:
+        crc = table[(crc ^ b) & 0xFF] ^ (crc >> 8)
+    return crc
+```
 
 ### 4.1 UCFX texture INFO (minimal)
 
@@ -181,6 +235,7 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 
 - [`tools/README.md`](../tools/README.md) — commands, pipeline, artifact index, env vars.
 - [`docs/game_extractor_notes.md`](game_extractor_notes.md), [`docs/quickbms_notes.md`](quickbms_notes.md) — external tooling workflows.
+- [`docs/modding_deep_dive.md`](modding_deep_dive.md) — DRM analysis, hash system identification, Lua bytecode format, `vz.bin` decode, and modding feasibility roadmap.
 - [`UnrealEngineGame/README.md`](../UnrealEngineGame/README.md) — Maracaibo demo list (`maracaibo_asset_list.json`).
 
 ---
