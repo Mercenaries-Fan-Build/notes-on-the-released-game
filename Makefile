@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port crack-game
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port crack-game test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -133,6 +133,10 @@ help:
 	@echo "  make extract-iso  Prints ISO/locale extraction hints (mount ISO yourself)"
 	@echo "  make clean OUTPUT=./output"
 	@echo "  make all           extract-all + saves/audio/video + ue5-bundle + regen-maracaibo-glbs (needs ZIP)"
+	@echo ""
+	@echo "  make test-windows      Start Windows 7 Docker container (dockur/windows) for game testing"
+	@echo "  make test-windows-down Stop the Windows test container"
+	@echo "  make test-windows-logs Follow container logs"
 	@echo ""
 	@echo "Variables: ZIP OUTPUT FORCE_UNZIP=1 VARIANT_PATH EXTRACT_JOBS (1=per-block sges; else bulk)"
 	@echo "            PYTHON (default: \`./.venv/bin/python\` if present, else \`python3\` — run \`make venv\` for pygltflib)"
@@ -435,24 +439,18 @@ full-pipeline:
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
 
 # ---- SecuROM Removal (Retail → Cracked) ----
+# Accepts v1.0 (17MB, original disc) or v1.1 (51MB, update) — auto-detected.
 
-SECUROM_PATCH ?= $(REPO_ROOT)/tools/patches/mercs2_v1.1_securom_bypass.bspatch
 RETAIL_EXE ?=
 
 crack-game:
-	@test -n "$(RETAIL_EXE)" || (echo "error: set RETAIL_EXE=path/to/Mercenaries2.exe (your retail v1.1 install)" >&2; exit 1)
+	@test -n "$(RETAIL_EXE)" || (echo "error: set RETAIL_EXE=path/to/Mercenaries2.exe (v1.0 or v1.1 retail)" >&2; exit 1)
 	@test -f "$(RETAIL_EXE)" || (echo "error: retail exe not found at $(RETAIL_EXE)" >&2; exit 1)
-	@test -f "$(SECUROM_PATCH)" || (echo "error: patch file not found at $(SECUROM_PATCH)" >&2; exit 1)
 	@"$(PYTHON)" -c "import bsdiff4" 2>/dev/null || (echo "error: bsdiff4 not available — run: .venv/bin/pip install bsdiff4" >&2; exit 1)
 	@mkdir -p "$(OUTPUT)/patched"
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/apply_securom_patch.py" \
 	  "$(RETAIL_EXE)" \
-	  --patch "$(SECUROM_PATCH)" \
 	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
-	@echo ""
-	@echo "Done! Copy these to your game install directory:"
-	@echo "  $(OUTPUT)/patched/Mercenaries2.exe"
-	@echo "  $(OUTPUT)/patched/cruise.dll"
 
 # ---- Xbox 360 DLC Port ----
 
@@ -524,3 +522,36 @@ webapp: docker-up
 		sleep 2; \
 	done
 	cd "$(REPO_ROOT)/viewer" && npm install && npm run dev
+
+# ---- Windows Test Environment (dockur/windows) ----
+# Runs Windows 7 in a Docker container for game testing.
+# Requires: Linux host with KVM, patched files in output/ (crack-game, dlc-port).
+
+test-windows:
+	@echo "Starting Windows 7 test environment..."
+	@echo ""
+	@test -d "$(OUTPUT)/patched" && test -f "$(OUTPUT)/patched/Mercenaries2.exe" \
+	  || echo "WARNING: No patched EXE found at $(OUTPUT)/patched/Mercenaries2.exe"
+	@test -f "$(OUTPUT)/data/vz-patch.wad" \
+	  || echo "WARNING: No vz-patch.wad found at $(OUTPUT)/data/vz-patch.wad"
+	@echo ""
+	docker compose -f docker-compose.test-windows.yml up -d
+	@echo ""
+	@echo "============================================================"
+	@echo "  Windows 7 test environment starting up."
+	@echo ""
+	@echo "  Web viewer (noVNC): http://localhost:8006"
+	@echo "  RDP:                localhost:3389  (mercs2/mercs2)"
+	@echo ""
+	@echo "  Windows installation takes ~5-10 minutes on first run."
+	@echo "  install.bat runs automatically after setup completes."
+	@echo ""
+	@echo "  Game files:  C:\\Mercs2\\"
+	@echo "  Shared:      C:\\Shared\\ (= host ./output/)"
+	@echo "============================================================"
+
+test-windows-down:
+	docker compose -f docker-compose.test-windows.yml down
+
+test-windows-logs:
+	docker compose -f docker-compose.test-windows.yml logs -f

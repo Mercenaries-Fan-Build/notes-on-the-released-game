@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""Apply binary patch to remove SecuROM from Mercenaries 2 retail v1.1 EXE.
+"""Apply binary patch to remove SecuROM from Mercenaries 2 retail EXE.
 
-This applies a pre-computed bsdiff patch that transforms the retail SecuROM-
-protected executable into a working cracked version. The patch file contains
-only the binary delta — no game code is redistributed.
+Supports both v1.0 (original disc, 17MB SecuROM-packed) and v1.1 (update, 51MB).
+Auto-detects the input version by file size and MD5, then applies the appropriate
+patches in sequence:
+
+  v1.0 retail → [update patch] → v1.1 retail → [crack patch] → cracked
+  v1.1 retail → [crack patch] → cracked
+
+Patches are stored as bsdiff deltas in tools/patches/ — no game code is
+redistributed.
 
 After patching, cruise.dll is generated alongside the output (it creates the
 Win32 Event that inline SecuROM trigger checks look for).
 
 Usage:
-  python3 tools/apply_securom_patch.py <retail_v1.1_exe> [-o <output>]
+  python3 tools/apply_securom_patch.py <retail_exe> [-o <output>]
   python3 tools/apply_securom_patch.py --generate-patch <retail> <cracked> -o <patch_file>
 
 Requirements:
   - bsdiff4 Python package (pip install bsdiff4)
-  - The retail v1.1 EXE (MD5: 5b9976f162e050f4adcc51bb997ba97f)
 """
 from __future__ import annotations
 
@@ -23,15 +28,30 @@ import hashlib
 import sys
 from pathlib import Path
 
-RETAIL_V11_MD5 = "5b9976f162e050f4adcc51bb997ba97f"
-CRACKED_MD5 = "857b3387d54774a32c1328effb5de4d4"
-RETAIL_V11_SIZE = 53_944_080
+# --- Known EXE versions ---
 
-PATCH_FILE = Path(__file__).parent / "patches" / "mercs2_v1.1_securom_bypass.bspatch"
+RETAIL_V10_SIZE = 17_122_568
+RETAIL_V10_MD5 = "596efbf5e6c88924acef1fd8b0891012"
+
+RETAIL_V11_SIZE = 53_944_080
+RETAIL_V11_MD5 = "5b9976f162e050f4adcc51bb997ba97f"
+
+CRACKED_SIZE = 53_482_288
+CRACKED_MD5 = "857b3387d54774a32c1328effb5de4d4"
+
+# --- Patch files ---
+
+PATCHES_DIR = Path(__file__).parent / "patches"
+PATCH_V10_TO_V11 = PATCHES_DIR / "mercs2_v1.0_to_v1.1_update.bspatch"
+PATCH_V11_TO_CRACKED = PATCHES_DIR / "mercs2_v1.1_securom_bypass.bspatch"
+
+
+def compute_md5(data: bytes) -> str:
+    return hashlib.md5(data).hexdigest()
 
 
 def verify_md5(data: bytes, expected: str, label: str) -> bool:
-    actual = hashlib.md5(data).hexdigest()
+    actual = compute_md5(data)
     if actual != expected:
         print(f"WARNING: {label} MD5 mismatch")
         print(f"  Expected: {expected}")
@@ -40,23 +60,64 @@ def verify_md5(data: bytes, expected: str, label: str) -> bool:
     return True
 
 
-def generate_cruise_dll() -> bytes:
-    """Generate minimal cruise.dll — creates the SecuROM spoof Event.
+def detect_version(data: bytes) -> str | None:
+    """Detect EXE version by size and MD5. Returns 'v1.0', 'v1.1', 'cracked', or None."""
+    size = len(data)
+    md5 = compute_md5(data)
 
-    This is a valid PE DLL whose DllMain creates a named Event object
-    "v7_XXXX" (where XXXX = PID XOR 0x19EA3FD3) with bManualReset=TRUE,
-    bInitialState=TRUE (signaled). SecuROM's inline trigger checks test
-    this event and proceed when it's signaled.
-    """
+    if size == RETAIL_V10_SIZE and md5 == RETAIL_V10_MD5:
+        return "v1.0"
+    if size == RETAIL_V11_SIZE and md5 == RETAIL_V11_MD5:
+        return "v1.1"
+    if size == CRACKED_SIZE and md5 == CRACKED_MD5:
+        return "cracked"
+
+    # Fallback: detect by size alone (MD5 may differ for regional variants)
+    if size == RETAIL_V10_SIZE:
+        return "v1.0"
+    if size == RETAIL_V11_SIZE:
+        return "v1.1"
+    if size == CRACKED_SIZE:
+        return "cracked"
+
+    return None
+
+
+def generate_cruise_dll() -> bytes:
+    """Generate minimal cruise.dll — creates the SecuROM spoof Event."""
     sys.path.insert(0, str(Path(__file__).parent))
     from remove_securom import generate_cruise_dll as _gen
     return _gen()
 
 
-def apply_patch(input_exe: Path, output_exe: Path, patch_file: Path,
+def _apply_bsdiff(source: bytes, patch_file: Path, label: str, verbose: bool) -> bytes:
+    """Apply a single bsdiff patch and return the result."""
+    import bsdiff4
+
+    if not patch_file.exists():
+        print(f"ERROR: Patch file not found: {patch_file}")
+        sys.exit(1)
+
+    patch_data = patch_file.read_bytes()
+    if verbose:
+        print(f"  Patch: {patch_file.name} ({len(patch_data):,} bytes)")
+        print(f"  Applying {label}...")
+
+    try:
+        result = bsdiff4.patch(source, patch_data)
+    except Exception as e:
+        print(f"ERROR: {label} failed: {e}")
+        sys.exit(1)
+
+    if verbose:
+        print(f"  Result: {len(result):,} bytes")
+    return result
+
+
+def apply_patch(input_exe: Path, output_exe: Path,
                 generate_cruise: bool = True, verbose: bool = True) -> None:
     try:
-        import bsdiff4
+        import bsdiff4  # noqa: F401
     except ImportError:
         print("ERROR: bsdiff4 package required. Install with:")
         print("  pip install bsdiff4")
@@ -67,52 +128,52 @@ def apply_patch(input_exe: Path, output_exe: Path, patch_file: Path,
         print(f"ERROR: Input EXE not found: {input_exe}")
         sys.exit(1)
 
-    if not patch_file.exists():
-        print(f"ERROR: Patch file not found: {patch_file}")
-        print("  Expected at: tools/patches/mercs2_v1.1_securom_bypass.bspatch")
-        sys.exit(1)
-
-    if verbose:
-        print(f"Input:  {input_exe}")
-        print(f"Patch:  {patch_file}")
-        print(f"Output: {output_exe}")
-        print()
-
     retail_data = input_exe.read_bytes()
+    version = detect_version(retail_data)
 
-    if len(retail_data) != RETAIL_V11_SIZE:
-        print(f"WARNING: Input size {len(retail_data):,} differs from expected "
-              f"retail v1.1 size {RETAIL_V11_SIZE:,}")
-        print("  The patch is built for the v1.1 update EXE.")
-        print("  If this is v1.0 (original disc), apply the v1.1 update first.")
+    if verbose:
+        print(f"Input:  {input_exe} ({len(retail_data):,} bytes)")
+        print(f"Output: {output_exe}")
+        print(f"Detected version: {version or 'UNKNOWN'}")
         print()
 
-    if verbose:
-        print("Verifying input MD5...")
-    if not verify_md5(retail_data, RETAIL_V11_MD5, "Input EXE"):
-        print("  This patch is designed for the retail v1.1 EXE.")
-        print("  Proceeding anyway — patch may fail if input is wrong.")
+    if version == "cracked":
+        print("Input is already the cracked EXE — nothing to do.")
+        print(f"  MD5: {CRACKED_MD5}")
+        return
+
+    if version == "v1.0":
+        if verbose:
+            print("Step 1/2: Updating v1.0 → v1.1...")
+        retail_data = _apply_bsdiff(retail_data, PATCH_V10_TO_V11,
+                                    "v1.0 → v1.1 update", verbose)
+        if not verify_md5(retail_data, RETAIL_V11_MD5, "v1.1 intermediate"):
+            print("WARNING: v1.0→v1.1 patch produced unexpected output.")
+            print("  Continuing with crack patch anyway...")
+        elif verbose:
+            print("  VERIFIED: v1.1 intermediate matches expected")
+        if verbose:
+            print()
+            print("Step 2/2: Applying SecuROM bypass (v1.1 → cracked)...")
+    elif version == "v1.1":
+        if verbose:
+            print("Applying SecuROM bypass (v1.1 → cracked)...")
+    else:
+        print(f"WARNING: Unrecognized EXE version (size={len(retail_data):,})")
+        print("  Known versions:")
+        print(f"    v1.0 retail: {RETAIL_V10_SIZE:,} bytes (SecuROM packed, original disc)")
+        print(f"    v1.1 retail: {RETAIL_V11_SIZE:,} bytes (update from EA)")
+        print(f"    cracked:     {CRACKED_SIZE:,} bytes")
+        print()
+        print("  Attempting v1.1→cracked patch anyway...")
         print()
 
-    if verbose:
-        print("Reading patch file...")
-    patch_data = patch_file.read_bytes()
-    if verbose:
-        print(f"  Patch size: {len(patch_data):,} bytes")
+    result = _apply_bsdiff(retail_data, PATCH_V11_TO_CRACKED,
+                           "v1.1 → cracked", verbose)
 
     if verbose:
-        print("Applying patch...")
-    try:
-        result = bsdiff4.patch(retail_data, patch_data)
-    except Exception as e:
-        print(f"ERROR: Patch application failed: {e}")
-        print("  This usually means the input EXE doesn't match the expected retail v1.1.")
-        sys.exit(1)
-
-    if verbose:
-        print(f"  Result size: {len(result):,} bytes")
-        print("Verifying output MD5...")
-
+        print()
+        print("Verifying output...")
     if verify_md5(result, CRACKED_MD5, "Patched output"):
         if verbose:
             print("  VERIFIED: Output matches expected cracked EXE")
@@ -141,8 +202,8 @@ def apply_patch(input_exe: Path, output_exe: Path, patch_file: Path,
             print(f"  {output_exe.parent / 'cruise.dll'}")
 
 
-def generate_patch(retail_exe: Path, cracked_exe: Path, output_patch: Path,
-                   verbose: bool = True) -> None:
+def generate_patch_file(retail_exe: Path, cracked_exe: Path, output_patch: Path,
+                        verbose: bool = True) -> None:
     """Generate a bsdiff patch from retail → cracked (for maintainer use)."""
     try:
         import bsdiff4
@@ -151,19 +212,19 @@ def generate_patch(retail_exe: Path, cracked_exe: Path, output_patch: Path,
         sys.exit(1)
 
     if verbose:
-        print(f"Source (retail v1.1): {retail_exe}")
-        print(f"Target (cracked):    {cracked_exe}")
-        print(f"Output patch:        {output_patch}")
+        print(f"Source: {retail_exe}")
+        print(f"Target: {cracked_exe}")
+        print(f"Output: {output_patch}")
         print()
 
     retail_data = retail_exe.read_bytes()
     cracked_data = cracked_exe.read_bytes()
 
     if verbose:
-        print(f"Retail size:  {len(retail_data):,}")
-        print(f"Cracked size: {len(cracked_data):,}")
-        print(f"Retail MD5:   {hashlib.md5(retail_data).hexdigest()}")
-        print(f"Cracked MD5:  {hashlib.md5(cracked_data).hexdigest()}")
+        print(f"Source size: {len(retail_data):,}")
+        print(f"Target size: {len(cracked_data):,}")
+        print(f"Source MD5:  {compute_md5(retail_data)}")
+        print(f"Target MD5:  {compute_md5(cracked_data)}")
         print()
         print("Generating bsdiff patch (this may take ~30-60 seconds)...")
 
@@ -184,23 +245,23 @@ def generate_patch(retail_exe: Path, cracked_exe: Path, output_patch: Path,
     assert result == cracked_data, "MISMATCH: patch does not reproduce target"
 
     if verbose:
-        print("  VERIFIED: patch(retail) == cracked")
+        print("  VERIFIED: patch(source) == target")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Apply binary patch to remove SecuROM from Mercenaries 2 v1.1 EXE")
+        description="Apply binary patch to remove SecuROM from Mercenaries 2 EXE. "
+                    "Auto-detects v1.0 (17MB) or v1.1 (51MB) and applies the "
+                    "appropriate patches.")
 
-    parser.add_argument("input", help="Path to retail v1.1 Mercenaries2.exe")
+    parser.add_argument("input", help="Path to retail Mercenaries2.exe (v1.0 or v1.1)")
     parser.add_argument("--output", "-o",
                         help="Output path (default: <input_dir>/Mercenaries2-Patched.exe)")
-    parser.add_argument("--patch", "-p", default=str(PATCH_FILE),
-                        help=f"Path to .bspatch file (default: {PATCH_FILE})")
     parser.add_argument("--no-cruise", action="store_true",
                         help="Don't generate cruise.dll")
     parser.add_argument("--quiet", "-q", action="store_true")
-    parser.add_argument("--generate-patch", metavar="CRACKED_EXE",
-                        help="Generate patch mode: INPUT is retail, this arg is cracked EXE, "
+    parser.add_argument("--generate-patch", metavar="TARGET_EXE",
+                        help="Generate patch mode: INPUT is source, this arg is target EXE, "
                              "--output is required for patch file destination")
 
     args = parser.parse_args()
@@ -208,7 +269,7 @@ def main() -> None:
     if args.generate_patch:
         if not args.output:
             parser.error("--output is required when using --generate-patch")
-        generate_patch(
+        generate_patch_file(
             retail_exe=Path(args.input),
             cracked_exe=Path(args.generate_patch),
             output_patch=Path(args.output),
@@ -224,7 +285,6 @@ def main() -> None:
         apply_patch(
             input_exe=input_exe,
             output_exe=output_exe,
-            patch_file=Path(args.patch),
             generate_cruise=not args.no_cruise,
             verbose=not args.quiet,
         )
