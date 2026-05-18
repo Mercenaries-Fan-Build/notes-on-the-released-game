@@ -651,7 +651,7 @@ import("MrxUtil")
 
 function Activated(self)
  MrxTaskContract.Activated(self)
- Event.Create("TimerRelative", 5, "AutoComplete", self)
+ self:_CreateEvent(Event.TimerRelative, {5}, AutoComplete, {self})
 end
 
 function AutoComplete(self)
@@ -659,9 +659,11 @@ function AutoComplete(self)
 end
 
 function Cancel(self)
+ MrxTaskContract.Cancel(self)
 end
 
 function Cleanup(self)
+ MrxTaskContract.Cleanup(self)
 end
 
 function LoadAssets()
