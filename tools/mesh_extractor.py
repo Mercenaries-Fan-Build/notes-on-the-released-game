@@ -598,7 +598,42 @@ def write_gltf_positions(
     path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
 
 
-def _extract_structured_parts(data: bytes) -> tuple[
+def _find_sibling_hier(blob_path: Path) -> list[dict[str, object]] | None:
+    """Locate the HIER from a sibling P000 standalone block.
+
+    Compound blocks (P001+) share the same primary c3 cell as a standalone
+    P000 block but omit the HIER chunk. This function locates the P000
+    sibling in the same blocks directory and extracts its HIER nodes.
+    """
+    import re
+    stem = blob_path.stem
+    m = re.match(r"^(\d+)_blocks__VZ__(c\d+)", stem)
+    if not m:
+        return None
+    primary_cell = m.group(2)
+    blocks_dir = blob_path.parent
+    if not blocks_dir.is_dir():
+        return None
+    pattern = f"*_blocks__VZ__{primary_cell}_P000_*.bin"
+    for candidate in blocks_dir.glob(pattern):
+        if candidate == blob_path:
+            continue
+        try:
+            sib_data = candidate.read_bytes()
+        except OSError:
+            continue
+        for container in iter_ucfx_containers(sib_data):
+            db = int(container["data_base"])
+            hier_info = _find_hier_chunk(container["chunks"])
+            if hier_info is not None:
+                hier_off, hier_len = hier_info
+                nodes = parse_hier_world_transforms(sib_data, db, hier_off, hier_len)
+                if nodes:
+                    return nodes
+    return None
+
+
+def _extract_structured_parts(data: bytes, blob_path: Path | None = None) -> tuple[
     list[tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]],
     list[dict[str, object]],
     list[int],
@@ -627,6 +662,7 @@ def _extract_structured_parts(data: bytes) -> tuple[
     submeta: list[dict[str, object]] = []
     touched: list[int] = []
     mtrl_records: list[dict[str, object]] = []
+    sibling_hier: list[dict[str, object]] | None = None
 
     for container in iter_ucfx_containers(data):
         before = len(parts)
@@ -643,6 +679,16 @@ def _extract_structured_parts(data: bytes) -> tuple[
                 data, db, container["chunks"], hier_nodes
             )
             indx_mapping = parse_indx_chunk(data, db, container["chunks"])
+
+        if hier_nodes is None:
+            indx_mapping = parse_indx_chunk(data, db, container["chunks"])
+            if indx_mapping is not None and blob_path is not None:
+                if sibling_hier is None:
+                    sibling_hier = _find_sibling_hier(blob_path)
+                if sibling_hier is not None:
+                    hier_nodes = sibling_hier
+                    indx_mapping = None
+                    print(f"  Using sibling HIER ({len(hier_nodes)} nodes) for compound block", file=sys.stderr)
 
         # Parse MTRL if present (only first container with MTRL wins)
         if not mtrl_records:
@@ -1060,7 +1106,7 @@ def main() -> int:
     geom_off = find_tag(data, b"GEOM")
 
     # Structured path (with HIER transforms)
-    raw_parts, submeta, touched, mtrl_records = _extract_structured_parts(data)
+    raw_parts, submeta, touched, mtrl_records = _extract_structured_parts(data, blob_path=args.blob)
 
     # Resolve MTRL texture hashes to names
     if mtrl_records:

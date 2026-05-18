@@ -7,10 +7,12 @@ produces a valid sges-compressed block that the game engine can load.
 Format (version 4, as used by the retail/demo engine):
   - 16-byte header: ``sges`` magic + u16 major + u16 segment_count
     + u32 total_uncompressed + u32 total_compressed
-  - Segment table: segment_count × 8 bytes per entry:
+  - Segment table: segment_count × 8 bytes per entry (starts at offset 0x10):
       u16 compressed_size
-      u16 uncompressed_size (0 for full-size segments, actual size for the last/short segment)
-      u32 absolute_offset   (1-indexed byte position within the block where this segment starts)
+      u16 uncompressed_size (0 means default = 65536 bytes; actual size for last segment)
+      u32 offset_with_flag  (bit 0 = compression flag; bits 1-31 = byte offset within block.
+                             Engine masks with 0xFFFFFFFE to get actual offset.
+                             All offsets are 16-byte aligned so bit 0 is always available.)
   - Compressed payload: raw deflate segments, each starting at a 16-byte aligned offset
     within the block, with zero-padding between segments for alignment.
   - total_compressed = align_to_16(last_segment_offset + last_segment_compressed_size)
@@ -114,7 +116,7 @@ def compress_sges(
                          total_u,
                          total_c)
 
-    # Build segment table: (u16 comp_size, u16 uncomp_size, u32 offset_1indexed) per segment
+    # Build segment table: (u16 comp_size, u16 uncomp_size, u32 offset_with_flag) per segment
     seg_table = b""
     for i, (compressed_data, uncompressed_size) in enumerate(segments):
         comp_sz = len(compressed_data)
@@ -123,8 +125,12 @@ def compress_sges(
             uncomp_field = 0
         else:
             uncomp_field = uncompressed_size
-        abs_offset_1 = seg_offsets_0[i] + 1  # 1-indexed
-        seg_table += struct.pack("<HHI", comp_sz, uncomp_field, abs_offset_1)
+        # The offset field's bit 0 is the compression flag (1=deflate compressed).
+        # Since all offsets are 16-byte aligned (always even), setting bit 0
+        # is equivalent to adding 1. The engine masks with 0xFFFFFFFE to get
+        # the actual byte offset.
+        abs_offset_flagged = seg_offsets_0[i] | 1  # bit 0 = compressed
+        seg_table += struct.pack("<HHI", comp_sz, uncomp_field, abs_offset_flagged)
 
     header_and_table = header + seg_table
     padding_needed = data_start - len(header_and_table)
@@ -195,9 +201,12 @@ def main() -> int:
             off = 16 + i * 8
             cs = struct.unpack_from("<H", data, off)[0]
             us = struct.unpack_from("<H", data, off + 2)[0]
-            abs_off = struct.unpack_from("<I", data, off + 4)[0]
+            abs_off_raw = struct.unpack_from("<I", data, off + 4)[0]
+            flag = abs_off_raw & 1
+            abs_off = abs_off_raw & 0xFFFFFFFE
             us_str = f"{us:,}" if us > 0 else "(default 65536)"
-            print(f"  Segment {i}: comp={cs:,}  uncomp={us_str}  offset={abs_off} (0x{abs_off:X})")
+            flag_str = "compressed" if flag else "raw"
+            print(f"  Segment {i}: comp={cs:,}  uncomp={us_str}  offset=0x{abs_off:X} ({flag_str})")
         return 0
 
     if not args.input.is_file():
