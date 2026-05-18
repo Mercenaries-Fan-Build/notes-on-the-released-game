@@ -734,6 +734,217 @@ def cmd_auto_complete_oilcon001(
     )
 
 
+# ── String-mod oilcon001 command ──────────────────────────────────────
+
+OILCON001_STRING_SWAPS = [
+    (b"[yellow]Threat: \x00",
+     b"[yellow]MODDED! \x00",
+     "HUD threat meter label"),
+    (b"Deliver exec to \x00",
+     b"MODDED! exec to \x00",
+     "Objective text"),
+    (b"[OilCon001.Objectives.filesBurned][objt][yellow][bar\x00",
+     b"[OilCon001.Objectives.filesBurned][objt][yellow][MOD\x00",
+     "HUD progress bar suffix"),
+    (b"[yellow][OilCon001.Objectives.timer]\x00",
+     b"[yellow][MODDED!!!.Objectives.timer]\x00",
+     "Timer objective label"),
+    (b"oc001 defend office\x00",
+     b"MODDED defend ofc!!\x00",
+     "Defend objective debug name"),
+    (b"Error in SetupObjective: no spawnFn, must issue 'setpath' command first \x00",
+     b"MODDED!! SetupObjective: no spawnFn, must issue 'setpath' command first \x00",
+     "Error message string"),
+]
+
+for _old, _new, _desc in OILCON001_STRING_SWAPS:
+    assert len(_old) == len(_new), f"Length mismatch for {_desc}: {len(_old)} vs {len(_new)}"
+
+
+def cmd_string_mod_oilcon001(
+    wad_path: Path,
+    *,
+    no_backup: bool = False,
+    dry_run: bool = False,
+    segment_size: int = 65536,
+    compression_level: int = 6,
+) -> int:
+    """Apply 6 same-length string swaps to oilcon001's Lua bytecode constant pool.
+
+    Replaces user-visible strings (HUD labels, objective text, error messages)
+    with 'MODDED' variants to prove Lua modding works. All replacements are
+    the exact same byte length — no structural changes, no recompilation needed.
+    """
+    print(f"String-Mod OilCon001 — reading WAD: {wad_path}")
+    print(f"Strategy: apply {len(OILCON001_STRING_SWAPS)} same-length string "
+          "swaps in Lua constant pool")
+
+    raw = wad_path.read_bytes()
+    if raw[:4] != b"FFCS":
+        print("ERROR: Not an FFCS WAD file", file=sys.stderr)
+        return 1
+
+    paths = load_wad_paths(wad_path)
+    if not paths:
+        print("ERROR: No paths found in WAD PTHS chunk", file=sys.stderr)
+        return 1
+
+    script_blocks = find_scripts_block_index(paths)
+    if not script_blocks:
+        print("ERROR: No scripts_vz block found", file=sys.stderr)
+        return 1
+
+    arch = parse_ffcs(wad_path)
+    data_chunk = next((c for c in arch.chunks if c.tag == "DATA"), None)
+    if data_chunk is None:
+        print("ERROR: No DATA chunk", file=sys.stderr)
+        return 1
+
+    with open(wad_path, "rb") as f:
+        mm = mmap_mod.mmap(f.fileno(), 0, access=mmap_mod.ACCESS_READ)
+
+    try:
+        boundaries = get_block_boundaries(mm, data_chunk.offset, data_chunk.size)
+
+        target_block_idx: int | None = None
+        target_decompressed: bytes = b""
+        target_entry: dict | None = None
+
+        for block_idx, block_path in script_blocks:
+            if block_idx >= len(boundaries):
+                continue
+
+            start, end = boundaries[block_idx]
+            print(f"\nFound {block_path} at block {block_idx} "
+                  f"(WAD offset 0x{start:x}, {end - start:,} bytes compressed)")
+
+            try:
+                decompressed = _decompress_block_at(mm, start, end)
+            except Exception as exc:
+                print(f"  ERROR: Failed to decompress: {exc}", file=sys.stderr)
+                continue
+
+            print(f"  Decompressed: {len(decompressed):,} bytes")
+            entries = parse_block_entries(decompressed)
+
+            for entry in entries:
+                name = get_script_name(decompressed, entry)
+                if "oilcon001" in name.lower():
+                    target_block_idx = block_idx
+                    target_decompressed = decompressed
+                    target_entry = entry
+                    break
+
+            if target_entry is not None:
+                break
+
+        if target_entry is None or target_block_idx is None:
+            print("\nERROR: oilcon001 script not found in WAD", file=sys.stderr)
+            return 1
+
+        entry_start = target_entry["offset"]
+        entry_body_end = target_entry["offset"] + target_entry["size"] - 8
+        chunk = target_decompressed[entry_start:entry_body_end]
+
+        modified = bytearray(target_decompressed)
+        patch_count = 0
+
+        print(f"\n  Applying {len(OILCON001_STRING_SWAPS)} string swaps:")
+        for old_bytes, new_bytes, desc in OILCON001_STRING_SWAPS:
+            hit_pos = chunk.find(old_bytes)
+            if hit_pos < 0:
+                print(f"    SKIP: {desc} — not found in bytecode", file=sys.stderr)
+                continue
+            abs_off = entry_start + hit_pos
+            modified[abs_off:abs_off + len(old_bytes)] = new_bytes
+            patch_count += 1
+            print(f"    OK: {desc} (offset 0x{abs_off:x}, {len(old_bytes)} bytes)")
+
+        if patch_count == 0:
+            print("\nERROR: No string swaps were applied", file=sys.stderr)
+            return 1
+
+        print(f"\n  {patch_count}/{len(OILCON001_STRING_SWAPS)} swaps applied")
+
+        csum_off = target_entry["csum_offset"]
+        if modified[csum_off:csum_off + 4] != CSUM_TAG:
+            print("ERROR: CSUM tag not found at expected offset", file=sys.stderr)
+            return 1
+
+        old_csum = struct.unpack_from("<I", modified, csum_off + 4)[0]
+        ucfx_body = bytes(modified[entry_start:csum_off])
+        new_csum = crc32_mercs2(ucfx_body)
+        struct.pack_into("<I", modified, csum_off + 4, new_csum)
+        print(f"  CSUM: 0x{old_csum:08X} → 0x{new_csum:08X}")
+
+        block_start, block_end = boundaries[target_block_idx]
+        max_slot_bytes = block_end - block_start
+
+        print(f"\nRecompressing ({len(modified):,} bytes)...")
+        new_sges = compress_sges(
+            bytes(modified),
+            segment_size=segment_size,
+            level=compression_level,
+        )
+        ratio = len(new_sges) / len(modified) * 100
+        print(f"Recompressed: {len(new_sges):,} bytes ({ratio:.1f}%), "
+              f"slot has {max_slot_bytes:,} bytes")
+
+        if len(new_sges) > max_slot_bytes:
+            print(
+                f"\nERROR: Recompressed block is {len(new_sges):,} bytes "
+                f"but slot is only {max_slot_bytes:,} bytes "
+                f"({len(new_sges) - max_slot_bytes:,} over).",
+                file=sys.stderr,
+            )
+            return 1
+
+        spare = max_slot_bytes - len(new_sges)
+        print(f"Fits in slot: {len(new_sges):,} <= {max_slot_bytes:,} "
+              f"({spare:,} bytes to spare)")
+
+        print("Verifying roundtrip...")
+        verify_decomp = decompress_sges_block(new_sges, 0, len(new_sges))
+        if verify_decomp != bytes(modified):
+            print("ERROR: Roundtrip verification failed!", file=sys.stderr)
+            return 1
+        print("Roundtrip OK")
+
+        if dry_run:
+            print(f"\n[DRY RUN] Would patch WAD at offset 0x{block_start:x}")
+            print(f"[DRY RUN] Would write {len(new_sges):,} bytes + "
+                  f"{spare:,} bytes zero-padding")
+            print("[DRY RUN] No files modified.")
+            return 0
+
+        wad_bytes = bytearray(mm[:])
+    finally:
+        mm.close()
+
+    if not no_backup:
+        bak = wad_path.with_suffix(wad_path.suffix + ".bak")
+        if not bak.exists():
+            print(f"Creating backup: {bak}")
+            shutil.copy2(wad_path, bak)
+        else:
+            print(f"Backup already exists: {bak}")
+
+    print(f"Patching WAD at offset 0x{block_start:x}...")
+    wad_bytes[block_start:block_start + len(new_sges)] = new_sges
+    if spare > 0:
+        wad_bytes[block_start + len(new_sges):block_end] = b"\x00" * spare
+
+    try:
+        wad_path.write_bytes(bytes(wad_bytes))
+    except PermissionError:
+        print(f"ERROR: WAD file is read-only: {wad_path}", file=sys.stderr)
+        print("Tip: chmod u+w the file or copy it first.", file=sys.stderr)
+        return 1
+
+    print(f"\nDone. {patch_count} string(s) modded in oilcon001 bytecode.")
+    return 0
+
+
 # ── Extend demo timer command ────────────────────────────────────────
 
 DEMO_QUIT_METHOD = b"ShowDemoOutroAndQuitToShell"
@@ -999,6 +1210,7 @@ def main() -> int:
             "  %(prog)s --wad vz.wad --script wiftutorialtank --lua-bytecode compiled.luac\n"
             "  %(prog)s --wad vz.wad --extend-demo-timer\n"
             "  %(prog)s --wad vz.wad --auto-complete-oilcon001\n"
+            "  %(prog)s --wad vz.wad --string-mod-oilcon001\n"
             "  %(prog)s vz.wad --index 1257 --sges-file modified.sges.bin --output patched.wad\n"
         ),
     )
@@ -1023,6 +1235,9 @@ def main() -> int:
     ap.add_argument("--auto-complete-oilcon001", action="store_true",
                     help="Replace oilcon001 with a script that auto-completes "
                          "the contract on accept (proof-of-concept mod)")
+    ap.add_argument("--string-mod-oilcon001", action="store_true",
+                    help="Replace '[yellow]Threat: ' with '[yellow]MODDED! ' "
+                         "in oilcon001 bytecode (simplest string-swap mod)")
     ap.add_argument("--no-backup", action="store_true",
                     help="Skip creating .wad.bak backup before patching")
     ap.add_argument("--dry-run", action="store_true",
@@ -1070,6 +1285,15 @@ def main() -> int:
 
     if args.auto_complete_oilcon001:
         return cmd_auto_complete_oilcon001(
+            wad_path,
+            no_backup=args.no_backup,
+            dry_run=args.dry_run,
+            segment_size=args.segment_size,
+            compression_level=args.compression_level,
+        )
+
+    if args.string_mod_oilcon001:
+        return cmd_string_mod_oilcon001(
             wad_path,
             no_backup=args.no_backup,
             dry_run=args.dry_run,
@@ -1165,7 +1389,7 @@ def main() -> int:
         return 0
 
     ap.error("Specify --list-scripts, --extend-demo-timer, --auto-complete-oilcon001, "
-             "--script <name>, --list-blocks, or --index <N>")
+             "--string-mod-oilcon001, --script <name>, --list-blocks, or --index <N>")
     return 1
 
 
