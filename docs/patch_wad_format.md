@@ -215,6 +215,22 @@ This means a patch WAD only needs to contain the **blocks that have changed**. U
 
 PTHS contains **null-terminated** path strings (one per INDX entry), concatenated sequentially. Each path is the block's source path (e.g., `blocks\VZ\scripts_vz_P000_Q3.block`). The N-th null-terminated string corresponds to the N-th INDX entry. PTHS is used for debugging/logging; the runtime asset lookup uses hash-based ASET, not path names.
 
+### PTHS trailer marker (CRITICAL)
+
+After all path strings, every WAD includes a mandatory **258-byte null-terminated ASCII marker string** (identical across all 8 tested WADs). The engine validates its presence — omitting it causes a black-screen hang during WAD loading.
+
+```
+xa37dd45ffe100bfffcc9753aabac325f07cb3fa231144fe2e33ae4783feead2
+b8a73ff021fac326df0ef9753ab9cdf6573ddff0312fab0b0ff39779eaff312
+a4f5de65892ffee33a44569bebf21f66d22e54a22347efd375981188743afd9
+9baacc342d88a99321235798725fedcbf43252669dade32415fee89da543bf23
+d4ex
+```
+
+This marker is NOT counted in the PTHS `meta` field (which only counts block path strings). It appears as an extra null-terminated string immediately following the last path string's null terminator. The `PTHS.meta` value equals the number of INDX entries; the marker is always the `meta + 1`-th string in the PTHS data region.
+
+The marker content looks like a hex-encoded build certificate or hash, bookended by `x` characters. Its exact purpose is unknown but it may be a Pandemic build pipeline artifact that the engine's `RedVirtualDisk::Open()` validates before accepting a WAD.
+
 ---
 
 ## 5. The `loading-patch.wad` Special Case

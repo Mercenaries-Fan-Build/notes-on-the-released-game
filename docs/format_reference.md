@@ -51,7 +51,7 @@ Tables are **not** parsed as Lua; strings are matched with regex. Output keys in
 | `INDX` | Block index; 12-byte entries: `(page_index, packed_field, flags_and_page_count)`. `page_index × 0x8000` = WAD file offset of the sges block. `flags_and_page_count & 0xFFFF` = number of 32KB pages the block spans |
 | `DATA`, `ASET`, `PTHS` | Spatial chunks; **inferred byte length** by sorting by offset; `DATA` extends to EOF |
 
-`PTHS` yields `paths.txt` path-like strings (see `dump_paths_from_pths`).
+`PTHS` yields `paths.txt` path-like strings (see `dump_paths_from_pths`). **After all path strings, a mandatory 258-byte null-terminated ASCII trailer marker** (`xa37dd45ff...d4ex`) must be present — identical across all tested WADs. Omitting it causes the engine to reject the WAD (black-screen hang). See `docs/patch_wad_format.md` §4 for full details.
 
 **ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows). Hash algorithm confirmed as **FNV-1a with `|0x20` case suppression** (see [`docs/modding_deep_dive.md` §4.3.1](modding_deep_dive.md) and `tools/pandemic_hash.py`).
 

@@ -67,6 +67,18 @@ SGES_MAGIC = b"sges"
 CSUM_TAG = b"CSUM"
 PAGE_SIZE = 0x8000  # 32 KB
 
+# 258-byte PTHS trailer marker (null-terminated ASCII string appended after all
+# path strings in every working WAD — identical across all 8 tested archives).
+# The engine validates its presence; omitting it causes a black-screen hang.
+PTHS_TRAILER = (
+    b"xa37dd45ffe100bfffcc9753aabac325f07cb3fa231144fe2e33ae4783feead2"
+    b"b8a73ff021fac326df0ef9753ab9cdf6573ddff0312fab0b0ff39779eaff312"
+    b"a4f5de65892ffee33a44569bebf21f66d22e54a22347efd375981188743afd9"
+    b"9baacc342d88a99321235798725fedcbf43252669dade32415fee89da543bf23"
+    b"d4ex"
+)
+assert len(PTHS_TRAILER) == 258
+
 # The 144-byte build certificate blob (byte-for-byte identical across all WADs)
 FFCS_CERT_BLOB = bytes([
     0xa8, 0xd8, 0x46, 0xfa, 0x28, 0x87, 0x0e, 0x14,
@@ -220,7 +232,7 @@ def build_patch_wad(
     aset_size = len(aset_entries) * 16
 
     pths_offset = aset_offset + aset_size
-    pths_bytes = pths_string.encode("utf-8") + b"\x00"
+    pths_bytes = pths_string.encode("utf-8") + b"\x00" + PTHS_TRAILER + b"\x00"
     pths_size = len(pths_bytes)
 
     # DATA starts at page 0x41 (same convention as original)
@@ -601,6 +613,14 @@ def validate_patch_wad(wad_path: Path) -> int:
     pths_str = raw[pths_off:pths_end].decode("utf-8", errors="replace")
     print(f"\n  PTHS ({pths_meta} strings at offset 0x{pths_off:X}):")
     print(f"    \"{pths_str}\"")
+
+    # Check for PTHS trailer marker
+    trailer_pos = raw.find(PTHS_TRAILER, pths_off)
+    if trailer_pos >= 0 and trailer_pos < (pths_off + 0x100000):
+        print(f"  PTHS trailer marker: PRESENT at offset 0x{trailer_pos:X}")
+    else:
+        print(f"  PTHS trailer marker: MISSING!", file=sys.stderr)
+        return 1
 
     # Check DATA region
     data_off = struct.unpack_from("<I", raw, 0x0C + 12 + 4)[0]
