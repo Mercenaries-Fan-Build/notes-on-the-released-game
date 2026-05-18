@@ -217,149 +217,209 @@ def find_demo_timer(data: bytes) -> int | None:
 def generate_cruise_dll() -> bytes:
     """Generate a minimal cruise.dll that creates the SecuROM spoof event.
 
-    The DLL's DllMain does:
-      1. GetCurrentProcessId()
-      2. XOR result with 0x19EA3FD3
-      3. sprintf(buf, "v7_%04d", xored_pid)
-      4. CreateEventA(NULL, TRUE, TRUE, buf)  — manual-reset, initially signaled
-      5. Return TRUE
+    The DLL's entry point does:
+      1. LoadLibraryA("USER32.dll")
+      2. GetProcAddress(hUser32, "wsprintfA") -> store pointer
+      3. GetCurrentProcessId()
+      4. XOR result with 0x19EA3FD3
+      5. wsprintfA(buf, "v7_%04d", xored_pid)
+      6. CreateEventA(NULL, TRUE, TRUE, buf)  — manual-reset, initially signaled
+      7. Return TRUE
 
     The event MUST be created in the SIGNALED state (bInitialState=TRUE) with
     manual reset (bManualReset=TRUE). SecuROM's inline trigger checks call
     WaitForSingleObject on this event — if it's not signaled, the wait blocks
     and the game exits after a timeout.
+
+    Architecture matches the known-good cruise.dll from the original crack:
+    - Only imports from KERNEL32.dll (GetCurrentProcessId, GetProcAddress,
+      LoadLibraryA, CreateEventA)
+    - Resolves wsprintfA dynamically via LoadLibraryA + GetProcAddress
+    - Includes a .reloc section for proper base relocation
+    - Uses IMAGE_BASE 0x00400000 with 4 sections (CODE/DATA/.idata/.reloc)
     """
-    # Minimal 64-byte DOS header so total headers fit within FileAlignment
-    dos_header = bytearray(64)
+    IMAGE_BASE = 0x00400000
+    SECTION_ALIGN = 0x1000
+    FILE_ALIGN = 0x200
+
+    # --- Layout ---
+    # Headers:      file 0x000..0x3FF (0x400 bytes), RVA 0
+    # CODE section: file 0x400..0x5FF (0x200 bytes), RVA 0x1000
+    # DATA section: file 0x600..0xBFF (0x600 bytes), RVA 0x2000
+    # .idata:       file 0xC00..0xDFF (0x200 bytes), RVA 0x3000
+    # .reloc:       file 0xE00..0xFFF (0x200 bytes), RVA 0x4000
+    # Total file: 0x1000 (4096 bytes)
+    # SizeOfImage: 0x5000
+
+    CODE_RVA = 0x1000
+    CODE_FILE = 0x400
+    DATA_RVA = 0x2000
+    DATA_FILE = 0x600
+    IDATA_RVA = 0x3000
+    IDATA_FILE = 0xC00
+    RELOC_RVA = 0x4000
+    RELOC_FILE = 0xE00
+
+    # Virtual addresses for data references
+    FMT_VA = IMAGE_BASE + DATA_RVA + 0x000       # "v7_%04d"
+    BUF_VA = IMAGE_BASE + DATA_RVA + 0x008       # sprintf output buffer
+    USERDLL_VA = IMAGE_BASE + DATA_RVA + 0x408   # "USER32.dll"
+    SPRINTF_NAME_VA = IMAGE_BASE + DATA_RVA + 0x414  # "wsprintfA"
+    SPRINTF_PTR_VA = IMAGE_BASE + DATA_RVA + 0x41C   # stored function pointer
+
+    # IAT layout in .idata (RVA 0x3000):
+    # OFT at 0x3028: [GetCurrentProcessId, GetProcAddress, LoadLibraryA, CreateEventA, NULL]
+    # IAT at 0x303C: [GetCurrentProcessId, GetProcAddress, LoadLibraryA, CreateEventA, NULL]
+    IAT_VA = IMAGE_BASE + IDATA_RVA + 0x3C
+    IAT_GET_PID = IAT_VA + 0       # GetCurrentProcessId
+    IAT_GET_PROC = IAT_VA + 4      # GetProcAddress
+    IAT_LOAD_LIB = IAT_VA + 8      # LoadLibraryA
+    IAT_CREATE_EVT = IAT_VA + 12   # CreateEventA
+
+    # --- Build DOS header (0x100 bytes, PE sig at offset 0x100) ---
+    dos_header = bytearray(0x100)
     dos_header[0:2] = b"MZ"
-    struct.pack_into("<I", dos_header, 0x3C, 64)  # PE offset at 0x40
+    struct.pack_into("<H", dos_header, 2, 0x50)   # e_cblp (last page bytes)
+    struct.pack_into("<H", dos_header, 4, 2)      # e_cp (pages)
+    struct.pack_into("<H", dos_header, 8, 4)      # e_minalloc
+    struct.pack_into("<H", dos_header, 0xA, 0x0F) # e_maxalloc
+    struct.pack_into("<H", dos_header, 0x10, 0xFFFF)  # e_ss
+    struct.pack_into("<H", dos_header, 0x14, 0xB8)    # e_sp
+    struct.pack_into("<H", dos_header, 0x18, 0x40)    # e_lfarlc
+    struct.pack_into("<H", dos_header, 0x1A, 0x1A)    # (padding for std layout)
+    struct.pack_into("<I", dos_header, 0x3C, 0x100)   # e_lfanew -> PE header
 
+    # --- COFF header ---
     pe_sig = b"PE\x00\x00"
-
     coff_header = bytearray(20)
     struct.pack_into("<H", coff_header, 0, 0x14C)    # Machine: i386
-    struct.pack_into("<H", coff_header, 2, 3)        # NumberOfSections
+    struct.pack_into("<H", coff_header, 2, 4)        # NumberOfSections
     struct.pack_into("<I", coff_header, 4, 0)        # TimeDateStamp
-    struct.pack_into("<H", coff_header, 16, 224)     # SizeOfOptionalHeader
-    struct.pack_into("<H", coff_header, 18, 0x2102)  # Characteristics: DLL, EXEC, 32BIT
+    struct.pack_into("<H", coff_header, 16, 224)     # SizeOfOptionalHeader (PE32)
+    # Characteristics: EXECUTABLE_IMAGE | 32BIT_MACHINE | DLL | RELOCS_STRIPPED=0
+    struct.pack_into("<H", coff_header, 18, 0x210E)
 
+    # --- Optional header (PE32, 224 bytes) ---
     opt_header = bytearray(224)
     struct.pack_into("<H", opt_header, 0, 0x10B)     # Magic: PE32
-    opt_header[2] = 8                                 # MajorLinkerVersion
+    opt_header[2] = 2                                 # MajorLinkerVersion
+    opt_header[3] = 25                                # MinorLinkerVersion
     struct.pack_into("<I", opt_header, 4, 0x200)     # SizeOfCode
-    struct.pack_into("<I", opt_header, 16, 0x1000)   # AddressOfEntryPoint
-    struct.pack_into("<I", opt_header, 20, 0x1000)   # BaseOfCode
-    struct.pack_into("<I", opt_header, 24, 0x2000)   # BaseOfData
-    struct.pack_into("<I", opt_header, 28, 0x10000000)  # ImageBase
-    struct.pack_into("<I", opt_header, 32, 0x1000)   # SectionAlignment
-    struct.pack_into("<I", opt_header, 36, 0x200)    # FileAlignment
-    struct.pack_into("<H", opt_header, 40, 4)        # MajorOSVersion
-    struct.pack_into("<H", opt_header, 44, 4)        # MajorSubsystemVersion
+    struct.pack_into("<I", opt_header, 8, 0xA00)     # SizeOfInitializedData
+    struct.pack_into("<I", opt_header, 16, CODE_RVA) # AddressOfEntryPoint
+    struct.pack_into("<I", opt_header, 20, CODE_RVA) # BaseOfCode
+    struct.pack_into("<I", opt_header, 24, DATA_RVA) # BaseOfData
+    struct.pack_into("<I", opt_header, 28, IMAGE_BASE)  # ImageBase
+    struct.pack_into("<I", opt_header, 32, SECTION_ALIGN)  # SectionAlignment
+    struct.pack_into("<I", opt_header, 36, FILE_ALIGN)     # FileAlignment
+    struct.pack_into("<H", opt_header, 40, 1)        # MajorOperatingSystemVersion
+    struct.pack_into("<H", opt_header, 48, 3)        # MajorSubsystemVersion
+    struct.pack_into("<H", opt_header, 50, 10)       # MinorSubsystemVersion
     struct.pack_into("<I", opt_header, 56, 0x5000)   # SizeOfImage
-    struct.pack_into("<I", opt_header, 60, 0x200)    # SizeOfHeaders
-    struct.pack_into("<H", opt_header, 68, 3)        # Subsystem: CONSOLE
-    struct.pack_into("<H", opt_header, 70, 0x40)     # DllCharacteristics: DYNAMIC_BASE
-    struct.pack_into("<I", opt_header, 72, 0x100000) # SizeOfStackReserve
-    struct.pack_into("<I", opt_header, 76, 0x1000)   # SizeOfStackCommit
+    struct.pack_into("<I", opt_header, 60, 0x400)    # SizeOfHeaders
+    struct.pack_into("<H", opt_header, 68, 2)        # Subsystem: WINDOWS_GUI
+    struct.pack_into("<H", opt_header, 70, 0x0000)   # DllCharacteristics
     struct.pack_into("<I", opt_header, 80, 0x100000) # SizeOfHeapReserve
     struct.pack_into("<I", opt_header, 84, 0x1000)   # SizeOfHeapCommit
     struct.pack_into("<I", opt_header, 92, 16)       # NumberOfRvaAndSizes
 
-    # Data directories (16 entries × 8 bytes = 128 bytes, already zeroed)
-    # Import directory at RVA 0x2000
-    struct.pack_into("<I", opt_header, 96 + 1 * 8, 0x2000)      # Import RVA
-    struct.pack_into("<I", opt_header, 96 + 1 * 8 + 4, 0x100)   # Import Size
+    # Data directories (16 × 8 = 128 bytes within opt_header[96:])
+    # [1] Import: RVA=0x3000, Size=0x28 (1 IDT entry + null = 2×20=40)
+    struct.pack_into("<I", opt_header, 96 + 1 * 8, IDATA_RVA)
+    struct.pack_into("<I", opt_header, 96 + 1 * 8 + 4, 0x28)
+    # [5] BaseReloc: RVA=0x4000, Size=0x20
+    struct.pack_into("<I", opt_header, 96 + 5 * 8, RELOC_RVA)
+    struct.pack_into("<I", opt_header, 96 + 5 * 8 + 4, 0x20)
 
-    # Section headers (3 sections × 40 bytes)
-    sections = bytearray(3 * 40)
+    # --- Section headers (4 × 40 = 160 bytes) ---
+    sections = bytearray(4 * 40)
 
-    # .text section
-    sections[0:8] = b".text\x00\x00\x00"
-    struct.pack_into("<I", sections, 8, 0x200)       # VirtualSize
-    struct.pack_into("<I", sections, 12, 0x1000)     # VirtualAddress
+    # CODE section
+    sections[0:8] = b"CODE\x00\x00\x00\x00"
+    struct.pack_into("<I", sections, 8, 0x1000)      # VirtualSize
+    struct.pack_into("<I", sections, 12, CODE_RVA)   # VirtualAddress
     struct.pack_into("<I", sections, 16, 0x200)      # SizeOfRawData
-    struct.pack_into("<I", sections, 20, 0x200)      # PointerToRawData
-    struct.pack_into("<I", sections, 36, 0x60000020) # Flags: CODE|EXEC|READ
+    struct.pack_into("<I", sections, 20, CODE_FILE)  # PointerToRawData
+    struct.pack_into("<I", sections, 36, 0x60000020) # CNT_CODE|MEM_EXECUTE|MEM_READ
 
-    # .data section (contains import table + strings)
-    sections[40:48] = b".data\x00\x00\x00"
-    struct.pack_into("<I", sections, 48, 0x200)      # VirtualSize
-    struct.pack_into("<I", sections, 52, 0x2000)     # VirtualAddress
-    struct.pack_into("<I", sections, 56, 0x200)      # SizeOfRawData
-    struct.pack_into("<I", sections, 60, 0x400)      # PointerToRawData
-    struct.pack_into("<I", sections, 76, 0xC0000040) # Flags: INIT_DATA|READ|WRITE
+    # DATA section
+    sections[40:48] = b"DATA\x00\x00\x00\x00"
+    struct.pack_into("<I", sections, 48, 0x1000)     # VirtualSize
+    struct.pack_into("<I", sections, 52, DATA_RVA)   # VirtualAddress
+    struct.pack_into("<I", sections, 56, 0x600)      # SizeOfRawData
+    struct.pack_into("<I", sections, 60, DATA_FILE)  # PointerToRawData
+    struct.pack_into("<I", sections, 76, 0xC0000040) # CNT_INITIALIZED_DATA|MEM_READ|MEM_WRITE
 
-    # .rdata section (IAT, import names)
-    sections[80:88] = b".rdata\x00\x00"
-    struct.pack_into("<I", sections, 88, 0x200)      # VirtualSize
-    struct.pack_into("<I", sections, 92, 0x3000)     # VirtualAddress
+    # .idata section
+    sections[80:88] = b".idata\x00\x00"
+    struct.pack_into("<I", sections, 88, 0x1000)     # VirtualSize
+    struct.pack_into("<I", sections, 92, IDATA_RVA)  # VirtualAddress
     struct.pack_into("<I", sections, 96, 0x200)      # SizeOfRawData
-    struct.pack_into("<I", sections, 100, 0x600)     # PointerToRawData
-    struct.pack_into("<I", sections, 116, 0x40000040)  # Flags: INIT_DATA|READ
+    struct.pack_into("<I", sections, 100, IDATA_FILE)  # PointerToRawData
+    struct.pack_into("<I", sections, 116, 0xC0000040)  # CNT_INITIALIZED_DATA|MEM_READ|MEM_WRITE
 
-    # Build headers — total = 64 + 4 + 20 + 224 + 120 = 432 bytes, fits in 0x200
+    # .reloc section
+    sections[120:128] = b".reloc\x00\x00"
+    struct.pack_into("<I", sections, 128, 0x1000)    # VirtualSize
+    struct.pack_into("<I", sections, 132, RELOC_RVA) # VirtualAddress
+    struct.pack_into("<I", sections, 136, 0x200)     # SizeOfRawData
+    struct.pack_into("<I", sections, 140, RELOC_FILE)  # PointerToRawData
+    struct.pack_into("<I", sections, 156, 0x50000040)  # CNT_INITIALIZED_DATA|MEM_DISCARDABLE|MEM_READ
+
+    # --- Assemble headers (pad to 0x400) ---
     headers = dos_header + pe_sig + coff_header + opt_header + sections
-    assert len(headers) <= 0x200, f"Headers too large: {len(headers)} > 0x200"
-    headers += b"\x00" * (0x200 - len(headers))
+    assert len(headers) <= 0x400, f"Headers too large: {len(headers)} > 0x400"
+    headers += b"\x00" * (0x400 - len(headers))
 
-    # .text section: DllMain code (at file offset 0x200, RVA 0x1000)
-    # The DLL entry is DllMain(hModule, reason, reserved)
-    # We only act on DLL_PROCESS_ATTACH (reason == 1)
+    # --- CODE section (file 0x400, RVA 0x1000) ---
+    # Entry point code — no DLL_PROCESS_ATTACH check (matches known-good).
+    # The Windows loader calls this for every reason; we always run the init
+    # and return TRUE. This is safe because CreateEventA is idempotent for
+    # named events and LoadLibraryA just increments the ref count.
     code = bytearray(0x200)
 
-    # DllMain:
-    #   cmp dword [esp+8], 1       ; reason == DLL_PROCESS_ATTACH?
-    #   jne .ret_true
-    #   call _do_spoof
-    # .ret_true:
-    #   mov eax, 1
-    #   ret 12
-    #
-    # _do_spoof:
-    #   call [IAT_GetCurrentProcessId]    ; -> eax = PID
-    #   xor eax, 0x19EA3FD3
-    #   push eax
-    #   push offset fmt                    ; "v7_%04d"
-    #   push offset buf                    ; buffer in .data
-    #   call [IAT_wsprintfA]
-    #   add esp, 12
-    #   push offset buf                    ; lpName
-    #   push 0                             ; bInitialState = FALSE
-    #   push 0                             ; bManualReset = FALSE
-    #   push 0                             ; lpEventAttributes = NULL
-    #   call [IAT_CreateEventA]
-    #   ret
-
-    # IAT layout (at RVA 0x3000, file 0x600):
-    #   +0x00: GetCurrentProcessId
-    #   +0x04: CreateEventA
-    #   +0x08: wsprintfA (from USER32)
-    #   +0x0C: NULL terminator for KERNEL32
-    #   +0x10: NULL terminator for USER32
-
-    IAT_BASE = 0x10000000 + 0x3000  # VA of IAT
-    FMT_VA = 0x10000000 + 0x2080    # "v7_%04d" string
-    BUF_VA = 0x10000000 + 0x20A0    # sprintf buffer
+    # Collect relocation offsets (relative to CODE_RVA)
+    relocs: list[int] = []
 
     i = 0
-    # cmp dword [esp+8], 1
-    code[i:i+4] = b"\x83\x7C\x24\x08"
-    i += 4
-    code[i] = 0x01
+
+    # push offset USERDLL_VA  ("USER32.dll")
+    code[i] = 0x68
+    struct.pack_into("<I", code, i + 1, USERDLL_VA)
+    relocs.append(i + 1)
+    i += 5
+
+    # call LoadLibraryA (via thunk at end of code)
+    # We'll patch this relative call target after laying out thunks
+    call_loadlib_pos = i
+    code[i] = 0xE8
+    i += 5  # placeholder for relative offset
+
+    # push offset SPRINTF_NAME_VA  ("wsprintfA")
+    code[i] = 0x68
+    struct.pack_into("<I", code, i + 1, SPRINTF_NAME_VA)
+    relocs.append(i + 1)
+    i += 5
+
+    # push eax  (hModule from LoadLibraryA)
+    code[i] = 0x50
     i += 1
-    # jne .ret_true (skip to ret)
-    code[i] = 0x75
-    code[i + 1] = 0x00  # placeholder
-    i += 2
-    jne_patch = i - 1
 
-    # call _do_spoof (inline it)
-    spoof_start = i
+    # call GetProcAddress (via thunk)
+    call_getproc_pos = i
+    code[i] = 0xE8
+    i += 5
 
-    # call [IAT_GetCurrentProcessId]  -> FF 15 <addr32>
-    code[i:i+2] = b"\xFF\x15"
-    struct.pack_into("<I", code, i + 2, IAT_BASE + 0x00)
-    i += 6
+    # mov [SPRINTF_PTR_VA], eax
+    code[i] = 0xA3
+    struct.pack_into("<I", code, i + 1, SPRINTF_PTR_VA)
+    relocs.append(i + 1)
+    i += 5
+
+    # call GetCurrentProcessId (via thunk)
+    call_getpid_pos = i
+    code[i] = 0xE8
+    i += 5
 
     # xor eax, 0x19EA3FD3
     code[i] = 0x35
@@ -370,176 +430,176 @@ def generate_cruise_dll() -> bytes:
     code[i] = 0x50
     i += 1
 
-    # push offset fmt ("v7_%04d")
+    # push offset FMT_VA  ("v7_%04d")
     code[i] = 0x68
     struct.pack_into("<I", code, i + 1, FMT_VA)
+    relocs.append(i + 1)
     i += 5
 
-    # push offset buf
+    # push offset BUF_VA  (buffer)
     code[i] = 0x68
     struct.pack_into("<I", code, i + 1, BUF_VA)
+    relocs.append(i + 1)
     i += 5
 
-    # call [IAT_wsprintfA]
+    # call [SPRINTF_PTR_VA]  (indirect call via stored pointer)
     code[i:i+2] = b"\xFF\x15"
-    struct.pack_into("<I", code, i + 2, IAT_BASE + 0x08)
+    struct.pack_into("<I", code, i + 2, SPRINTF_PTR_VA)
+    relocs.append(i + 2)
     i += 6
 
-    # add esp, 12
+    # add esp, 12  (cdecl cleanup for sprintf: 3 args)
     code[i:i+3] = b"\x83\xC4\x0C"
     i += 3
 
-    # push offset buf (lpName)
+    # push offset BUF_VA  (lpName)
     code[i] = 0x68
     struct.pack_into("<I", code, i + 1, BUF_VA)
+    relocs.append(i + 1)
     i += 5
 
-    # push -1 (bInitialState = TRUE — event starts SIGNALED)
+    # push -1  (bInitialState = TRUE)
     code[i:i+2] = b"\x6A\xFF"
     i += 2
 
-    # push -1 (bManualReset = TRUE — event stays signaled until explicit reset)
+    # push -1  (bManualReset = TRUE)
     code[i:i+2] = b"\x6A\xFF"
     i += 2
 
-    # push 0 (lpEventAttributes = NULL)
+    # push 0   (lpEventAttributes = NULL)
     code[i:i+2] = b"\x6A\x00"
     i += 2
 
-    # call [IAT_CreateEventA]
-    code[i:i+2] = b"\xFF\x15"
-    struct.pack_into("<I", code, i + 2, IAT_BASE + 0x04)
-    i += 6
+    # call CreateEventA (via thunk)
+    call_createevt_pos = i
+    code[i] = 0xE8
+    i += 5
 
-    # .ret_true:
-    ret_true_offset = i
-    code[jne_patch] = ret_true_offset - (jne_patch + 1)
-
-    # mov eax, 1
+    # mov eax, 1  (return TRUE)
     code[i:i+5] = b"\xB8\x01\x00\x00\x00"
     i += 5
 
-    # ret 12
-    code[i:i+3] = b"\xC2\x0C\x00"
-    i += 3
+    # ret  (not ret 12 — matches known-good; loader trampoline handles cleanup)
+    code[i] = 0xC3
+    i += 1
 
-    # .data section (file offset 0x400, RVA 0x2000)
-    data_sec = bytearray(0x200)
+    # --- Jump thunks (jmp [IAT_xxx]) ---
+    # Thunk for GetCurrentProcessId
+    thunk_getpid = i
+    code[i:i+2] = b"\xFF\x25"
+    struct.pack_into("<I", code, i + 2, IAT_GET_PID)
+    relocs.append(i + 2)
+    i += 6
 
-    # Import Directory Table at RVA 0x2000 (file 0x400)
-    # Entry 1: KERNEL32.dll
-    # OriginalFirstThunk, TimeDateStamp, ForwarderChain, Name, FirstThunk
-    idt_off = 0
-    # KERNEL32 entry
-    struct.pack_into("<I", data_sec, idt_off + 0, 0x3020)   # OrigFirstThunk -> hint/name array
-    struct.pack_into("<I", data_sec, idt_off + 12, 0x2040)  # Name RVA
-    struct.pack_into("<I", data_sec, idt_off + 16, 0x3000)  # FirstThunk (IAT)
-    idt_off += 20
+    # Thunk for GetProcAddress
+    thunk_getproc = i
+    code[i:i+2] = b"\xFF\x25"
+    struct.pack_into("<I", code, i + 2, IAT_GET_PROC)
+    relocs.append(i + 2)
+    i += 6
 
-    # USER32.dll entry
-    struct.pack_into("<I", data_sec, idt_off + 0, 0x3030)   # OrigFirstThunk
-    struct.pack_into("<I", data_sec, idt_off + 12, 0x2060)  # Name RVA
-    struct.pack_into("<I", data_sec, idt_off + 16, 0x3008)  # FirstThunk (IAT)
-    idt_off += 20
+    # Thunk for LoadLibraryA
+    thunk_loadlib = i
+    code[i:i+2] = b"\xFF\x25"
+    struct.pack_into("<I", code, i + 2, IAT_LOAD_LIB)
+    relocs.append(i + 2)
+    i += 6
 
-    # NULL terminator entry
-    idt_off += 20
+    # Thunk for CreateEventA
+    thunk_createevt = i
+    code[i:i+2] = b"\xFF\x25"
+    struct.pack_into("<I", code, i + 2, IAT_CREATE_EVT)
+    relocs.append(i + 2)
+    i += 6
 
-    # DLL name strings
-    data_sec[0x40:0x40 + 13] = b"KERNEL32.dll\x00"
-    data_sec[0x60:0x60 + 11] = b"USER32.dll\x00"
+    # Patch relative call targets (E8 calls use: target - (call_addr + 5))
+    code_va_base = IMAGE_BASE + CODE_RVA
+    struct.pack_into("<i", code, call_loadlib_pos + 1,
+                     (code_va_base + thunk_loadlib) - (code_va_base + call_loadlib_pos + 5))
+    struct.pack_into("<i", code, call_getproc_pos + 1,
+                     (code_va_base + thunk_getproc) - (code_va_base + call_getproc_pos + 5))
+    struct.pack_into("<i", code, call_getpid_pos + 1,
+                     (code_va_base + thunk_getpid) - (code_va_base + call_getpid_pos + 5))
+    struct.pack_into("<i", code, call_createevt_pos + 1,
+                     (code_va_base + thunk_createevt) - (code_va_base + call_createevt_pos + 5))
 
-    # Format string "v7_%04d"
-    data_sec[0x80:0x80 + 8] = b"v7_%04d\x00"
+    # --- DATA section (file 0x600, RVA 0x2000, 0x600 bytes) ---
+    data_sec = bytearray(0x600)
+    data_sec[0x000:0x008] = b"v7_%04d\x00"
+    # Buffer at 0x008..0x020 (left zeroed)
+    data_sec[0x408:0x408 + 11] = b"USER32.dll\x00"
+    data_sec[0x414:0x414 + 10] = b"wsprintfA\x00"
+    # wsprintfA function pointer at 0x41C (left zeroed, filled at runtime)
 
-    # Buffer for sprintf (at offset 0xA0)
-    # left zeroed
+    # --- .idata section (file 0xC00, RVA 0x3000, 0x200 bytes) ---
+    idata_sec = bytearray(0x200)
 
-    # .rdata section (file offset 0x600, RVA 0x3000)
-    rdata_sec = bytearray(0x200)
+    # Import Directory Table (IDT) at start of .idata (RVA 0x3000)
+    # Entry 0: KERNEL32.dll
+    struct.pack_into("<I", idata_sec, 0, IDATA_RVA + 0x28)    # OriginalFirstThunk
+    struct.pack_into("<I", idata_sec, 12, IDATA_RVA + 0x50)   # Name RVA
+    struct.pack_into("<I", idata_sec, 16, IDATA_RVA + 0x3C)   # FirstThunk (IAT)
+    # Entry 1: NULL terminator (20 zero bytes, already zero)
 
-    # IAT (FirstThunk arrays):
-    # KERNEL32 IAT at RVA 0x3000:
-    #   [0] -> hint/name for GetCurrentProcessId
-    #   [4] -> hint/name for CreateEventA
-    #   [8] -> NULL
-    # USER32 IAT at RVA 0x3008:
-    #   [0] -> hint/name for wsprintfA
-    #   [4] -> NULL
+    # OFT array at .idata+0x28 (RVA 0x3028):
+    #   -> hint/name for GetCurrentProcessId, GetProcAddress, LoadLibraryA, CreateEventA, NULL
+    oft_base = 0x28
+    hn_getpid_rva = IDATA_RVA + 0x5E
+    hn_getproc_rva = IDATA_RVA + 0x74
+    hn_loadlib_rva = IDATA_RVA + 0x86
+    hn_createevt_rva = IDATA_RVA + 0x96
+    struct.pack_into("<I", idata_sec, oft_base + 0, hn_getpid_rva)
+    struct.pack_into("<I", idata_sec, oft_base + 4, hn_getproc_rva)
+    struct.pack_into("<I", idata_sec, oft_base + 8, hn_loadlib_rva)
+    struct.pack_into("<I", idata_sec, oft_base + 12, hn_createevt_rva)
+    # NULL at oft_base+16 already zero
 
-    # Hint/Name Table entries (placed at RVA 0x3040+)
-    # GetCurrentProcessId at 0x3040
-    hn_off = 0x40
-    struct.pack_into("<H", rdata_sec, hn_off, 0)  # Hint
-    name = b"GetCurrentProcessId\x00"
-    rdata_sec[hn_off + 2:hn_off + 2 + len(name)] = name
-    get_pid_rva = 0x3000 + hn_off
+    # IAT (FirstThunk) array at .idata+0x3C (RVA 0x303C):
+    iat_base = 0x3C
+    struct.pack_into("<I", idata_sec, iat_base + 0, hn_getpid_rva)
+    struct.pack_into("<I", idata_sec, iat_base + 4, hn_getproc_rva)
+    struct.pack_into("<I", idata_sec, iat_base + 8, hn_loadlib_rva)
+    struct.pack_into("<I", idata_sec, iat_base + 12, hn_createevt_rva)
+    # NULL at iat_base+16 already zero
 
-    # CreateEventA at 0x3060
-    hn_off = 0x60
-    struct.pack_into("<H", rdata_sec, hn_off, 0)
-    name = b"CreateEventA\x00"
-    rdata_sec[hn_off + 2:hn_off + 2 + len(name)] = name
-    create_event_rva = 0x3000 + hn_off
+    # DLL name at .idata+0x50
+    idata_sec[0x50:0x50 + 13] = b"KERNEL32.dll\x00"
 
-    # wsprintfA at 0x3080
-    hn_off = 0x80
-    struct.pack_into("<H", rdata_sec, hn_off, 0)
-    name = b"wsprintfA\x00"
-    rdata_sec[hn_off + 2:hn_off + 2 + len(name)] = name
-    wsprintf_rva = 0x3000 + hn_off
+    # Hint/Name entries (2-byte hint + ASCIIZ name, even-aligned)
+    # GetCurrentProcessId at .idata+0x5E
+    struct.pack_into("<H", idata_sec, 0x5E, 0)
+    idata_sec[0x60:0x60 + 20] = b"GetCurrentProcessId\x00"
+    # GetProcAddress at .idata+0x74
+    struct.pack_into("<H", idata_sec, 0x74, 0)
+    idata_sec[0x76:0x76 + 15] = b"GetProcAddress\x00"
+    # LoadLibraryA at .idata+0x86
+    struct.pack_into("<H", idata_sec, 0x86, 0)
+    idata_sec[0x88:0x88 + 13] = b"LoadLibraryA\x00"
+    # CreateEventA at .idata+0x96
+    struct.pack_into("<H", idata_sec, 0x96, 0)
+    idata_sec[0x98:0x98 + 13] = b"CreateEventA\x00"
 
-    # IAT entries (at start of .rdata)
-    struct.pack_into("<I", rdata_sec, 0x00, get_pid_rva)     # GetCurrentProcessId
-    struct.pack_into("<I", rdata_sec, 0x04, create_event_rva)  # CreateEventA
-    struct.pack_into("<I", rdata_sec, 0x08, 0)               # NULL (end KERNEL32)
-    # USER32 IAT starts at offset 0x08 in the IAT? No - let me fix the layout.
-    # Actually the IAT for USER32 starts at RVA 0x3008 -> file offset 0x600 + 0x08 = NO
-    # Wait: .rdata file offset is 0x600, RVA is 0x3000
-    # So IAT at RVA 0x3000 = file 0x600 + 0 = rdata_sec[0]
-    # IAT at RVA 0x3008 = rdata_sec[8]
-    struct.pack_into("<I", rdata_sec, 0x08, wsprintf_rva)    # wsprintfA
-    struct.pack_into("<I", rdata_sec, 0x0C, 0)              # NULL (end USER32)
+    # --- .reloc section (file 0xE00, RVA 0x4000, 0x200 bytes) ---
+    reloc_sec = bytearray(0x200)
 
-    # Fix: KERNEL32 IAT needs 2 entries + NULL = 12 bytes
-    # Then USER32 starts at offset 12
-    # Let me redo:
-    # KERNEL32 IAT at RVA 0x3000: GetCurrentProcessId, CreateEventA, NULL
-    #   -> offsets 0x00, 0x04, 0x08 (12 bytes)
-    # USER32 IAT at RVA 0x300C: wsprintfA, NULL
-    #   -> offsets 0x0C, 0x10 (8 bytes)
+    # Base relocation block for CODE section (PageRVA = 0x1000)
+    # Each entry is 2 bytes: high 4 bits = type (3=HIGHLOW), low 12 bits = offset
+    reloc_entries = []
+    for r in sorted(relocs):
+        reloc_entries.append(0x3000 | (r & 0xFFF))
+    # Pad to even number of entries
+    if len(reloc_entries) % 2 != 0:
+        reloc_entries.append(0x0000)  # type ABS = padding
 
-    rdata_sec[0:0x14] = b"\x00" * 0x14
-    struct.pack_into("<I", rdata_sec, 0x00, get_pid_rva)
-    struct.pack_into("<I", rdata_sec, 0x04, create_event_rva)
-    struct.pack_into("<I", rdata_sec, 0x08, 0)  # NULL end
-    struct.pack_into("<I", rdata_sec, 0x0C, wsprintf_rva)
-    struct.pack_into("<I", rdata_sec, 0x10, 0)  # NULL end
+    block_size = 8 + len(reloc_entries) * 2
+    struct.pack_into("<I", reloc_sec, 0, CODE_RVA)    # PageRVA
+    struct.pack_into("<I", reloc_sec, 4, block_size)  # BlockSize
+    for idx, entry in enumerate(reloc_entries):
+        struct.pack_into("<H", reloc_sec, 8 + idx * 2, entry)
 
-    # OriginalFirstThunk arrays:
-    # KERNEL32 OFT at RVA 0x3020: same as IAT
-    struct.pack_into("<I", rdata_sec, 0x20, get_pid_rva)
-    struct.pack_into("<I", rdata_sec, 0x24, create_event_rva)
-    struct.pack_into("<I", rdata_sec, 0x28, 0)
-    # USER32 OFT at RVA 0x3030: same as IAT
-    struct.pack_into("<I", rdata_sec, 0x30, wsprintf_rva)
-    struct.pack_into("<I", rdata_sec, 0x34, 0)
-
-    # Fix IDT references
-    data_sec[0:60] = b"\x00" * 60  # clear IDT
-    # KERNEL32 IDT entry
-    struct.pack_into("<I", data_sec, 0, 0x3020)    # OrigFirstThunk
-    struct.pack_into("<I", data_sec, 12, 0x2040)   # Name
-    struct.pack_into("<I", data_sec, 16, 0x3000)   # FirstThunk
-    # USER32 IDT entry
-    struct.pack_into("<I", data_sec, 20, 0x3030)   # OrigFirstThunk
-    struct.pack_into("<I", data_sec, 32, 0x2060)   # Name
-    struct.pack_into("<I", data_sec, 36, 0x300C)   # FirstThunk
-    # NULL terminator (20 zero bytes already)
-
-    dll_image = headers + code + data_sec + rdata_sec
-    # Pad to a nice size
-    dll_image += b"\x00" * (0x1000 - len(dll_image))
+    # --- Assemble final image ---
+    dll_image = headers + code + data_sec + idata_sec + reloc_sec
+    assert len(dll_image) == 0x1000, f"DLL image size mismatch: {len(dll_image):#x}"
 
     return bytes(dll_image)
 
