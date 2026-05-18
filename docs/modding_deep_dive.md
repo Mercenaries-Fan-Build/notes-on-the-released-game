@@ -512,9 +512,29 @@ pandemic_hash("registry") = 0x3884598e  ✓ CONFIRMED
 
 **Implementation:** `tools/pandemic_hash.py`
 
-#### What the type hash strings are
+#### Mercenaries 2 Post-Processing Step
 
-The ASET type constants (`0xF011157A`, `0x5B724250`, `0x1602815C`) are FNV-1a hashes of type name strings. The exact strings used in Mercenaries 2 have not been identified yet — they likely differ from the Mercenaries 1 type names (`texture`, `model`, `config`, etc.) as the engine evolved between games. The input strings may include file extensions, asset class names, or pipeline identifiers.
+**Confirmed from EXE disassembly** (see [`docs/exe_cross_validation.md`](exe_cross_validation.md)): Mercenaries 2 adds a post-processing step NOT present in the Mercs 1 source:
+
+```c
+// After the main FNV-1a loop:
+hash ^= 0x2A;           // XOR with 42
+hash *= 0x01000193;     // Multiply by FNV prime one more time
+```
+
+This produces a different hash variant (`pandemic_hash_m2()` in `tools/pandemic_hash.py`). Found at **166+ call sites** in the EXE. The Mercs 1 version (without post-processing) remains available as `pandemic_hash()` for backward compatibility.
+
+#### Type Hash Constants IDENTIFIED
+
+The ASET type constants are `pandemic_hash_m2()` of simple ASCII type name strings:
+
+| Constant | Input String | Verification |
+|----------|-------------|--------------|
+| `0xF011157A` | `"texture"` | `pandemic_hash_m2("texture") == 0xF011157A` ✓ |
+| `0x5B724250` | `"model"` | `pandemic_hash_m2("model") == 0x5B724250` ✓ |
+| `0x1602815C` | *(unknown)* | Not yet identified — not `"terrain"` (= `0x19FC10AC`) |
+
+**Implementation:** `tools/pandemic_hash.py --m2 "texture"` to compute Mercs 2 hashes from CLI.
 
 ### 4.4 Entity Keys
 
@@ -845,7 +865,7 @@ These are the critical unknowns that determine modding feasibility:
 
 5. **Does `vz.bin` serve any role beyond startup validation?** Is it checked only by the launcher, or does the engine read it during gameplay?
 
-6. **What algorithm produces the ASET / texture_index asset hashes?** Identifying this would enable creation of new asset entries without reverse-engineering the EXE.
+6. **What algorithm produces the ASET per-asset name hashes?** The *type* hashes use `pandemic_hash_m2()` (`"texture"` → `0xF011157A`, `"model"` → `0x5B724250`). But the per-asset *name* hashes (e.g., `0x35383CCD` for `vz_mar_roads`) do NOT match `pandemic_hash_m2()` on any tested name variant. The input to the name hash may include untested path prefixes or use a different algorithm entirely.
 
 7. **What is the save file checksum algorithm?** Needed for save editing to survive integrity checks.
 
