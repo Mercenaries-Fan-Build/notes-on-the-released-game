@@ -48,7 +48,7 @@ def compress_sges(
     *,
     segment_size: int = DEFAULT_SEGMENT_SIZE,
     level: int = 6,
-    major: int = 1,
+    major: int = 4,
 ) -> bytes:
     """Compress raw block data into an sges block.
 
@@ -56,7 +56,7 @@ def compress_sges(
         uncompressed: Raw decompressed block data.
         segment_size: Max uncompressed bytes per segment.
         level: zlib compression level (1-9, default 6).
-        major: sges major version (observed as 1 in game data).
+        major: sges major version (4 in all retail/demo blocks; exe validates this).
 
     Returns:
         Complete sges block bytes ready for WAD injection.
