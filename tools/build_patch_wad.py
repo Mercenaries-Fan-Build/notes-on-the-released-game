@@ -430,7 +430,89 @@ def cmd_build_string_mod_patch(
     return 0
 
 
-# ── Analyze block command ─────────────────────────────────────────────
+def cmd_build_passthrough_patch(
+    source_wad: Path, block_index: int, output: Path,
+) -> int:
+    """Build a patch WAD using the ORIGINAL unmodified compressed block.
+
+    No decompression, no recompression, no string swaps — just the exact
+    same bytes from the source WAD wrapped in our FFCS patch structure.
+    This isolates whether the FFCS structure itself is the problem.
+    """
+    print(f"Building PASSTHROUGH patch WAD (block {block_index})...")
+    print(f"  Source WAD: {source_wad}")
+    print(f"  Output:     {output}")
+    print(f"  Mode: VERBATIM copy — zero decompression/recompression")
+
+    print("\n[1/3] Extracting block metadata from original WAD...")
+    meta = extract_block_metadata(source_wad, block_index)
+    original_block = meta["compressed_block_data"]
+
+    print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
+          f"packed={meta['indx_entry']['packed_field']}, "
+          f"flags_pages=0x{meta['indx_entry']['flags_and_page_count']:08X}")
+    print(f"  ASET entries: {meta['aset_entry_count']}")
+    print(f"  PTHS: {meta['pths_string']}")
+    print(f"  Compressed block size: {len(original_block):,} bytes")
+    print(f"  Block file offset in source WAD: 0x{meta['block_file_offset']:X}")
+
+    if original_block[:4] != SGES_MAGIC:
+        print(f"ERROR: Block does not start with sges magic "
+              f"(got {original_block[:4]!r})", file=sys.stderr)
+        return 1
+    print(f"  sges magic: OK")
+
+    print("\n[2/3] Building patch WAD with verbatim block data...")
+    patch_wad = build_patch_wad(
+        indx_entry=meta["indx_entry"],
+        aset_entries=meta["aset_entries"],
+        pths_string=meta["pths_string"],
+        compressed_block=original_block,
+        csum_value=meta["csum_value"],
+    )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(patch_wad)
+    block_pages = _align_up(len(original_block), PAGE_SIZE) // PAGE_SIZE
+    print(f"  Wrote: {output} ({len(patch_wad):,} bytes)")
+    print(f"  DATA offset in patch: 0x208000")
+    print(f"  Block pages: {block_pages}")
+
+    print("\n[3/3] Verifying DATA section matches original block...")
+    data_offset = 0x208000
+    patch_raw = output.read_bytes()
+    embedded_block = patch_raw[data_offset:data_offset + len(original_block)]
+    if embedded_block == original_block:
+        print("  PASS: Embedded block is byte-for-byte identical to original")
+    else:
+        mismatch_pos = next(
+            i for i in range(len(original_block))
+            if embedded_block[i] != original_block[i]
+        )
+        print(f"  FAIL: First mismatch at offset {mismatch_pos} "
+              f"(patch=0x{embedded_block[mismatch_pos]:02X} vs "
+              f"orig=0x{original_block[mismatch_pos]:02X})", file=sys.stderr)
+        return 1
+
+    source_raw = source_wad.read_bytes()
+    src_off = meta["block_file_offset"]
+    sample_offsets = [0, 4, 8, 16, 100, 1000, len(original_block) - 4]
+    print(f"\n  Spot-check (patch DATA vs source WAD at block offset):")
+    for so in sample_offsets:
+        if so >= len(original_block):
+            continue
+        patch_byte = patch_raw[data_offset + so]
+        source_byte = source_raw[src_off + so]
+        match = "OK" if patch_byte == source_byte else "MISMATCH"
+        print(f"    +0x{so:04X}: patch=0x{patch_byte:02X} source=0x{source_byte:02X} {match}")
+
+    print(f"\nDone. Passthrough patch WAD written to: {output}")
+    print(f"If this WAD also causes a black screen → FFCS structure is wrong.")
+    print(f"If this WAD works → sges recompression is the problem.")
+    return 0
+
+
+# ── Analyze block command ─────────────────────────────────────────
 
 
 def cmd_analyze_block(source_wad: Path, block_index: int, output: Path) -> int:
@@ -674,6 +756,10 @@ def main() -> int:
                          "recompress, build patch WAD")
     ap.add_argument("--validate", action="store_true",
                     help="Validate an existing patch WAD (--output = WAD to validate)")
+    ap.add_argument("--passthrough", action="store_true",
+                    help="Build patch WAD using the ORIGINAL unmodified compressed "
+                         "block — no decompression or recompression. Used to isolate "
+                         "FFCS structure issues vs sges recompression issues.")
 
     args = ap.parse_args()
 
@@ -681,6 +767,15 @@ def main() -> int:
         if args.output is None:
             ap.error("--validate requires --output (path to WAD to validate)")
         return validate_patch_wad(args.output)
+
+    if args.passthrough:
+        if args.source_wad is None:
+            ap.error("--passthrough requires --source-wad")
+        if args.output is None:
+            ap.error("--passthrough requires --output")
+        return cmd_build_passthrough_patch(
+            args.source_wad, args.block_index, args.output,
+        )
 
     if args.analyze_block:
         if args.source_wad is None:
