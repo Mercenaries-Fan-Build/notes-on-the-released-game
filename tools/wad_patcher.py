@@ -647,9 +647,14 @@ def cmd_patch_script(
 
 OILCON001_MOD_SOURCE = '''\
 inherit("MrxTaskContract")
+import("MrxUtil")
 
 function Activated(self)
  MrxTaskContract.Activated(self)
+ Event.Create("TimerRelative", 5, "AutoComplete", self)
+end
+
+function AutoComplete(self)
  self:Complete()
 end
 
