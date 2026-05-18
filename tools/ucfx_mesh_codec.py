@@ -1065,6 +1065,46 @@ def _find_hier_chunk(
     return None
 
 
+def parse_indx_chunk(
+    data: bytes,
+    data_base: int,
+    chunks: list[tuple[bytes, tuple[int, int, int, int]]],
+) -> list[int] | None:
+    """Parse the INDX chunk inside a GEOM container.
+
+    The INDX chunk contains N × u16 entries where N = number of MESH groups.
+    Each u16 maps MESH group index → HIER node index.
+
+    Returns a list of HIER node indices (one per MESH group), or None if
+    no INDX chunk is present.
+    """
+    for rows in _iter_geom_child_row_slices(chunks):
+        for tag, u in rows:
+            if tag == b"INDX" and u[0] != CONTAINER_SENTINEL:
+                indx_off = int(u[0])
+                indx_len = int(u[1])
+                if indx_len < 2:
+                    return None
+                abs_off = data_base + indx_off
+                if abs_off < 0 or abs_off + indx_len > len(data):
+                    return None
+                n_entries = indx_len // 2
+                return list(struct.unpack_from(f"<{n_entries}H", data, abs_off))
+    # Also check top-level chunks (INDX may sit directly under GEOM's child rows)
+    for tag, u in chunks:
+        if tag == b"INDX" and u[0] != CONTAINER_SENTINEL:
+            indx_off = int(u[0])
+            indx_len = int(u[1])
+            if indx_len < 2:
+                return None
+            abs_off = data_base + indx_off
+            if abs_off < 0 or abs_off + indx_len > len(data):
+                return None
+            n_entries = indx_len // 2
+            return list(struct.unpack_from(f"<{n_entries}H", data, abs_off))
+    return None
+
+
 def _parse_prmg_body(
     body: list[tuple[bytes, tuple[int, int, int, int]]],
 ) -> dict[str, Any] | None:
@@ -1214,11 +1254,16 @@ def decode_submesh(
     sub: dict[str, Any],
     hier_nodes: list[dict[str, Any]] | None = None,
     damage_branches: dict[int, str] | None = None,
+    indx_hier_node_idx: int | None = None,
 ) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]], dict[str, Any]]:
     """Decode one PRMG draw: explicit VB/IB relative to ``data_base``.
 
-    When *hier_nodes* is provided, the PRMG's local bbox is matched to the
-    HIER tree and the accumulated world transform is applied to vertices.
+    When *indx_hier_node_idx* is provided (from the INDX chunk), it is used
+    directly to look up the HIER node — no bbox matching is performed.
+
+    When *hier_nodes* is provided without *indx_hier_node_idx*, the PRMG's
+    local bbox is matched to the HIER tree and the accumulated world
+    transform is applied to vertices.
     """
     vb_abs = data_base + int(sub["vb_off"])
     ib_abs = data_base + int(sub["ib_off"])
@@ -1337,7 +1382,20 @@ def decode_submesh(
     world_trans = (0.0, 0.0, 0.0)
     rot_3x3: tuple[tuple[float, ...], ...] | None = None
     all_hier_matches: list[dict[str, Any]] = []
-    if hier_nodes and prmg_bbox is not None:
+    if hier_nodes and indx_hier_node_idx is not None:
+        # INDX-based direct mapping (authoritative)
+        node_map = {n["idx"]: n for n in hier_nodes}
+        matched = node_map.get(indx_hier_node_idx)
+        if matched is not None:
+            world_trans = get_world_translation(matched)
+            rot_3x3 = get_world_matrix_3x3(matched)
+            meta["hier_node_idx"] = matched["idx"]
+            meta["world_translation"] = list(world_trans)
+            meta["hier_source"] = "indx"
+            if rot_3x3 is not None:
+                meta["world_rotation_3x3"] = [list(r) for r in rot_3x3]
+    elif hier_nodes and prmg_bbox is not None:
+        # Fallback: bbox-based heuristic matching
         all_hier_matches = match_all_prmg_to_hier_nodes(prmg_bbox, hier_nodes)
         matched = all_hier_matches[0] if all_hier_matches else None
         if matched is not None:
@@ -1345,6 +1403,7 @@ def decode_submesh(
             rot_3x3 = get_world_matrix_3x3(matched)
             meta["hier_node_idx"] = matched["idx"]
             meta["world_translation"] = list(world_trans)
+            meta["hier_source"] = "bbox"
             if rot_3x3 is not None:
                 meta["world_rotation_3x3"] = [list(r) for r in rot_3x3]
             if len(all_hier_matches) > 1:

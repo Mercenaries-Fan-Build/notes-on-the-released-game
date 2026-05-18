@@ -139,7 +139,44 @@ def crc32_mercs2_explicit(data: bytes) -> int:
     return crc
 ```
 
-### 4.1 UCFX texture INFO (minimal)
+### 4.1 INDX chunk (MESH group → HIER node mapping)
+
+**Tool:** [`tools/ucfx_mesh_codec.py :: parse_indx_chunk`](../tools/ucfx_mesh_codec.py)
+
+Located inside the **GEOM** container as a direct child chunk. The INDX chunk provides an authoritative mapping from MESH group index to HIER node index, replacing the heuristic bounding-box matching that was previously used.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Header tag | 4 bytes | ASCII `INDX` |
+| `u0` (offset) | u32 | Byte offset relative to `data_base` |
+| `u1` (length) | u32 | Byte length of the payload (= N × 2) |
+| `u2` (count) | u32 | Number of entries (= N = number of MESH groups in this GEOM) |
+| `u3` | u32 | Reserved (0) |
+
+**Payload:** N × u16 little-endian values. Entry `i` gives the HIER node index for MESH group `i`.
+
+**Example (ZTZ-63 tank, 9 MESH groups, 115 HIER nodes):**
+
+```
+INDX values: [0, 1, 2, 3, 4, 5, 6, 51, 64]
+  MESH group 0 → HIER node  0  (hull, at origin)
+  MESH group 1 → HIER node  1  (tread L, at origin)
+  MESH group 2 → HIER node  2  (tread R, at origin)
+  MESH group 3 → HIER node  3  (antenna, at 0.49, 2.55, 0.47)
+  MESH group 4 → HIER node  4  (hatch, at 0, 1.89, 4.29)
+  MESH group 5 → HIER node  5  (barrel, at 0, 1.98, 1.30)
+  MESH group 6 → HIER node  6  (destroyed hull variant, at origin)
+  MESH group 7 → HIER node 51  (turret base, at 0, 1.63, 0.23)
+  MESH group 8 → HIER node 64  (headlight L, at -0.77, 1.51, 3.60)
+```
+
+When INDX is present, `decode_submesh` uses it to look up the HIER node's world transform directly instead of bbox matching. Analysis shows that **every block with a HIER chunk also has an INDX chunk** (1,147 out of 3,581 P000_Q3 blocks have both; the remaining 2,434 have neither HIER nor INDX). The bbox fallback path exists for safety but is not exercised by any known block in the archive.
+
+INDX + HIER are found in multi-part assets: vehicles, characters, buildings with sub-components, and complex props where multiple MESH groups must be positioned relative to a hierarchy. Single-part meshes (simple static props, vegetation, terrain tiles) have no HIER and produce one mesh group at origin.
+
+---
+
+### 4.2 UCFX texture INFO (minimal)
 
 **Tool:** [`tools/texture_extractor.py`](../tools/texture_extractor.py)
 
@@ -152,7 +189,7 @@ def crc32_mercs2_explicit(data: bytes) -> int:
 
 Bytes between documented fields are **read but not exported** as named fields.
 
-### 4.2 Texture streaming index
+### 4.3 Texture streaming index
 
 **Tool:** [`tools/texture_streaming_index.py`](../tools/texture_streaming_index.py)
 

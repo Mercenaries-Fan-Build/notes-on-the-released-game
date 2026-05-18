@@ -66,6 +66,73 @@ from wad_patcher import (  # noqa: E402
     _update_block_header_size,
 )
 
+WIFVZBOUNDARY_NOOP_SOURCE = '''\
+import("MrxVoSequence")
+
+_bMapBoundariesDrawn = false
+_sBoundaryName = nil
+
+function SetupBoundaryIntro()
+end
+
+function SetupBoundary00()
+end
+
+function SetupBoundaryINTRO_OIL()
+end
+
+function SetupBoundaryPOST_OIL()
+end
+
+function SetupBoundaryPOST_EVA_PRE_PIR()
+end
+
+function SetupBoundaryPOST_EVA_POST_PIR()
+end
+
+function SetupBoundaryPMCCON003()
+end
+
+function SetupBoundary02()
+end
+
+function SetupBoundary(sBoundaryName, bShowMessage)
+end
+
+function BoundaryCallback(uPlayer, sType, sAction)
+end
+
+function RemoveWorldBoundary()
+end
+
+function EnableExclusionBoundary(sBoundaryName, bEnable)
+end
+
+function RemoveExclusionBoundaries()
+end
+
+function SetInteriorMode(bEnable)
+end
+
+function _AddBoundaryToPlayers(bEnable)
+end
+
+function _DrawWorldBoundaryOnMap(bEnable)
+end
+
+function _DrawBoundaryOnMap(sBoundaryName, bEnable, bInvert)
+end
+
+function DrawExclusionBoundaryOnMap(sBoundaryName, bEnable)
+end
+
+function SaveSingleton()
+end
+
+function LoadSingleton(tSaveData, bAutoDeactivate)
+end
+'''
+
 SGES_MAGIC = b"sges"
 CSUM_TAG = b"CSUM"
 PAGE_SIZE = 0x8000  # 32 KB
@@ -626,6 +693,100 @@ def cmd_build_autocomplete_patch(
     return 0
 
 
+def cmd_remove_boundaries(
+    source_wad: Path,
+    output: Path,
+    *,
+    segment_size: int = 65536,
+    compression_level: int = 6,
+) -> int:
+    """All-in-one: replace wifvzboundary with noop + apply string mods, build patch WAD.
+
+    Compiles a no-op version of the wifvzboundary script (all boundary functions
+    are empty stubs) and replaces the original bytecode. Also applies the oilcon001
+    string swaps and demo timer disable so the patch WAD is a complete mod bundle.
+    """
+    print("Building boundary-removal patch WAD...")
+    print(f"  Source WAD: {source_wad}")
+    print(f"  Output:     {output}")
+
+    repo_root = Path(__file__).resolve().parent.parent
+    luac = repo_root / "lua-5.1.5" / "src" / "luac"
+
+    # Step 1: Compile the noop boundary script
+    print("\n[1/6] Compiling noop wifvzboundary Lua source...")
+    bytecode = compile_lua_source(WIFVZBOUNDARY_NOOP_SOURCE, luac)
+
+    # Step 2: Extract block 1257 metadata
+    print("\n[2/6] Extracting block 1257 metadata from original WAD...")
+    meta = extract_block_metadata(source_wad, 1257)
+    print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
+          f"packed={meta['indx_entry']['packed_field']}")
+    print(f"  ASET entries: {meta['aset_entry_count']}")
+    print(f"  PTHS: {meta['pths_string']}")
+    print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
+
+    # Step 3: Decompress block 1257
+    print("\n[3/6] Decompressing block 1257...")
+    compressed_data = meta["compressed_block_data"]
+    decompressed = decompress_sges_block(
+        compressed_data, 0, len(compressed_data)
+    )
+    print(f"  Decompressed: {len(decompressed):,} bytes")
+
+    # Step 4: Replace wifvzboundary bytecode
+    print("\n[4/6] Replacing wifvzboundary bytecode with noop version...")
+    modified = apply_bytecode_replacement_to_block(
+        decompressed, "wifvzboundary", bytecode
+    )
+    print(f"  Modified block: {len(modified):,} bytes "
+          f"(delta {len(modified) - len(decompressed):+,})")
+
+    # Step 5: Apply oilcon001 string mods + demo timer disable on top
+    print("\n[5/6] Applying oilcon001 string mods + demo timer disable...")
+    modified = apply_string_mod_to_block(modified)
+
+    # Recompress
+    print("\n  Recompressing with sges (major=4)...")
+    new_sges = compress_sges(
+        modified,
+        segment_size=segment_size,
+        level=compression_level,
+        major=4,
+    )
+    ratio = len(new_sges) / len(modified) * 100
+    print(f"  Compressed: {len(new_sges):,} bytes ({ratio:.1f}%)")
+
+    # Verify roundtrip
+    verify = decompress_sges_block(new_sges, 0, len(new_sges))
+    if verify != modified:
+        print("ERROR: Roundtrip verification failed!", file=sys.stderr)
+        return 1
+    print("  Roundtrip verification OK")
+
+    # Step 6: Build patch WAD
+    print("\n[6/6] Building patch WAD...")
+    patch_wad = build_patch_wad(
+        indx_entry=meta["indx_entry"],
+        aset_entries=meta["aset_entries"],
+        pths_string=meta["pths_string"],
+        compressed_block=new_sges,
+        csum_value=meta["csum_value"],
+    )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(patch_wad)
+    print(f"\n  Wrote: {output} ({len(patch_wad):,} bytes)")
+    print(f"  DATA offset: 0x208000")
+    print(f"  Block pages: {_align_up(len(new_sges), PAGE_SIZE) // PAGE_SIZE}")
+    print(f"\n  Mods applied:")
+    print(f"    - wifvzboundary: all boundary functions replaced with no-ops")
+    print(f"    - oilcon001: 6 string swaps (MODDED labels)")
+    print(f"    - demo timer: ShowDemoOutroAndQuitToShell disabled")
+
+    return 0
+
+
 def cmd_build_passthrough_patch(
     source_wad: Path, block_index: int, output: Path,
 ) -> int:
@@ -959,6 +1120,10 @@ def main() -> int:
                     help="Build patch WAD using the ORIGINAL unmodified compressed "
                          "block — no decompression or recompression. Used to isolate "
                          "FFCS structure issues vs sges recompression issues.")
+    ap.add_argument("--remove-boundaries", action="store_true",
+                    help="All-in-one: replace wifvzboundary with noop script "
+                         "(disables all world boundaries), apply oilcon001 string "
+                         "mods + demo timer disable, build patch WAD")
 
     args = ap.parse_args()
 
@@ -982,6 +1147,18 @@ def main() -> int:
         if args.output is None:
             ap.error("--analyze-block requires --output")
         return cmd_analyze_block(args.source_wad, args.block_index, args.output)
+
+    if args.remove_boundaries:
+        if args.source_wad is None:
+            ap.error("--remove-boundaries requires --source-wad")
+        if args.output is None:
+            ap.error("--remove-boundaries requires --output")
+        return cmd_remove_boundaries(
+            args.source_wad,
+            args.output,
+            segment_size=args.segment_size,
+            compression_level=args.compression_level,
+        )
 
     if args.build_string_mod_patch:
         if args.source_wad is None:

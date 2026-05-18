@@ -26,6 +26,7 @@ from ucfx_mesh_codec import (
     merge_submeshes,
     parse_hier_world_transforms,
     parse_ibuf_meta,
+    parse_indx_chunk,
     parse_mtrl,
     parse_mtrl_raw,
     parse_prmg_info_flags,
@@ -303,6 +304,7 @@ def extract_structured(data: bytes) -> tuple[list[tuple[float, float, float]], l
 
         hier_nodes: list[dict[str, object]] | None = None
         damage_branches: dict[int, str] | None = None
+        indx_mapping: list[int] | None = None
         hier_info = _find_hier_chunk(container["chunks"])
         if hier_info is not None:
             hier_off, hier_len = hier_info
@@ -310,15 +312,23 @@ def extract_structured(data: bytes) -> tuple[list[tuple[float, float, float]], l
             damage_branches = classify_hier_damage_branches(
                 data, db, container["chunks"], hier_nodes
             )
+            indx_mapping = parse_indx_chunk(data, db, container["chunks"])
 
         for sub in iter_submesh_buffers(container):
+            # Resolve INDX-based HIER node for this MESH group
+            indx_hier_idx: int | None = None
+            mg = sub.get("mesh_group_id")
+            if indx_mapping is not None and mg is not None and mg < len(indx_mapping):
+                indx_hier_idx = indx_mapping[mg]
+
             verts, faces, sm = decode_submesh(
-                data, db, sub, hier_nodes=hier_nodes, damage_branches=damage_branches
+                data, db, sub, hier_nodes=hier_nodes,
+                damage_branches=damage_branches,
+                indx_hier_node_idx=indx_hier_idx,
             )
             if not verts or not faces:
                 continue
 
-            # Tag single-material PRMGs and also extract transparency flag
             info_flags = parse_prmg_info_flags(
                 data, db, int(sub.get("prmg_info_off", 0)), int(sub.get("prmg_info_len", 0))
             )
@@ -327,6 +337,11 @@ def extract_structured(data: bytes) -> tuple[list[tuple[float, float, float]], l
             for sv, sf, smeta in _split_by_prmt(data, db, sub, verts, faces, sm):
                 parts.append((sv, sf))
                 submeta.append(smeta)
+
+                # When using INDX, skip bbox-based instancing (INDX gives the
+                # authoritative single node per MESH group)
+                if indx_hier_idx is not None:
+                    continue
 
                 instance_nodes = smeta.get("hier_instance_nodes")
                 if instance_nodes and len(instance_nodes) > 1 and hier_nodes:
@@ -602,6 +617,7 @@ def _extract_structured_parts(data: bytes) -> tuple[
         iter_submesh_buffers,
         iter_ucfx_containers,
         parse_hier_world_transforms,
+        parse_indx_chunk,
         parse_prmg_bbox,
         parse_prmg_info_flags,
         match_all_prmg_to_hier_nodes,
@@ -618,6 +634,7 @@ def _extract_structured_parts(data: bytes) -> tuple[
 
         hier_nodes = None
         damage_branches: dict[int, str] | None = None
+        indx_mapping: list[int] | None = None
         hier_info = _find_hier_chunk(container["chunks"])
         if hier_info is not None:
             hier_off, hier_len = hier_info
@@ -625,6 +642,7 @@ def _extract_structured_parts(data: bytes) -> tuple[
             damage_branches = classify_hier_damage_branches(
                 data, db, container["chunks"], hier_nodes
             )
+            indx_mapping = parse_indx_chunk(data, db, container["chunks"])
 
         # Parse MTRL if present (only first container with MTRL wins)
         if not mtrl_records:
@@ -633,8 +651,15 @@ def _extract_structured_parts(data: bytes) -> tuple[
                 mtrl_records = parse_mtrl(data, mtrl_abs, mtrl_len)
 
         for sub in iter_submesh_buffers(container):
+            indx_hier_idx: int | None = None
+            mg = sub.get("mesh_group_id")
+            if indx_mapping is not None and mg is not None and mg < len(indx_mapping):
+                indx_hier_idx = indx_mapping[mg]
+
             verts, faces, sm = decode_submesh(
-                data, db, sub, hier_nodes=hier_nodes, damage_branches=damage_branches
+                data, db, sub, hier_nodes=hier_nodes,
+                damage_branches=damage_branches,
+                indx_hier_node_idx=indx_hier_idx,
             )
             if not verts or not faces:
                 continue
@@ -647,6 +672,9 @@ def _extract_structured_parts(data: bytes) -> tuple[
             for sv, sf, smeta in _split_by_prmt(data, db, sub, verts, faces, sm):
                 parts.append((sv, sf))
                 submeta.append(smeta)
+
+                if indx_hier_idx is not None:
+                    continue
 
                 instance_nodes = smeta.get("hier_instance_nodes")
                 if instance_nodes and len(instance_nodes) > 1 and hier_nodes:
@@ -849,6 +877,8 @@ def write_per_submesh_objs(
                 entry["mesh_group_id"] = sm["mesh_group_id"]
             if "mesh_draw_index" in sm:
                 entry["mesh_draw_index"] = sm["mesh_draw_index"]
+            if "hier_source" in sm:
+                entry["hier_source"] = sm["hier_source"]
             if "inherited_hier_from_mesh_group" in sm:
                 entry["inherited_hier_from_mesh_group"] = True
             if "world_rotation_3x3" in sm:
