@@ -1,33 +1,44 @@
 #!/usr/bin/env python3
-"""Remove SecuROM v7.38 DRM from Mercenaries 2 demo executable.
+"""Remove SecuROM v7.37/7.38 DRM from Mercenaries 2 executables.
 
-This tool patches the demo exe to bypass SecuROM's disc authentication so the
-game can run without the original disc/media. It also patches the 15-minute
-demo timer to extend or disable the time limit.
+Supports both the demo (SecuROM v7.38) and retail (SecuROM v7.37) executables.
 
-Approach:
-  SecuROM v7.38 encrypts the .text section and decrypts it at runtime via the
-  Sitext stub. We cannot easily decrypt .text offline (the key is derived from
-  disc authentication). Instead, we:
+Demo approach (v7.38 — disc-check only):
+  SecuROM encrypts .text and decrypts at runtime via the Sitext stub.
+  We let SecuROM's stub run but spoof the disc authentication:
+  1. Zero the PE Security directory entry
+  2. Inject cruise.dll import (creates the expected Win32 Event)
+  3. Patch the .rdata timer constant (900.0 → 0.0) to disable demo timer
 
-  1. Zero the PE Security directory entry (removes Authenticode signature check)
-  2. Inject an import for cruise.dll into the import table — this DLL creates
-     the Win32 Event that SecuROM's runtime checks expect, spoofing auth.
-  3. Patch the .rdata timer constant (900.0 → 0.0) to disable the demo timer.
-
-  The cruise.dll approach lets SecuROM's own decryption stub run normally, but
-  the disc-check callbacks succeed because the expected Event already exists.
+Retail approach (v7.37 — disc-check + Product Activation):
+  SecuROM v7.37 adds Product Activation (PA) on top of disc check.
+  PA validates registry keys, activation files, and may phone home to dead
+  servers. We bypass everything using a "text transplant" from the pre-cracked
+  executable:
+  1. Copy decrypted .text section from the cracked exe into the original
+  2. Redirect entry point to the Original Entry Point (OEP) in .text
+  3. Zero Security directory and PE checksum
+  4. Inject cruise.dll import (handles inline trigger Event checks)
+  SecuROM's stub never executes → no PA check → game runs immediately.
 
 Usage:
+  # Demo (works standalone):
   python3 tools/remove_securom.py <demo_exe> [--output <patched_exe>] [--timer <seconds>]
+
+  # Retail (requires cracked exe as donor for decrypted .text):
+  python3 tools/remove_securom.py <retail_exe> --donor <cracked_exe> [--output <patched>]
+
+  # Analysis only:
   python3 tools/remove_securom.py --analyze <exe>
 
 Requirements:
   - cruise.dll must be placed next to the patched exe for it to run
   - The script generates cruise.dll if --generate-cruise is passed
+  - Retail patching requires the pre-cracked donor exe (51 MB) for .text data
 
 Example:
   python3 tools/remove_securom.py "Mercenaries 2 World in Flames DEMO/Merc2-Demo.exe"
+  python3 tools/remove_securom.py Mercs2.exe --donor CRACK/Mercenaries2.exe -o Mercs2-Patched.exe
 """
 from __future__ import annotations
 
@@ -43,6 +54,11 @@ DEMO_IMAGE_BASE = 0x400000
 DEMO_TIMER_FILE_OFFSET = 0x007EA87C
 DEMO_TIMER_VALUE = 900.0
 SECUROM_PDB = b"SecuROM_DRM"
+
+RETAIL_EP_RVA = 0x1C87A10
+RETAIL_OEP_RVA = 0x5EE71C
+RETAIL_TEXT_FILE_OFF = 0x1000
+RETAIL_TEXT_SIZE = 0x704000
 
 PE_SECURITY_DIR_INDEX = 4
 
@@ -206,18 +222,18 @@ def generate_cruise_dll() -> bytes:
       1. GetCurrentProcessId()
       2. XOR result with 0x19EA3FD3
       3. sprintf(buf, "v7_%04d", xored_pid)
-      4. CreateEventA(NULL, FALSE, FALSE, buf)
+      4. CreateEventA(NULL, TRUE, TRUE, buf)  — manual-reset, initially signaled
       5. Return TRUE
 
-    This is functionally equivalent to the original cruise.dll from the crack.
+    The event MUST be created in the SIGNALED state (bInitialState=TRUE) with
+    manual reset (bManualReset=TRUE). SecuROM's inline trigger checks call
+    WaitForSingleObject on this event — if it's not signaled, the wait blocks
+    and the game exits after a timeout.
     """
-    # Pre-built minimal cruise.dll (8192 bytes)
-    # This is a functional replica assembled from the known behavior
-    # Rather than including a binary blob, we build the PE from scratch
-
-    dos_header = bytearray(256)
+    # Minimal 64-byte DOS header so total headers fit within FileAlignment
+    dos_header = bytearray(64)
     dos_header[0:2] = b"MZ"
-    dos_header[0x3C:0x40] = struct.pack("<I", 256)  # PE offset at 0x100
+    struct.pack_into("<I", dos_header, 0x3C, 64)  # PE offset at 0x40
 
     pe_sig = b"PE\x00\x00"
 
@@ -282,8 +298,9 @@ def generate_cruise_dll() -> bytes:
     struct.pack_into("<I", sections, 100, 0x600)     # PointerToRawData
     struct.pack_into("<I", sections, 116, 0x40000040)  # Flags: INIT_DATA|READ
 
-    # Build headers (pad to 0x200)
+    # Build headers — total = 64 + 4 + 20 + 224 + 120 = 432 bytes, fits in 0x200
     headers = dos_header + pe_sig + coff_header + opt_header + sections
+    assert len(headers) <= 0x200, f"Headers too large: {len(headers)} > 0x200"
     headers += b"\x00" * (0x200 - len(headers))
 
     # .text section: DllMain code (at file offset 0x200, RVA 0x1000)
@@ -378,15 +395,15 @@ def generate_cruise_dll() -> bytes:
     struct.pack_into("<I", code, i + 1, BUF_VA)
     i += 5
 
-    # push 0 (bInitialState)
-    code[i:i+2] = b"\x6A\x00"
+    # push -1 (bInitialState = TRUE — event starts SIGNALED)
+    code[i:i+2] = b"\x6A\xFF"
     i += 2
 
-    # push 0 (bManualReset)
-    code[i:i+2] = b"\x6A\x00"
+    # push -1 (bManualReset = TRUE — event stays signaled until explicit reset)
+    code[i:i+2] = b"\x6A\xFF"
     i += 2
 
-    # push 0 (lpEventAttributes)
+    # push 0 (lpEventAttributes = NULL)
     code[i:i+2] = b"\x6A\x00"
     i += 2
 
@@ -772,19 +789,299 @@ def patch_demo_exe(input_path: Path, output_path: Path, timer_value: float,
     return changes
 
 
+def detect_exe_type(pe: PEInfo) -> str:
+    """Detect whether this is a demo or retail Mercenaries 2 executable."""
+    if pe.entry_point_rva == DEMO_EP_RVA:
+        return "demo"
+    if pe.entry_point_rva == RETAIL_EP_RVA:
+        return "retail"
+    ep_sec = pe.ep_section()
+    if ep_sec and ep_sec.name == ".text":
+        return "cracked"
+    if ep_sec and ep_sec.name == "Sitext" and pe.has_securom():
+        text_sec = next((s for s in pe.sections if s.name == ".text"), None)
+        if text_sec and text_sec.raw_size == RETAIL_TEXT_SIZE:
+            return "retail"
+        return "demo"
+    return "unknown"
+
+
+def patch_retail_exe(input_path: Path, output_path: Path, donor_path: Path,
+                     verbose: bool = True) -> dict:
+    """Patch the retail exe using text transplant from the cracked donor.
+
+    The donor exe is the pre-cracked 51 MB executable that has .text fully
+    decrypted. We copy its .text into the original retail exe and redirect
+    the entry point to the OEP, bypassing SecuROM's stub and PA entirely.
+    """
+    data = bytearray(input_path.read_bytes())
+    donor_data = donor_path.read_bytes()
+    pe = PEInfo(bytes(data))
+    donor_pe = PEInfo(donor_data)
+    changes: dict = {"input": str(input_path), "output": str(output_path),
+                     "donor": str(donor_path), "patches": []}
+
+    if verbose:
+        print(f"Input:  {input_path} ({len(data):,} bytes)")
+        print(f"Donor:  {donor_path} ({len(donor_data):,} bytes)")
+        print(f"Output: {output_path}")
+        print()
+
+    # Validate donor
+    donor_type = detect_exe_type(donor_pe)
+    if donor_type != "cracked":
+        print(f"WARNING: Donor exe does not look pre-cracked (type={donor_type}, "
+              f"EP section={donor_pe.ep_section().name if donor_pe.ep_section() else '?'})")
+
+    # Find .text sections in both
+    orig_text = next((s for s in pe.sections if s.name == ".text"), None)
+    donor_text = next((s for s in donor_pe.sections if s.name == ".text"), None)
+    if not orig_text or not donor_text:
+        print("ERROR: Could not find .text section in one or both executables")
+        return changes
+
+    if orig_text.raw_size != donor_text.raw_size:
+        print(f"ERROR: .text section size mismatch: "
+              f"original=0x{orig_text.raw_size:X} donor=0x{donor_text.raw_size:X}")
+        return changes
+
+    if verbose:
+        print(f"[PATCH 1] Text transplant: copying {orig_text.raw_size:,} bytes "
+              f"of decrypted .text from donor")
+        print(f"          Source: donor file offset 0x{donor_text.raw_addr:X}")
+        print(f"          Dest:   output file offset 0x{orig_text.raw_addr:X}")
+        print()
+
+    # --- Patch 1: Copy decrypted .text from donor ---
+    donor_text_bytes = donor_data[donor_text.raw_addr:
+                                  donor_text.raw_addr + donor_text.raw_size]
+    data[orig_text.raw_addr:orig_text.raw_addr + orig_text.raw_size] = donor_text_bytes
+    changes["patches"].append({
+        "name": "Text Transplant",
+        "size": orig_text.raw_size,
+        "source": f"donor offset 0x{donor_text.raw_addr:X}",
+    })
+
+    # --- Patch 2: Change entry point to OEP ---
+    ep_offset = pe.opt_start + 16
+    old_ep = read_u32(data, ep_offset)
+    write_u32(data, ep_offset, RETAIL_OEP_RVA)
+    changes["patches"].append({
+        "name": "Redirect Entry Point to OEP",
+        "old_ep": f"0x{old_ep:X}",
+        "new_ep": f"0x{RETAIL_OEP_RVA:X}",
+    })
+    if verbose:
+        print(f"[PATCH 2] Entry point redirected: 0x{old_ep:X} → 0x{RETAIL_OEP_RVA:X}")
+        print(f"          (Sitext SecuROM stub → original .text CRT startup)")
+        print()
+
+    # --- Patch 3: Zero Security directory ---
+    sec_rva, sec_size = pe.get_data_dir(PE_SECURITY_DIR_INDEX)
+    if sec_rva or sec_size:
+        sec_dir_off = pe.data_dir_offset + PE_SECURITY_DIR_INDEX * 8
+        write_u32(data, sec_dir_off, 0)
+        write_u32(data, sec_dir_off + 4, 0)
+        changes["patches"].append({
+            "name": "Zero Security Directory",
+            "offset": f"0x{sec_dir_off:X}",
+        })
+        if verbose:
+            print(f"[PATCH 3] Zeroed Security directory (was RVA=0x{sec_rva:X} Size=0x{sec_size:X})")
+            print()
+
+    # --- Patch 4: Zero PE checksum and IAT data directory ---
+    checksum_off = pe.opt_start + 64
+    old_checksum = read_u32(data, checksum_off)
+    if old_checksum:
+        write_u32(data, checksum_off, 0)
+        changes["patches"].append({"name": "Zero PE Checksum"})
+        if verbose:
+            print(f"[PATCH 4] Zeroed PE checksum (was 0x{old_checksum:X})")
+
+    # Zero the IAT data directory — it points to SecuROM's Sidata IAT which
+    # is no longer relevant (we use .rdata IAT via the rebuilt IDT instead)
+    iat_dir_off = pe.data_dir_offset + 12 * 8
+    old_iat_rva = read_u32(data, iat_dir_off)
+    if old_iat_rva:
+        write_u32(data, iat_dir_off, 0)
+        write_u32(data, iat_dir_off + 4, 0)
+        if verbose:
+            print(f"          Zeroed IAT data directory (was RVA 0x{old_iat_rva:X})")
+    if verbose and (old_checksum or old_iat_rva):
+        print()
+
+    # --- Patch 5: Rebuild import directory with .rdata IAT entries ---
+    # The text transplant means .text code uses the game's ORIGINAL IAT in .rdata
+    # (not SecuROM's relocated IAT in Sidata). We must build an IDT whose
+    # FirstThunk entries point to the .rdata IAT so the Windows loader resolves them.
+    # We extract the correct IDT entries from the donor (cracked) exe.
+
+    securom_sec = None
+    for s in pe.sections:
+        if s.name == ".securom":
+            securom_sec = s
+
+    import_injected = False
+    if securom_sec:
+        # Extract the .rdata-based IDT entries from the donor exe
+        donor_idt_rva = donor_pe.get_data_dir(1)[0]
+        donor_sec = next((s for s in donor_pe.sections if s.contains_rva(donor_idt_rva)), None)
+
+        rdata_idt_entries: list[tuple[int, int, int, int, int]] = []
+        if donor_sec:
+            donor_idt_off = donor_sec.rva_to_file(donor_idt_rva)
+            off = donor_idt_off
+            while off + 20 <= len(donor_data):
+                oft = read_u32(donor_data, off)
+                ts = read_u32(donor_data, off + 4)
+                fc = read_u32(donor_data, off + 8)
+                name_rva = read_u32(donor_data, off + 12)
+                ft = read_u32(donor_data, off + 16)
+                if oft == 0 and name_rva == 0 and ft == 0:
+                    break
+                # Only take entries whose FirstThunk is in .rdata (0x705000-0x7F5012)
+                # These are the game's original imports that .text code references
+                rdata_sec = next((s for s in pe.sections if s.name == ".rdata"), None)
+                if rdata_sec and rdata_sec.contains_rva(ft):
+                    rdata_idt_entries.append((oft, ts, fc, name_rva, ft))
+                off += 20
+
+        if rdata_idt_entries:
+            # Write new IDT into .securom padding
+            padding_file = securom_sec.raw_addr + securom_sec.virt_size
+            padding_file = (padding_file + 15) & ~15
+            padding_rva = securom_sec.virt_addr + (padding_file - securom_sec.raw_addr)
+            space_avail = (securom_sec.raw_addr + securom_sec.raw_size) - padding_file
+
+            # Space: entries + cruise.dll entry + null terminator + dll name + IAT/OFT
+            needed = (len(rdata_idt_entries) + 2) * 20 + 32
+            if space_avail >= needed and padding_rva < pe.size_of_image:
+                cursor_file = padding_file
+                cursor_rva = padding_rva
+                new_idt_rva = cursor_rva
+
+                # Write the .rdata-based IDT entries
+                for oft, ts, fc, name_rva, ft in rdata_idt_entries:
+                    write_u32(data, cursor_file + 0, oft)
+                    write_u32(data, cursor_file + 4, 0)
+                    write_u32(data, cursor_file + 8, 0)
+                    write_u32(data, cursor_file + 12, name_rva)
+                    write_u32(data, cursor_file + 16, ft)
+                    cursor_file += 20
+                    cursor_rva += 20
+
+                # Add cruise.dll entry
+                cruise_idt_off = cursor_file
+                cursor_file += 20
+                cursor_rva += 20
+
+                # Null terminator
+                data[cursor_file:cursor_file + 20] = b"\x00" * 20
+                cursor_file += 20
+                cursor_rva += 20
+
+                # DLL name string
+                dll_name_bytes = b"cruise.dll\x00"
+                dll_name_rva = cursor_rva
+                data[cursor_file:cursor_file + len(dll_name_bytes)] = dll_name_bytes
+                cursor_file += len(dll_name_bytes)
+                cursor_rva += len(dll_name_bytes)
+                if cursor_file % 4:
+                    pad = 4 - (cursor_file % 4)
+                    cursor_file += pad
+                    cursor_rva += pad
+
+                # IAT for cruise.dll (import by ordinal #1)
+                ordinal_import = 0x80000001
+                iat_rva = cursor_rva
+                struct.pack_into("<I", data, cursor_file, ordinal_import)
+                struct.pack_into("<I", data, cursor_file + 4, 0)
+                cursor_file += 8
+                cursor_rva += 8
+
+                # OFT for cruise.dll
+                oft_rva = cursor_rva
+                struct.pack_into("<I", data, cursor_file, ordinal_import)
+                struct.pack_into("<I", data, cursor_file + 4, 0)
+                cursor_file += 8
+                cursor_rva += 8
+
+                # Fill in cruise.dll IDT entry
+                write_u32(data, cruise_idt_off + 0, oft_rva)
+                write_u32(data, cruise_idt_off + 4, 0)
+                write_u32(data, cruise_idt_off + 8, 0)
+                write_u32(data, cruise_idt_off + 12, dll_name_rva)
+                write_u32(data, cruise_idt_off + 16, iat_rva)
+
+                # Update Import Directory data dir
+                total_entries = len(rdata_idt_entries) + 2  # + cruise + null
+                write_u32(data, pe.data_dir_offset + 1 * 8, new_idt_rva)
+                write_u32(data, pe.data_dir_offset + 1 * 8 + 4, total_entries * 20)
+
+                import_injected = True
+                changes["patches"].append({
+                    "name": "Rebuild IDT with .rdata IAT + cruise.dll",
+                    "new_idt_rva": f"0x{new_idt_rva:X}",
+                    "game_imports": len(rdata_idt_entries),
+                })
+                if verbose:
+                    print(f"[PATCH 5] Rebuilt import directory at RVA 0x{new_idt_rva:X}")
+                    print(f"          {len(rdata_idt_entries)} game imports "
+                          f"(.rdata IAT) + cruise.dll")
+                    print()
+
+    if not import_injected and verbose:
+        print("[PATCH 5] WARNING: Import directory not rebuilt!")
+        print("          The exe may crash due to unresolved .rdata IAT entries.")
+        print()
+
+    # --- Write output ---
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(bytes(data))
+    changes["output_size"] = len(data)
+
+    if verbose:
+        print(f"{'=' * 60}")
+        print(f"Output written: {output_path} ({len(data):,} bytes)")
+        print()
+        print("HOW IT WORKS:")
+        print("  The patched exe has its .text section pre-decrypted (from donor).")
+        print("  Entry point goes directly to the game's CRT startup, skipping")
+        print("  SecuROM's Sitext stub entirely. No Product Activation runs.")
+        print("  cruise.dll creates the signaled Event that inline trigger checks")
+        print("  expect when they fire during gameplay.")
+        print()
+        print("REQUIREMENTS:")
+        print(f"  1. Place cruise.dll next to the patched exe:")
+        print(f"     {output_path.parent / 'cruise.dll'}")
+        print(f"  2. Run the patched exe normally.")
+        print()
+        print("NOTE: The patched exe remains ~16 MB (same as original).")
+        print("      Only .text content and PE headers are modified.")
+
+    return changes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Remove SecuROM v7.38 DRM from Mercenaries 2 demo executable")
+        description="Remove SecuROM v7.37/7.38 DRM from Mercenaries 2 executables")
     parser.add_argument("input", nargs="?",
-                        help="Path to Merc2-Demo.exe")
+                        help="Path to the protected exe (demo or retail)")
     parser.add_argument("--output", "-o",
-                        help="Output path (default: <input_dir>/Merc2-Demo-Patched.exe)")
+                        help="Output path (default: auto-named in same directory)")
+    parser.add_argument("--donor", "-d",
+                        help="Path to pre-cracked donor exe (required for retail)")
     parser.add_argument("--timer", type=float, default=0.0,
                         help="Demo timer value in seconds (0=disabled, default: 0)")
     parser.add_argument("--analyze", action="store_true",
                         help="Only analyze the PE structure, don't patch")
     parser.add_argument("--generate-cruise", action="store_true",
                         help="Generate cruise.dll next to the output exe")
+    parser.add_argument("--generate-cruise-asi", action="store_true",
+                        help="Generate cruise.asi for use with ASI Loader (no exe patching)")
+    parser.add_argument("--asi-output",
+                        help="Output path for cruise.asi (with --generate-cruise-asi)")
     parser.add_argument("--verbose", "-v", action="store_true", default=True,
                         help="Verbose output (default: true)")
     parser.add_argument("--quiet", "-q", action="store_true",
@@ -794,6 +1091,32 @@ def main() -> None:
 
     if args.quiet:
         args.verbose = False
+
+    # Standalone ASI generation (no exe input required)
+    if args.generate_cruise_asi:
+        if args.asi_output:
+            asi_path = Path(args.asi_output)
+        elif args.input:
+            asi_path = Path(args.input).parent / "scripts" / "cruise.asi"
+        else:
+            asi_path = Path("cruise.asi")
+        asi_path.parent.mkdir(parents=True, exist_ok=True)
+        asi_data = generate_cruise_dll()
+        asi_path.write_bytes(asi_data)
+        if not args.quiet:
+            print(f"Generated: {asi_path} ({len(asi_data):,} bytes)")
+            print(f"  This is a valid PE DLL loadable by ASI Loader via LoadLibrary.")
+            print(f"  DllMain creates Event: v7_XXXX (PID XOR 0x19EA3FD3)")
+            print(f"  bManualReset=TRUE, bInitialState=TRUE (signaled)")
+            print()
+            print("Setup for ASI Loader (no exe patching required):")
+            print("  1. Place dinput8.dll (ASI Loader Win32) in game directory")
+            print("  2. Place cruise.asi in game/scripts/ folder")
+            print("  3. Create game/scripts/global.ini with:")
+            print("       [GlobalSets]")
+            print("       DontLoadFromDllMain=0")
+            print("  4. Run the game normally")
+        sys.exit(0)
 
     if not args.input:
         parser.print_help()
@@ -808,14 +1131,59 @@ def main() -> None:
         data = input_path.read_bytes()
         pe = PEInfo(data)
         pe.print_analysis()
+        exe_type = detect_exe_type(pe)
+        print(f"\nDetected type: {exe_type}")
+        if exe_type == "retail":
+            print("  → Use --donor <cracked_exe> to patch this retail executable")
+        elif exe_type == "demo":
+            print("  → Can be patched directly (no donor needed)")
+        elif exe_type == "cracked":
+            print("  → This is already a cracked/unpacked executable")
         sys.exit(0)
 
-    if args.output:
-        output_path = Path(args.output)
-    else:
-        output_path = input_path.parent / "Merc2-Demo-Patched.exe"
+    # Detect exe type
+    data = input_path.read_bytes()
+    pe = PEInfo(data)
+    exe_type = detect_exe_type(pe)
 
-    changes = patch_demo_exe(input_path, output_path, args.timer, verbose=args.verbose)
+    if args.verbose:
+        print(f"Detected executable type: {exe_type}")
+        print()
+
+    if exe_type == "retail":
+        if not args.donor:
+            print("ERROR: Retail exe requires a donor (pre-cracked) executable.")
+            print("       Use: --donor <path_to_cracked_Mercenaries2.exe>")
+            print()
+            print("       The donor is the 51 MB pre-cracked exe with decrypted .text.")
+            print("       It can be found in the CRACK/ directory of the game ISO.")
+            sys.exit(1)
+
+        donor_path = Path(args.donor)
+        if not donor_path.exists():
+            print(f"ERROR: Donor file not found: {donor_path}")
+            sys.exit(1)
+
+        if args.output:
+            output_path = Path(args.output)
+        else:
+            output_path = input_path.parent / (input_path.stem + "-Patched.exe")
+
+        changes = patch_retail_exe(input_path, output_path, donor_path,
+                                   verbose=args.verbose)
+    elif exe_type == "cracked":
+        print("This executable is already cracked/unpacked. No patching needed.")
+        print("Just place cruise.dll next to it and run.")
+        sys.exit(0)
+    else:
+        # Demo or unknown — use original demo patcher
+        if args.output:
+            output_path = Path(args.output)
+        else:
+            output_path = input_path.parent / (input_path.stem + "-Patched.exe")
+
+        changes = patch_demo_exe(input_path, output_path, args.timer,
+                                 verbose=args.verbose)
 
     if args.generate_cruise:
         cruise_path = output_path.parent / "cruise.dll"
@@ -823,8 +1191,9 @@ def main() -> None:
         cruise_path.write_bytes(cruise_data)
         if args.verbose:
             print(f"\nGenerated: {cruise_path} ({len(cruise_data):,} bytes)")
-            print("NOTE: This is a minimal functional replica. For best compatibility,")
-            print("      use the original cruise.dll from the retail crack if available.")
+            print("  Creates Event: v7_XXXX (PID XOR 0x19EA3FD3)")
+            print("  bManualReset=TRUE, bInitialState=TRUE (signaled)")
+            print("  Matches original crack cruise.dll behavior.")
 
 
 if __name__ == "__main__":

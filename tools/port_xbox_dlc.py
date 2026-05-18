@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Port Xbox 360 DLC content to PC-compatible patch WAD.
+"""DEPRECATED: Use tools/dlc_port.py instead.
+
+Port Xbox 360 DLC content to PC-compatible patch WAD.
 
 Converts the Xbox 360 "Blow It Up Again Pack" DLC from its big-endian
 STFS/FFCS/sges/UCFX format into a PC ``vz-patch.wad`` that the engine

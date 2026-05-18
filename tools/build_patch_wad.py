@@ -133,48 +133,16 @@ function LoadSingleton(tSaveData, bAutoDeactivate)
 end
 '''
 
+from ffcs_patch_wad import (  # noqa: E402
+    FFCS_CERT_BLOB,
+    PAGE_SIZE,
+    PTHS_TRAILER,
+    _align_up,
+    build_patch_wad_single,
+)
+
 SGES_MAGIC = b"sges"
 CSUM_TAG = b"CSUM"
-PAGE_SIZE = 0x8000  # 32 KB
-
-# 258-byte PTHS trailer marker (null-terminated ASCII string appended after all
-# path strings in every working WAD — identical across all 8 tested archives).
-# The engine validates its presence; omitting it causes a black-screen hang.
-PTHS_TRAILER = (
-    b"xa37dd45ffe100bfffcc9753aabac325f07cb3fa231144fe2e33ae4783feead2"
-    b"b8a73ff021fac326df0ef9753ab9cdf6573ddff0312fab0b0ff39779eaff312"
-    b"a4f5de65892ffee33a44569bebf21f66d22e54a22347efd375981188743afd9"
-    b"9baacc342d88a99321235798725fedcbf43252669dade32415fee89da543bf23"
-    b"d4ex"
-)
-assert len(PTHS_TRAILER) == 258
-
-# The 144-byte build certificate blob (byte-for-byte identical across all WADs)
-FFCS_CERT_BLOB = bytes([
-    0xa8, 0xd8, 0x46, 0xfa, 0x28, 0x87, 0x0e, 0x14,
-    0x9a, 0xd3, 0x31, 0x71, 0xe2, 0x54, 0x0a, 0x8f,
-    0xf8, 0xab, 0x0a, 0x3b, 0x3e, 0xf1, 0x5e, 0x66,
-    0xd0, 0xf6, 0x53, 0xf7, 0x78, 0xe9, 0xe5, 0x39,
-    0x5a, 0x54, 0x22, 0xc1, 0x54, 0x1a, 0xb8, 0xe6,
-    0x87, 0x4d, 0xdf, 0xe8, 0xc7, 0x59, 0x73, 0x20,
-    0x4e, 0x90, 0x0b, 0x60, 0x14, 0x3c, 0x27, 0xe5,
-    0x61, 0x2d, 0x98, 0xde, 0xce, 0x7a, 0xe7, 0x99,
-    0x55, 0x65, 0x16, 0x18, 0x5d, 0xc3, 0x47, 0x56,
-    0xbc, 0x8d, 0x0b, 0xfa, 0x50, 0x42, 0x72, 0x5b,
-    0x86, 0x2f, 0x61, 0x34, 0x10, 0xca, 0x8b, 0x9f,
-    0x5c, 0x81, 0x02, 0x16, 0x20, 0x83, 0x0e, 0xfe,
-    0xf2, 0x47, 0xce, 0xac, 0xc4, 0x30, 0x7d, 0x4d,
-    0xd5, 0x29, 0x48, 0xea, 0x7a, 0x15, 0x11, 0xf0,
-    0x14, 0x63, 0xfe, 0xbc, 0x5a, 0xbd, 0x08, 0x56,
-    0x7f, 0x80, 0x10, 0x63, 0x6a, 0xdf, 0xb9, 0x59,
-    0x07, 0x93, 0x56, 0x7c, 0x71, 0x03, 0xe7, 0xec,
-    0xbb, 0x49, 0xf6, 0x1c, 0x80, 0x86, 0x49, 0x42,
-])
-assert len(FFCS_CERT_BLOB) == 144
-
-
-def _align_up(value: int, alignment: int) -> int:
-    return (value + alignment - 1) & ~(alignment - 1)
 
 
 # ── WAD metadata extraction ──────────────────────────────────────────
@@ -286,94 +254,15 @@ def build_patch_wad(
 ) -> bytes:
     """Build a complete FFCS patch WAD containing a single block.
 
-    Layout:
-      [0x000 - 0x0FF]  FFCS header (256 bytes padded)
-      [0x8000]         INDX data (1 entry × 12 bytes)
-      [0x800C]         ASET data (N entries × 16 bytes)
-      [ASET_end]       PTHS data (null-terminated path string)
-      [0x208000]       DATA: sges-compressed block
-      [DATA_end]       Page-aligned end
+    Delegates to the shared ffcs_patch_wad module.
     """
-    # Fixed layout offsets (matching original WAD conventions)
-    indx_offset = 0x8000
-    indx_size = 12  # 1 entry
-
-    aset_offset = indx_offset + indx_size
-    aset_size = len(aset_entries) * 16
-
-    pths_offset = aset_offset + aset_size
-    pths_bytes = pths_string.encode("utf-8") + b"\x00" + PTHS_TRAILER + b"\x00"
-    pths_size = len(pths_bytes)
-
-    # DATA starts at page 0x41 (same convention as original)
-    data_offset = 0x208000
-    data_page_index = data_offset // PAGE_SIZE  # = 0x41
-
-    # Calculate block pages (round up to PAGE_SIZE)
-    block_pages = _align_up(len(compressed_block), PAGE_SIZE) // PAGE_SIZE
-    total_data_size = block_pages * PAGE_SIZE
-
-    # Total file size
-    file_size = data_offset + total_data_size
-
-    # ── Build FFCS header ──
-    # Magic + version + chunk count
-    header = bytearray(256)
-    struct.pack_into("<4sII", header, 0, b"FFCS", 2, 7)
-
-    # 5 chunk rows at offset 0x0C (12 bytes each = 60 bytes, ending at 0x48)
-    chunk_rows_off = 0x0C
-    # Row 0: INDX
-    struct.pack_into("<4sII", header, chunk_rows_off + 0,
-                     b"INDX", indx_offset, 1)  # meta=1 (1 block entry)
-    # Row 1: DATA
-    struct.pack_into("<4sII", header, chunk_rows_off + 12,
-                     b"DATA", data_offset, 36)  # meta=36 (constant in all WADs)
-    # Row 2: CSUM
-    struct.pack_into("<4sII", header, chunk_rows_off + 24,
-                     b"CSUM", csum_value, len(aset_entries))  # meta = entry count
-    # Row 3: ASET
-    struct.pack_into("<4sII", header, chunk_rows_off + 36,
-                     b"ASET", aset_offset, len(aset_entries))
-    # Row 4: PTHS
-    struct.pack_into("<4sII", header, chunk_rows_off + 48,
-                     b"PTHS", pths_offset, 1)  # meta=1 (1 path string)
-
-    # 144-byte certificate blob at offset 0x48
-    header[0x48:0x48 + 144] = FFCS_CERT_BLOB
-
-    # Rest of header (0xD8 to 0xFF) is zero-padded (already zeroed)
-
-    # ── Allocate output buffer ──
-    out = bytearray(file_size)
-    out[0:256] = header
-
-    # ── Write INDX entry ──
-    # Remap page_index to our data region (block 0 starts at data_page_index)
-    struct.pack_into("<III", out, indx_offset,
-                     data_page_index,
-                     indx_entry["packed_field"],
-                     (indx_entry["flags"] << 16) | block_pages)
-
-    # ── Write ASET entries ──
-    # Remap block index in u32_2 to 0 (this patch has only 1 block at index 0)
-    for i, aset in enumerate(aset_entries):
-        off = aset_offset + i * 16
-        # Rewrite u32_2: keep low 16 bits, set high 16 bits to 0 (our block index)
-        u2_remapped = (0 << 16) | (aset["u32_2"] & 0xFFFF)
-        struct.pack_into("<IIII", out, off,
-                         aset["asset_hash"],
-                         aset["u32_1"],
-                         u2_remapped,
-                         aset["u32_3"])
-
-    # ── Write PTHS ──
-    out[pths_offset:pths_offset + pths_size] = pths_bytes
-
-    # ── Write DATA (compressed block) ──
-    out[data_offset:data_offset + len(compressed_block)] = compressed_block
-
-    return bytes(out)
+    return build_patch_wad_single(
+        indx_entry=indx_entry,
+        aset_entries=aset_entries,
+        pths_string=pths_string,
+        compressed_block=compressed_block,
+        csum_value=csum_value,
+    )
 
 
 # ── String mod convenience ────────────────────────────────────────────

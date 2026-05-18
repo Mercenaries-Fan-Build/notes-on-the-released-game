@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Port Mercenaries 2 Xbox 360 DLC content to PC ``vz-patch.wad`` format.
+"""DEPRECATED: Use tools/dlc_port.py instead.
+
+Port Mercenaries 2 Xbox 360 DLC content to PC ``vz-patch.wad`` format.
 
 The Xbox 360 "Blow It Up Again Pack" DLC uses the same FFCS/sges/UCFX format
 family as the PC version, but big-endian (PowerPC byte order).  All 4-byte
