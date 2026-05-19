@@ -446,7 +446,6 @@ RETAIL_EXE ?=
 crack-game:
 	@test -n "$(RETAIL_EXE)" || (echo "error: set RETAIL_EXE=path/to/Mercenaries2.exe (v1.0 or v1.1 retail)" >&2; exit 1)
 	@test -f "$(RETAIL_EXE)" || (echo "error: retail exe not found at $(RETAIL_EXE)" >&2; exit 1)
-	@"$(PYTHON)" -c "import bsdiff4" 2>/dev/null || (echo "error: bsdiff4 not available — run: .venv/bin/pip install bsdiff4" >&2; exit 1)
 	@mkdir -p "$(OUTPUT)/patched"
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/apply_securom_patch.py" \
 	  "$(RETAIL_EXE)" \
