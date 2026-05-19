@@ -19,7 +19,7 @@ Usage:
   python3 tools/apply_securom_patch.py --generate-patch <retail> <cracked> -o <patch_file>
 
 Requirements:
-  - bsdiff4 Python package (pip install bsdiff4)
+  - Python 3.12+ (stdlib only for patching; bsdiff4 only needed for --generate-patch)
 """
 from __future__ import annotations
 
@@ -90,24 +90,84 @@ def generate_cruise_dll() -> bytes:
     return _gen()
 
 
+def _find_bspatch() -> str:
+    """Locate bspatch executable. Checks bundled tools/bin/, PATH, then bsdiff4."""
+    import shutil
+
+    bin_dir = Path(__file__).parent / "bin"
+    if sys.platform == "win32":
+        bundled = bin_dir / "bspatch.exe"
+    else:
+        bundled = bin_dir / "bspatch"
+
+    if bundled.exists():
+        return str(bundled)
+
+    system = shutil.which("bspatch")
+    if system:
+        return system
+
+    return ""
+
+
 def _apply_bsdiff(source: bytes, patch_file: Path, label: str, verbose: bool) -> bytes:
-    """Apply a single bsdiff patch and return the result."""
-    import bsdiff4
+    """Apply a single bsdiff patch using external bspatch binary or bsdiff4."""
+    import subprocess
+    import tempfile
 
     if not patch_file.exists():
         print(f"ERROR: Patch file not found: {patch_file}")
         sys.exit(1)
 
-    patch_data = patch_file.read_bytes()
     if verbose:
-        print(f"  Patch: {patch_file.name} ({len(patch_data):,} bytes)")
+        print(f"  Patch: {patch_file.name} ({patch_file.stat().st_size:,} bytes)")
         print(f"  Applying {label}...")
 
-    try:
-        result = bsdiff4.patch(source, patch_data)
-    except Exception as e:
-        print(f"ERROR: {label} failed: {e}")
-        sys.exit(1)
+    bspatch_exe = _find_bspatch()
+
+    if bspatch_exe:
+        if verbose:
+            print(f"  Using: {bspatch_exe}")
+        with tempfile.TemporaryDirectory() as td:
+            src_path = Path(td) / "source.bin"
+            out_path = Path(td) / "output.bin"
+            src_path.write_bytes(source)
+            try:
+                subprocess.run(
+                    [bspatch_exe, str(src_path), str(out_path), str(patch_file)],
+                    check=True, capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"ERROR: {label} failed: {e.stderr.decode(errors='replace')}")
+                sys.exit(1)
+            except FileNotFoundError:
+                print(f"ERROR: bspatch not found at {bspatch_exe}")
+                sys.exit(1)
+            result = out_path.read_bytes()
+    else:
+        try:
+            import bsdiff4
+            patch_data = patch_file.read_bytes()
+            result = bsdiff4.patch(source, patch_data)
+        except ImportError:
+            print("ERROR: No bspatch binary found and bsdiff4 package not installed.")
+            print()
+            print("  Option A: Place bspatch binary in tools/bin/")
+            if sys.platform == "win32":
+                print("            e.g. tools/bin/bspatch.exe")
+            else:
+                print("            e.g. tools/bin/bspatch")
+            print("  Option B: Install bspatch to PATH")
+            if sys.platform == "win32":
+                print("            e.g. scoop install bsdiff")
+            else:
+                print("            e.g. brew install bsdiff  (macOS)")
+                print("            e.g. apt install bsdiff   (Debian/Ubuntu)")
+            print("  Option C: pip install bsdiff4")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERROR: {label} failed: {e}")
+            sys.exit(1)
 
     if verbose:
         print(f"  Result: {len(result):,} bytes")
@@ -116,14 +176,6 @@ def _apply_bsdiff(source: bytes, patch_file: Path, label: str, verbose: bool) ->
 
 def apply_patch(input_exe: Path, output_exe: Path,
                 generate_cruise: bool = True, verbose: bool = True) -> None:
-    try:
-        import bsdiff4  # noqa: F401
-    except ImportError:
-        print("ERROR: bsdiff4 package required. Install with:")
-        print("  pip install bsdiff4")
-        print("  # or: .venv/bin/pip install bsdiff4")
-        sys.exit(1)
-
     if not input_exe.exists():
         print(f"ERROR: Input EXE not found: {input_exe}")
         sys.exit(1)
