@@ -174,6 +174,156 @@ def _apply_bsdiff(source: bytes, patch_file: Path, label: str, verbose: bool) ->
     return result
 
 
+def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
+    """Inject cruise.dll into the EXE's import table.
+
+    In this EXE, all sections have RawAddr == VirtualAddr, so RVA == file offset.
+    The IDT lives in the last section ('reloaded') which has VirtualSize 0x1000
+    but RawSize only 0x330. We append our entry and extend the raw size.
+    """
+    import struct
+
+    lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+    pe_off = lfanew + 4
+    num_sections = struct.unpack_from("<H", data, pe_off + 2)[0]
+    opt_off = pe_off + 20
+    magic = struct.unpack_from("<H", data, opt_off)[0]
+    sec_off = opt_off + (224 if magic == 0x10B else 240)
+
+    import_dir_off = opt_off + 96 + 1 * 8
+    import_rva = struct.unpack_from("<I", data, import_dir_off)[0]
+
+    if not import_rva:
+        if verbose:
+            print("WARNING: No import directory found, skipping cruise.dll injection")
+        return bytes(data)
+
+    # Find the section containing the IDT (should be last section)
+    idt_sec_idx = None
+    for i in range(num_sections):
+        s = sec_off + i * 40
+        va = struct.unpack_from("<I", data, s + 12)[0]
+        vs = struct.unpack_from("<I", data, s + 8)[0]
+        if va <= import_rva < va + max(vs, 0x1000):
+            idt_sec_idx = i
+            break
+
+    if idt_sec_idx is None:
+        if verbose:
+            print("WARNING: Cannot find section for import directory")
+        return bytes(data)
+
+    sec_hdr = sec_off + idt_sec_idx * 40
+    sec_va = struct.unpack_from("<I", data, sec_hdr + 12)[0]
+    sec_vs = struct.unpack_from("<I", data, sec_hdr + 8)[0]
+    sec_rs = struct.unpack_from("<I", data, sec_hdr + 16)[0]
+    sec_ra = struct.unpack_from("<I", data, sec_hdr + 20)[0]
+    sec_name = data[sec_hdr:sec_hdr + 8].rstrip(b"\x00").decode("ascii", errors="replace")
+
+    # In this EXE, RVA == file offset for all sections
+    rva_is_offset = (sec_va == sec_ra)
+    if not rva_is_offset:
+        if verbose:
+            print("WARNING: RVA != file offset, skipping injection")
+        return bytes(data)
+
+    # Count existing IDT entries (RVA == file offset)
+    num_imports = 0
+    off = import_rva
+    while off + 20 <= len(data):
+        name_rva = struct.unpack_from("<I", data, off + 12)[0]
+        ft_rva = struct.unpack_from("<I", data, off + 16)[0]
+        if name_rva == 0 and ft_rva == 0:
+            break
+        # Check if cruise.dll is already imported
+        if name_rva + 10 <= len(data):
+            existing = data[name_rva:name_rva + 10]
+            if existing.lower() == b"cruise.dll":
+                if verbose:
+                    print("cruise.dll already in import table, skipping injection")
+                return bytes(data)
+        num_imports += 1
+        off += 20
+
+    if verbose:
+        print(f"\nInjecting cruise.dll import into '{sec_name}' section...")
+        print(f"  Existing imports: {num_imports}")
+
+    # The null terminator is at import_rva + num_imports * 20.
+    # We overwrite it with the cruise.dll entry, then append a new null
+    # terminator + DLL name + IAT + OFT.
+    cruise_idt_off = import_rva + num_imports * 20
+    cursor = cruise_idt_off + 20  # after cruise entry
+
+    # New null terminator
+    null_term_off = cursor
+    cursor += 20
+
+    # DLL name
+    dll_name_bytes = b"cruise.dll\x00"
+    dll_name_rva = cursor
+    cursor += len(dll_name_bytes)
+    if cursor % 4:
+        cursor += 4 - (cursor % 4)
+
+    # IAT: import by ordinal #1 (bit 31 set + ordinal 1)
+    iat_rva = cursor
+    cursor += 8  # ordinal entry + null terminator
+
+    # OFT: same
+    oft_rva = cursor
+    cursor += 8
+
+    # Check virtual space
+    if cursor > sec_va + sec_vs:
+        if verbose:
+            print(f"  WARNING: Not enough virtual space (need 0x{cursor - sec_va:X}, have 0x{sec_vs:X})")
+        return bytes(data)
+
+    # Extend file if needed
+    if cursor > len(data):
+        data.extend(b"\x00" * (cursor - len(data)))
+
+    # Update section raw size
+    new_rs = cursor - sec_ra
+    new_rs = (new_rs + 0x1FF) & ~0x1FF
+    struct.pack_into("<I", data, sec_hdr + 16, new_rs)
+    if sec_ra + new_rs > len(data):
+        data.extend(b"\x00" * (sec_ra + new_rs - len(data)))
+
+    # Write null terminator
+    data[null_term_off:null_term_off + 20] = b"\x00" * 20
+
+    # Write DLL name
+    data[dll_name_rva:dll_name_rva + len(dll_name_bytes)] = dll_name_bytes
+
+    # Write IAT
+    struct.pack_into("<I", data, iat_rva, 0x80000001)
+    struct.pack_into("<I", data, iat_rva + 4, 0)
+
+    # Write OFT
+    struct.pack_into("<I", data, oft_rva, 0x80000001)
+    struct.pack_into("<I", data, oft_rva + 4, 0)
+
+    # Write cruise.dll IDT entry
+    struct.pack_into("<I", data, cruise_idt_off + 0, oft_rva)
+    struct.pack_into("<I", data, cruise_idt_off + 4, 0)
+    struct.pack_into("<I", data, cruise_idt_off + 8, 0)
+    struct.pack_into("<I", data, cruise_idt_off + 12, dll_name_rva)
+    struct.pack_into("<I", data, cruise_idt_off + 16, iat_rva)
+
+    # Update import directory size
+    struct.pack_into("<I", data, import_dir_off + 4, (num_imports + 2) * 20)
+
+    if verbose:
+        print(f"  cruise.dll IDT entry #{num_imports + 1}")
+        print(f"  DLL name RVA: 0x{dll_name_rva:X}")
+        print(f"  IAT RVA: 0x{iat_rva:X} (ordinal #1)")
+        print(f"  Section raw size: 0x{sec_rs:X} -> 0x{new_rs:X}")
+
+    return bytes(data)
+
+
 def apply_patch(input_exe: Path, output_exe: Path,
                 generate_cruise: bool = True, verbose: bool = True) -> None:
     if not input_exe.exists():
@@ -231,6 +381,9 @@ def apply_patch(input_exe: Path, output_exe: Path,
             print("  VERIFIED: Output matches expected cracked EXE")
     else:
         print("WARNING: Output MD5 doesn't match expected. Patch may be corrupt.")
+
+    if generate_cruise:
+        result = _inject_cruise_import(bytearray(result), verbose)
 
     output_exe.parent.mkdir(parents=True, exist_ok=True)
     output_exe.write_bytes(result)

@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port crack-game test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -452,6 +452,9 @@ crack-game:
 	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
 
 # ---- Xbox 360 DLC Port ----
+# Produces a complete vz-patch.wad with DLC blocks + Lua bootstrap.
+# Set SOURCE_WAD to the retail vz.wad for integrated bootstrap injection.
+# Without SOURCE_WAD, produces DLC blocks only (no bootstrap).
 
 DLC_RAR ?= Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar
 
@@ -460,6 +463,7 @@ dlc-port:
 	@mkdir -p "$(OUTPUT)/data/Audios"
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/dlc_port.py" \
 	  --x360-rar "$(DLC_RAR)" \
+	  $(if $(SOURCE_WAD),--source-wad "$(SOURCE_WAD)") \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
 
@@ -554,3 +558,42 @@ test-windows-down:
 
 test-windows-logs:
 	docker compose -f docker-compose.test-windows.yml logs -f
+
+# ---- DLC Bootstrap Injection (standalone/legacy) ----
+# PREFERRED: use `make dlc-port DLC_RAR=... SOURCE_WAD=...` which integrates
+# the bootstrap directly into the DLC porting pipeline (single command).
+#
+# These targets remain as alternatives for building bootstrap-only WADs or
+# merging into pre-existing patch WADs without re-running the full DLC port.
+
+SOURCE_WAD ?=
+
+dlc-bootstrap:
+	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
+	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/data"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_patch_wad.py" \
+	  --inject-dlc-bootstrap \
+	  --source-wad "$(SOURCE_WAD)" \
+	  --output "$(OUTPUT)/data/vz-patch.wad"
+
+dlc-bootstrap-merge:
+	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
+	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: existing vz-patch.wad not found (run dlc-port first)" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_patch_wad.py" \
+	  --inject-dlc-bootstrap-merge \
+	  --source-wad "$(SOURCE_WAD)" \
+	  --merge-from "$(OUTPUT)/data/vz-patch.wad" \
+	  --output "$(OUTPUT)/data/vz-patch.wad"
+
+# ---- DLC Enable ASI Plugin Generation ----
+# Generates dlc_enable.asi (Lua hook DLL) via the Python PE generator.
+# No C compiler needed — outputs a valid 32-bit PE DLL from pure Python.
+
+dlc-enable-asi:
+	@mkdir -p "$(OUTPUT)/scripts"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_dlc_asi.py" \
+	  --output "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"

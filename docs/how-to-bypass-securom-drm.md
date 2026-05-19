@@ -55,6 +55,7 @@ workspace/
 1. Move the `workspace/xinput1_3.dll` to your `Games/Mercenaries 2 World in Flames/` folder.
 1. Move the `workspace/bsdiff-v4.3-win-x86/*.exe` files into the `workspace/notes-on-the-released-game-main/tools/bin/` folder.
 1. Create an `updates` folder in your Mercenaries 2 game folder at `Games/Mercenaries 2 World in Flames/updates`
+1. Create a `bin` folder in your notes-on-the-released-game-main/ folder at `workspace/notes-on-the-released-game-main/tools/bin/`
 1. Open a terminal and navigate to your copy of this repository in `workspace/notes-on-the-released-game-main`
 1. Run the following command **changing the parts you need for your machine** 
 

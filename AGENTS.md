@@ -94,6 +94,11 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 | `make filter-maracaibo-placements OUTPUT=./output` | Tight bbox + strict Maracaibo vz_state → `maracaibo_placements.json` |
 | `make preview-placements OUTPUT=./output` | Vite viewer opens **placement map** (`placement-preview.html`) |
 | `make viewer` | Launch Three.js asset viewer (main app) |
+| `make dlc-port DLC_RAR=... SOURCE_WAD=... OUTPUT=./output` | Xbox 360 DLC → PC `vz-patch.wad` (2,196 blocks + bootstrap) |
+| `make dlc-bootstrap SOURCE_WAD=... OUTPUT=./output` | Inject DLC bootstrap scripts into new patch WAD (standalone) |
+| `make dlc-bootstrap-merge SOURCE_WAD=... OUTPUT=./output` | Inject DLC bootstrap into existing DLC patch WAD (legacy) |
+| `make crack-game RETAIL_EXE=... OUTPUT=./output` | Apply SecuROM bypass to retail EXE |
+| `make dlc-enable-asi OUTPUT=./output` | Generate `dlc_enable.asi` plugin (Lua hooks for DLC activation) |
 
 ### Resuming after failure
 
