@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug cruise-dll test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -612,3 +612,29 @@ dlc-asi-native-debug:
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
 	@echo "NOTE: This build shows a MessageBox on load for diagnostics."
+
+# ---- Lua binding enumeration ASI (runtime + static .rdata inventory) ----
+
+lua-enum-asi:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/lua_enum_asi" mingw
+	@cp "$(REPO_ROOT)/tools/lua_enum_asi/lua_enum.asi" "$(OUTPUT)/scripts/lua_enum.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/lua_enum.asi to <game>/scripts/"
+	@echo "After running the game ~10s, collect scripts/lua_bindings_runtime.{txt,json}"
+
+lua-enum-asi-debug:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/lua_enum_asi" mingw-debug
+	@cp "$(REPO_ROOT)/tools/lua_enum_asi/lua_enum.asi" "$(OUTPUT)/scripts/lua_enum.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/lua_enum.asi to <game>/scripts/"
+
+# ---- cruise.dll (SecuROM spoof + debug console + ASI status) ----
+
+cruise-dll:
+	$(MAKE) -C "$(REPO_ROOT)/tools/cruise_dll" mingw
+	@cp "$(REPO_ROOT)/tools/cruise_dll/cruise.dll" "$(REPO_ROOT)/dlls/self_compiled_cruise.dll"
+	@echo ""
+	@echo "Install: copy dlls/self_compiled_cruise.dll to <game>/cruise.dll"
+	@echo "         (or <game>/scripts/cruise.asi for ASI Loader mode)"
