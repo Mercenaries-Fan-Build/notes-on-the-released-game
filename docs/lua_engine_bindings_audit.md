@@ -787,8 +787,6 @@ These scripts are `import()`-able modules available in the game's WAD:
 - **~200+ functions** have CERTAIN evidence (exact EXE offsets, disassembly, or working hooks)
 - **~100+ additional functions** have CONFIRMED evidence (named in multiple RE reports)
 - **All functions** use the same `luaL_Reg` registration mechanism and can be hooked identically
-- **Three hooks are already working** in production (`IsOnlineConnected`, `IsDLC`, `IsMatchmakingInternet`)
-- The **scan-and-patch** technique in `dlc_enable.c` generalizes to any registered binding
 
 ### What We Don't Know
 
@@ -802,4 +800,4 @@ These scripts are `import()`-able modules available in the game's WAD:
 
 1. **Full table dump**: Write a script that walks the `.rdata` section from `0x00798770` to `0x00799200`, reading all `{string_ptr, func_ptr}` pairs until `{NULL, NULL}` terminators, and producing a complete function list with namespace attribution
 2. **Lua bytecode decompilation**: Decompile the 114 scripts in `scripts_vz` to recover full call-site evidence for every binding
-3. **Runtime enumeration**: Use the captured `lua_State*` (from an ASI plugin) to iterate all registered globals and tables via `lua_next()`, producing the definitive binding inventory
+3. **Runtime enumeration**: Use `lua_enum.asi` — see [`lua_runtime_enumeration.md`](lua_runtime_enumeration.md) — to iterate `_G` via `lua_next()` and dump `scripts/lua_bindings_runtime.{txt,json}`

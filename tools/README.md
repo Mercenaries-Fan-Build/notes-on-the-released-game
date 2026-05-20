@@ -42,6 +42,13 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 | [`pandemic_hash.py`](pandemic_hash.py) | Pandemic Studios FNV-1a hash (confirmed from Mercs 1 source) |
 | [`filter_pmc_base.py`](filter_pmc_base.py) | `pmc_base_asset_list.json`, `placements/pmc_base.json`, streaming groups |
 | [`regen_pmc_base_glbs.py`](regen_pmc_base_glbs.py) | Regenerate GLBs for PMC asset list |
+| [`dump_lua_bindings.py`](dump_lua_bindings.py) | Walk `luaL_Reg` tables in cracked EXE `.rdata` → JSON/CSV |
+
+```bash
+.venv/bin/python3 tools/dump_lua_bindings.py \\
+  --exe game-files/cracked-parts/Crack/Mercenaries2.exe \\
+  --json output/lua_bindings_dump.json --csv output/lua_bindings_dump.csv
+```
 
 Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, `regen-pmc-glbs` (see `make help`).
 
