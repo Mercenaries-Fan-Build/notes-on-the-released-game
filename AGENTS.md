@@ -99,6 +99,8 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 | `make dlc-bootstrap-merge SOURCE_WAD=... OUTPUT=./output` | Inject DLC bootstrap into existing DLC patch WAD (legacy) |
 | `make crack-game RETAIL_EXE=... OUTPUT=./output` | Apply SecuROM bypass to retail EXE |
 | `make dlc-enable-asi OUTPUT=./output` | Generate `dlc_enable.asi` plugin (Lua hooks for DLC activation) |
+| `make dlc-asi-native OUTPUT=./output` | Cross-compile `dlc_enable.asi` from C with MinGW (requires `brew install mingw-w64`) |
+| `make dlc-asi-native-debug OUTPUT=./output` | Same as above but with MessageBox popup on load (diagnostic) |
 
 ### Resuming after failure
 

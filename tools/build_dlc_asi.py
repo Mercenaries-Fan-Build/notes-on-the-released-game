@@ -814,9 +814,25 @@ def main() -> None:
                         help="Output path for the ASI plugin (default: dlc_enable.asi)")
     parser.add_argument("--verify", action="store_true",
                         help="Verify the generated PE structure")
+    parser.add_argument("--diagnostic", action="store_true",
+                        help="Generate the diagnostic-only version (file + MessageBox, no hooks)")
 
     args = parser.parse_args()
     output_path = Path(args.output)
+
+    if args.diagnostic:
+        from build_diagnostic_asi import generate_diagnostic_asi
+        print("Generating DIAGNOSTIC dlc_enable.asi (proves ASI loading works)...")
+        print()
+        asi_data = generate_diagnostic_asi(use_messagebox=True)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(asi_data)
+        print(f"Generated: {output_path} ({len(asi_data):,} bytes)")
+        print()
+        print("This is a DIAGNOSTIC build — it only writes a log file and shows a popup.")
+        print("Use it to verify the ASI Loader is loading plugins at all.")
+        print("Once confirmed working, rebuild without --diagnostic for full Lua hooks.")
+        return
 
     print("Generating dlc_enable.asi...")
     print()
@@ -853,6 +869,15 @@ def main() -> None:
     print("NOTE: For DLC contracts to actually load, vz-patch.wad must contain")
     print("      PC-compatible DLC Lua scripts. Use 'make dlc-bootstrap' to")
     print("      inject the bootstrap scripts into the patch WAD.")
+    print()
+    print("DEBUGGING: If the plugin doesn't seem to work (no behavior change):")
+    print("  python3 tools/build_dlc_asi.py --diagnostic --output scripts/dlc_enable.asi")
+    print("  This generates a simple version that writes dlc_enable.log + shows a popup.")
+    print("  If no log file appears, the ASI Loader itself isn't loading plugins.")
+    print()
+    print("NATIVE BUILD (recommended — has full logging):")
+    print("  brew install mingw-w64  # macOS")
+    print("  make dlc-asi-native OUTPUT=./output")
 
     if args.verify:
         print()

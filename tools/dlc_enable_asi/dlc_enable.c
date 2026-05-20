@@ -5,8 +5,8 @@
  * performs three operations to enable DLC content without modifying WAD files:
  *
  *   1. Hooks IsOnlineConnected() Lua binding → always returns true
- *   2. Hooks the Lua module system to inject DLC bootstrap on first ScriptInit
- *   3. Forces IsDLC session flag to true
+ *   2. Hooks IsDLC() → always returns true
+ *   3. Hooks IsMatchmakingInternet() → always returns true
  *
  * The game uses Lua 5.1.2 (float number type) with functions registered via
  * luaL_register into named tables (Sys, Net, Object, etc.). The Lua C API
@@ -33,6 +33,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 /* --------------------------------------------------------------------------
  * Mercenaries 2 EXE Layout (cracked retail, 53,482,288 bytes)
@@ -95,7 +96,8 @@ typedef int   (*pfn_luaL_loadstring)(lua_State* L, const char* s);
 /* --- Global state --- */
 
 static HMODULE g_hModule = NULL;
-static FILE* g_logFile = NULL;
+static HANDLE g_logHandle = INVALID_HANDLE_VALUE;
+static char g_logPath[MAX_PATH] = {0};
 
 /* Original function pointers (for chaining) */
 static lua_CFunction g_origIsOnlineConnected = NULL;
@@ -108,26 +110,37 @@ static pfn_lua_pushnumber  g_lua_pushnumber = NULL;
 /* Flag: DLC bootstrap has been injected */
 static volatile LONG g_dlcBootstrapDone = 0;
 
-/* --- Logging --- */
+/* --- Logging (uses Win32 API only - no CRT dependency for early init) --- */
 
 static void LogInit(void) {
-    char path[MAX_PATH];
-    GetModuleFileNameA(g_hModule, path, MAX_PATH);
-    /* Replace .asi with .log */
-    char* dot = strrchr(path, '.');
+    GetModuleFileNameA(g_hModule, g_logPath, MAX_PATH);
+    char* dot = strrchr(g_logPath, '.');
     if (dot) strcpy(dot, ".log");
-    else strcat(path, ".log");
-    g_logFile = fopen(path, "w");
+    else strcat(g_logPath, ".log");
+
+    g_logHandle = CreateFileA(g_logPath, GENERIC_WRITE, FILE_SHARE_READ,
+                              NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 
 static void Log(const char* fmt, ...) {
-    if (!g_logFile) return;
+    if (g_logHandle == INVALID_HANDLE_VALUE) return;
+    char buf[1024];
     va_list ap;
     va_start(ap, fmt);
-    vfprintf(g_logFile, fmt, ap);
+    int len = wvsprintfA(buf, fmt, ap);
     va_end(ap);
-    fputc('\n', g_logFile);
-    fflush(g_logFile);
+    if (len > 0) {
+        buf[len] = '\r'; buf[len+1] = '\n';
+        DWORD written;
+        WriteFile(g_logHandle, buf, len + 2, &written, NULL);
+    }
+}
+
+static void LogClose(void) {
+    if (g_logHandle != INVALID_HANDLE_VALUE) {
+        CloseHandle(g_logHandle);
+        g_logHandle = INVALID_HANDLE_VALUE;
+    }
 }
 
 /* --- Memory scanning utilities --- */
@@ -324,13 +337,15 @@ static DWORD WINAPI InitThread(LPVOID param) {
     InlineHook hookIsDLC = {0};
     InlineHook hookIsMatchmaking = {0};
 
+    Log("Worker thread started, sleeping 5 seconds for Lua init...");
+
     /* Wait for the game to finish loading (Lua state needs to be initialized) */
     Sleep(5000);
 
-    LogInit();
-    Log("=== dlc_enable.asi v1.0 ===");
+    Log("=== dlc_enable.asi v1.1 ===");
     Log("Mercenaries 2 DLC Content Activator");
-    Log("Scanning game memory...");
+    Log("Scanning game memory (rdata: 0x%08X, size: 0x%X)...",
+        RDATA_START_VA, RDATA_SIZE);
 
     /* --- Step 1: Find and hook IsOnlineConnected --- */
     DWORD str_isonline = FindStringInRdata("IsOnlineConnected");
@@ -421,11 +436,7 @@ static DWORD WINAPI InitThread(LPVOID param) {
     Log("      the DLC Lua scripts (compiled for PC, little-endian).");
     Log("      Use 'make dlc-bootstrap' to inject the bootstrap scripts.");
 
-    if (g_logFile) {
-        fclose(g_logFile);
-        g_logFile = NULL;
-    }
-
+    LogClose();
     return 0;
 }
 
@@ -436,10 +447,29 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         g_hModule = (HMODULE)hinstDLL;
         DisableThreadLibraryCalls(hinstDLL);
 
+        /* Open log IMMEDIATELY in DllMain — this is the first observable signal
+         * that the ASI was loaded at all. The log file existing proves loading. */
+        LogInit();
+        Log("=== dlc_enable.asi loaded ===");
+        Log("DllMain(DLL_PROCESS_ATTACH) at module 0x%08X", (DWORD)hinstDLL);
+        Log("Process ID: %d", GetCurrentProcessId());
+
+#ifdef DLC_ENABLE_MSGBOX
+        /* Compile with -DDLC_ENABLE_MSGBOX to get a visible popup on attach.
+         * Useful for debugging whether the ASI is being loaded at all.
+         * DO NOT ship with this enabled — it blocks the game startup. */
+        MessageBoxA(NULL,
+                    "dlc_enable.asi loaded successfully!\n\n"
+                    "This confirms the ASI Loader (dinput8.dll) is working.\n"
+                    "Check scripts/dlc_enable.log for details.",
+                    "DLC Enable Plugin", MB_OK | MB_ICONINFORMATION);
+#endif
+
         /* Spawn initialization on a separate thread.
          * We cannot do heavy work in DllMain (loader lock).
          * The 5-second delay in InitThread ensures Lua is initialized. */
         CreateThread(NULL, 0, InitThread, NULL, 0, NULL);
+        Log("Worker thread created, DllMain returning...");
     }
     return TRUE;
 }

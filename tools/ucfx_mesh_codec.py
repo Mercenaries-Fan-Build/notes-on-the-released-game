@@ -1285,10 +1285,10 @@ def decode_submesh(
         return [], [], {**meta, "skip": "empty_ib"}
 
     bad = sum(1 for x in indices if x == 65535)
-    if bad > max(8, len(indices) // 10):
+    if bad > max(8, len(indices) // 4):
         return [], [], {**meta, "skip": "too_many_sentinel_indices"}
 
-    max_idx = max(indices)
+    max_idx = max(x for x in indices if x != 65535) if any(x != 65535 for x in indices) else 0
     if max_idx > 200_000:
         return [], [], {**meta, "skip": "index_out_of_range"}
 

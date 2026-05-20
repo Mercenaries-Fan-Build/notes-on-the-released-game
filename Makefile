@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -597,3 +597,18 @@ dlc-enable-asi:
 	  --output "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+
+dlc-asi-native:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+
+dlc-asi-native-debug:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-debug
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "NOTE: This build shows a MessageBox on load for diagnostics."
