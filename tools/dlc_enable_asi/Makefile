@@ -13,18 +13,40 @@ CC_MSVC     = cl
 
 TARGET      = dlc_enable.asi
 SRC         = dlc_enable.c
-CFLAGS      = -O2 -Wall -shared -Wl,--enable-stdcall-fixup
+CFLAGS      = -O2 -Wall -shared -Wl,--enable-stdcall-fixup $(EXTRA_CFLAGS)
 LDFLAGS     = -lkernel32 -luser32
 
-.PHONY: all clean mingw mingw-debug msvc help
+.PHONY: all clean mingw mingw-nobootstrap mingw-bootstrap mingw-bootstrap-deferred mingw-bootstrap-early mingw-debug msvc help
 
+# Default: VZ-load bootstrap (import dlc01 at masterscript). ~19.5 KB stripped.
 all: mingw
 
+mingw: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1 -DDLC_ENABLE_CRASH_PATCH=1
 mingw: $(SRC)
 	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
 	$(STRIP_MINGW) $(TARGET)
-	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes)"
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) VZ_LOAD=1 CRASH_PATCH=1"
 	@echo "Copy to: <game>/scripts/dlc_enable.asi"
+	@echo "Log must show: VZ_LOAD=1 CRASH_PATCH=1; deferred inject ~3s after vz masterscript"
+
+# Net hooks only — no Lua bootstrap (bisection / logging-only).
+mingw-nobootstrap: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) NO bootstrap"
+
+# Alias for explicit bootstrap (same as default mingw).
+mingw-bootstrap: mingw
+
+# InitThread waits for loadMainShell + 120s, then injects.
+mingw-bootstrap-deferred: EXTRA_CFLAGS += -DDLC_ENABLE_DEFERRED_BOOTSTRAP=1
+mingw-bootstrap-deferred: mingw
+	@echo "Bootstrap: DEFERRED (120s after loadMainShell)"
+
+# Inject at first IsOnlineConnected — unsafe during shell movies (bisection only).
+mingw-bootstrap-early: EXTRA_CFLAGS += -DDLC_ENABLE_BOOTSTRAP=1
+mingw-bootstrap-early: mingw
+	@echo "Bootstrap: EARLY (IsOnlineConnected — may crash during shell)"
 
 mingw-debug: $(SRC)
 	$(CC_MINGW) $(CFLAGS) -DDLC_ENABLE_MSGBOX -o $(TARGET) $(SRC) $(LDFLAGS)
@@ -40,8 +62,11 @@ clean:
 
 help:
 	@echo "Usage:"
-	@echo "  make mingw        — Cross-compile with MinGW (macOS/Linux)"
-	@echo "  make mingw-debug  — Same but with MessageBox popup on load (diagnostic)"
+	@echo "  make mingw                  — Default (net hooks + Debug.Printf patch)"
+	@echo "  make mingw-bootstrap        — + import(dlc01) at vz level load (recommended)"
+	@echo "  make mingw-bootstrap-deferred — + import(dlc01) 120s after shell"
+	@echo "  make mingw-bootstrap-early  — + import(dlc01) at shell (unsafe)"
+	@echo "  make mingw-debug            — MessageBox popup on load (diagnostic)"
 	@echo "  make msvc         — Compile with MSVC (Windows)"
 	@echo "  make clean        — Remove build artifacts"
 	@echo ""

@@ -68,7 +68,7 @@ python -m venv .venv
 This will detect whether you have the 1.0 or 1.1 version of the PC game, and patch accordingly. For 1.0 games it'll update you to 1.1, and then apply the DRM patch, otherwise it'll just apply the DRM patch.
 
 1. Once the above is complete, copy the `Mercenaries2.exe` file from the `workspace/notes-on-the-released-game-main/output/Mercenaries2.exe` to your `Games/Mercenaries 2 World in Flames/` directory
-1. Take the `workspace/notes-on-the-released-game-main/output/pmc_blackbox.dll` file and put it in your `Games/Mercenaries 2 World in Flames/` directory (next to `Mercenaries2.exe`).
+1. Take the `workspace/notes-on-the-released-game-main/output/pmc_bb.dll` file and put it in your `Games/Mercenaries 2 World in Flames/` directory (next to `Mercenaries2.exe`).
 
 
 ## Start the game
@@ -79,7 +79,7 @@ For a quick sanity check, your folder structure in the game should look like thi
 ```
 Games/
 ├──Mercenaries 2 World in Flames/
-│   ├── pmc_blackbox.dll
+│   ├── pmc_bb.dll
 │   ├── Mercenaries2.exe
 │   ├── xinput1_3.dll
 │   ├── xinput1_3Hooked.dll

@@ -5,13 +5,23 @@ content without modifying game files on disk.
 
 ## What It Does
 
-Hooks three Lua-callable functions in the game's runtime:
+Default build (`make dlc-asi-native`):
 
-| Function | Effect |
-|----------|--------|
-| `IsOnlineConnected()` | Returns `true` (bypasses dead EA server check) |
-| `IsDLC()` | Returns `true` (enables DLC session flag) |
-| `IsMatchmakingInternet()` | Returns `true` (bypasses secondary online gate) |
+| Feature | Effect |
+|---------|--------|
+| `Debug.Printf` reg patch | Routes script `Debug.Printf(...)` to `Hook_LogPrintf` → `dlc_enable_crash.log` |
+| `print()` reg patch | Same for shell/bootstrap `print(...)` (string-first args only) |
+| Net hooks (optional) | `IsOnlineConnected` / unlock / matchmaking → return `true` |
+
+Does **not** inline-hook the shared stub at `0x006D5640` (that hits 60+ unrelated
+functions and floods the log). Verify bindings:
+
+```bash
+make debug-binding-report OUTPUT=./output
+```
+
+On PC retail, `Debug.Printf`, `print`, and `Sys.WriteToConsole` all point at the
+same no-op stub — there is no engine console to forward into; the reg patch is the restore path.
 
 ## Build Options
 

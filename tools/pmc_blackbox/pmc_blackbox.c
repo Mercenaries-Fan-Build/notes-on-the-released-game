@@ -1,13 +1,13 @@
 /**
- * pmc_blackbox.dll — SecuROM Spoof + Debug Console + ASI Loader
+ * pmc_bb.dll — SecuROM Spoof + Debug Console + ASI Loader
  *                    for Mercenaries 2: World in Flames
  *
  * Self-contained entry point that replaces the need for a separate ASI loader
  * (xinput1_3.dll / dinput8.dll proxy). Loaded via the game's import table.
  *
- * IMPORTANT: The game's import table must reference "pmc_blackbox.dll" (not
+ * IMPORTANT: The game's import table must reference "pmc_bb.dll" (not
  * "cruise.dll"). The exe patcher (tools/apply_securom_patch.py) handles this
- * automatically — it injects pmc_blackbox.dll into the import table.
+ * automatically — it injects pmc_bb.dll into the import table.
  *
  * Responsibilities:
  *   1. Creates the SecuROM v7 spoof Event (mandatory for game boot)
@@ -26,7 +26,7 @@
  * resolves this by ordinal) and pmc_log by name.
  *
  * Build (MinGW cross-compile from macOS/Linux):
- *   i686-w64-mingw32-gcc -shared -o pmc_blackbox.dll pmc_blackbox.c pmc_blackbox.def \
+ *   i686-w64-mingw32-gcc -shared -o pmc_bb.dll pmc_blackbox.c pmc_blackbox.def \
  *       -lkernel32 -luser32 -O2 -s -Wl,--enable-stdcall-fixup
  *
  * Architecture: 32-bit (x86) Windows DLL — Mercenaries 2 is a 32-bit game.
@@ -126,17 +126,29 @@ static void InitDebugConsole(void) {
     pmc_log("blackbox", "============================================");
 }
 
+/* --- Underground spawn fix --- */
+
+static void FixSpawnValidation(void) {
+    BYTE* flag = (BYTE*)0x00DFBD74;
+    DWORD oldProtect;
+    if (VirtualProtect(flag, 1, PAGE_READWRITE, &oldProtect)) {
+        *flag = 0x01;
+        VirtualProtect(flag, 1, oldProtect, &oldProtect);
+        pmc_log("blackbox", "Spawn validation flag set (0x00DFBD74 = 0x01)");
+    }
+}
+
 /* --- ASI plugin loader --- */
 
 static HINSTANCE g_hinstSelf = NULL;
 
 /**
  * Case-insensitive check whether a filename should be skipped (self-load prevention).
- * Skips: pmc_blackbox.dll, pmc_blackbox.asi, and the DLL's own module filename.
+ * Skips: pmc_bb.dll, pmc_bb.asi, and the DLL's own module filename.
  */
 static int IsSelfModule(const char *filename) {
-    if (_stricmp(filename, "pmc_blackbox.dll") == 0) return 1;
-    if (_stricmp(filename, "pmc_blackbox.asi") == 0) return 1;
+    if (_stricmp(filename, "pmc_bb.dll") == 0) return 1;
+    if (_stricmp(filename, "pmc_bb.asi") == 0) return 1;
 
     char self_name[MAX_PATH];
     if (GetModuleFileNameA(g_hinstSelf, self_name, MAX_PATH)) {
@@ -232,7 +244,7 @@ static void LoadASIPlugins(void) {
 
 /* --- Exported function (ordinal #1) ---
  *
- * The patched EXE imports pmc_blackbox.dll by ordinal #1. This function is
+ * The patched EXE imports pmc_bb.dll by ordinal #1. This function is
  * the target of that import. It doesn't need to do anything — the real work
  * happens in DllMain. But the export must exist for the import to resolve.
  */
@@ -254,6 +266,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
+
+        /* Fix underground spawn — must run before first spawn call */
+        FixSpawnValidation();
 
         /* Load all .asi plugins (replaces external ASI loader) */
         LoadASIPlugins();

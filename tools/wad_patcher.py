@@ -66,6 +66,21 @@ def crc32_mercs2(data: bytes) -> int:
     return (zlib.crc32(data, 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
 
 
+# Script UCFX entries use type_hash 0x42498680 → ASET type_id 35 (see docs/aset_format.md).
+SCRIPT_TYPE_HASH = 0x42498680
+SCRIPT_ASET_TYPE_ID = 35
+
+
+def script_aset_entry(asset_hash: int) -> dict:
+    """ASET row for a Lua script module (required for import() lookup)."""
+    return {
+        "asset_hash": asset_hash,
+        "u32_1": 0xFFFFFFFF,
+        "u32_2": 0,
+        "u32_3": SCRIPT_ASET_TYPE_ID,
+    }
+
+
 # ── Block header / entry parsing ─────────────────────────────────────
 
 def parse_block_entries(data: bytes) -> list[dict]:
@@ -183,6 +198,63 @@ def find_scripts_block_index(paths: list[str]) -> list[tuple[int, str]]:
         if "scripts_vz" in p.lower():
             results.append((i, p))
     return results
+
+
+# Retail PC vz.wad: scripts_vz is block 3197 (PTHS: scripts_vz_P000_Q3.block).
+# Block 1257 is c30624_P000_Q3.block (27 entries) — NOT scripts_vz (old doc typo).
+SCRIPTS_VZ_BLOCK_INDEX_RETAIL = 3197
+
+# PC retail scripts_vz has no Lua chunk named "vz"; chain-load via these if --vz-inject.
+DLC_BOOTSTRAP_HOOK_SCRIPTS = (
+    "vz",
+    "wifmissionflow",
+    "wifpmcinterior",
+)
+
+
+def resolve_scripts_vz_block_index(
+    source_wad: Path,
+    *,
+    explicit_index: int | None = None,
+) -> int:
+    """Resolve the scripts_vz block index in a retail vz.wad."""
+    if explicit_index is not None:
+        return explicit_index
+
+    paths = load_wad_paths(source_wad)
+    matches = find_scripts_block_index(paths)
+    if not matches:
+        raise ValueError(
+            f"No scripts_vz block in PTHS for {source_wad}. "
+            "Pass --scripts-block-index explicitly."
+        )
+    if len(matches) > 1:
+        # Prefer canonical scripts_vz_P000_Q3 over other matches.
+        for idx, path in matches:
+            if "scripts_vz_p000" in path.lower().replace("\\", "/"):
+                return idx
+        return matches[0][0]
+    return matches[0][0]
+
+
+def find_dlc_bootstrap_hook_script(
+    decompressed: bytes,
+    entries: list[dict],
+    *,
+    preferred_names: tuple[str, ...] = DLC_BOOTSTRAP_HOOK_SCRIPTS,
+) -> tuple[str, dict] | None:
+    """Pick a script entry to receive import('dlc01') wrapper bytecode."""
+    by_name: dict[str, dict] = {}
+    for entry in entries:
+        name = get_script_name(decompressed, entry)
+        if name and name != "(unknown)":
+            by_name[name] = entry
+
+    for name in preferred_names:
+        if name in by_name:
+            return name, by_name[name]
+
+    return None
 
 
 # ── patch_inplace (backward-compat API for csum_corruption_test.py) ──

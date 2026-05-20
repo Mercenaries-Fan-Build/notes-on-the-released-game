@@ -570,6 +570,61 @@ These are inferred from:
 
 ## 6. Technical Context
 
+### 6.0 Verified Lua C API VAs — Critical Functions
+
+> **IMPORTANT — VA CORRECTIONS (2026-05-20)**
+>
+> Earlier reverse-engineering passes incorrectly identified two VAs. These
+> corrections have been verified across 10+ independent call sites in the
+> binary. All future ASI plugins and hook code must use the corrected addresses.
+>
+> | Wrong VA | Was claimed to be | Actually is |
+> |----------|-------------------|-------------|
+> | **0x0085F050** | `luaL_loadbuffer` | **`luaL_typerror`** (error raiser) |
+> | **0x00868AD0** | `lua_pcall` | **`luaD_pcall`** (internal, not public API) |
+
+#### Definitive VA Table
+
+| Function | VA | Type | LTCG Calling Convention |
+|----------|-----|------|------------------------|
+| **`luaL_loadbuffer`** | **0x00860240** | Public API | EAX=name, EDX=L, stack=[buff, sz]; caller cleans 8 bytes |
+| **`lua_pcall`** | **0x0085DF50** | Public API | EAX=L, ECX=errfunc, EDI=nresults, stack=[nargs]; caller cleans 4 bytes |
+| `luaD_pcall` | 0x00868AD0 | Internal | EAX=L, EDX=ef, stack=[func_ptr, ud, old_top]; caller cleans 12 bytes |
+| `luaL_typerror` | 0x0085F050 | Public API | EAX=L, EDI=narg, stack=[expected_type_name] |
+| `luaL_argerror` | 0x0085EF70 | Public API | — |
+| `luaD_call` | 0x008688D0 | Internal | — |
+| `luaL_checklstring` | 0x0085D860 | Public API | — |
+| `f_call` | 0x0085DF30 | Static | Callback used internally by `lua_pcall` for `luaD_pcall` |
+| Type name table | 0x00B920D4 | Data | Array of Lua type name strings |
+
+#### cdecl Wrappers (standard `int f(lua_State* L)`)
+
+| Function | VA | Notes |
+|----------|-----|-------|
+| `luaB_loadstring` | 0x00860FC0 | Wraps `luaL_loadbuffer` (0x00860240) |
+| `luaB_pcall` | 0x008615F0 | Calls `luaD_pcall` (0x00868AD0) directly, NOT `lua_pcall` |
+
+#### Call Site Examples
+
+**`luaL_loadbuffer`** — from `luaB_loadstring` at 0x00861043:
+```asm
+mov eax, ebx       ; eax = chunkname (name)
+push ecx           ; push sz
+push ebp           ; push buff
+mov edx, esi       ; edx = L
+call 0x00860240    ; luaL_loadbuffer
+add esp, 8         ; caller cleans 2 stack args
+```
+
+**`lua_pcall`** — canonical pattern (10+ callers):
+```asm
+push <nargs>       ; 6A xx or register push
+xor ecx, ecx      ; errfunc = 0
+xor edi, edi       ; nresults = 0 (or "or edi, -1" for LUA_MULTRET)
+mov eax, esi       ; eax = L
+call 0x0085DF50    ; lua_pcall
+```
+
 ### 6.1 Lua State Layout (Lua 5.1.2 + float)
 
 ```c

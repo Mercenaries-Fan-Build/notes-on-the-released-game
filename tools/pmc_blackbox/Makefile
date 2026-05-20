@@ -1,5 +1,5 @@
 # Makefile for PMC Blackbox — SecuROM spoof + debug console + ASI loader
-# Output: pmc_blackbox.dll — game's import table must reference this name.
+# Output: pmc_bb.dll — game's import table must reference this name.
 #
 # Cross-compiles from macOS/Linux using MinGW, or native on Windows with MSVC.
 #
@@ -12,7 +12,7 @@ CC_MINGW    = i686-w64-mingw32-gcc
 STRIP_MINGW = i686-w64-mingw32-strip
 CC_MSVC     = cl
 
-TARGET      = pmc_blackbox.dll
+TARGET      = pmc_bb.dll
 SRC         = pmc_blackbox.c
 DEF         = pmc_blackbox.def
 CFLAGS      = -O2 -Wall -shared -Wl,--enable-stdcall-fixup
@@ -41,7 +41,7 @@ help:
 	@echo "  make msvc   — Compile with MSVC (Windows)"
 	@echo "  make clean  — Remove build artifacts"
 	@echo ""
-	@echo "Output: pmc_blackbox.dll (~4-6 KB) [PMC Blackbox]"
+	@echo "Output: pmc_bb.dll (~4-6 KB) [PMC Blackbox]"
 	@echo "  Place next to Mercenaries2.exe."
-	@echo "  Game import table must reference pmc_blackbox.dll (patch with exe tool)."
+	@echo "  Game import table must reference pmc_bb.dll (patch with exe tool)."
 	@echo "  Adds debug console + ASI plugin loading on startup."

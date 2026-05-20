@@ -11,7 +11,7 @@ Runs Windows 7 Ultimate in a Docker container via [dockur/windows](https://githu
 ### Prepare patched files on the host
 
 ```bash
-# 1. Crack the retail EXE (produces output/patched/Mercenaries2.exe + pmc_blackbox.dll)
+# 1. Crack the retail EXE (produces output/patched/Mercenaries2.exe + pmc_bb.dll)
 make crack-game RETAIL_EXE="path/to/Mercenaries2.exe" OUTPUT=./output
 
 # 2. Port DLC content (produces output/data/vz-patch.wad + audio .pws files)
@@ -48,7 +48,7 @@ After Windows setup completes, `install.bat` runs automatically and:
 
 1. Copies the game from `C:\Shared\game-install\` to `C:\Mercs2\` (if provided)
 2. Overwrites with the patched `Mercenaries2.exe` from `C:\Shared\patched\`
-3. Copies `pmc_blackbox.dll` (SecuROM spoof + ASI loader DLL)
+3. Copies `pmc_bb.dll` (SecuROM spoof + ASI loader DLL)
 4. Copies `vz-patch.wad` to `C:\Mercs2\data\`
 5. Copies DLC audio `.pws` files to `C:\Mercs2\data\Audios\`
 6. Creates a desktop shortcut
@@ -58,7 +58,7 @@ After Windows setup completes, `install.bat` runs automatically and:
 ### SecuROM crack works
 1. Double-click the "Mercenaries 2" desktop shortcut (or `C:\Mercs2\Mercenaries2.exe`)
 2. The game should reach the main menu without a SecuROM error dialog
-3. If it crashes, check that both `Mercenaries2.exe` and `pmc_blackbox.dll` are present
+3. If it crashes, check that both `Mercenaries2.exe` and `pmc_bb.dll` are present
 
 ### Game launches with DirectX 9
 1. Windows 7 includes DirectX 9 out of the box
@@ -111,6 +111,6 @@ docker compose -f docker-compose.test-windows.yml down -v
 | "KVM not available" | Enable virtualization in BIOS; verify `ls /dev/kvm` on host |
 | Windows install stuck | Give it time (up to 15 min); check logs for disk space issues |
 | Port 8006 in use | Change the port mapping in `docker-compose.test-windows.yml` |
-| Game crashes on launch | Verify both `Mercenaries2.exe` and `pmc_blackbox.dll` are in `C:\Mercs2\` |
+| Game crashes on launch | Verify both `Mercenaries2.exe` and `pmc_bb.dll` are in `C:\Mercs2\` |
 | No DLC content | Verify `C:\Mercs2\data\vz-patch.wad` exists and matches host file size |
 | RDP won't connect | Wait for Windows to finish installing; try noVNC first |

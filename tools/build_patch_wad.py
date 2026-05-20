@@ -54,6 +54,7 @@ from ffcs_wad import FFCSChunk, dump_paths_from_pths, extract_slice, parse_ffcs 
 from sges_compress import compress_sges  # noqa: E402
 from sges_decompress import decompress_sges_block, find_sges_offsets, parse_sges_header  # noqa: E402
 from wad_patcher import (  # noqa: E402
+    script_aset_entry,
     OILCON001_MOD_SOURCE,
     OILCON001_STRING_SWAPS,
     DEMO_QUIT_METHOD,
@@ -333,8 +334,11 @@ def cmd_build_string_mod_patch(
     print(f"  Output:     {output}")
 
     # Extract metadata for block 1257
-    print("\n[1/5] Extracting block 1257 metadata from original WAD...")
-    meta = extract_block_metadata(source_wad, 1257)
+    from wad_patcher import resolve_scripts_vz_block_index
+
+    scripts_idx = resolve_scripts_vz_block_index(source_wad)
+    print(f"\n[1/5] Extracting scripts_vz block (index {scripts_idx})...")
+    meta = extract_block_metadata(source_wad, scripts_idx)
     print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
           f"packed={meta['indx_entry']['packed_field']}, "
           f"flags_pages=0x{meta['indx_entry']['flags_and_page_count']:08X}")
@@ -343,7 +347,7 @@ def cmd_build_string_mod_patch(
     print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
 
     # Decompress
-    print("\n[2/5] Decompressing block 1257...")
+    print("\n[2/5] Decompressing scripts_vz block...")
     compressed_data = meta["compressed_block_data"]
     decompressed = decompress_sges_block(
         compressed_data, 0, len(compressed_data)
@@ -522,17 +526,18 @@ def cmd_build_autocomplete_patch(
     print("\n[1/5] Compiling auto-complete Lua source...")
     bytecode = compile_lua_source(OILCON001_MOD_SOURCE, luac)
 
-    # Step 2: Extract block 1257 metadata
-    print("\n[2/5] Extracting block 1257 metadata from original WAD...")
-    meta = extract_block_metadata(source_wad, 1257)
+    from wad_patcher import resolve_scripts_vz_block_index
+
+    scripts_idx = resolve_scripts_vz_block_index(source_wad)
+    print(f"\n[2/5] Extracting scripts_vz block (index {scripts_idx})...")
+    meta = extract_block_metadata(source_wad, scripts_idx)
     print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
           f"packed={meta['indx_entry']['packed_field']}")
     print(f"  ASET entries: {meta['aset_entry_count']}")
     print(f"  PTHS: {meta['pths_string']}")
     print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
 
-    # Step 3: Decompress block 1257
-    print("\n[3/5] Decompressing block 1257...")
+    print("\n[3/5] Decompressing scripts_vz block...")
     compressed_data = meta["compressed_block_data"]
     decompressed = decompress_sges_block(
         compressed_data, 0, len(compressed_data)
@@ -609,8 +614,11 @@ def cmd_remove_boundaries(
     bytecode = compile_lua_source(WIFVZBOUNDARY_NOOP_SOURCE, luac)
 
     # Step 2: Extract block 1257 metadata
-    print("\n[2/6] Extracting block 1257 metadata from original WAD...")
-    meta = extract_block_metadata(source_wad, 1257)
+    from wad_patcher import resolve_scripts_vz_block_index
+
+    scripts_idx = resolve_scripts_vz_block_index(source_wad)
+    print(f"\n[2/6] Extracting scripts_vz block (index {scripts_idx})...")
+    meta = extract_block_metadata(source_wad, scripts_idx)
     print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
           f"packed={meta['indx_entry']['packed_field']}")
     print(f"  ASET entries: {meta['aset_entry_count']}")
@@ -618,7 +626,7 @@ def cmd_remove_boundaries(
     print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
 
     # Step 3: Decompress block 1257
-    print("\n[3/6] Decompressing block 1257...")
+    print("\n[3/6] Decompressing scripts_vz block...")
     compressed_data = meta["compressed_block_data"]
     decompressed = decompress_sges_block(
         compressed_data, 0, len(compressed_data)
@@ -882,17 +890,18 @@ end
         print("\n[2/7] Compiling vz DLC import call...")
         vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
 
-    # Step 3: Extract block 1257 metadata
-    print("\n[3/7] Extracting block 1257 metadata from original WAD...")
-    meta = extract_block_metadata(source_wad, 1257)
+    from wad_patcher import resolve_scripts_vz_block_index
+
+    scripts_idx = resolve_scripts_vz_block_index(source_wad)
+    print(f"\n[3/7] Extracting scripts_vz block (index {scripts_idx})...")
+    meta = extract_block_metadata(source_wad, scripts_idx)
     print(f"  INDX entry: page={meta['indx_entry']['page_index']}, "
           f"packed={meta['indx_entry']['packed_field']}")
     print(f"  ASET entries: {meta['aset_entry_count']}")
     print(f"  PTHS: {meta['pths_string']}")
     print(f"  Compressed size: {meta['block_compressed_size']:,} bytes")
 
-    # Step 4: Decompress block 1257
-    print("\n[4/7] Decompressing block 1257...")
+    print("\n[4/7] Decompressing scripts_vz block...")
     compressed_data = meta["compressed_block_data"]
     decompressed = decompress_sges_block(
         compressed_data, 0, len(compressed_data)
@@ -902,7 +911,6 @@ end
     entries = parse_block_entries(decompressed)
     print(f"  UCFX entries: {len(entries)}")
 
-    # Locate the vz master script
     vz_entry = None
     for entry in entries:
         name = get_script_name(decompressed, entry)
@@ -910,16 +918,21 @@ end
             vz_entry = entry
             break
 
-    if vz_entry is None:
-        print("ERROR: 'vz' master script not found in block 1257", file=sys.stderr)
-        available = [get_script_name(decompressed, e) for e in entries[:20]]
-        print(f"  First 20 scripts: {available}", file=sys.stderr)
-        return 1
-
-    print(f"\n  Found 'vz' master script:")
-    print(f"    Index: {vz_entry['index']}")
-    print(f"    Hash:  0x{vz_entry['hash']:08X}")
-    print(f"    Size:  {vz_entry['size']:,} bytes")
+    if vz_entry is None and inject_into_vz:
+        print(
+            "  NOTE: No 'vz' script chunk in scripts_vz (normal on PC retail).",
+            file=sys.stderr,
+        )
+        print(
+            "  Continuing with dlc01 entry only (use ASI to import('dlc01') at runtime).",
+            file=sys.stderr,
+        )
+        inject_into_vz = False
+    elif vz_entry is not None:
+        print(f"\n  Found 'vz' master script:")
+        print(f"    Index: {vz_entry['index']}")
+        print(f"    Hash:  0x{vz_entry['hash']:08X}")
+        print(f"    Size:  {vz_entry['size']:,} bytes")
 
     # Step 5: Build the dlc01 UCFX chunk
     print("\n[5/7] Building dlc01 UCFX container...")
@@ -1004,12 +1017,7 @@ end
 
     # Update ASET entries to include dlc01
     aset_entries = list(meta["aset_entries"])
-    aset_entries.append({
-        "asset_hash": dlc01_asset_hash,
-        "u32_1": 0xFFFFFFFF,
-        "u32_2": 0,
-        "u32_3": 0,
-    })
+    aset_entries.append(script_aset_entry(dlc01_asset_hash))
 
     patch_wad = build_patch_wad(
         indx_entry=meta["indx_entry"],
@@ -1096,7 +1104,10 @@ end
 
     # Extract and modify scripts_vz block
     print("\n[2/5] Extracting and modifying scripts_vz block...")
-    meta = extract_block_metadata(source_wad, 1257)
+    from wad_patcher import resolve_scripts_vz_block_index
+
+    scripts_idx = resolve_scripts_vz_block_index(source_wad)
+    meta = extract_block_metadata(source_wad, scripts_idx)
 
     compressed_data = meta["compressed_block_data"]
     decompressed = decompress_sges_block(
@@ -1118,9 +1129,15 @@ end
         dlc01_asset_hash,
     )
 
-    # Inject import("dlc01") into vz
-    vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
-    modified = apply_bytecode_replacement_to_block(modified, "vz", vz_import_bytecode)
+    entries = parse_block_entries(modified)
+    if any(get_script_name(modified, e) == "vz" for e in entries):
+        vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
+        modified = apply_bytecode_replacement_to_block(modified, "vz", vz_import_bytecode)
+    else:
+        print(
+            "  NOTE: Skipping vz bytecode replace (no vz chunk); dlc01 added only.",
+            file=sys.stderr,
+        )
 
     modified = apply_string_mod_to_block(modified)
 
@@ -1140,12 +1157,7 @@ end
 
     # Build a PatchBlock for scripts_vz
     aset_entries = list(meta["aset_entries"])
-    aset_entries.append({
-        "asset_hash": dlc01_asset_hash,
-        "u32_1": 0xFFFFFFFF,
-        "u32_2": 0,
-        "u32_3": 0,
-    })
+    aset_entries.append(script_aset_entry(dlc01_asset_hash))
 
     scripts_block = PatchBlock(
         compressed_data=new_sges,
@@ -1476,8 +1488,8 @@ def main() -> int:
 
     ap.add_argument("--source-wad", type=Path,
                     help="Path to original vz.wad")
-    ap.add_argument("--block-index", type=int, default=1257,
-                    help="Block index to patch (default: 1257 = scripts_vz)")
+    ap.add_argument("--block-index", type=int, default=None,
+                    help="scripts_vz block index (default: auto-detect from PTHS, retail=3197)")
     ap.add_argument("--modified-block", type=Path,
                     help="Path to modified block (sges or raw)")
     ap.add_argument("--raw", action="store_true",
@@ -1549,7 +1561,11 @@ def main() -> int:
             ap.error("--analyze-block requires --source-wad")
         if args.output is None:
             ap.error("--analyze-block requires --output")
-        return cmd_analyze_block(args.source_wad, args.block_index, args.output)
+        block_index = args.block_index
+        if block_index is None:
+            from wad_patcher import resolve_scripts_vz_block_index
+            block_index = resolve_scripts_vz_block_index(args.source_wad)
+        return cmd_analyze_block(args.source_wad, block_index, args.output)
 
     if args.inject_dlc_bootstrap:
         if args.source_wad is None:

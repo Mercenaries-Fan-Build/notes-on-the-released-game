@@ -75,7 +75,13 @@ from build_patch_wad import (  # noqa: E402
 )
 from pandemic_hash import pandemic_hash_m2  # noqa: E402
 from sges_decompress import decompress_sges_block  # noqa: E402
-from wad_patcher import parse_block_entries, get_script_name  # noqa: E402
+from wad_patcher import (  # noqa: E402
+    find_dlc_bootstrap_hook_script,
+    get_script_name,
+    parse_block_entries,
+    resolve_scripts_vz_block_index,
+    script_aset_entry,
+)
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────
@@ -363,14 +369,16 @@ end
         print(f"  ERROR: {e}", file=sys.stderr)
         return None
 
-    # Step 3: Extract block 1257 (scripts_vz) from the retail WAD
+    # Step 3: Extract scripts_vz block from the retail WAD (block 3197 on PC retail)
     print("  [bootstrap 3/5] Extracting scripts_vz block from retail WAD...")
     try:
-        meta = extract_block_metadata(source_wad, 1257)
+        scripts_idx = resolve_scripts_vz_block_index(source_wad)
+        meta = extract_block_metadata(source_wad, scripts_idx)
     except Exception as e:
-        print(f"  ERROR extracting block 1257: {e}", file=sys.stderr)
+        print(f"  ERROR extracting scripts_vz block: {e}", file=sys.stderr)
         return None
 
+    print(f"    Block index: {scripts_idx}")
     print(f"    PTHS: {meta['pths_string']}")
     print(f"    ASET entries: {meta['aset_entry_count']}")
     print(f"    Compressed size: {meta['block_compressed_size']:,} bytes")
@@ -382,11 +390,27 @@ end
     entries = parse_block_entries(decompressed)
     print(f"    UCFX entries: {len(entries)}")
 
-    # Verify vz master script exists
-    vz_found = any(get_script_name(decompressed, e) == "vz" for e in entries)
-    if not vz_found:
-        print("  ERROR: 'vz' master script not found in block 1257", file=sys.stderr)
-        return None
+    hook = find_dlc_bootstrap_hook_script(decompressed, entries)
+    hook_name = None
+    if hook is None:
+        print(
+            "  NOTE: No script chunk named 'vz' in scripts_vz (expected on PC retail).",
+        )
+        print(
+            "        Adding dlc01 only — use dlc_enable ASI bootstrap to import('dlc01') at runtime.",
+        )
+    else:
+        hook_name, hook_entry = hook
+        if hook_name != "vz":
+            print(
+                f"  NOTE: Found {hook_name!r} but PC bootstrap only replaces a 'vz' chunk.",
+            )
+            hook_name = None
+        else:
+            print(
+                f"    Bootstrap hook: {hook_name!r} "
+                f"(hash=0x{hook_entry['hash']:08X}, size={hook_entry['size']:,})"
+            )
 
     # Step 4: Modify the block
     print("  [bootstrap 4/5] Injecting DLC bootstrap into scripts_vz block...")
@@ -404,8 +428,11 @@ end
         decompressed, dlc01_ucfx, dlc01_asset_hash,
     )
 
-    # Replace vz bytecode with the import("dlc01") wrapper
-    modified = apply_bytecode_replacement_to_block(modified, "vz", vz_import_bytecode)
+    if hook_name == "vz":
+        print("    Replacing vz bytecode with import('dlc01') wrapper...")
+        modified = apply_bytecode_replacement_to_block(
+            modified, "vz", vz_import_bytecode
+        )
 
     # Apply existing mods (oilcon001 string swaps + demo timer disable)
     modified = apply_string_mod_to_block(modified)
@@ -431,12 +458,7 @@ end
 
     # Build PatchBlock with updated ASET
     aset_entries = list(meta["aset_entries"])
-    aset_entries.append({
-        "asset_hash": dlc01_asset_hash,
-        "u32_1": 0xFFFFFFFF,
-        "u32_2": 0,
-        "u32_3": 0,
-    })
+    aset_entries.append(script_aset_entry(dlc01_asset_hash))
 
     return PatchBlock(
         compressed_data=new_sges,
