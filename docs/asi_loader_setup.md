@@ -205,11 +205,11 @@ later calls `WaitForSingleObject` on this Event name, it returns immediately
   separate PA bypass.
 - **Already-cracked exe**: Not needed (SecuROM stub is already bypassed).
 
-### Why Not Just Use cruise.dll Directly?
+### Why Not Just Use pmc_blackbox.dll Directly?
 
-The game doesn't import `cruise.dll`, so Windows won't load it automatically.
-Options:
-1. **Patch the import table** (our current `remove_securom.py` approach) — requires exe modification
+The game doesn't import `pmc_blackbox.dll` by default, so Windows won't load it
+automatically. Options:
+1. **Patch the import table** (our current approach) — requires exe modification to reference `pmc_blackbox.dll`
 2. **ASI Loader proxy** (this document) — no exe modification, just drop files in
 
 ---
@@ -266,7 +266,7 @@ Mercenaries 2 for SecuROM bypass.
 | Reversible | Delete 2 files | Re-download exe |
 | Retail PA bypass | Partial (disc only) | Full (text transplant) |
 | Demo support | Full | Full |
-| Extra files | dinput8.dll + cruise.asi + global.ini | cruise.dll + patched exe |
+| Extra files | dinput8.dll + cruise.asi + global.ini | pmc_blackbox.dll + patched exe |
 | Complexity | Drop-in | PE surgery |
 | Compatibility | Any version | Version-specific offsets |
 

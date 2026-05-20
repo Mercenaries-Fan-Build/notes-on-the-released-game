@@ -1,7 +1,7 @@
 # Mercenaries 2 — Windows Test Environment (dockur/windows)
 #
 # Runs Windows 7 in a Docker container for verifying:
-#   - SecuROM crack works (patched EXE + cruise.dll)
+#   - SecuROM crack works (patched EXE + pmc_blackbox.dll)
 #   - Game launches with DirectX 9
 #   - vz-patch.wad loads DLC content
 #
@@ -24,7 +24,7 @@ services:
     image: dockurr/windows
     container_name: mercs2-win7-test
     environment:
-      VERSION: "7u"
+      VERSION: "10"
       RAM_SIZE: "8G"
       CPU_CORES: "4"
       DISK_SIZE: "64G"

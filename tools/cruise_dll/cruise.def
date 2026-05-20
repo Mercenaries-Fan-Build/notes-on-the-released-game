@@ -1,6 +1,0 @@
-; cruise.dll export definition
-; The patched EXE imports cruise.dll by ordinal #1.
-; This .def file ensures the exported function has the correct ordinal.
-LIBRARY cruise
-EXPORTS
-    CruiseEntry @1

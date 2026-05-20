@@ -11,8 +11,11 @@ patches in sequence:
 Patches are stored as bsdiff deltas in tools/patches/ — no game code is
 redistributed.
 
-After patching, cruise.dll is generated alongside the output (it creates the
-Win32 Event that inline SecuROM trigger checks look for).
+After patching, pmc_blackbox.dll is injected into the import table (ordinal #1).
+The pmc_blackbox.dll handles SecuROM event spoofing, opens a debug console, and
+loads ASI plugins — replacing the legacy cruise.dll entirely.
+
+Build pmc_blackbox.dll with: make pmc-blackbox
 
 Usage:
   python3 tools/apply_securom_patch.py <retail_exe> [-o <output>]
@@ -81,13 +84,6 @@ def detect_version(data: bytes) -> str | None:
         return "cracked"
 
     return None
-
-
-def generate_cruise_dll() -> bytes:
-    """Generate minimal cruise.dll — creates the SecuROM spoof Event."""
-    sys.path.insert(0, str(Path(__file__).parent))
-    from remove_securom import generate_cruise_dll as _gen
-    return _gen()
 
 
 def _find_bspatch() -> str:
@@ -174,14 +170,20 @@ def _apply_bsdiff(source: bytes, patch_file: Path, label: str, verbose: bool) ->
     return result
 
 
-def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
-    """Inject cruise.dll into the EXE's import table.
+def _inject_blackbox_import(data: bytearray, verbose: bool) -> bytes:
+    """Inject pmc_blackbox.dll into the EXE's import table.
 
     In this EXE, all sections have RawAddr == VirtualAddr, so RVA == file offset.
     The IDT lives in the last section ('reloaded') which has VirtualSize 0x1000
     but RawSize only 0x330. We append our entry and extend the raw size.
+
+    The game imports pmc_blackbox.dll by ordinal #1 (BlackboxEntry). This DLL
+    replaces the legacy cruise.dll — it handles the SecuROM event spoof, opens
+    a debug console, and acts as an ASI plugin loader.
     """
     import struct
+
+    DLL_NAME = b"pmc_blackbox.dll\x00"  # 17 bytes
 
     lfanew = struct.unpack_from("<I", data, 0x3C)[0]
     pe_off = lfanew + 4
@@ -195,7 +197,7 @@ def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
 
     if not import_rva:
         if verbose:
-            print("WARNING: No import directory found, skipping cruise.dll injection")
+            print("WARNING: No import directory found, skipping pmc_blackbox.dll injection")
         return bytes(data)
 
     # Find the section containing the IDT (should be last section)
@@ -235,34 +237,62 @@ def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
         ft_rva = struct.unpack_from("<I", data, off + 16)[0]
         if name_rva == 0 and ft_rva == 0:
             break
-        # Check if cruise.dll is already imported
-        if name_rva + 10 <= len(data):
-            existing = data[name_rva:name_rva + 10]
-            if existing.lower() == b"cruise.dll":
+        # Check if pmc_blackbox.dll or cruise.dll is already imported
+        if name_rva + 16 <= len(data):
+            existing = data[name_rva:name_rva + 16]
+            if existing.lower().startswith(b"pmc_blackbox.dll"):
                 if verbose:
-                    print("cruise.dll already in import table, skipping injection")
+                    print("pmc_blackbox.dll already in import table, skipping injection")
                 return bytes(data)
+            if name_rva + 10 <= len(data):
+                existing_short = data[name_rva:name_rva + 10]
+                if existing_short.lower() == b"cruise.dll":
+                    if verbose:
+                        print("cruise.dll found — replacing with pmc_blackbox.dll...")
+                    # Overwrite in-place if there's room, otherwise fall through
+                    # to append. Check bytes available before next non-zero.
+                    avail = 0
+                    scan = name_rva
+                    while scan < len(data) and scan < name_rva + 64:
+                        if data[scan] == 0 and scan > name_rva:
+                            avail = scan - name_rva + 1
+                            # Check that bytes after the null are also zero (padding)
+                            end = scan + 1
+                            while end < len(data) and end < name_rva + 64 and data[end] == 0:
+                                end += 1
+                            avail = end - name_rva
+                            break
+                        scan += 1
+                    if avail >= len(DLL_NAME):
+                        data[name_rva:name_rva + len(DLL_NAME)] = DLL_NAME
+                        # Zero any trailing bytes from old name
+                        leftover = avail - len(DLL_NAME)
+                        if leftover > 0:
+                            data[name_rva + len(DLL_NAME):name_rva + len(DLL_NAME) + leftover] = b"\x00" * leftover
+                        if verbose:
+                            print(f"  Replaced in-place at RVA 0x{name_rva:X}")
+                        return bytes(data)
+                    # Not enough room in-place; skip this entry, we'll append a new one
         num_imports += 1
         off += 20
 
     if verbose:
-        print(f"\nInjecting cruise.dll import into '{sec_name}' section...")
+        print(f"\nInjecting pmc_blackbox.dll import into '{sec_name}' section...")
         print(f"  Existing imports: {num_imports}")
 
     # The null terminator is at import_rva + num_imports * 20.
-    # We overwrite it with the cruise.dll entry, then append a new null
+    # We overwrite it with the pmc_blackbox.dll entry, then append a new null
     # terminator + DLL name + IAT + OFT.
-    cruise_idt_off = import_rva + num_imports * 20
-    cursor = cruise_idt_off + 20  # after cruise entry
+    bb_idt_off = import_rva + num_imports * 20
+    cursor = bb_idt_off + 20  # after new entry
 
     # New null terminator
     null_term_off = cursor
     cursor += 20
 
     # DLL name
-    dll_name_bytes = b"cruise.dll\x00"
     dll_name_rva = cursor
-    cursor += len(dll_name_bytes)
+    cursor += len(DLL_NAME)
     if cursor % 4:
         cursor += 4 - (cursor % 4)
 
@@ -295,7 +325,7 @@ def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
     data[null_term_off:null_term_off + 20] = b"\x00" * 20
 
     # Write DLL name
-    data[dll_name_rva:dll_name_rva + len(dll_name_bytes)] = dll_name_bytes
+    data[dll_name_rva:dll_name_rva + len(DLL_NAME)] = DLL_NAME
 
     # Write IAT
     struct.pack_into("<I", data, iat_rva, 0x80000001)
@@ -305,27 +335,27 @@ def _inject_cruise_import(data: bytearray, verbose: bool) -> bytes:
     struct.pack_into("<I", data, oft_rva, 0x80000001)
     struct.pack_into("<I", data, oft_rva + 4, 0)
 
-    # Write cruise.dll IDT entry
-    struct.pack_into("<I", data, cruise_idt_off + 0, oft_rva)
-    struct.pack_into("<I", data, cruise_idt_off + 4, 0)
-    struct.pack_into("<I", data, cruise_idt_off + 8, 0)
-    struct.pack_into("<I", data, cruise_idt_off + 12, dll_name_rva)
-    struct.pack_into("<I", data, cruise_idt_off + 16, iat_rva)
+    # Write pmc_blackbox.dll IDT entry
+    struct.pack_into("<I", data, bb_idt_off + 0, oft_rva)
+    struct.pack_into("<I", data, bb_idt_off + 4, 0)
+    struct.pack_into("<I", data, bb_idt_off + 8, 0)
+    struct.pack_into("<I", data, bb_idt_off + 12, dll_name_rva)
+    struct.pack_into("<I", data, bb_idt_off + 16, iat_rva)
 
     # Update import directory size
     struct.pack_into("<I", data, import_dir_off + 4, (num_imports + 2) * 20)
 
     if verbose:
-        print(f"  cruise.dll IDT entry #{num_imports + 1}")
+        print(f"  pmc_blackbox.dll IDT entry #{num_imports + 1}")
         print(f"  DLL name RVA: 0x{dll_name_rva:X}")
-        print(f"  IAT RVA: 0x{iat_rva:X} (ordinal #1)")
+        print(f"  IAT RVA: 0x{iat_rva:X} (ordinal #1 → BlackboxEntry)")
         print(f"  Section raw size: 0x{sec_rs:X} -> 0x{new_rs:X}")
 
     return bytes(data)
 
 
 def apply_patch(input_exe: Path, output_exe: Path,
-                generate_cruise: bool = True, verbose: bool = True) -> None:
+                inject_import: bool = True, verbose: bool = True) -> None:
     if not input_exe.exists():
         print(f"ERROR: Input EXE not found: {input_exe}")
         sys.exit(1)
@@ -382,29 +412,23 @@ def apply_patch(input_exe: Path, output_exe: Path,
     else:
         print("WARNING: Output MD5 doesn't match expected. Patch may be corrupt.")
 
-    if generate_cruise:
-        result = _inject_cruise_import(bytearray(result), verbose)
+    if inject_import:
+        result = _inject_blackbox_import(bytearray(result), verbose)
 
     output_exe.parent.mkdir(parents=True, exist_ok=True)
     output_exe.write_bytes(result)
     if verbose:
         print(f"\nWritten: {output_exe} ({len(result):,} bytes)")
 
-    if generate_cruise:
-        cruise_path = output_exe.parent / "cruise.dll"
-        cruise_data = generate_cruise_dll()
-        cruise_path.write_bytes(cruise_data)
-        if verbose:
-            print(f"Written: {cruise_path} ({len(cruise_data):,} bytes)")
-            print("  Creates Event: v7_XXXX (PID XOR 0x19EA3FD3)")
-            print("  bManualReset=TRUE, bInitialState=TRUE (signaled)")
-
     if verbose:
         print()
         print("Done! Copy these to your game install directory:")
         print(f"  {output_exe}")
-        if generate_cruise:
-            print(f"  {output_exe.parent / 'cruise.dll'}")
+        print(f"  pmc_blackbox.dll  (build with: make pmc-blackbox)")
+        print()
+        print("The patched EXE imports pmc_blackbox.dll by ordinal #1.")
+        print("pmc_blackbox.dll handles SecuROM spoofing, debug console,")
+        print("and ASI plugin loading — no separate cruise.dll needed.")
 
 
 def generate_patch_file(retail_exe: Path, cracked_exe: Path, output_patch: Path,
@@ -457,13 +481,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Apply binary patch to remove SecuROM from Mercenaries 2 EXE. "
                     "Auto-detects v1.0 (17MB) or v1.1 (51MB) and applies the "
-                    "appropriate patches.")
+                    "appropriate patches. Injects pmc_blackbox.dll import (ordinal #1).")
 
     parser.add_argument("input", help="Path to retail Mercenaries2.exe (v1.0 or v1.1)")
     parser.add_argument("--output", "-o",
                         help="Output path (default: <input_dir>/Mercenaries2-Patched.exe)")
+    parser.add_argument("--no-import", action="store_true",
+                        help="Don't inject pmc_blackbox.dll import into the EXE")
     parser.add_argument("--no-cruise", action="store_true",
-                        help="Don't generate cruise.dll")
+                        help="(deprecated, same as --no-import)")
     parser.add_argument("--quiet", "-q", action="store_true")
     parser.add_argument("--generate-patch", metavar="TARGET_EXE",
                         help="Generate patch mode: INPUT is source, this arg is target EXE, "
@@ -487,10 +513,11 @@ def main() -> None:
         else:
             output_exe = input_exe.parent / (input_exe.stem + "-Patched.exe")
 
+        skip_import = args.no_import or args.no_cruise
         apply_patch(
             input_exe=input_exe,
             output_exe=output_exe,
-            generate_cruise=not args.no_cruise,
+            inject_import=not skip_import,
             verbose=not args.quiet,
         )
 

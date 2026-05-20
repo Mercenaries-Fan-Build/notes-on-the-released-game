@@ -73,17 +73,17 @@ The ISO contains two files in `Crack/`:
 | File | Size | Purpose |
 |------|------|---------|
 | `Mercenaries2.exe` | 51 MB | Patched exe (entry point moved to OEP in `.text`) |
-| `cruise.dll` | 8 KB | SecuROM event emulator DLL |
+| `pmc_blackbox.dll` | ~14 KB | SecuROM event emulator + debug console + ASI loader |
 
 **Patched EXE changes:**
 - Entry point moved from `Sitext` (VA `0x1C87A10`) to `.text` (VA `0xB04C2E` = game's OEP)
-- Small stub patched at the OEP that: (1) saves/replaces SecuROM's verification callback, (2) calls `LoadLibraryA("cruise.dll")`, (3) jumps to original init code
+- Small stub patched at the OEP that: (1) saves/replaces SecuROM's verification callback, (2) calls `LoadLibraryA("pmc_blackbox.dll")`, (3) jumps to original init code
 - A conditional hook at VA `0xB04C44` intercepts SecuROM's verification calls: if the call signature matches SecuROM's expected pattern, returns OK; otherwise passes through to the original handler
 - SECURITY directory (Authenticode signature) removed
 - `Stext` section pre-decompressed (no runtime decompression needed)
 - New `reloaded` section (816 bytes) — crack team signature
 
-**cruise.dll DllMain pseudocode** (fully reverse-engineered):
+**pmc_blackbox.dll DllMain pseudocode** (core SecuROM spoof logic, simplified):
 ```c
 BOOL DllMain(HINSTANCE hDll, DWORD reason, LPVOID reserved) {
     HMODULE hMsvcr = LoadLibraryA("msvcr71.dll");
@@ -96,11 +96,11 @@ BOOL DllMain(HINSTANCE hDll, DWORD reason, LPVOID reserved) {
 }
 ```
 
-The DLL has **no exports** — it only has DllMain. It creates the named event that SecuROM's remaining stub code checks for, spoofing successful authentication.
+The DLL exports `BlackboxEntry` (ordinal #1, for import table resolution) and `pmc_log` (for ASI plugins). It creates the named event that SecuROM's remaining stub code checks for, spoofing successful authentication, then opens a debug console and loads .asi plugins.
 
 **Combined bypass effect:**
 1. EXE starts at OEP (skips SecuROM's Sitext initialization entirely)
-2. `cruise.dll` is loaded, creates the authentication event
+2. `pmc_blackbox.dll` is loaded, creates the authentication event
 3. The patched callback hook intercepts any remaining SecuROM verification calls
 4. Game runs without disc/activation checks
 
@@ -149,7 +149,7 @@ Error codes of interest for modding:
 2. **`vz.bin` is not referenced by filename** in any executable (demo, original, cracked, or update v1.1)
 3. **`vz.wad` is referenced only in game code** (`.text` section at `"%s\vz.wad"` pattern — the engine's WAD loader, not SecuROM)
 4. **SecuROM's file I/O imports** (`CreateFileA`, `ReadFile`) in the `.securom` section are for its own activation data, not game assets
-5. **The bypass (cruise.dll) has no effect on WAD loading** — it only spoofs the authentication event
+5. **The bypass (pmc_blackbox.dll) has no effect on WAD loading** — it only spoofs the authentication event
 
 The game data files use:
 - **FFCS** container format (not encrypted, not DRM-protected)
@@ -182,7 +182,7 @@ For modders who need to test modified WAD files:
 
 **If the game won't launch at all** (SecuROM blocks startup):
 - The crack files bypass all SecuROM checks
-- The mechanism: patched entry point + `cruise.dll` creating the auth event
+- The mechanism: patched entry point + `pmc_blackbox.dll` creating the auth event
 - This removes disc/activation requirements but has zero effect on data file validation
 
 **If the game launches but shows black screen with modded data:**

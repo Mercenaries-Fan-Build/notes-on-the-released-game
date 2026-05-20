@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug cruise-dll test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -450,6 +450,14 @@ crack-game:
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/apply_securom_patch.py" \
 	  "$(RETAIL_EXE)" \
 	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
+	@echo ""
+	@echo "Building pmc_blackbox.dll..."
+	@$(MAKE) pmc-blackbox
+	@cp "$(REPO_ROOT)/dlls/pmc_blackbox.dll" "$(OUTPUT)/patched/pmc_blackbox.dll"
+	@echo ""
+	@echo "Ready: $(OUTPUT)/patched/"
+	@echo "  Mercenaries2.exe   (patched, imports pmc_blackbox.dll)"
+	@echo "  pmc_blackbox.dll   (SecuROM spoof + debug console + ASI loader)"
 
 # ---- Xbox 360 DLC Port ----
 # Produces a complete vz-patch.wad with DLC blocks + Lua bootstrap.
@@ -630,11 +638,16 @@ lua-enum-asi-debug:
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/lua_enum.asi to <game>/scripts/"
 
-# ---- cruise.dll (SecuROM spoof + debug console + ASI status) ----
+# ---- PMC Blackbox (SecuROM spoof + debug console + ASI loader) ----
+# Output: pmc_blackbox.dll — game's import table must reference this name.
 
-cruise-dll:
-	$(MAKE) -C "$(REPO_ROOT)/tools/cruise_dll" mingw
-	@cp "$(REPO_ROOT)/tools/cruise_dll/cruise.dll" "$(REPO_ROOT)/dlls/self_compiled_cruise.dll"
+pmc-blackbox:
+	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
+	@mkdir -p "$(REPO_ROOT)/dlls"
+	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_blackbox.dll" "$(REPO_ROOT)/dlls/pmc_blackbox.dll"
 	@echo ""
-	@echo "Install: copy dlls/self_compiled_cruise.dll to <game>/cruise.dll"
-	@echo "         (or <game>/scripts/cruise.asi for ASI Loader mode)"
+	@echo "Install: copy dlls/pmc_blackbox.dll to <game>/pmc_blackbox.dll"
+	@echo "         (game import table must reference pmc_blackbox.dll)"
+
+# Backward-compat alias
+cruise-dll: pmc-blackbox

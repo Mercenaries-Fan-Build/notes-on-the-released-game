@@ -116,14 +116,17 @@ def main() -> None:
         marker = ""
         if dll.lower() in asi_proxy_dlls:
             marker = "  ← ASI Loader can proxy this"
+        elif dll.lower() == "pmc_blackbox.dll":
+            marker = "  ← SecuROM spoof + ASI loader (injected by patcher)"
         elif dll.lower() == "cruise.dll":
-            marker = "  ← SecuROM spoof (injected by patcher)"
+            marker = "  ← Legacy SecuROM spoof (consider upgrading to pmc_blackbox.dll)"
         print(f"  {dll}{marker}")
 
     print()
 
     # Check for DINPUT8.dll specifically
     has_dinput8 = any(d.lower() == "dinput8.dll" for d in dlls)
+    has_blackbox = any(d.lower() == "pmc_blackbox.dll" for d in dlls)
     has_cruise = any(d.lower() == "cruise.dll" for d in dlls)
 
     if has_dinput8:
@@ -151,11 +154,17 @@ def main() -> None:
             print("    The EXE may need import table repair.")
 
     print()
-    if has_cruise:
-        print("✓ cruise.dll IS in the import table (SecuROM spoof will auto-load)")
+    if has_blackbox:
+        print("✓ pmc_blackbox.dll IS in the import table")
+        print("  → SecuROM spoof + debug console + ASI loader all handled")
+        print("  → No separate ASI loader proxy (dinput8.dll) needed")
+    elif has_cruise:
+        print("✓ cruise.dll IS in the import table (legacy SecuROM spoof)")
+        print("  → Consider re-patching with latest tools to use pmc_blackbox.dll")
+        print("  → Run: make crack-game RETAIL_EXE=<path>")
     else:
-        print("○ cruise.dll is NOT in the import table")
-        print("  → You need cruise.asi loaded via ASI Loader, OR use --no-cruise with the patcher")
+        print("○ Neither pmc_blackbox.dll nor cruise.dll in import table")
+        print("  → You need cruise.asi loaded via ASI Loader, or re-patch the exe")
 
 
 if __name__ == "__main__":
