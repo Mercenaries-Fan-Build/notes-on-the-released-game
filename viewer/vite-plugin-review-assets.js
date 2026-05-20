@@ -110,16 +110,18 @@ function buildStemAsset(pack, stem, dir) {
   const objPath = path.join(dir, 'mesh.obj')
   const gltfPath = path.join(dir, 'mesh.gltf')
   const sceneGltfPath = path.join(dir, 'mesh_scene.gltf')
+  const sceneGlbPath = path.join(dir, 'mesh_scene.glb')
   const submeshIndex = path.join(dir, 'submeshes', 'index.json')
   const ucfxPath = path.join(dir, 'ucfx.json')
 
   const hasObj = fileExists(objPath)
   const hasGltf = fileExists(gltfPath)
   const hasScene = fileExists(sceneGltfPath)
+  const hasGlb = fileExists(sceneGlbPath)
   const hasSubmesh = fileExists(submeshIndex)
   const hasUcfx = fileExists(ucfxPath)
 
-  if (!hasObj && !hasGltf && !hasScene && !hasSubmesh && !hasUcfx) return null
+  if (!hasObj && !hasGltf && !hasScene && !hasGlb && !hasSubmesh && !hasUcfx) return null
 
   const textureFiles = listTextureDir(dir, pack, stem)
   const firstDds = textureFiles.find((t) => t.name.toLowerCase().endsWith('.dds'))
@@ -167,6 +169,7 @@ function buildStemAsset(pack, stem, dir) {
     obj: hasObj ? reviewAssetUrl(pack, stem, 'mesh.obj') : null,
     gltf: hasGltf ? reviewAssetUrl(pack, stem, 'mesh.gltf') : null,
     meshSceneGltf: hasScene ? reviewAssetUrl(pack, stem, 'mesh_scene.gltf') : null,
+    glb: hasGlb ? reviewAssetUrl(pack, stem, 'mesh_scene.glb') : null,
     dds: firstDds ? firstDds.url : firstPng ? firstPng.url : null,
     manifest: hasSubmesh ? reviewAssetUrl(pack, stem, 'submeshes/index.json') : null,
     textureFiles,

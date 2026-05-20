@@ -1,9 +1,13 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export const useAnimationsStore = defineStore('animations', () => {
   const animList = ref([])
   const loading = ref(false)
+  const currentSlug = ref('')
+  const currentClipIndex = ref(0)
+  const isPlaying = ref(false)
+  const playbackSpeed = ref(1.0)
 
   async function fetchAnimIndex() {
     loading.value = true
@@ -28,5 +32,9 @@ export const useAnimationsStore = defineStore('animations', () => {
     return null
   }
 
-  return { animList, loading, fetchAnimIndex, fetchAnimDetail }
+  return {
+    animList, loading, currentSlug, currentClipIndex,
+    isPlaying, playbackSpeed,
+    fetchAnimIndex, fetchAnimDetail
+  }
 })

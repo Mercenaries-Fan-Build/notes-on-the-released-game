@@ -26,7 +26,7 @@ const links = [
   { to: '/', label: 'Dashboard' },
   { to: '/blocks', label: 'Block Browser' },
   { to: '/review', label: 'Review Queue' },
-  { to: '/viewer', label: 'Asset Viewer' },
+  { to: '/workbench', label: 'Workbench' },
   { to: '/placements', label: 'Placement Map' },
   { to: '/zones', label: 'Zone Editor' },
   { to: '/search', label: 'Search' },

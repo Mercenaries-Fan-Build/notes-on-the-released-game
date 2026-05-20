@@ -8,8 +8,12 @@ const routes = [
   },
   {
     path: '/viewer',
-    name: 'viewer',
-    component: () => import('./views/AssetViewerView.vue'),
+    redirect: '/workbench',
+  },
+  {
+    path: '/workbench',
+    name: 'workbench',
+    component: () => import('./views/AssetWorkbenchView.vue'),
   },
   {
     path: '/placements',
