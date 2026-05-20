@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-bootstrap dlc-bootstrap-merge crack-game dlc-enable-asi dlc-asi-native dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port fix-dlc01-aset dlc-bootstrap dlc-bootstrap-merge crack-game dlc-asi-native dlc-asi-native-bootstrap dlc-asi-native-bootstrap-deferred dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -451,13 +451,13 @@ crack-game:
 	  "$(RETAIL_EXE)" \
 	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
 	@echo ""
-	@echo "Building pmc_blackbox.dll..."
+	@echo "Building pmc_bb.dll..."
 	@$(MAKE) pmc-blackbox
-	@cp "$(REPO_ROOT)/dlls/pmc_blackbox.dll" "$(OUTPUT)/patched/pmc_blackbox.dll"
+	@cp "$(REPO_ROOT)/dlls/pmc_bb.dll" "$(OUTPUT)/patched/pmc_bb.dll"
 	@echo ""
 	@echo "Ready: $(OUTPUT)/patched/"
-	@echo "  Mercenaries2.exe   (patched, imports pmc_blackbox.dll)"
-	@echo "  pmc_blackbox.dll   (SecuROM spoof + debug console + ASI loader)"
+	@echo "  Mercenaries2.exe   (patched, imports pmc_bb.dll)"
+	@echo "  pmc_bb.dll   (SecuROM spoof + debug console + ASI loader)"
 
 # ---- Xbox 360 DLC Port ----
 # Produces a complete vz-patch.wad with DLC blocks + Lua bootstrap.
@@ -474,6 +474,15 @@ dlc-port:
 	  $(if $(SOURCE_WAD),--source-wad "$(SOURCE_WAD)") \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
+
+# One-shot fix if bootstrap used ASET type_id=0 (breaks import('dlc01') on PC).
+fix-dlc01-aset:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/fix_dlc01_aset_type.py" --wad "$(OUTPUT)/data/vz-patch.wad"
+
+verify-patch-dlc01:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_patch_dlc01.py" --wad "$(OUTPUT)/data/vz-patch.wad"
 
 all:
 	@test -n "$(ZIP)" || (echo "error: set ZIP, e.g. make all ZIP=./Mercenaries\\ 2\\ World\\ in\\ Flames.zip OUTPUT=./output" >&2; exit 1)
@@ -595,20 +604,49 @@ dlc-bootstrap-merge:
 	  --merge-from "$(OUTPUT)/data/vz-patch.wad" \
 	  --output "$(OUTPUT)/data/vz-patch.wad"
 
-# ---- DLC Enable ASI Plugin Generation ----
-# Generates dlc_enable.asi (Lua hook DLL) via the Python PE generator.
-# No C compiler needed — outputs a valid 32-bit PE DLL from pure Python.
+# ---- Lua binding reports (needs cracked EXE) ----
 
-dlc-enable-asi:
-	@mkdir -p "$(OUTPUT)/scripts"
-	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_dlc_asi.py" \
-	  --output "$(OUTPUT)/scripts/dlc_enable.asi"
-	@echo ""
-	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+LUA_BIND_EXE ?= $(firstword $(wildcard game-files/cracked-parts/Crack/Mercenaries2.exe) $(wildcard $(OUTPUT)/patched/Mercenaries2.exe))
+
+debug-binding-report: venv
+	@test -n "$(LUA_BIND_EXE)" || (echo "error: place Mercenaries2.exe under game-files/cracked-parts/Crack/ or $(OUTPUT)/patched/" >&2; exit 1)
+	$(PYTHON) tools/debug_binding_report.py --exe "$(LUA_BIND_EXE)"
+	$(PYTHON) tools/dump_lua_bindings.py --exe "$(LUA_BIND_EXE)" --no-heuristic \
+	  --json "$(OUTPUT)/lua_bindings_primary.json"
+
+dump-lua-bindings: venv
+	@test -n "$(LUA_BIND_EXE)" || (echo "error: set LUA_BIND_EXE or place EXE in game-files/cracked-parts/Crack/" >&2; exit 1)
+	$(PYTHON) tools/dump_lua_bindings.py --exe "$(LUA_BIND_EXE)" \
+	  --json "$(OUTPUT)/lua_bindings_dump.json" --csv "$(OUTPUT)/lua_bindings_dump.csv"
+
+# ---- DLC Enable ASI Plugin (Native MinGW build) ----
 
 dlc-asi-native:
 	@mkdir -p "$(OUTPUT)/scripts"
 	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "Verify: file size ~19456 bytes; log must show VZ_LOAD=1 and Build: ... bootstrap=ON"
+
+dlc-asi-native-nobootstrap:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-nobootstrap
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: logging/net only — no import(dlc01) (VZ_LOAD=0)"
+
+dlc-asi-native-bootstrap:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-bootstrap
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "Expect log: Flags: ... VZ_LOAD=1 ... then import(dlc01) at vz level load"
+
+dlc-asi-native-bootstrap-deferred:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-bootstrap-deferred
 	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
@@ -639,15 +677,15 @@ lua-enum-asi-debug:
 	@echo "Install: copy $(OUTPUT)/scripts/lua_enum.asi to <game>/scripts/"
 
 # ---- PMC Blackbox (SecuROM spoof + debug console + ASI loader) ----
-# Output: pmc_blackbox.dll — game's import table must reference this name.
+# Output: pmc_bb.dll — game's import table must reference this name.
 
 pmc-blackbox:
 	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
 	@mkdir -p "$(REPO_ROOT)/dlls"
-	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_blackbox.dll" "$(REPO_ROOT)/dlls/pmc_blackbox.dll"
+	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(REPO_ROOT)/dlls/pmc_bb.dll"
 	@echo ""
-	@echo "Install: copy dlls/pmc_blackbox.dll to <game>/pmc_blackbox.dll"
-	@echo "         (game import table must reference pmc_blackbox.dll)"
+	@echo "Install: copy dlls/pmc_bb.dll to <game>/pmc_bb.dll"
+	@echo "         (game import table must reference pmc_bb.dll)"
 
 # Backward-compat alias
 cruise-dll: pmc-blackbox

@@ -25,3 +25,21 @@ output_demo/
 Mercenaries 2 World in Flames DEMO
 game-files/
 first-game-source-code-with-engine/
+
+*.dll
+tools/*agent*.py
+docs/**plan*.md
+
+*.zip
+*.rar
+*.iso
+*.wad
+*.bin
+*.json
+*.csv
+*.txt
+*.log
+*.err
+*.err.log
+*.out 
+*.asi
