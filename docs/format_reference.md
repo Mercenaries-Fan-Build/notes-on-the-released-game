@@ -53,7 +53,7 @@ Tables are **not** parsed as Lua; strings are matched with regex. Output keys in
 
 `PTHS` yields `paths.txt` path-like strings (see `dump_paths_from_pths`). **After all path strings, a mandatory 258-byte null-terminated ASCII trailer marker** (`xa37dd45ff...d4ex`) must be present — identical across all tested WADs. Omitting it causes the engine to reject the WAD (black-screen hang). See `docs/patch_wad_format.md` §4 for full details.
 
-**ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows). Hash algorithm confirmed as **FNV-1a with `|0x20` case suppression** (see [`docs/modding_deep_dive.md` §4.3.1](modding_deep_dive.md) and `tools/pandemic_hash.py`).
+**ASET (asset set / streaming graph hints):** [`docs/aset_format.md`](aset_format.md) — 16-byte rows; [`tools/aset_decoder.py`](../tools/aset_decoder.py) emits [`output/block_dependency_graph.json`](../output/block_dependency_graph.json) (retail: `u32_0` hits `texture_index.json` keys for a large subset of rows). Hash algorithm confirmed as **FNV-1a with `|0x20` case suppression and `^0x2A * prime` finalization** — identical between Mercenaries 2 and The Saboteur (see [`docs/modding_deep_dive.md` §4.3.1](modding_deep_dive.md) and `tools/pandemic_hash.py`).
 
 **ECS `COMP` harvest:** [`docs/ecs_components.md`](ecs_components.md) — [`tools/ucfx_ecs_codec.py`](../tools/ucfx_ecs_codec.py) + [`tools/ecs_metadata_extract.py`](../tools/ecs_metadata_extract.py) → `output/placements/ecs_components.json` and merged `ecs` keys on placement JSON when `make extract-placements` runs.
 
@@ -72,6 +72,10 @@ Tables are **not** parsed as Lua; strings are matched with regex. Output keys in
 | Header | Segment table (`minor` × 8 bytes), then **16-byte-aligned** start of payload |
 | Payload | Repeated **raw deflate** (`zlib` windowBits `-15`) segments separated by **zero padding** |
 
+Each segment decompresses independently. A **64 KB sentinel** (`0x00010000` LE) appears in the segment table for the final chunk when the last segment is exactly 64 KB uncompressed.
+
+**Engine lineage:** The `sges` compression format is **identical** between Mercenaries 2 and The Saboteur — same header layout, chunk format, raw deflate, and 64 KB sentinel. This confirms shared Zero Engine heritage.
+
 The **n-th** `sges` in `data.bin` corresponds to the **n-th** line in `paths.txt` (same indexing as batch scripts).
 
 ---
@@ -85,6 +89,7 @@ The **n-th** `sges` in `data.bin` corresponds to the **n-th** line in `paths.txt
 - **UCFX** root: magic + four u32 header fields (`u0`–`u3`); `data_base = ucfx_off + u0` for child chunks.
 - **Chunk table:** 20-byte rows: 4-byte tag + four u32s (`read_chunk_header`). Tags parsed in mesh path include **GEOM**, **MESH**, **PRMG**, **STRM**, **IBUF**, **INFO**, **MTRL**, **PRMT**, **HIER**, **SWIT**, **NAME**, **BODY** (texture). Others (**CHDR**, **STAT**, **CEXE**, **enum**, **flgt**, **flgs**, **INDX**, …) may appear in **`tag_occurrences`** without a dedicated decoder.
 - **CONTAINER_SENTINEL** `0xFFFFFFFF` on chunk row `u0` marks nested-container boundaries in some walks.
+- **Stringdb chunks** (**SYEK**, **SRTS**): localized string database. Body data is **natively big-endian** on all platforms (PC and Xbox). Descriptor fields (offset, size) follow normal UCFX LE convention. See §4.1.
 
 ### 4.0 CSUM trailer (per-chunk integrity)
 
@@ -139,7 +144,41 @@ def crc32_mercs2_explicit(data: bytes) -> int:
     return crc
 ```
 
-### 4.1 INDX chunk (MESH group → HIER node mapping)
+### 4.1 Stringdb chunks (SYEK / SRTS)
+
+**ASET type_id:** 7 (`type_hash = 0x39E5E978`, `pandemic_hash_m2("stringdb")`)
+
+Localized string database blocks (e.g., `english_P000_Q3.block`, `english_dlc01_P000_Q3.block`). Contains key→value lookup for bracket-key strings like `[DlcCon001.Title]`.
+
+**Critical:** Body data is **natively big-endian on all platforms**. The PC engine reads SYEK/SRTS body content directly as BE. Only the UCFX chunk descriptor fields (offset, size) are platform-endian. `ucfx_be_to_le.py` swaps descriptors but does NOT swap body data.
+
+#### SYEK (keys)
+
+| Offset | Size | Endian | Field |
+|--------|------|--------|-------|
+| +0 | 4 | BE | `key_count` — number of entries |
+| +4 | 8 × N | BE | entries: `pandemic_hash(key_string)` (u32) + `byte_offset_into_SRTS` (u32) |
+
+Key strings use the standard `pandemic_hash_m2()` algorithm (FNV-1a + `|0x20` + `^0x2A * prime`). Offsets point into the SRTS string data area (after the SRTS 4-byte size header).
+
+#### SRTS (strings)
+
+| Offset | Size | Endian | Field |
+|--------|------|--------|-------|
+| +0 | 4 | BE | `total_string_bytes` (total byte length of string data following) |
+| +4 | variable | BE | Concatenated NUL-terminated UTF-16BE strings |
+
+Each string is NUL-terminated (u16 `0x0000`). SYEK entry offsets are byte offsets from the start of the string data area (i.e., from SRTS body + 4).
+
+#### Loading via Lua
+
+```lua
+Sys.AddStringDb("patch01", "dlc01")
+```
+
+Resolves asset name `<current_language>_<prefix>` → `english_dlc01`, hashes to `pandemic_hash_m2("english_dlc01") = 0x9FE1E7D8`, loads via ASET lookup. The first argument `"patch01"` is an internal DB namespace identifier.
+
+### 4.2 INDX chunk (MESH group → HIER node mapping)
 
 **Tool:** [`tools/ucfx_mesh_codec.py :: parse_indx_chunk`](../tools/ucfx_mesh_codec.py)
 
@@ -176,7 +215,7 @@ INDX + HIER are found in multi-part assets: vehicles, characters, buildings with
 
 ---
 
-### 4.2 UCFX texture INFO (minimal)
+### 4.3 UCFX texture INFO (minimal)
 
 **Tool:** [`tools/texture_extractor.py`](../tools/texture_extractor.py)
 
@@ -189,7 +228,7 @@ INDX + HIER are found in multi-part assets: vehicles, characters, buildings with
 
 Bytes between documented fields are **read but not exported** as named fields.
 
-### 4.3 Texture streaming index
+### 4.4 Texture streaming index
 
 **Tool:** [`tools/texture_streaming_index.py`](../tools/texture_streaming_index.py)
 
@@ -279,7 +318,7 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 
 ## 11. Anim group block + Havok 5.5 packfile (skeletal pipeline)
 
-**Carving:** [`tools/animgroup_extractor.py`](../tools/animgroup_extractor.py) — each ``output/extracted/batch_*/blocks/*animgroup*.block.bin`` begins with a **record table** (16 bytes per record: ``u32 checksum``, ``u32 magic`` = ``0x18166555``, ``u32 reserved``, ``u32 record_size``), followed by concatenated **UCFX** wrappers. Inside each wrapper the Havok slice starts at the ASCII version token ``Havok-5.5.0-r1``; the tool writes standalone ``record_NNNN.hkx`` bytes plus ``records.json``.
+**Carving:** [`tools/animgroup_extractor.py`](../tools/animgroup_extractor.py) — each ``output/extracted/batch_*/blocks/*animgroup*.block.bin`` begins with a **record table** (16 bytes per record: ``u32 checksum``, ``u32 magic`` = ``0x18166555`` = `pandemic_hash_m2("animation")`, ``u32 reserved``, ``u32 record_size``), followed by concatenated **UCFX** wrappers. Inside each wrapper the Havok slice starts at the ASCII version token ``Havok-5.5.0-r1``; the tool writes standalone ``record_NNNN.hkx`` bytes plus ``records.json``.
 
 **Packfile:** [`tools/hk_packfile.py`](../tools/hk_packfile.py) parses the three 48-byte section headers (``__classnames__``, ``__types__``, ``__data__``), the hashed classname table, and the **four chained fixup streams** inside ``__data__`` (local → global → virtual → finish, each terminated by ``0xFFFFFFFF`` dword pairs). **Local** fixups are applied to build ``data_patched.bin``. **Global** fixups are optional (``--apply-global``) while pointer semantics are validated against external dumps (hkxcmd). ``packfile.json`` includes ``types_preview`` (hex head of ``__types__``), fixup counts, and a coarse ``data_class_hits_sample`` (u32 hits against classname hashes).
 
@@ -425,10 +464,11 @@ The PNG is **not** rotated at load time.
 
 `make extract-terrain` writes `mesh_scene.glb` via
 `_build_terrain_glb` (pygltflib), **not** via `gltf_exporter`. That path
-embeds the synthesized UVs as-is (no second `convert_uvs_d3d_to_gltf`) but
-**does** apply the same LH→RH position/normal Z-negate and triangle winding
-flip as `gltf_exporter`, so the merged mesh at the origin actor aligns with
-`game_to_ue` placements like other imported GLBs.
+embeds the synthesized UVs as-is (no second `convert_uvs_d3d_to_gltf`) and
+writes game LH coordinates directly (no Z-negate, no winding flip) — the
+same convention as all other meshes. UE Interchange's Y-up→Z-up swap
+produces the correct world alignment with `game_to_ue` placements at the
+origin actor.
 
 Regular meshes with UVs baked in the vertex buffer use `gltf_exporter`'s
 `convert_uvs_d3d_to_gltf` for the D3D9 V-flip.

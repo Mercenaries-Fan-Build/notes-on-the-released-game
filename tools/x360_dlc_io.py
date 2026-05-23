@@ -464,11 +464,21 @@ def parse_be_indx(doh: bytes, indx_offset: int, count: int) -> list[INDXEntry]:
 
 
 def parse_be_aset(doh: bytes, aset_offset: int, count: int) -> list[ASETEntry]:
-    """Parse big-endian ASET entries."""
+    """Parse big-endian ASET entries.
+
+    u0 (asset_hash), u1, u2 are big-endian.  u2's high 16 bits encode the
+    block_index — only valid as BE (5341/5341 valid vs 49/5341 as LE).
+
+    The u3 field (type_id) is stored in **little-endian** even inside the
+    otherwise-BE FFCS container.  Raw bytes ``1b 00 00 00`` = 27 (LE) vs
+    452984832 (BE).  PC retail type_ids are small integers 0–35; LE
+    interpretation matches for all 5341 entries across 24 unique values.
+    """
     entries = []
     for i in range(count):
         off = aset_offset + i * 16
-        u0, u1, u2, u3 = struct.unpack_from(">IIII", doh, off)
+        u0, u1, u2 = struct.unpack_from(">III", doh, off)
+        u3 = struct.unpack_from("<I", doh, off + 12)[0]
         entries.append(ASETEntry(asset_hash=u0, u1=u1, u2=u2, u3=u3))
     return entries
 

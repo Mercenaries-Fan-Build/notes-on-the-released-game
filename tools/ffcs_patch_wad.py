@@ -161,8 +161,7 @@ def build_patch_wad_multi(
         block_layouts.append((current_page, pages_needed, blk.compressed_data))
         current_page += pages_needed
 
-    total_data_size = (current_page - data_page_start) * PAGE_SIZE
-    file_size = data_offset + total_data_size
+    file_size = current_page * PAGE_SIZE
 
     # ── Build FFCS header (256 bytes) ──
     header = bytearray(256)

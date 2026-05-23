@@ -16,7 +16,7 @@ SRC         = dlc_enable.c
 CFLAGS      = -O2 -Wall -shared -Wl,--enable-stdcall-fixup $(EXTRA_CFLAGS)
 LDFLAGS     = -lkernel32 -luser32
 
-.PHONY: all clean mingw mingw-nobootstrap mingw-bootstrap mingw-bootstrap-deferred mingw-bootstrap-early mingw-debug msvc help
+.PHONY: all clean mingw mingw-nobootstrap mingw-minimal mingw-nohooks mingw-no-crash-patch mingw-probe mingw-bootstrap mingw-bootstrap-deferred mingw-bootstrap-early mingw-debug msvc help
 
 # Default: VZ-load bootstrap (import dlc01 at masterscript). ~19.5 KB stripped.
 all: mingw
@@ -29,11 +29,40 @@ mingw: $(SRC)
 	@echo "Copy to: <game>/scripts/dlc_enable.asi"
 	@echo "Log must show: VZ_LOAD=1 CRASH_PATCH=1; deferred inject ~3s after vz masterscript"
 
-# Net hooks only — no Lua bootstrap (bisection / logging-only).
+# Bisect: VZ bootstrap without 0x005AE372 code-cave patch (shell movie path).
+mingw-no-crash-patch: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1
+mingw-no-crash-patch: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) VZ_LOAD=1 CRASH_PATCH=0"
+
+# Net hooks only — no Lua bootstrap (G5: test WAD hook without ASI inject).
 mingw-nobootstrap: $(SRC)
 	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
 	$(STRIP_MINGW) $(TARGET)
-	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) NO bootstrap"
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) NO bootstrap (REG_PATCH+NET)"
+
+# Net hooks only — no Debug.Printf / print() patch (isolates REG_PATCH).
+mingw-minimal: EXTRA_CFLAGS += -DDLC_ENABLE_MINIMAL_MODE=1
+mingw-minimal: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) MINIMAL (NET only)"
+
+# DllMain log only — zero hooks (isolates ASI entirely).
+mingw-nohooks: EXTRA_CFLAGS += -DDLC_ENABLE_NO_HOOKS=1
+mingw-nohooks: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) NO_HOOKS (log only)"
+
+# G3: inject type(import), type(_SYS._IMPORT), type(error) at VZ-load trigger.
+mingw-probe: EXTRA_CFLAGS += -DDLC_ENABLE_PROBE_GLOBALS=1 -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1 -DDLC_ENABLE_CRASH_PATCH=1
+mingw-probe: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) PROBE_GLOBALS=1"
+	@echo "Log must show: [dlc_enable] PROBE type(import)= ..."
 
 # Alias for explicit bootstrap (same as default mingw).
 mingw-bootstrap: mingw
@@ -62,8 +91,12 @@ clean:
 
 help:
 	@echo "Usage:"
-	@echo "  make mingw                  — Default (net hooks + Debug.Printf patch)"
-	@echo "  make mingw-bootstrap        — + import(dlc01) at vz level load (recommended)"
+	@echo "  make mingw                  — Default (VZ bootstrap + CRASH_PATCH)"
+	@echo "  make mingw-nobootstrap      — REG_PATCH + NET, no bootstrap inject"
+	@echo "  make mingw-minimal          — NET hooks only (no print patch)"
+	@echo "  make mingw-nohooks          — DllMain log only (zero hooks)"
+	@echo "  make mingw-no-crash-patch   — VZ bootstrap without 0x005AE372 patch"
+	@echo "  make mingw-bootstrap        — Alias for default mingw"
 	@echo "  make mingw-bootstrap-deferred — + import(dlc01) 120s after shell"
 	@echo "  make mingw-bootstrap-early  — + import(dlc01) at shell (unsafe)"
 	@echo "  make mingw-debug            — MessageBox popup on load (diagnostic)"

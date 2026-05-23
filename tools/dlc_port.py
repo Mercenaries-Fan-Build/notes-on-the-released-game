@@ -66,11 +66,9 @@ from x360_dlc_io import (  # noqa: E402
 from build_patch_wad import (  # noqa: E402
     _build_ucfx_script_chunk,
     _add_ucfx_entry_to_block,
-    apply_bytecode_replacement_to_block,
-    apply_string_mod_to_block,
     compile_lua_source,
     extract_block_metadata,
-    VZ_DLC_WRAPPER_SOURCE,
+    inject_dlc_hook_chain_load,
     DLC_CONTRACT_NAMES,
 )
 from pandemic_hash import pandemic_hash_m2  # noqa: E402
@@ -82,6 +80,128 @@ from wad_patcher import (  # noqa: E402
     resolve_scripts_vz_block_index,
     script_aset_entry,
 )
+from dlc_aset_normalize import (  # noqa: E402
+    dedupe_asset_hash_across_blocks,
+    normalize_all_block_asets,
+)
+from aset_type_ids import (  # noqa: E402
+    SCRIPT_ASET_TYPE_ID,
+    STRINGDB_ASET_TYPE_ID,
+    STRINGDB_TYPE_HASH,
+    type_id_for_type_hash,
+)
+
+
+_CRC32_TABLE: list[int] = []
+for _i in range(256):
+    _c = _i
+    for _ in range(8):
+        _c = (_c >> 1) ^ 0xEDB88320 if _c & 1 else _c >> 1
+    _CRC32_TABLE.append(_c)
+
+
+def _crc32_mercs2(data: bytes) -> int:
+    """CRC-32 matching the game's per-UCFX CSUM trailer (init=0, no final XOR)."""
+    crc = 0
+    for b in data:
+        crc = _CRC32_TABLE[(crc ^ b) & 0xFF] ^ (crc >> 8)
+    return crc & 0xFFFFFFFF
+
+
+# ── Stringdb descriptor fixup ─────────────────────────────────────────
+
+_STRINGDB_TYPE_HASH = 0x39E5E978  # pandemic_hash_m2("stringdb")
+
+def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
+    """Ensure SYEK/SRTS chunk descriptor u32s are little-endian.
+
+    Xbox 360 DLC stringdb UCFX blocks may have chunk descriptor values
+    that remain in big-endian order after the generic byte-swap pass.
+    The body data is natively BE on all platforms (the PC engine reads
+    it as BE), but the descriptor fields (body_offset, body_size, u2, u3)
+    must be LE for the PC engine to locate the body within the UCFX.
+
+    Detects mismatched descriptors by checking whether the LE-interpreted
+    body_offset + body_size would exceed the UCFX container, and swaps
+    if the BE interpretation yields sane values instead.
+    """
+    data = bytearray(block_data)
+    count = struct.unpack_from("<I", data, 0)[0]
+    if count < 1 or count > 5000:
+        return bytes(data)
+
+    header_end = 4 + count * 16
+
+    # Check each UCFX entry's type_hash to find stringdb blocks
+    for i in range(count):
+        eoff = 4 + i * 16
+        type_hash = struct.unpack_from("<I", data, eoff + 4)[0]
+        if type_hash != _STRINGDB_TYPE_HASH:
+            continue
+        chunk_size = struct.unpack_from("<I", data, eoff + 12)[0]
+
+        # Find the UCFX container for this entry
+        ucfx_off = header_end
+        for j in range(i):
+            ucfx_off += struct.unpack_from("<I", data, 4 + j * 16 + 12)[0]
+
+        if ucfx_off + 8 > len(data):
+            continue
+        if data[ucfx_off:ucfx_off + 4] != b"UCFX":
+            continue
+
+        ucfx_u0 = struct.unpack_from("<I", data, ucfx_off + 4)[0]
+        if ucfx_u0 == 0 or ucfx_u0 > chunk_size:
+            continue
+        data_base = ucfx_off + ucfx_u0
+        ucfx_end = ucfx_off + chunk_size
+
+        # Scan chunk descriptor rows between ucfx_off+8 and data_base
+        # for SYEK/SRTS tags whose descriptor values look like BE
+        fixed = False
+        pos = ucfx_off + 8
+        while pos + 20 <= data_base:
+            tag = bytes(data[pos:pos + 4])
+            if tag in (b"SYEK", b"SRTS"):
+                # Read descriptor values as LE
+                v0_le = struct.unpack_from("<I", data, pos + 4)[0]
+                v1_le = struct.unpack_from("<I", data, pos + 8)[0]
+                # Read as BE for comparison
+                v0_be = struct.unpack_from(">I", data, pos + 4)[0]
+                v1_be = struct.unpack_from(">I", data, pos + 8)[0]
+
+                # Heuristic: if LE body_offset is unreasonably large but
+                # BE interpretation is within the container, the values
+                # are still BE and need swapping.
+                container_body_size = ucfx_end - data_base
+                le_sane = (v0_le < container_body_size and
+                           v1_le < container_body_size)
+                be_sane = (v0_be < container_body_size and
+                           v1_be < container_body_size)
+
+                if not le_sane and be_sane:
+                    # Swap the 4 descriptor u32s from BE to LE
+                    for k in range(4):
+                        off = pos + 4 + k * 4
+                        data[off:off + 4] = data[off:off + 4][::-1]
+                    fixed = True
+                pos += 20
+            elif tag in (b"INFO", b"CSUM"):
+                pos += 20 if tag != b"CSUM" else 8
+            else:
+                pos += 1
+
+        # Recompute CSUM trailer if descriptors were fixed.
+        # Game uses CRC-32 (reflected poly 0xEDB88320, init=0, no final XOR).
+        if fixed:
+            csum_pos = ucfx_off + chunk_size - 8
+            if (csum_pos >= ucfx_off and csum_pos + 8 <= len(data)
+                    and data[csum_pos:csum_pos + 4] == b"CSUM"):
+                ucfx_body = bytes(data[ucfx_off:csum_pos])
+                new_crc = _crc32_mercs2(ucfx_body)
+                struct.pack_into("<I", data, csum_pos + 4, new_crc)
+
+    return bytes(data)
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────
@@ -98,6 +218,9 @@ def port_x360_dlc(
     dump_dir: Path | None = None,
     dlc_contracts: list[str] | None = None,
     no_bootstrap: bool = False,
+    no_hook: bool = False,
+    fix_stringdb_descriptors: bool = False,
+    synth_stringdb_aset: bool = True,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -106,6 +229,10 @@ def port_x360_dlc(
     modified with a ``dlc01`` master script, and the ``vz`` master script is
     replaced with a minimal wrapper that chain-loads it.  The resulting WAD
     contains both the DLC asset blocks and the bootstrap block.
+
+    If *no_hook* is True, the bootstrap adds ``dlc01`` as a new entry only
+    (entry 115) without modifying ``wifmissionflow`` — the original 114 entries
+    remain byte-identical.  The ASI triggers ``import("dlc01")`` at runtime.
     """
     print("Xbox 360 DLC → PC Patch WAD Porter (unified)")
     print("=" * 60)
@@ -140,17 +267,31 @@ def port_x360_dlc(
             print(f"    ... ({len(path_strings) - 10} more)")
 
     # Build ASET lookup: block_index → list of entries
-    # Xbox ASET block indices may start from a base offset
-    aset_block_indices = set()
+    # Xbox ASET block indices may start from a base offset; entries with
+    # block_index == 0xFFFF are "global" references that need resolving
+    # to the actual block containing that asset (done after decompression).
+    real_block_indices = set()
+    global_aset: list[dict] = []
     for ae in aset_entries:
-        aset_block_indices.add(ae.block_index)
-    if aset_block_indices:
-        aset_base_idx = min(aset_block_indices)
+        if ae.block_index == 0xFFFF:
+            global_aset.append({
+                "asset_hash": ae.asset_hash,
+                "u32_1": ae.u1,
+                "u32_2": ae.u2,
+                "u32_3": ae.u3,
+            })
+        else:
+            real_block_indices.add(ae.block_index)
+
+    if real_block_indices:
+        aset_base_idx = min(real_block_indices)
     else:
         aset_base_idx = 0
 
     aset_by_block: dict[int, list[dict]] = {}
     for ae in aset_entries:
+        if ae.block_index == 0xFFFF:
+            continue
         local_idx = ae.block_index - aset_base_idx
         entry_dict = {
             "asset_hash": ae.asset_hash,
@@ -159,6 +300,10 @@ def port_x360_dlc(
             "u32_3": ae.u3,
         }
         aset_by_block.setdefault(local_idx, []).append(entry_dict)
+
+    if global_aset:
+        print(f"\n  Global ASET entries (block_index=0xFFFF): {len(global_aset)}")
+        print("  These will be resolved to actual blocks after decompression.")
 
     # Determine block range
     end_block = min(num_blocks, start_block + (max_blocks or num_blocks))
@@ -170,6 +315,7 @@ def port_x360_dlc(
     converted: list[PatchBlock] = []
     skipped = 0
     total_swap_stats: dict = {"tags_seen": {}}
+    hash_to_local_block: dict[int, int] = {}  # asset_hash → index in converted[]
 
     for blk_idx in blocks_to_process:
         indx = indx_entries[blk_idx]
@@ -234,12 +380,28 @@ def port_x360_dlc(
         # Byte-swap BE → LE
         swapped, stats = byteswap_ucfx_block(decompressed)
 
+        # Optional stringdb descriptor fixup (off by default — Phase 0f proved
+        # retail PC uses LE descriptors; byte-swap alone is sufficient).
+        if fix_stringdb_descriptors:
+            swapped = _fix_stringdb_descriptors(swapped)
+
         if dump_dir:
             (dump_dir / f"block_{blk_idx:04d}_le.bin").write_bytes(swapped)
 
         for tag, cnt in stats.get("tags_seen", {}).items():
             total_swap_stats["tags_seen"][tag] = (
                 total_swap_stats["tags_seen"].get(tag, 0) + cnt)
+
+        # Collect UCFX entry hashes for global ASET resolution
+        if global_aset:
+            try:
+                entries = parse_block_entries(swapped)
+                for entry in entries:
+                    h = entry.get("hash")
+                    if h is not None and h != 0:
+                        hash_to_local_block[h] = len(converted)
+            except Exception:
+                pass
 
         # Recompress as PC sges
         pc_sges = compress_sges(swapped, segment_size=65536, level=6, major=4)
@@ -248,15 +410,44 @@ def port_x360_dlc(
             ratio = len(pc_sges) / len(swapped) * 100
             print(f"         compressed={len(pc_sges):,} bytes ({ratio:.1f}%)")
 
-        # Build PatchBlock
+        # Build PatchBlock (block-specific ASET entries only at this point)
         block_asets = aset_by_block.get(blk_idx, [])
         converted.append(PatchBlock(
             compressed_data=pc_sges,
             path_string=path,
-            aset_entries=block_asets,
+            aset_entries=list(block_asets),
             packed_field=indx.packed_field,
             flags=indx.flags,
         ))
+
+    # Resolve global ASET entries (block_index=0xFFFF) to actual blocks
+    if global_aset:
+        resolved = 0
+        unresolved = 0
+        for gae in global_aset:
+            local_blk = hash_to_local_block.get(gae["asset_hash"])
+            if local_blk is not None and local_blk < len(converted):
+                entry = dict(gae)
+                try:
+                    raw_blk = decompress_sges_block(
+                        converted[local_blk].compressed_data,
+                        0,
+                        len(converted[local_blk].compressed_data),
+                    )
+                    for ucfx in parse_block_entries(raw_blk):
+                        if ucfx.get("hash") == entry["asset_hash"]:
+                            th = ucfx.get("type_hash", 0)
+                            tid = type_id_for_type_hash(th)
+                            if tid is not None:
+                                entry["u32_3"] = tid
+                            break
+                except Exception:
+                    pass
+                converted[local_blk].aset_entries.append(entry)
+                resolved += 1
+            else:
+                unresolved += 1
+        print(f"\n  Global ASET resolved: {resolved}, unresolved: {unresolved}")
 
     print(f"\n  Converted: {len(converted)}, Skipped: {skipped}")
     if total_swap_stats["tags_seen"]:
@@ -268,19 +459,65 @@ def port_x360_dlc(
         print("ERROR: No blocks converted", file=sys.stderr)
         return 1
 
+    # ── Ensure ASET entries exist for all UCFX entries ────────────────
+    # The Xbox DLC ASET table may not cover every block (some blocks have
+    # no ASET rows, or the global resolution missed them).  Blocks that
+    # the engine needs to look up by asset hash — especially stringdb
+    # blocks loaded via Sys.AddStringDb() — MUST have ASET entries or
+    # the lookup will fail silently.
+    #
+    # Scan all converted blocks: for each UCFX entry whose asset_hash is
+    # not already represented in the block's ASET list, add a synthetic
+    # entry with the correct type_hash.
+    synth_added = 0
+    if not synth_stringdb_aset:
+        print("\n  ASET fix: skipping synthetic stringdb rows (--no-synth-stringdb-aset)")
+    for blk_idx, blk in enumerate(converted):
+        if not synth_stringdb_aset:
+            break
+        existing_hashes = {e["asset_hash"] for e in blk.aset_entries}
+        try:
+            decomp = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data))
+            entries = parse_block_entries(decomp)
+        except Exception:
+            continue
+        for entry in entries:
+            h = entry.get("hash")
+            th = entry.get("type_hash", 0)
+            if h and h != 0 and h not in existing_hashes:
+                if th == STRINGDB_TYPE_HASH:
+                    blk.aset_entries.append({
+                        "asset_hash": h,
+                        "u32_1": 0xFFFFFFFF,
+                        "u32_2": 0,
+                        "u32_3": STRINGDB_ASET_TYPE_ID,
+                    })
+                    existing_hashes.add(h)
+                    synth_added += 1
+                    if verbose:
+                        print(f"  [ASET fix] block {blk_idx}: added stringdb "
+                              f"entry 0x{h:08X} (type_id={STRINGDB_ASET_TYPE_ID})")
+    if synth_added:
+        print(f"\n  ASET fix: added {synth_added} missing stringdb "
+              f"ASET entries (required for Sys.AddStringDb)")
+
     # ── DLC Bootstrap Injection ──────────────────────────────────────
     # When --source-wad is provided, extract the scripts_vz block from the
     # retail WAD, inject the dlc01 master script, modify the vz master
     # script to chain-load it, and include the modified block in the WAD.
     if source_wad and not no_bootstrap:
         print("\n" + "─" * 60)
-        print("DLC Bootstrap Injection (integrated)")
+        mode_label = "nohook — entry 115 only" if no_hook else "integrated"
+        print(f"DLC Bootstrap Injection ({mode_label})")
         print("─" * 60)
 
         bootstrap_block = _build_bootstrap_block(
             source_wad,
             dlc_contracts=dlc_contracts or DLC_CONTRACT_NAMES,
             verbose=verbose,
+            no_hook=no_hook,
+            converted_blocks=converted,
         )
         if bootstrap_block is None:
             print("ERROR: Bootstrap injection failed", file=sys.stderr)
@@ -288,9 +525,53 @@ def port_x360_dlc(
         converted.append(bootstrap_block)
         print(f"\n  Added scripts_vz bootstrap block "
               f"({len(bootstrap_block.compressed_data):,} bytes compressed)")
+        scripts_vz_idx = len(converted) - 1
     elif source_wad is None and not no_bootstrap:
         print("\n  NOTE: --source-wad not provided; skipping DLC bootstrap injection.")
         print("        Run with --source-wad path/to/vz.wad for a complete patch WAD.")
+    else:
+        scripts_vz_idx = None
+
+    norm_changed = normalize_all_block_asets(converted)
+    if norm_changed:
+        print(f"\n  ASET normalize: fixed {norm_changed} type_id field(s) from UCFX type_hash")
+
+    dlc01_hash = pandemic_hash_m2("dlc01")
+    dedupe_removed = dedupe_asset_hash_across_blocks(
+        converted,
+        dlc01_hash,
+        prefer_type_id=SCRIPT_ASET_TYPE_ID,
+        prefer_min_block_index=scripts_vz_idx,
+    )
+    if dedupe_removed:
+        print(f"  ASET dedupe: removed {dedupe_removed} duplicate dlc01 row(s) "
+              f"(prefer scripts_vz block {scripts_vz_idx})")
+
+    # Global Xbox ASET can leave script hashes on resident (464) AND scripts_vz;
+    # engine may resolve wifmissionflow/vz to resident → crash at GameBootstrap.
+    if scripts_vz_idx is not None:
+        resident_idx = None
+        for idx, blk in enumerate(converted):
+            if "resident" in blk.path_string.replace("/", "\\").lower():
+                resident_idx = idx
+                break
+        if resident_idx is not None:
+            script_deduped = 0
+            seen: set[int] = set()
+            for blk in converted:
+                for entry in blk.aset_entries:
+                    if entry.get("u32_3") == SCRIPT_ASET_TYPE_ID:
+                        seen.add(entry["asset_hash"])
+            for asset_hash in seen:
+                script_deduped += dedupe_asset_hash_across_blocks(
+                    converted,
+                    asset_hash,
+                    prefer_type_id=SCRIPT_ASET_TYPE_ID,
+                    prefer_min_block_index=scripts_vz_idx,
+                )
+            if script_deduped:
+                print(f"  ASET dedupe: removed {script_deduped} script row(s) "
+                      f"conflicting with resident block {resident_idx}")
 
     # Build or merge patch WAD
     if merge_into and merge_into.is_file():
@@ -315,10 +596,226 @@ def port_x360_dlc(
     print("    - STRM vertex data (mixed f16/f32/u8 — needs per-format swapping)")
     print("    - BODY texture data (possible Xbox 360 tile swizzle)")
     print("    - Havok binary data (class-aware field swapping)")
-    print("    - Lua bytecode (endianness flag + opcode/constant swapping)")
     print("    - COMP/CHDR placement data (42-byte records)")
+    print("\n  Localization / briefing (Row 13):")
+    print("    - dlc01 bootstrap calls Sys.AddStringDb(\"patch01\", \"dlc01\")")
+    print("      → registers blocks\\\\dlc01\\\\english_dlc01 (titles: Mercs Blitz, etc.)")
+    print("    - Deploy VO: copy vo_stream_dlctest.english.pws to <game>/Data/Audios/")
+    print("      (use --extract-audio or fresh-rebuilt/data/Audios/)")
+    print("    - Briefing Spiel gfx still missing → placeholder slides (slow, not deadlock)")
 
     return 0
+
+
+def _extract_contract_bytecodes(
+    converted_blocks: list[PatchBlock],
+    contract_names: list[str],
+    *,
+    verbose: bool = False,
+) -> dict[str, bytes]:
+    """Extract LuaQ bytecodes for DLC contracts from the resident block.
+
+    Searches converted DLC blocks for UCFX entries matching the contract
+    name hashes, decompresses the block, and extracts the raw LuaQ bytecode.
+    Returns a dict mapping contract name → bytecode bytes.
+    """
+    target_hashes: dict[int, str] = {}
+    for name in contract_names:
+        target_hashes[pandemic_hash_m2(name)] = name
+
+    LUAQ_SIG = b"\x1bLua"
+    results: dict[str, bytes] = {}
+
+    for blk_idx, block in enumerate(converted_blocks):
+        decompressed = decompress_sges_block(
+            block.compressed_data, 0, len(block.compressed_data)
+        )
+        try:
+            entries = parse_block_entries(decompressed)
+        except Exception:
+            continue
+
+        for entry in entries:
+            if entry["hash"] in target_hashes:
+                cname = target_hashes[entry["hash"]]
+                if cname in results:
+                    continue
+                entry_start = entry["offset"]
+                entry_end = entry_start + entry["size"] - 8
+                chunk = decompressed[entry_start:entry_end]
+                luaq_pos = chunk.find(LUAQ_SIG)
+                if luaq_pos >= 0:
+                    results[cname] = chunk[luaq_pos:]
+                elif verbose:
+                    print(f"      WARNING: {cname} in block {blk_idx} has no LuaQ signature")
+
+        if len(results) == len(target_hashes):
+            break
+
+    return results
+
+
+# The DLC01 registration script registers DLC missions with tMissionData
+# and unlocks them so they appear in Fiona's mission list.
+# Based on analysis of wifmissiondata.luac: PMC contracts use sStarter="PmcBoss"
+# (Fiona), sFactionId="Pmc", bPlayerVisibleMission=true.
+#
+# IMPORTANT: Do NOT call import("dlccon*") here.  Contract scripts live in the
+# DLC asset blocks and will be loaded on-demand by the mission system when the
+# player accepts a contract.  Eagerly importing them during dlc01 load can
+# trigger re-entrant block loading if the engine is still processing scripts_vz,
+# and the DLC block's non-script UCFX entries (meshes, textures with unswapped
+# STRM/BODY data) may confuse the loader.
+#
+# Title strings: Xbox resident dlc01 calls Sys.AddStringDb("patch01", "dlc01")
+# to register blocks\\dlc01\\english_dlc01_P000_Q3.block (ported in vz-patch.wad).
+# Without this, GetMissionTitle falls back to unresolved keys like
+# [DlcCon001.Title] in Fiona's briefing list.
+_DLC01_REGISTRATION_SOURCE = '''\
+print("[dlc01] ======== dlc01 script executing ========")
+
+-- Probe the environment: what globals are visible?
+-- (Do NOT use type() — it may be shadowed as a table)
+if print then
+    print("[dlc01] print is available")
+else
+    -- If we get here, we can't even log. But let's try anyway.
+end
+
+if import then
+    print("[dlc01] import exists (good — engine global)")
+else
+    print("[dlc01] import is NIL")
+end
+
+if tMissionData then
+    print("[dlc01] tMissionData EXISTS")
+else
+    print("[dlc01] tMissionData is NIL — missions will NOT be registered")
+end
+
+if UnlockMission then
+    print("[dlc01] UnlockMission EXISTS")
+else
+    print("[dlc01] UnlockMission is NIL — missions will NOT be unlocked")
+end
+
+-- Probe other common game globals for environment diagnosis
+if _G then
+    print("[dlc01] _G exists")
+else
+    print("[dlc01] _G is NIL")
+end
+
+if _MODULES then
+    print("[dlc01] _MODULES exists")
+else
+    print("[dlc01] _MODULES is NIL")
+end
+
+if _SYS then
+    print("[dlc01] _SYS exists")
+else
+    print("[dlc01] _SYS is NIL")
+end
+
+if inherit then
+    print("[dlc01] inherit exists")
+else
+    print("[dlc01] inherit is NIL")
+end
+
+if MissionManager then
+    print("[dlc01] MissionManager exists")
+else
+    print("[dlc01] MissionManager is NIL")
+end
+
+if ActivateMission then
+    print("[dlc01] ActivateMission exists")
+else
+    print("[dlc01] ActivateMission is NIL")
+end
+
+-- Load DLC English string DB (Mercs Blitz, Arms Race, Urban Rampage, Death Race)
+if Sys and Sys.AddStringDb then
+    print("[dlc01] Calling Sys.AddStringDb(patch01, dlc01)...")
+    Sys.AddStringDb("patch01", "dlc01")
+    print("[dlc01] Sys.AddStringDb returned")
+elseif AddStringDb then
+    print("[dlc01] Calling AddStringDb(patch01, dlc01)...")
+    AddStringDb("patch01", "dlc01")
+    print("[dlc01] AddStringDb returned")
+else
+    print("[dlc01] AddStringDb unavailable — contract titles will show as [DlcConNNN.Title]")
+end
+
+-- Now attempt registration
+if tMissionData then
+    print("[dlc01] Registering DlcCon001 with tMissionData...")
+    tMissionData["DlcCon001"] = {
+        sModuleName = "DlcCon001",
+        sFactionId = "Pmc",
+        sStarter = "PmcBoss",
+        bPlayerVisibleMission = true,
+        bContract = true,
+    }
+    print("[dlc01] Registering DlcCon002 with tMissionData...")
+    tMissionData["DlcCon002"] = {
+        sModuleName = "DlcCon002",
+        sFactionId = "Pmc",
+        sStarter = "PmcBoss",
+        bPlayerVisibleMission = true,
+        bContract = true,
+    }
+    print("[dlc01] Registering DlcCon003 with tMissionData...")
+    tMissionData["DlcCon003"] = {
+        sModuleName = "DlcCon003",
+        sFactionId = "Pmc",
+        sStarter = "PmcBoss",
+        bPlayerVisibleMission = true,
+        bContract = true,
+    }
+    print("[dlc01] Registering DlcCon004a with tMissionData...")
+    tMissionData["DlcCon004a"] = {
+        sModuleName = "DlcCon004a",
+        sFactionId = "Pmc",
+        sStarter = "PmcBoss",
+        bPlayerVisibleMission = true,
+        bContract = true,
+    }
+    print("[dlc01] All 4 missions registered in tMissionData")
+else
+    print("[dlc01] SKIPPED tMissionData registration (nil)")
+end
+
+if UnlockMission then
+    print("[dlc01] Calling UnlockMission for DlcCon001...")
+    UnlockMission("DlcCon001")
+    print("[dlc01] Calling UnlockMission for DlcCon002...")
+    UnlockMission("DlcCon002")
+    print("[dlc01] Calling UnlockMission for DlcCon003...")
+    UnlockMission("DlcCon003")
+    print("[dlc01] Calling UnlockMission for DlcCon004a...")
+    UnlockMission("DlcCon004a")
+    print("[dlc01] All 4 missions unlocked")
+else
+    print("[dlc01] SKIPPED UnlockMission calls (nil)")
+end
+
+print("[dlc01] ======== dlc01 script finished ========")
+'''
+
+
+def _build_dlc01_source(contract_names: list[str], *, no_hook: bool = False) -> str:
+    """Build the Lua source for the DLC01 master script.
+
+    Both modes register missions with tMissionData and call UnlockMission()
+    so DLC contracts appear in Fiona's list.  Contract scripts are NOT
+    imported eagerly — they live in the DLC asset blocks and are loaded
+    on-demand by the mission system when the player accepts a contract.
+    """
+    return _DLC01_REGISTRATION_SOURCE
 
 
 def _build_bootstrap_block(
@@ -326,10 +823,20 @@ def _build_bootstrap_block(
     *,
     dlc_contracts: list[str],
     verbose: bool = False,
+    no_hook: bool = False,
+    converted_blocks: list[PatchBlock] | None = None,
 ) -> PatchBlock | None:
     """Extract scripts_vz from vz.wad, inject DLC bootstrap, return as PatchBlock.
 
-    Returns None on failure.
+    If *no_hook* is True (recommended), only adds ``dlc01`` as entry 115
+    without modifying ``wifmissionflow``.  Contract scripts remain in the
+    DLC asset blocks and are resolved via ASET on-demand.  The ASI triggers
+    ``import("dlc01")`` at runtime.  Returns None on failure.
+
+    If *no_hook* is False, also extracts DLC contract bytecodes from the
+    resident block, adds them to scripts_vz, and hooks ``wifmissionflow``
+    with a chain-loader.  WARNING: this path causes a hang at
+    "Loading vz level with vz masterscript" — use ``--no-hook`` instead.
     """
     repo_root = Path(__file__).resolve().parent.parent
     luac = repo_root / "lua-backup-dont-delete" / "src" / "luac"
@@ -347,30 +854,42 @@ def _build_bootstrap_block(
 
     print(f"  Lua compiler: {luac}")
 
-    # Step 1: Compile the DLC master script (dlc01)
-    print("\n  [bootstrap 1/5] Compiling DLC master script (dlc01)...")
-    import_lines = "\n".join(f'    import("{c}")' for c in dlc_contracts)
-    dlc01_source = f'''\
-function ScriptInit()
-{import_lines}
-end
-'''
+    # Step 1: Extract DLC contract bytecodes from the resident block.
+    # In nohook mode, skip extraction — contracts stay in the DLC asset
+    # blocks and are resolved via ASET on-demand when the player accepts
+    # a mission.  Injecting them into scripts_vz is unnecessary and risks
+    # re-entrant block loading during masterscript evaluation.
+    contract_bytecodes: dict[str, bytes] = {}
+    if no_hook:
+        print("\n  [bootstrap 1/6] Nohook mode — contracts remain in DLC blocks (ASET on-demand).")
+    elif converted_blocks:
+        print("\n  [bootstrap 1/6] Extracting DLC contract bytecodes from resident block...")
+        contract_bytecodes = _extract_contract_bytecodes(
+            converted_blocks, dlc_contracts, verbose=verbose
+        )
+        if contract_bytecodes:
+            print(f"    Extracted {len(contract_bytecodes)} contract bytecodes:")
+            for name, bc in contract_bytecodes.items():
+                print(f"      {name}: {len(bc):,} bytes")
+        else:
+            print("    WARNING: No contract bytecodes found in converted blocks.")
+            print("             Contracts will only be loadable from resident block.")
+    else:
+        print("\n  [bootstrap 1/6] No converted blocks provided; skipping contract extraction.")
+
+    # Step 2: Compile the DLC master script (dlc01)
+    print("\n  [bootstrap 2/6] Compiling DLC master script (dlc01)...")
+    dlc01_source = _build_dlc01_source(dlc_contracts, no_hook=no_hook)
+    if verbose:
+        print(f"    Source:\n{dlc01_source}")
     try:
         dlc01_bytecode = compile_lua_source(dlc01_source, luac)
     except (FileNotFoundError, RuntimeError) as e:
         print(f"  ERROR: {e}", file=sys.stderr)
         return None
 
-    # Step 2: Compile the vz wrapper
-    print("  [bootstrap 2/5] Compiling vz DLC import wrapper...")
-    try:
-        vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
-    except (FileNotFoundError, RuntimeError) as e:
-        print(f"  ERROR: {e}", file=sys.stderr)
-        return None
-
     # Step 3: Extract scripts_vz block from the retail WAD (block 3197 on PC retail)
-    print("  [bootstrap 3/5] Extracting scripts_vz block from retail WAD...")
+    print("  [bootstrap 3/6] Extracting scripts_vz block from retail WAD...")
     try:
         scripts_idx = resolve_scripts_vz_block_index(source_wad)
         meta = extract_block_metadata(source_wad, scripts_idx)
@@ -390,30 +909,29 @@ end
     entries = parse_block_entries(decompressed)
     print(f"    UCFX entries: {len(entries)}")
 
-    hook = find_dlc_bootstrap_hook_script(decompressed, entries)
     hook_name = None
-    if hook is None:
-        print(
-            "  NOTE: No script chunk named 'vz' in scripts_vz (expected on PC retail).",
-        )
-        print(
-            "        Adding dlc01 only — use dlc_enable ASI bootstrap to import('dlc01') at runtime.",
-        )
+    hook_orig_hash: int | None = None
+
+    if no_hook:
+        print("    Mode: nohook — adding dlc01 only, no wifmissionflow modification")
     else:
-        hook_name, hook_entry = hook
-        if hook_name != "vz":
+        hook = find_dlc_bootstrap_hook_script(decompressed, entries)
+        if hook is None:
             print(
-                f"  NOTE: Found {hook_name!r} but PC bootstrap only replaces a 'vz' chunk.",
+                "  NOTE: No hook script (vz / wifmissionflow / wifpmcinterior) in scripts_vz.",
             )
-            hook_name = None
+            print(
+                "        Adding dlc01 only — use dlc_enable ASI or verify_patch_dlc_hook.py on PC.",
+            )
         else:
+            hook_name, hook_entry = hook
             print(
                 f"    Bootstrap hook: {hook_name!r} "
                 f"(hash=0x{hook_entry['hash']:08X}, size={hook_entry['size']:,})"
             )
 
-    # Step 4: Modify the block
-    print("  [bootstrap 4/5] Injecting DLC bootstrap into scripts_vz block...")
+    # Step 4: Modify the block — add dlc01 entry
+    print("  [bootstrap 4/6] Injecting DLC bootstrap into scripts_vz block...")
 
     dlc01_asset_hash = pandemic_hash_m2("dlc01")
     if verbose:
@@ -423,27 +941,44 @@ end
         "dlc01", dlc01_bytecode, dlc01_asset_hash,
     )
 
-    # Add dlc01 entry to block
     modified = _add_ucfx_entry_to_block(
         decompressed, dlc01_ucfx, dlc01_asset_hash,
     )
 
-    if hook_name == "vz":
-        print("    Replacing vz bytecode with import('dlc01') wrapper...")
-        modified = apply_bytecode_replacement_to_block(
-            modified, "vz", vz_import_bytecode
-        )
+    # Step 5: Add DLC contract bytecodes to scripts_vz
+    contract_aset_hashes: list[int] = []
+    if contract_bytecodes:
+        print("  [bootstrap 5/6] Adding DLC contract scripts to scripts_vz...")
+        for cname, cbytecode in contract_bytecodes.items():
+            chash = pandemic_hash_m2(cname)
+            cucfx = _build_ucfx_script_chunk(cname, cbytecode, chash)
+            modified = _add_ucfx_entry_to_block(modified, cucfx, chash)
+            contract_aset_hashes.append(chash)
+            if verbose:
+                print(f"      Added {cname} (hash=0x{chash:08X}, "
+                      f"ucfx={len(cucfx):,} bytes)")
+        new_count = struct.unpack_from("<I", modified, 0)[0]
+        print(f"    scripts_vz now has {new_count} entries "
+              f"(+1 dlc01 +{len(contract_bytecodes)} contracts)")
+    else:
+        print("  [bootstrap 5/6] No contract bytecodes to add.")
 
-    # Apply existing mods (oilcon001 string swaps + demo timer disable)
-    modified = apply_string_mod_to_block(modified)
+    if hook_name is not None:
+        try:
+            modified, hook_orig_hash = inject_dlc_hook_chain_load(
+                modified, hook_name, luac
+            )
+        except (ValueError, RuntimeError) as e:
+            print(f"  ERROR: hook chain-load failed: {e}", file=sys.stderr)
+            return None
 
     new_entries = parse_block_entries(modified)
     print(f"    Block entries: {len(entries)} → {len(new_entries)}")
     print(f"    Modified size: {len(modified):,} bytes "
           f"(delta {len(modified) - len(decompressed):+,})")
 
-    # Step 5: Recompress
-    print("  [bootstrap 5/5] Recompressing scripts_vz block...")
+    # Step 6: Recompress
+    print("  [bootstrap 6/6] Recompressing scripts_vz block...")
     new_sges = compress_sges(modified, segment_size=65536, level=6, major=4)
     ratio = len(new_sges) / len(modified) * 100
     print(f"    Compressed: {len(new_sges):,} bytes ({ratio:.1f}%)")
@@ -459,6 +994,10 @@ end
     # Build PatchBlock with updated ASET
     aset_entries = list(meta["aset_entries"])
     aset_entries.append(script_aset_entry(dlc01_asset_hash))
+    for chash in contract_aset_hashes:
+        aset_entries.append(script_aset_entry(chash))
+    if hook_orig_hash is not None:
+        aset_entries.append(script_aset_entry(hook_orig_hash))
 
     return PatchBlock(
         compressed_data=new_sges,
@@ -549,6 +1088,14 @@ def main() -> int:
     ap.add_argument("--no-bootstrap", action="store_true",
                     help="Skip DLC bootstrap injection even when --source-wad "
                          "is provided (produce DLC blocks only)")
+    ap.add_argument("--no-hook", action="store_true",
+                    help="Add dlc01 as entry 115 only — do NOT modify "
+                         "wifmissionflow (use ASI to trigger import at runtime)")
+    ap.add_argument("--fix-stringdb-descriptors", action="store_true",
+                    help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
+                         "see tools/dlc_stringdb_forensic.py)")
+    ap.add_argument("--no-synth-stringdb-aset", action="store_true",
+                    help="Do not add synthetic stringdb ASET rows for AddStringDb")
     ap.add_argument("--dlc-contracts", type=str, default=None,
                     help="Comma-separated DLC contract names to import "
                          "(default: dlccon001,dlccon002,dlccon003,dlccon004)")
@@ -622,6 +1169,9 @@ def main() -> int:
         dump_dir=args.dump_dir,
         dlc_contracts=dlc_contracts,
         no_bootstrap=args.no_bootstrap,
+        no_hook=args.no_hook,
+        fix_stringdb_descriptors=args.fix_stringdb_descriptors,
+        synth_stringdb_aset=not args.no_synth_stringdb_aset,
     )
 
 

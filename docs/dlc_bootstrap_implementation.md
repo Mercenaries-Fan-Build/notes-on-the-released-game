@@ -1,9 +1,21 @@
 # DLC Bootstrap Implementation
 
-> **Date:** 2026-05-19
-> **Status:** Implemented. Tooling complete; runtime validation pending (requires game installation with DLC patch WAD).
+> **Date:** 2026-05-19 (updated 2026-05-23)
+> **Status:** SUPERSEDED. The "vz master script chain-load" approach described here
+> was abandoned — modifying retail scripts causes hangs at "Loading vz level with vz
+> masterscript". The working solution is the **"nohook" approach**: append `dlc01` as
+> entry 115, and use `dlc_enable.asi` to call `import("dlc01")` after load.
+> See [`dlc_pc_activation_checklist.md`](dlc_pc_activation_checklist.md) for the current workflow.
+>
+> This document is retained for historical context on the tooling architecture.
 
 ---
+
+## PC activation checklist
+
+Before iterating on `dlc_enable.asi`, run the gates in
+[dlc_pc_activation_checklist.md](dlc_pc_activation_checklist.md) (G1–G5).
+Mac-built WAD can be checked with `make verify-patch-dlc` and `make verify-patch-dlc-hook`.
 
 ## Overview
 

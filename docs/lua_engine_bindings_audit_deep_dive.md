@@ -136,7 +136,7 @@ Bindings counted by walking valid `{name, func}` rows and `{NULL,NULL}` (compoun
 | Audit file `0x798770`–`0x799200` only | 11 | ~352 | Strict `{NULL,NULL}` |
 | Extended game cluster `0x798770`–`0x79A930` | ~41 | ~1,015 | Manual walk + markers |
 | All `.rdata` strict tables | 56 | 1,254 | Pair scan (includes stdlib/Flash) |
-| `dump_lua_bindings.py` (conservative) | 49 | 867 | Primary + heuristic, misses marker-split regions |
+| `dump_lua_bindings.py` (cluster only) | ~49 | ~831 | Primary cluster; verified namespace labels only when in `VERIFIED_TABLE_LABELS` |
 
 The **800–1300** range is **accurate** if counting **all** registration rows + stdlib + Flash + SendEvent wrappers; the **narrow doc window under-counts by ~60%**.
 

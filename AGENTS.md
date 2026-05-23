@@ -94,13 +94,13 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 | `make filter-maracaibo-placements OUTPUT=./output` | Tight bbox + strict Maracaibo vz_state → `maracaibo_placements.json` |
 | `make preview-placements OUTPUT=./output` | Vite viewer opens **placement map** (`placement-preview.html`) |
 | `make viewer` | Launch Three.js asset viewer (main app) |
-| `make dlc-port DLC_RAR=... SOURCE_WAD=... OUTPUT=./output` | Xbox 360 DLC → PC `vz-patch.wad` (2,196 blocks + bootstrap) |
-| `make dlc-bootstrap SOURCE_WAD=... OUTPUT=./output` | Inject DLC bootstrap scripts into new patch WAD (standalone) |
-| `make dlc-bootstrap-merge SOURCE_WAD=... OUTPUT=./output` | Inject DLC bootstrap into existing DLC patch WAD (legacy) |
+| `make dlc-port DLC_RAR=... SOURCE_WAD=... OUTPUT=./output` | Xbox 360 DLC → PC `vz-patch.wad` (2,197 blocks + nohook bootstrap) |
+| `make verify-patch-wad-structure OUTPUT=./output` | G7: PTHS trailer + structure (`WAD_VARIANT`, `WAD_EXPECT_BLOCKS`) |
+| `make ghidra-ps3-eboot` | Headless Ghidra analyze decrypted PS3 EBOOT.elf |
 | `make crack-game RETAIL_EXE=... OUTPUT=./output` | Apply SecuROM bypass to retail EXE |
-| `make dlc-enable-asi OUTPUT=./output` | Generate `dlc_enable.asi` plugin (Lua hooks for DLC activation) |
 | `make dlc-asi-native OUTPUT=./output` | Cross-compile `dlc_enable.asi` from C with MinGW (requires `brew install mingw-w64`) |
 | `make dlc-asi-native-debug OUTPUT=./output` | Same as above but with MessageBox popup on load (diagnostic) |
+| `make ghidra-annotate-preanalysis` | Scan Mercs 1 source → `scripts/mercs2_annotations.json` for Ghidra annotation |
 
 ### Resuming after failure
 
@@ -191,13 +191,21 @@ Full-world populate handles visibility layers:
 - Verified: Parque Central towers = 220 game units ≈ 225m real-world height
 - glTF `GLB_ROOT_SCALE` defaults to 1 (UE applies glTF unit scaling)
 
+### Engine Lineage
+
+- **Zero Engine:** Mercenaries 1 → Mercenaries 2 → The Saboteur (all Pandemic Studios)
+- "Last-opened-file wins" asset lookup confirmed from Mercs 1 source (`RedVirtualDisk`)
+- Mercs 1 had a fixed 64-slot C++ mission manager (`RsMissionDataManager`)
+- Hash algorithm and `sges` compression are identical between Mercs 2 and The Saboteur
+
 ### Binary Formats
 
 - **FFCS**: `.wad` container (magic `FFCS`, 5 chunk types: INDX, DATA, CSUM, ASET, PTHS)
-- **sges**: Compressed blocks (raw deflate, `zlib` windowBits `-15`, multi-segment)
+- **sges**: Compressed blocks (raw deflate, `zlib` windowBits `-15`, multi-segment, 64 KB sentinel). Identical between Mercs 2 and The Saboteur
 - **UCFX**: Decompressed asset container (CHDR/COMP/GEOM/MESH/PRMG/STRM/IBUF/MTRL/...)
 - **Placement**: UCFX → CHDR → COMP/flgs chunks; 42-byte records with XYZ + unit quaternion (qx, qy, qz, qw)
 - **CSUM trailer**: CRC-32 (poly 0xEDB88320, init=0, no final XOR) of UCFX header+body. Block file layout: `count(4)` + `count × entry(16)` + chunks; each chunk = `UCFX(8+body)` + `CSUM(8)`. See `docs/format_reference.md` §4.0
+- **Hash algorithm**: FNV-1a with `|0x20` case suppression and `^0x2A * prime` finalization — confirmed identical between Mercenaries 2 and The Saboteur. `pandemic_hash_m2("animation") == 0x18166555` (magic constant in animgroup record headers). 35 unique type_hash values exist across vz.wad; 18 resolved to names. See `docs/aset_format.md`
 
 ### World Data
 
@@ -235,7 +243,7 @@ Within `layers_static`, **~37%** are vegetation/rocks, **~10%** street furniture
 - Texture streaming index (`texture_index.json`) enables cross-block mip assembly
 - UE Interchange importer handles material assignment from glTF
 - **UV V-flip**: D3D9 stores V=0 at image top; glTF expects V=0 at bottom. `gltf_exporter.py` applies `v = 1.0 - v` via `convert_uvs_d3d_to_gltf` for all meshes. Do **not** add extra V-flips in mesh_extractor or other upstream stages
-- **Terrain UV + GLB**: `make extract-terrain` writes `mesh_scene.glb` directly via `terrain_extractor._build_terrain_glb` (no `gltf_exporter` round-trip). Synthesized terrain UVs use `_TEXTURE_V_FLIP = True` in `_world_xz_to_uv` (atlas top = game south / low Z; verified by placement density correlation). The atlas PNG is not rotated. GLB positions are written in **game LH coordinates directly** (no Z-negate, no winding flip) — UE Interchange's Y-up→Z-up swap produces the correct world alignment with `game_to_ue` placements at the origin actor. This differs from building meshes which use local-origin geometry and apply Z-negate.
+- **Terrain UV + GLB**: `make extract-terrain` writes `mesh_scene.glb` directly via `terrain_extractor._build_terrain_glb` (no `gltf_exporter` round-trip). Synthesized terrain UVs use `_TEXTURE_V_FLIP = True` in `_world_xz_to_uv` (atlas top = game south / low Z; verified by placement density correlation). The atlas PNG is not rotated. GLB positions are written in **game LH coordinates directly** (no Z-negate, no winding flip) — UE Interchange's Y-up→Z-up swap produces the correct world alignment with `game_to_ue` placements at the origin actor.
 
 ### Animations
 

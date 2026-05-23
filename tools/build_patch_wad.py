@@ -54,6 +54,7 @@ from ffcs_wad import FFCSChunk, dump_paths_from_pths, extract_slice, parse_ffcs 
 from sges_compress import compress_sges  # noqa: E402
 from sges_decompress import decompress_sges_block, find_sges_offsets, parse_sges_header  # noqa: E402
 from wad_patcher import (  # noqa: E402
+    find_dlc_bootstrap_hook_script,
     script_aset_entry,
     OILCON001_MOD_SOURCE,
     OILCON001_STRING_SWAPS,
@@ -718,12 +719,70 @@ VZ_DLC_WRAPPER_SOURCE = '''\
 import("dlc01")
 '''
 
+
+def dlc_chain_wrapper_source(orig_module: str) -> str:
+    """Lua wrapper: defer DLC import to ScriptInit() so it runs after block loading."""
+    return (
+        f'import("{orig_module}")\n'
+        f'function ScriptInit()\n'
+        f'    import("dlc01")\n'
+        f'end\n'
+    )
+
+
+def extract_script_bytecode(decompressed: bytes, script_name: str) -> bytes:
+    """Return LuaQ bytecode bytes for a named script entry in a decompressed block."""
+    entries = parse_block_entries(decompressed)
+    target_entry = None
+    for entry in entries:
+        name = get_script_name(decompressed, entry)
+        if script_name.lower() in name.lower():
+            target_entry = entry
+            break
+    if target_entry is None:
+        raise ValueError(f"Script {script_name!r} not found for bytecode extract")
+
+    entry_start = target_entry["offset"]
+    entry_end = entry_start + target_entry["size"] - 8
+    chunk = decompressed[entry_start:entry_end]
+    luaq_rel = chunk.find(LUAQ_SIG)
+    if luaq_rel < 0:
+        raise ValueError(f"No LuaQ in {script_name!r}")
+    return chunk[luaq_rel:]
+
+
+def inject_dlc_hook_chain_load(
+    modified: bytes,
+    hook_name: str,
+    luac: Path,
+) -> tuple[bytes, int]:
+    """Preserve hook bytecode as {hook}_orig; replace hook with dlc01 + import orig.
+
+    Returns (modified block, pandemic_hash_m2 of the _orig module for ASET).
+    """
+    from pandemic_hash import pandemic_hash_m2
+
+    orig_name = f"{hook_name}_orig"
+    orig_bytecode = extract_script_bytecode(modified, hook_name)
+    orig_hash = pandemic_hash_m2(orig_name)
+    print(
+        f"  Preserving {hook_name!r} ({len(orig_bytecode):,} bytes) as {orig_name!r} "
+        f"(hash 0x{orig_hash:08X})"
+    )
+    orig_ucfx = _build_ucfx_script_chunk(orig_name, orig_bytecode, orig_hash)
+    modified = _add_ucfx_entry_to_block(modified, orig_ucfx, orig_hash)
+
+    wrapper_bc = compile_lua_source(dlc_chain_wrapper_source(orig_name), luac)
+    print(f"  Replacing {hook_name!r} with chain wrapper ({len(wrapper_bc):,} bytes)...")
+    modified = apply_bytecode_replacement_to_block(modified, hook_name, wrapper_bc)
+    return modified, orig_hash
+
 # Contract names for the "Blow It Up Again" DLC pack
 DLC_CONTRACT_NAMES = [
-    "dlccon001",  # Merc Blitz
-    "dlccon002",  # Arms Race
-    "dlccon003",  # Urban Rampage
-    "dlccon004",  # Death Race
+    "dlccon001",   # Merc Blitz
+    "dlccon002",   # Arms Race
+    "dlccon003",   # Urban Rampage
+    "dlccon004a",  # Death Race (Xbox uses 'dlccon004a', NOT 'dlccon004')
 ]
 
 
@@ -876,19 +935,20 @@ def cmd_inject_dlc_bootstrap(
 
     # Step 1: Compile the DLC master script
     print("\n[1/7] Compiling DLC master script (dlc01)...")
-    import_lines = "\n".join(f'    import("{c}")' for c in contracts)
-    dlc01_source = f'''\
+    if inject_into_vz:
+        import_lines = "\n".join(f'    import("{c}")' for c in contracts)
+        dlc01_source = f'''\
 function ScriptInit()
 {import_lines}
 end
 '''
+    else:
+        import_lines = "\n".join(f'import("{c}")' for c in contracts)
+        dlc01_source = f'''\
+{import_lines}
+'''
     print(f"  Source:\n{dlc01_source}")
     dlc01_bytecode = compile_lua_source(dlc01_source, luac)
-
-    # Step 2: Compile the vz wrapper (import("dlc01")) for injection
-    if inject_into_vz:
-        print("\n[2/7] Compiling vz DLC import call...")
-        vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
 
     from wad_patcher import resolve_scripts_vz_block_index
 
@@ -911,28 +971,24 @@ end
     entries = parse_block_entries(decompressed)
     print(f"  UCFX entries: {len(entries)}")
 
-    vz_entry = None
-    for entry in entries:
-        name = get_script_name(decompressed, entry)
-        if name == "vz":
-            vz_entry = entry
-            break
-
-    if vz_entry is None and inject_into_vz:
+    hook = find_dlc_bootstrap_hook_script(decompressed, entries) if inject_into_vz else None
+    hook_name = hook[0] if hook else None
+    if inject_into_vz and hook is None:
         print(
-            "  NOTE: No 'vz' script chunk in scripts_vz (normal on PC retail).",
+            "  NOTE: No hook script (vz / wifmissionflow / wifpmcinterior) in scripts_vz.",
             file=sys.stderr,
         )
         print(
-            "  Continuing with dlc01 entry only (use ASI to import('dlc01') at runtime).",
+            "  Continuing with dlc01 entry only (use ASI or verify_patch_dlc_hook.py).",
             file=sys.stderr,
         )
         inject_into_vz = False
-    elif vz_entry is not None:
-        print(f"\n  Found 'vz' master script:")
-        print(f"    Index: {vz_entry['index']}")
-        print(f"    Hash:  0x{vz_entry['hash']:08X}")
-        print(f"    Size:  {vz_entry['size']:,} bytes")
+    elif hook_name is not None:
+        _, hook_entry = hook
+        print(f"\n  Bootstrap hook script: {hook_name!r}")
+        print(f"    Index: {hook_entry['index']}")
+        print(f"    Hash:  0x{hook_entry['hash']:08X}")
+        print(f"    Size:  {hook_entry['size']:,} bytes")
 
     # Step 5: Build the dlc01 UCFX chunk
     print("\n[5/7] Building dlc01 UCFX container...")
@@ -951,37 +1007,7 @@ end
     print("\n[6/7] Modifying scripts_vz block...")
     modified = decompressed
 
-    if inject_into_vz:
-        # Replace the vz master script's bytecode with the wrapper
-        # that adds import("dlc01") before the original code.
-        #
-        # Strategy: We can't easily prepend to compiled bytecode.
-        # Instead, we inject `import("dlc01")` as a same-length
-        # string swap into an existing string constant if possible,
-        # or we do a full bytecode replacement.
-        #
-        # The safest approach: find a string in the vz bytecode constant
-        # pool that we can repurpose, OR compile a minimal wrapper and
-        # chain-load the original via its existing entry point.
-        #
-        # Actually, the simplest reliable approach is to find an existing
-        # `import("...")` call in the vz script and add our import alongside
-        # it. Since the vz script already uses `import()` extensively,
-        # we can look for padding or add our import call.
-        #
-        # Let's use the bytecode replacement approach: compile a wrapper
-        # that does import("dlc01") then falls through. The game's
-        # module system means the dlc01 script's ScriptInit will be
-        # called by the engine when the module loads.
-        print("  Replacing vz bytecode with DLC-aware version...")
-        modified = apply_bytecode_replacement_to_block(
-            modified, "vz", vz_import_bytecode
-        )
-        print(f"  WARNING: vz script replaced with minimal import wrapper.")
-        print(f"  The original vz script logic is lost from this patch.")
-        print(f"  This works because vz-patch.wad overrides the base scripts_vz,")
-        print(f"  but the base vz.wad's vz script still runs from the base WAD.")
-        print(f"  The engine loads scripts from BOTH WADs — patch just adds new content.")
+    hook_orig_hash: int | None = None
 
     # Add the dlc01 entry to the block
     print("  Adding dlc01 UCFX entry to block...")
@@ -994,9 +1020,10 @@ end
     print(f"  Block now has {len(new_entries)} UCFX entries (was {len(entries)})")
     print(f"  Modified block: {len(modified):,} bytes (delta {len(modified) - len(decompressed):+,})")
 
-    # Also apply existing mods (string swaps + demo timer) if desired
-    print("  Applying oilcon001 string mods + demo timer disable...")
-    modified = apply_string_mod_to_block(modified)
+    if inject_into_vz and hook_name is not None:
+        modified, hook_orig_hash = inject_dlc_hook_chain_load(
+            modified, hook_name, luac
+        )
 
     # Step 7: Recompress and build patch WAD
     print("\n[7/7] Recompressing and building patch WAD...")
@@ -1015,9 +1042,11 @@ end
         return 1
     print("  Roundtrip verification OK")
 
-    # Update ASET entries to include dlc01
+    # Update ASET entries to include dlc01 (+ preserved hook _orig when chain-loaded)
     aset_entries = list(meta["aset_entries"])
     aset_entries.append(script_aset_entry(dlc01_asset_hash))
+    if hook_orig_hash is not None:
+        aset_entries.append(script_aset_entry(hook_orig_hash))
 
     patch_wad = build_patch_wad(
         indx_entry=meta["indx_entry"],
@@ -1042,8 +1071,7 @@ end
     if inject_into_vz:
         print(f"  2. Modified vz master script to import dlc01")
     print(f"  3. Added dlc01 as new UCFX entry (hash 0x{dlc01_asset_hash:08X})")
-    print(f"  4. Applied oilcon001 string mods + demo timer disable")
-    print(f"  5. Recompressed and packaged into patch WAD")
+    print(f"  4. Recompressed and packaged into patch WAD")
     print(f"\nTo use:")
     print(f"  Copy {output} to the game's data/ directory alongside vz.wad")
     print(f"\nKnown limitations:")
@@ -1130,16 +1158,18 @@ end
     )
 
     entries = parse_block_entries(modified)
-    if any(get_script_name(modified, e) == "vz" for e in entries):
-        vz_import_bytecode = compile_lua_source(VZ_DLC_WRAPPER_SOURCE, luac)
-        modified = apply_bytecode_replacement_to_block(modified, "vz", vz_import_bytecode)
+    hook = find_dlc_bootstrap_hook_script(modified, entries)
+    hook_orig_hash: int | None = None
+    if hook is not None:
+        hook_name, _ = hook
+        modified, hook_orig_hash = inject_dlc_hook_chain_load(
+            modified, hook_name, luac
+        )
     else:
         print(
-            "  NOTE: Skipping vz bytecode replace (no vz chunk); dlc01 added only.",
+            "  NOTE: No hook script (vz / wifmissionflow / wifpmcinterior); dlc01 only.",
             file=sys.stderr,
         )
-
-    modified = apply_string_mod_to_block(modified)
 
     # Recompress
     print("\n[3/5] Recompressing scripts_vz block...")
@@ -1158,6 +1188,8 @@ end
     # Build a PatchBlock for scripts_vz
     aset_entries = list(meta["aset_entries"])
     aset_entries.append(script_aset_entry(dlc01_asset_hash))
+    if hook_orig_hash is not None:
+        aset_entries.append(script_aset_entry(hook_orig_hash))
 
     scripts_block = PatchBlock(
         compressed_data=new_sges,

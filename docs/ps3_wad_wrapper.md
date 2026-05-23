@@ -86,9 +86,49 @@ ISO capacity minus filesystem overhead).
    - `ps3-update/` contains game patch PKG (v1.03) + firmware PUP
    - Neither is the DLC; a separate PSN PKG would be needed
 
+## Header cryptanalysis strategy
+
+Tool: [`tools/ps3_wad_header_crack.py`](../tools/ps3_wad_header_crack.py)  
+Report: `analysis/cross_platform/ps3_header_crack/ps3_header_crack_report.md`
+
+### Layout hypothesis (verified)
+
+| Region | Size | Role |
+|--------|------|------|
+| `0x00000`–`0x7FFFF` | 16 × 32 KiB | Encrypted FFCS metadata (INDX/ASET/PTHS/CSUM equivalent) |
+| `0x80000`–`0x807FF` | 0x800 | Gap / bridge (unknown) |
+| `0x80800`–EOF | ~1 GiB − 0x80800 | Cleartext big-endian **`segs`** DATA |
+
+The envelope is **not** a single XOR layer: first-12-byte XOR against an SCFF template
+does not yield a repeating key, and per-INDX-entry XOR streams differ → **stream cipher**
+(AES-CTR, RC4, or custom PRNG in EBOOT).
+
+### Attack order (late-2000s RE playbook)
+
+1. **Structural bypass** — Walk all `segs` blocks (no header). Decompress each block;
+   scan decompressed UCFX wrappers for `name_hash == 0xB4420059` (`vz`) or ~114 BINN
+   records. CPU-heavy but avoids the cipher entirely.
+2. **Known-plaintext INDX** — Catalog `(rel_page_index, page_count)` from every `segs`
+   offset; assume PC layout (`INDX` at `0x8000`, 12-byte BE triplets). XOR with
+   ciphertext to recover keystream; analyze for RC4/AES-CTR period.
+3. **Transform battery** — Single-byte XOR, repeating XOR, zlib at common offsets,
+   `segs` decompress at 0, bswap32, AES-128 ECB/CBC with title-derived keys
+   (`BLUS30056`, `MERCENARIES2`, MD5/SHA1 of path strings). None succeeded on retail
+   sample without EBOOT key.
+4. **EBOOT / ISO** — Decrypted `EBOOT.elf` is available via `scripts/decrypt_ps3_eboot.sh`
+   (oscetool + `appldr` key revision 1). See `docs/ps3_eboot_analysis.md`.
+   Next: PPC xref from `VZ.WAD` string → header decrypt routine.
+
+### What does *not* work
+
+- Plaintext `scripts_vz` / `FFCS` / `SCFF` anywhere in the file (full-file scan)
+- Single-byte XOR to reveal `INDX` at `0x8000`
+- AES-128 with guessed title/path keys (see crack report)
+- Decompressing the header as one `segs` block at offset 0
+
 ## Next steps
 
-- Scan beyond the first 1MB for additional patterns or a relocated FFCS
-- Compare PS3 VZ.WAD offset table with Xbox DLC01.doh INDX to find correlations
-- If EBOOT decryption tools are available, decrypt header to look for INDX
+- Run `ps3_wad_header_crack.py` after any new PS3 dump or EBOOT revision
+- Compare PS3 `segs` catalog (~5.4k blocks in 1 GiB) vs Xbox INDX (11,087 blocks)
+- Decrypt EBOOT / hook `cellFsRead` on `VZ.WAD` for the real keystream
 - Xbox DLC path remains the fastest route to playable PC content

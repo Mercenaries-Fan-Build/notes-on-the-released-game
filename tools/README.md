@@ -42,12 +42,13 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 | [`pandemic_hash.py`](pandemic_hash.py) | Pandemic Studios FNV-1a hash (confirmed from Mercs 1 source) |
 | [`filter_pmc_base.py`](filter_pmc_base.py) | `pmc_base_asset_list.json`, `placements/pmc_base.json`, streaming groups |
 | [`regen_pmc_base_glbs.py`](regen_pmc_base_glbs.py) | Regenerate GLBs for PMC asset list |
-| [`dump_lua_bindings.py`](dump_lua_bindings.py) | Walk `luaL_Reg` tables in cracked EXE `.rdata` → JSON/CSV |
+| [`dump_lua_bindings.py`](dump_lua_bindings.py) | Walk engine `luaL_Reg` cluster in cracked EXE `.rdata` → JSON/CSV; namespaces only when verified (`VERIFIED_TABLE_LABELS`) |
 
 ```bash
 .venv/bin/python3 tools/dump_lua_bindings.py \\
   --exe game-files/cracked-parts/Crack/Mercenaries2.exe \\
   --json output/lua_bindings_dump.json --csv output/lua_bindings_dump.csv
+# Optional --scan-rdata: full .rdata pair scan (many false tables; not for docs)
 ```
 
 Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, `regen-pmc-glbs` (see `make help`).
@@ -280,6 +281,21 @@ See script headers for the full list. Common variables:
 Batch path extraction (`scripts/extract_all_from_paths.sh`): default **bulk** sges (`sges_decompress.py --bulk-out-dir`, one mmap + one scan). **`EXTRACT_JOBS=1`** forces per-block subprocesses. **`WITH_UCFX=1`** writes **`extracted/batch_*/ucfx_manifests/*.json`** (bulk runs `ucfx_parser` per block in-process); **`ALLOW_PARTIAL=1`** continues after per-block failures. See script headers for **`EXTRACT_OUT_ROOT`**, **`START`**, **`MAX`**, **`SKIP_EXISTING`**, **`PYTHON`**.
 
 **`level_extractor.py --precache-root`** adds **`precache_files`** to **`level_hints.json`** when run manually; stage 2 does not pass it by default.
+
+## DLC PC activation (verify before ASI)
+
+| Tool / target | Purpose |
+|---------------|---------|
+| `tools/verify_patch_dlc01.py` | G1: `dlc01` ASET + `scripts_vz` block |
+| `tools/verify_patch_dlc_hook.py` | G2: hook script bytecode contains `dlc01` |
+| `tools/verify_patch_vz.py` | G2b: vz masterscript chunk matches retail |
+| `tools/verify_patch_wad_structure.py` | G6/G7: PTHS 258-byte trailer + block count |
+| `make verify-patch-dlc` | Run G1 on `OUTPUT` or `fresh-rebuilt` WAD |
+| `make verify-patch-dlc-hook` | Run G2 (fails until WAD rebuilt with hook inject) |
+| `make dlc-asi-native-probe` | G3 ASI: log `type(import)`, `type(_SYS._IMPORT)`, … |
+| `make dlc-asi-native-nobootstrap` | G5: net hooks only — test WAD without inject |
+
+See [docs/dlc_pc_activation_checklist.md](../docs/dlc_pc_activation_checklist.md).
 
 ## Legacy note
 

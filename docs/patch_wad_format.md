@@ -219,6 +219,13 @@ PTHS contains **null-terminated** path strings (one per INDX entry), concatenate
 
 After all path strings, every WAD includes a mandatory **258-byte null-terminated ASCII marker string** (identical across all 8 tested WADs). The engine validates its presence — omitting it causes a black-screen hang during WAD loading.
 
+Verify on built patches:
+
+```bash
+make verify-patch-wad-structure OUTPUT=./output WAD_VARIANT=full WAD_EXPECT_BLOCKS=2197
+# or: .venv/bin/python3 tools/verify_patch_wad_structure.py --wad Data/vz-patch.wad
+```
+
 ```
 xa37dd45ffe100bfffcc9753aabac325f07cb3fa231144fe2e33ae4783feead2
 b8a73ff021fac326df0ef9753ab9cdf6573ddff0312fab0b0ff39779eaff312

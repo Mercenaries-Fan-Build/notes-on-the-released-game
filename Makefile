@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port fix-dlc01-aset dlc-bootstrap dlc-bootstrap-merge crack-game dlc-asi-native dlc-asi-native-bootstrap dlc-asi-native-bootstrap-deferred dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-port-assets-only fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -137,6 +137,9 @@ help:
 	@echo "  make test-windows      Start Windows 7 Docker container (dockur/windows) for game testing"
 	@echo "  make test-windows-down Stop the Windows test container"
 	@echo "  make test-windows-logs Follow container logs"
+	@echo ""
+	@echo "  make ghidra-annotate-preanalysis"
+	@echo "                      Scan Mercs 1 source → scripts/mercs2_annotations.json (for Ghidra script)"
 	@echo ""
 	@echo "Variables: ZIP OUTPUT FORCE_UNZIP=1 VARIANT_PATH EXTRACT_JOBS (1=per-block sges; else bulk)"
 	@echo "            PYTHON (default: \`./.venv/bin/python\` if present, else \`python3\` — run \`make venv\` for pygltflib)"
@@ -460,29 +463,72 @@ crack-game:
 	@echo "  pmc_bb.dll   (SecuROM spoof + debug console + ASI loader)"
 
 # ---- Xbox 360 DLC Port ----
-# Produces a complete vz-patch.wad with DLC blocks + Lua bootstrap.
-# Set SOURCE_WAD to the retail vz.wad for integrated bootstrap injection.
-# Without SOURCE_WAD, produces DLC blocks only (no bootstrap).
+# Produces a complete vz-patch.wad with DLC blocks + nohook bootstrap.
+# Requires SOURCE_WAD (retail vz.wad) for INDX/ASET template + bootstrap injection.
 
 DLC_RAR ?= Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar
+SOURCE_WAD ?=
 
 dlc-port:
 	@test -f "$(DLC_RAR)" || (echo "error: DLC RAR not found at $(DLC_RAR) — set DLC_RAR=path" >&2; exit 1)
+	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad (retail PC base WAD)" >&2; exit 1)
+	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
 	@mkdir -p "$(OUTPUT)/data/Audios"
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/dlc_port.py" \
 	  --x360-rar "$(DLC_RAR)" \
-	  $(if $(SOURCE_WAD),--source-wad "$(SOURCE_WAD)") \
+	  --source-wad "$(SOURCE_WAD)" \
+	  --no-hook \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
+	@echo ""
+	@echo "Built DLC nohook vz-patch.wad (~2197 blocks, dlc01 as entry 115)."
+	@echo "Deploy with: make dlc-asi-native OUTPUT=$(OUTPUT)"
+	@echo "Mac gates: make dlc-phase0 verify-dlc-import-chain OUTPUT=$(OUTPUT) SOURCE_WAD=$(SOURCE_WAD)"
+
+# 2196 DLC asset blocks only — no scripts_vz bootstrap (boot baseline, not Row 13 success).
+dlc-port-assets-only:
+	@test -f "$(DLC_RAR)" || (echo "error: DLC RAR not found at $(DLC_RAR)" >&2; exit 1)
+	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/data"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/dlc_port.py" \
+	  --x360-rar "$(DLC_RAR)" \
+	  --source-wad "$(SOURCE_WAD)" \
+	  --no-bootstrap \
+	  --output "$(OUTPUT)/data/vz-patch-assets-only.wad"
+	@echo "Built assets-only WAD (2196 blocks, no scripts_vz). Not Row 13 activation."
+
+# Phase 0 regression report + import chain + stringdb forensic.
+dlc-phase0:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad missing" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/dlc_phase0_baseline.py" \
+	  --output-wad "$(OUTPUT)/data/vz-patch.wad" \
+	  --fresh-wad "$(REPO_ROOT)/fresh-rebuilt/data/vz-patch.wad" \
+	  --base-wad "$(SOURCE_WAD)"
+
+verify-dlc-import-chain:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: vz-patch.wad missing" >&2; exit 1)
+	@test -f "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=game-files/vz.wad" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_dlc_import_chain.py" \
+	  --base-wad "$(SOURCE_WAD)" \
+	  --patch-wad "$(OUTPUT)/data/vz-patch.wad"
+
+inventory-dlc-patch:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: vz-patch.wad missing" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/inventory_dlc_patch.py" \
+	  --wad "$(OUTPUT)/data/vz-patch.wad" \
+	  --json "$(REPO_ROOT)/analysis/cross_platform/dlc_patch_inventory.json"
 
 # One-shot fix if bootstrap used ASET type_id=0 (breaks import('dlc01') on PC).
 fix-dlc01-aset:
 	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/fix_dlc01_aset_type.py" --wad "$(OUTPUT)/data/vz-patch.wad"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/fix_patch_script_aset_dupes.py" --wad "$(OUTPUT)/data/vz-patch.wad"
 
-verify-patch-dlc01:
+fix-patch-script-aset:
 	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
-	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_patch_dlc01.py" --wad "$(OUTPUT)/data/vz-patch.wad"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/fix_patch_script_aset_dupes.py" --wad "$(OUTPUT)/data/vz-patch.wad"
+
+verify-patch-dlc01: verify-patch-dlc
 
 all:
 	@test -n "$(ZIP)" || (echo "error: set ZIP, e.g. make all ZIP=./Mercenaries\\ 2\\ World\\ in\\ Flames.zip OUTPUT=./output" >&2; exit 1)
@@ -576,34 +622,6 @@ test-windows-down:
 test-windows-logs:
 	docker compose -f docker-compose.test-windows.yml logs -f
 
-# ---- DLC Bootstrap Injection (standalone/legacy) ----
-# PREFERRED: use `make dlc-port DLC_RAR=... SOURCE_WAD=...` which integrates
-# the bootstrap directly into the DLC porting pipeline (single command).
-#
-# These targets remain as alternatives for building bootstrap-only WADs or
-# merging into pre-existing patch WADs without re-running the full DLC port.
-
-SOURCE_WAD ?=
-
-dlc-bootstrap:
-	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
-	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
-	@mkdir -p "$(OUTPUT)/data"
-	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_patch_wad.py" \
-	  --inject-dlc-bootstrap \
-	  --source-wad "$(SOURCE_WAD)" \
-	  --output "$(OUTPUT)/data/vz-patch.wad"
-
-dlc-bootstrap-merge:
-	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
-	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
-	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: existing vz-patch.wad not found (run dlc-port first)" >&2; exit 1)
-	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_patch_wad.py" \
-	  --inject-dlc-bootstrap-merge \
-	  --source-wad "$(SOURCE_WAD)" \
-	  --merge-from "$(OUTPUT)/data/vz-patch.wad" \
-	  --output "$(OUTPUT)/data/vz-patch.wad"
-
 # ---- Lua binding reports (needs cracked EXE) ----
 
 LUA_BIND_EXE ?= $(firstword $(wildcard game-files/cracked-parts/Crack/Mercenaries2.exe) $(wildcard $(OUTPUT)/patched/Mercenaries2.exe))
@@ -611,13 +629,56 @@ LUA_BIND_EXE ?= $(firstword $(wildcard game-files/cracked-parts/Crack/Mercenarie
 debug-binding-report: venv
 	@test -n "$(LUA_BIND_EXE)" || (echo "error: place Mercenaries2.exe under game-files/cracked-parts/Crack/ or $(OUTPUT)/patched/" >&2; exit 1)
 	$(PYTHON) tools/debug_binding_report.py --exe "$(LUA_BIND_EXE)"
-	$(PYTHON) tools/dump_lua_bindings.py --exe "$(LUA_BIND_EXE)" --no-heuristic \
+	$(PYTHON) tools/dump_lua_bindings.py --exe "$(LUA_BIND_EXE)" \
 	  --json "$(OUTPUT)/lua_bindings_primary.json"
 
 dump-lua-bindings: venv
 	@test -n "$(LUA_BIND_EXE)" || (echo "error: set LUA_BIND_EXE or place EXE in game-files/cracked-parts/Crack/" >&2; exit 1)
 	$(PYTHON) tools/dump_lua_bindings.py --exe "$(LUA_BIND_EXE)" \
 	  --json "$(OUTPUT)/lua_bindings_dump.json" --csv "$(OUTPUT)/lua_bindings_dump.csv"
+
+# ---- DLC PC activation gates (G1/G2 — run on game PC or fresh-rebuilt WAD) ----
+
+REFERENCE_WAD ?= game-files/vz.wad
+
+verify-patch-vz:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
+	@test -f "$(REFERENCE_WAD)" || (echo "error: $(REFERENCE_WAD) not found" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_patch_vz.py" --wad "$(OUTPUT)/data/vz-patch.wad" --reference-wad "$(REFERENCE_WAD)"
+
+verify-patch-dlc:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || test -f "$(REPO_ROOT)/fresh-rebuilt/data/vz-patch.wad" || \
+	  (echo "error: no vz-patch.wad under OUTPUT or fresh-rebuilt" >&2; exit 1)
+	@WAD="$(OUTPUT)/data/vz-patch.wad"; \
+	  test -f "$$WAD" || WAD="$(REPO_ROOT)/fresh-rebuilt/data/vz-patch.wad"; \
+	  "$(PYTHON)" "$(REPO_ROOT)/tools/verify_patch_dlc01.py" --wad "$$WAD"
+
+verify-patch-dlc-hook:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || test -f "fresh-rebuilt/data/vz-patch.wad" || \
+	  (echo "error: no vz-patch.wad under OUTPUT or fresh-rebuilt" >&2; exit 1)
+	@WAD="$(OUTPUT)/data/vz-patch.wad"; \
+	  test -f "$$WAD" || WAD="fresh-rebuilt/data/vz-patch.wad"; \
+	  $(PYTHON) tools/verify_patch_dlc_hook.py --wad "$$WAD"
+
+# G6 — FFCS structure + 258-byte PTHS trailer (patch_wad_format.md)
+WAD_VARIANT ?= any
+WAD_EXPECT_BLOCKS ?=
+
+verify-patch-wad-structure:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_patch_wad_structure.py" \
+	  --wad "$(OUTPUT)/data/vz-patch.wad" \
+	  --variant "$(WAD_VARIANT)" \
+	  $(if $(WAD_EXPECT_BLOCKS),--expect-blocks $(WAD_EXPECT_BLOCKS),)
+
+# PS3 EBOOT PPC analysis (requires brew install ghidra; decrypt EBOOT first)
+ghidra-ps3-eboot:
+	@chmod +x "$(REPO_ROOT)/scripts/ghidra_analyze_ps3_eboot.sh"
+	@"$(REPO_ROOT)/scripts/ghidra_analyze_ps3_eboot.sh"
+
+r2-ps3-vz-xrefs:
+	@chmod +x "$(REPO_ROOT)/scripts/r2_vz_wad_xrefs.sh"
+	@"$(REPO_ROOT)/scripts/r2_vz_wad_xrefs.sh"
 
 # ---- DLC Enable ASI Plugin (Native MinGW build) ----
 
@@ -627,29 +688,39 @@ dlc-asi-native:
 	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
-	@echo "Verify: file size ~19456 bytes; log must show VZ_LOAD=1 and Build: ... bootstrap=ON"
+	@echo "Verify: log Build: VZ_LOAD; see docs/dlc_pc_activation_checklist.md"
 
 dlc-asi-native-nobootstrap:
 	@mkdir -p "$(OUTPUT)/scripts"
 	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-nobootstrap
 	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
-	@echo "Install: logging/net only — no import(dlc01) (VZ_LOAD=0)"
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "Bisect: REG_PATCH+NET, no bootstrap — expect Flags REG_PATCH=1 NET=1 VZ_LOAD=0"
 
-dlc-asi-native-bootstrap:
+dlc-asi-native-minimal:
 	@mkdir -p "$(OUTPUT)/scripts"
-	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-bootstrap
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-minimal
 	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
-	@echo "Expect log: Flags: ... VZ_LOAD=1 ... then import(dlc01) at vz level load"
+	@echo "Bisect: NET hooks only — expect Flags MINIMAL=1 REG_PATCH=0 NET=1"
 
-dlc-asi-native-bootstrap-deferred:
+dlc-asi-native-nohooks:
 	@mkdir -p "$(OUTPUT)/scripts"
-	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-bootstrap-deferred
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-nohooks
 	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "Bisect: zero hooks — expect Build: NO_HOOKS; compare vs removing ASI entirely"
+
+dlc-asi-native-no-crash-patch:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/dlc_enable_asi" mingw-no-crash-patch
+	@cp "$(REPO_ROOT)/tools/dlc_enable_asi/dlc_enable.asi" "$(OUTPUT)/scripts/dlc_enable.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
+	@echo "Bisect: VZ bootstrap without CRASH_PATCH at 0x005AE372"
 
 dlc-asi-native-debug:
 	@mkdir -p "$(OUTPUT)/scripts"
@@ -676,6 +747,30 @@ lua-enum-asi-debug:
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/lua_enum.asi to <game>/scripts/"
 
+# ---- Runtime research probe ASI (standalone — not dlc_enable) ----
+
+mercs2-probe:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/mercs2_probe" mingw
+	@cp "$(REPO_ROOT)/tools/mercs2_probe/mercs2_probe.asi" "$(OUTPUT)/scripts/mercs2_probe.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/mercs2_probe.asi to <game>/scripts/"
+	@echo "After ~15s in-game, collect scripts/probe_results/*.json"
+	@echo "Validate: make validate-probe-results PROBE_DIR=<path/to/probe_results>"
+
+mercs2-probe-debug:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/mercs2_probe" mingw-debug
+	@cp "$(REPO_ROOT)/tools/mercs2_probe/mercs2_probe.asi" "$(OUTPUT)/scripts/mercs2_probe.asi"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/mercs2_probe.asi to <game>/scripts/"
+
+# PROBE_DIR — directory with probe_results/*.json from a game run (default: OUTPUT/scripts/probe_results)
+PROBE_DIR ?= $(OUTPUT)/scripts/probe_results
+
+validate-probe-results:
+	$(PYTHON) "$(REPO_ROOT)/tools/validate_probe_results.py" --probe-dir "$(PROBE_DIR)"
+
 # ---- PMC Blackbox (SecuROM spoof + debug console + ASI loader) ----
 # Output: pmc_bb.dll — game's import table must reference this name.
 
@@ -689,3 +784,12 @@ pmc-blackbox:
 
 # Backward-compat alias
 cruise-dll: pmc-blackbox
+
+# ---- Ghidra Annotation (Mercs 1 → Mercs 2 cross-reference) ----
+
+ghidra-annotate-preanalysis:
+	@"$(PYTHON)" "$(REPO_ROOT)/scripts/ghidra_mercs2_preanalysis.py" \
+	  --output "$(REPO_ROOT)/scripts/mercs2_annotations.json"
+	@echo ""
+	@echo "Annotation database: scripts/mercs2_annotations.json"
+	@echo "Next: load Mercs 2 EXE in Ghidra, run scripts/ghidra_mercs2_annotate.py"

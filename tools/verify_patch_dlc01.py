@@ -49,6 +49,7 @@ def main() -> int:
         print("        Bootstrap scripts_vz block missing from this WAD.")
         return 1
 
+    scripts_vz_hits: list[dict] = []
     ok = True
     for r in hits:
         tid = r["type_id"]
@@ -58,11 +59,14 @@ def main() -> int:
         if tid != SCRIPT_ASET_TYPE_ID:
             print(f"  FAIL: type_id must be {SCRIPT_ASET_TYPE_ID} (run fix_dlc01_aset_type.py)")
             ok = False
-        elif "scripts_vz" not in path.lower():
-            print("  WARN: dlc01 not in scripts_vz block path")
+        if "scripts_vz" in path.lower():
+            scripts_vz_hits.append(r)
 
-    if ok:
-        print("  OK: dlc01 ASET looks correct for import() on PC")
+    if not scripts_vz_hits:
+        print("  FAIL: no dlc01 ASET row on scripts_vz block (Row 13 requires entry 115)")
+        ok = False
+    elif ok:
+        print("  OK: dlc01 ASET on scripts_vz (type_id=35) — Row 13 import target")
     return 0 if ok else 1
 
 

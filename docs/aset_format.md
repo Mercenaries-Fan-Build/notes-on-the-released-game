@@ -21,23 +21,44 @@ Each row is four `uint32`:
 
 | Offset | Field | Verified? | Notes |
 |--------|-------|-------------|-------|
-| +0 | `asset_hash` | **Yes** | FNV-1a hash (with `\|0x20` case suppression) of the asset's internal name. Matches `name_hash` field in decompressed block sub-entry headers. **30,006 unique hashes** across 30,645 rows. |
+| +0 | `asset_hash` | **Yes** | FNV-1a hash (with `\|0x20` case suppression and `^0x2A * prime` finalization) of the asset's internal name. Matches `name_hash` field in decompressed block sub-entry headers. **30,006 unique hashes** across 30,645 rows. Confirmed identical between Mercenaries 2 and The Saboteur. |
 | +4 | `secondary_ref` | **Yes** | `0xFFFFFFFF` = single-block asset (22,196 rows). Non-sentinel values are secondary block reference hashes for streaming dependencies (3,002 rows pointing to c3 cells, `resident2`, etc.). |
 | +8 | `packed_block_ref` | **Yes** | **High 16 bits** = block index into PTHS/INDX (verified: 3,581 unique blocks referenced). **Low 16 bits** = `0xFFFF` for primary reference (19,847 rows), otherwise a sub-entry offset within the block. |
 | +12 | `type_id` | **Yes** | Type discriminator (0–35). Maps 1:1 to the `type_hash` field in decompressed block sub-entry headers. See type table below. |
 
 ## Type discriminator table
 
-| `type_id` | `type_hash` | Count | Description |
-|-----------|-------------|-------|-------------|
-| 27 | `0xf011157a` | 13,340 | Texture (DDS body) — same as `FORMAT_HASH_C3_BODY` |
-| 28 | `0xbcfe6314` | 5,194 | Registry / configuration data (small 52–116 byte entries) |
-| 16 | `0x18166555` | 4,261 | Havok 5.5 animation / skeleton data |
-| 19 | `0x5b724250` | 3,007 | **Mesh / geometry** — same as `FORMAT_HASH_C3_MESH` |
-| 12 | — | 1,026 | Unknown |
-| 9 | — | 923 | Unknown |
-| 35 | `0x42498680` | 645 | Unknown |
-| 30 | `0x6310807f` | 625 | Unknown |
+See also: [`docs/type_hash_registry.md`](type_hash_registry.md) for the complete 35-type registry with block distribution analysis.
+
+**35 unique `type_hash` values** exist across vz.wad (55,425 UCFX entries), 18 resolved to names:
+
+| `type_id` | `type_hash` | Resolved Name | Count | Description |
+|-----------|-------------|---------------|-------|-------------|
+| 27 | `0xf011157a` | **texture** | 13,340 | Texture (DDS body) — same as `FORMAT_HASH_C3_BODY` |
+| 28 | `0xbcfe6314` | **path** | 5,194 | Registry / configuration data (small 52–116 byte entries) |
+| 16 | `0x18166555` | **animation** | 4,261 | `pandemic_hash_m2("animation") == 0x18166555` — Havok 5.5 animation / skeleton data. This hash is the magic constant in animgroup record headers. |
+| 19 | `0x5b724250` | **model** | 3,007 | **Mesh / geometry** — same as `FORMAT_HASH_C3_MESH` |
+| 12 | `0x600b904e` | *(unknown)* | 1,026 | UCFX with SCRB+MTRL+STRM (shader/material resources) |
+| 9 | `0xe6b81a54` | **layer** | 923 | Placement/entity layer data (vz_state + layers_static) |
+| 35 | `0x42498680` | **script** | 645 | Lua bytecode (BINN/LuaQ) |
+| 30 | `0x6310807f` | *(unknown)* | 625 | Global object registry (all in resident block) |
+| 32 | `0x7c569307` | **terrainmesh** | 400 | Terrain mesh geometry (one per c3 cell) |
+| 22 | `0x1602815c` | **lowresterrain** | 400 | Low-res terrain tiles (20×20 grid) |
+| 29 | `0x5608bd5a` | **effect** | 314 | Particle/VFX definitions (all in effects block) |
+| 6 | `0xf753f6d0` | **wavebank** | 95 | Audio wave bank data |
+| 5 | `0x665ef13e` | *(unknown)* | 86 | Large UCFX in contract/briefing blocks |
+| 13 | `0xe5273c14` | *(unknown)* | 77 | Small metadata in vehicle/weapon blocks |
+| 21 | `0x9f8bca10` | **soundbank** | 76 | Sound bank data |
+| 23 | `0xfe0e8320` | *(unknown)* | 60 | Compressed CFX payload |
+| 34 | `0x1cf649bb` | *(unknown)* | 31 | In starter/misc blocks |
+| 18 | `0xfa0b8dbc` | *(unknown)* | 22 | Resident-only (22 entries) |
+| 11 | `0x207359c7` | *(unknown)* | 15 | Resident-only (15 entries) |
+| 3 | `0x8f0a54e2` | **binary** | 14 | Raw binary data (ps3saveassets) |
+| 15 | `0x99e77ace` | **font** | 9 | Font data |
+| 14 | `0xde982d61` | *(unknown)* | 6 | Resident-only (6 entries) |
+| 7 | `0x39e5e978` | **stringdb** | 3 | Localized string database |
+| 20 | `0xea4829d5` | **level** | 1 | Singleton in resident |
+| + 12 more singleton types | — | — | 1 each | See [type_hash_registry.md](type_hash_registry.md) |
 
 ## Block distribution
 
@@ -67,7 +88,9 @@ Props like trees, rocks, fences, and street furniture are **embedded in c3 cell 
 
 ## Asset name hash opacity
 
-The `asset_hash` values are FNV-1a hashes of internal asset names. These names are **not stored** anywhere in the WAD — only the hash survives. The original asset names were defined during Pandemic's build pipeline. Entity names from placement data (e.g., `_global_env_rocksbeach01`) are **instance names**, not asset names, and do not hash to ASET entries.
+The `asset_hash` values are FNV-1a hashes (with `|0x20` case suppression and `^0x2A * prime` finalization) of internal asset names. These names are **not stored** anywhere in the WAD — only the hash survives. The original asset names were defined during Pandemic's build pipeline. Entity names from placement data (e.g., `_global_env_rocksbeach01`) are **instance names**, not asset names, and do not hash to ASET entries.
+
+The hash algorithm is identical to The Saboteur's, confirming shared Zero Engine lineage (Mercenaries 1 → Mercenaries 2 → The Saboteur). Implementation: `tools/pandemic_hash.py`.
 
 To reverse-map hashes → names would require the game's internal registry tables or brute-force hash collision with a comprehensive wordlist.
 

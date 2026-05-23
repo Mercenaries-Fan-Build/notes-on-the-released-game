@@ -37,7 +37,7 @@ conclusive across multiple independent data points:
 | `addLeaderboardEntry` / `removeLeaderboardEntries` | CERTAIN — at `0x7D01B4` / `0x7D0120` |
 | `ScriptName` field in Lua bindings | CERTAIN — at offset `0x7CA54C` |
 | `vz-patch.wad` already working in demo `data/` | CONFIRMED — file present and engine loads it |
-| PS3 EBOOT.BIN has **none** of these strings | CONFIRMED — DLC was PS3 PSN-only, not engine-level |
+| PS3 EBOOT (decrypted ELF) has `%s-patch.wad`, `IsDLC`, `SetMasterScriptName` | CERTAIN — see [`ps3_eboot_analysis.md`](ps3_eboot_analysis.md); strings were absent on **encrypted** EBOOT scan only |
 | Xbox 360 DLC uses `package.cfg` with `datafile`/`scriptname` | CONFIRMED — from prototype STFS containers |
 | Mercs 1 `SetMainMasterScriptName` in source | CONFIRMED — identical pattern in Mercs 2 EXE |
 

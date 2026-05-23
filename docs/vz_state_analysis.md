@@ -261,11 +261,12 @@ The entity_id field (offset +0x0E in each record) maps to named entities defined
 
 ### 4.9 Coordinate System
 
-Based on the position data:
-- **X axis**: roughly -5000 to +5000 (East-West across Venezuela map)
-- **Y axis**: roughly -200 to +500 (elevation/height — negative values are underwater/below terrain)
-- **Z axis**: roughly -5000 to +5000 (North-South)
-- Values are in **game units** (likely meters or a near-metric scale)
+Based on the position data (verified against `layers_static` full extraction):
+- **X axis**: approximately -3900 to +3800 (East-West across Venezuela map)
+- **Y axis**: approximately -103 to +393 (elevation — negative values are underwater/below terrain)
+- **Z axis**: approximately -3870 to +3800 (North-South)
+- Units are **meters** (verified: Parque Central towers = 220 game units ≈ 225 m real-world height)
+- Coordinate system is **left-handed Y-up** (D3D9 game space)
 
 ### 4.10 Rotation Encoding
 
@@ -385,7 +386,7 @@ The vz_state filenames encode game state information:
 7. **~746 state overlays** represent different game states for the same map locations
 8. **No 4x4 transform matrices** — positions use simple XYZ + Y-rotation encoding
 9. **The `layers_static` block** is the base world layer; vz_state blocks are delta overlays applied conditionally
-10. **Coordinate range**: X ≈ -5000..5000, Y ≈ -200..500, Z ≈ -5000..5000
+10. **Coordinate range**: X ≈ -3900..3800, Y ≈ -103..393, Z ≈ -3870..3800 (meters, left-handed Y-up)
 11. **Format hash `0xe6b81a54`** is constant across all 746 vz_state files and uniquely identifies this block type
 
 ---
@@ -433,8 +434,8 @@ def extract_placements(filepath):
         z = struct.unpack_from("<f", rec, 26)[0]
         rot_y = struct.unpack_from("<f", rec, 38)[0]
 
-        # Filter to plausible world coordinates
-        if -5000 < x < 5000 and -200 < y < 600 and -5000 < z < 5000:
+        # Filter to plausible world coordinates (meters)
+        if -4000 < x < 4000 and -200 < y < 600 and -4000 < z < 4000:
             placements.append((entity_id, x, y, z, rot_y))
 
         off += stride

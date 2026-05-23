@@ -292,7 +292,7 @@ Y axis:  -103  to +393   (Elevation — negative = underwater)
 Z axis:  -3870 to +3800  (North-South)
 ```
 
-Units are game-world units (approximately metric scale based on building/entity spacing).
+Units are **meters** (verified: Parque Central towers = 220 game units ≈ 225 m real-world height).
 
 ### 5.1 Handedness and transforms (positions + rotations)
 
@@ -361,8 +361,8 @@ Uses a **single sin(yaw) value** at record offset +0x26:
 | File count | 1 composite file | 746 individual files |
 | COMP child offsets | **Relative** to data_area_start | **Absolute** file offsets |
 | Transform record start | Offset 0 (u32 entity key) | Variable (1.0f search heuristic) |
-| Rotation encoding | sin/cos pair (2 floats) | sin only (1 float) |
-| Record layout | uint16 + XYZ + pad + quat(4) + pad | uint32×2 + uint32 + uint16 + uint32 + XYZ + rot(3) |
+| Rotation encoding | Unit quaternion (4 floats: qx, qy, qz, qw) | sin(yaw) only (1 float) |
+| Record layout | u32 key + XYZ + pad + quat(4) + tail(6) | uint32×2 + uint32 + uint16 + uint32 + XYZ + rot(3) |
 | Entity ID in record | u32 at offset 0 of each Transform record | At record offset +14 |
 | Purpose | Always-loaded base world | Conditional state overlays |
 

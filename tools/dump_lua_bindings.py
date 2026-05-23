@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """Dump luaL_Reg registration tables from Mercenaries 2 PC EXE.
 
-Walks the known primary registration cluster (file offsets 0x00798770–0x00799200
-in ``docs/lua_engine_bindings_audit.md``; the cluster extends slightly to ~0x799600
-in practice) and heuristically scans the rest of ``.rdata`` for additional
-``{name_va, func_va}`` tables.
+Walks the engine registration cluster in ``.rdata`` (file offsets ~0x00798770–0x0079AA38).
+**By default only tables with a verified namespace label are named** — see
+``VERIFIED_TABLE_LABELS`` (from ``docs/lua_engine_bindings_audit_deep_dive.md``,
+CONFIRMED/CERTAIN only). Unlabeled tables are emitted as ``table@0x<file_offset>``.
 
-Table storage uses **file offsets** in ``.rdata`` for this EXE; each entry's
-``name_va`` / ``func_va`` are true image VAs (image base 0x00400000).
+Optional ``--scan-rdata`` runs a pair scan over all of ``.rdata``; that mode produces
+many false tables (Lua stdlib, Flash, misaligned runs) and is **off by default**.
+
+Table storage uses **file offsets** in ``.rdata``; each entry's ``name_va`` / ``func_va``
+are image VAs (image base 0x00400000).
 
 Usage:
-  .venv/bin/python3 tools/dump_lua_bindings.py \\
-      --exe game-files/cracked-parts/Crack/Mercenaries2.exe
-  .venv/bin/python3 tools/dump_lua_bindings.py --exe path/to/Mercenaries2.exe \\
-      --json output/lua_bindings_dump.json --csv output/lua_bindings_dump.csv
+  .venv/bin/python3 tools/dump_lua_bindings.py --exe path/to/Mercenaries2.exe
+  .venv/bin/python3 tools/dump_lua_bindings.py --exe ... --json out.json --csv out.csv
+  .venv/bin/python3 tools/dump_lua_bindings.py --exe ... --scan-rdata   # not recommended
   .venv/bin/python3 tools/dump_lua_bindings.py --self-test
 """
 from __future__ import annotations
@@ -30,26 +32,31 @@ from typing import Any, Iterator
 
 IMAGE_BASE_DEFAULT = 0x00400000
 
-# Audit/doc cluster (file offsets within .rdata for cracked MERCENAR.EXE)
+# Engine luaL_Reg cluster (file offsets within .rdata for cracked 53,482,288-byte EXE)
 PRIMARY_FILE_START = 0x00798770
 PRIMARY_FILE_END = 0x00799200
-# Last tables in the cluster spill past the doc end (verified on retail crack)
-PRIMARY_FILE_SCAN_END = 0x0079A000
+PRIMARY_FILE_SCAN_END = 0x0079AA38
 
-# Documented anchors (file offsets) → namespace hints
-KNOWN_TABLE_LABELS: dict[int, str] = {
-    0x00798770: "Object",
+# CONFIRMED/CERTAIN table bases only (docs/lua_engine_bindings_audit_deep_dive.md §1.4).
+# Do not add labels without cross-verified evidence (bytecode, luaopen string, or RE consensus).
+VERIFIED_TABLE_LABELS: dict[int, str] = {
     0x007987F8: "Event",
     0x00798828: "Debug",
     0x00798860: "Weapon",
     0x007988B0: "VO",
     0x00798918: "Vehicle",
-    0x00798A78: "Debug",
+    0x00798A78: "Sys",
     0x00798C98: "Sound",
     0x00798F64: "Faction",
     0x00798FC0: "Player",
-    0x00799328: "Sys",
-    0x007995B0: "Object",
+    0x00799328: "Pg",
+    0x00799608: "Object",
+    0x007998D0: "Net",
+    0x00799C78: "LTI",
+    0x00799FF8: "Gui",
+    0x0079A7D8: "Camera",
+    0x0079A854: "_SYS",
+    0x0079A938: "Ai",
 }
 
 MAX_NAME_LEN = 128
@@ -144,7 +151,7 @@ class BindingEntry:
 
 @dataclass
 class BindingTable:
-    namespace_guess: str
+    namespace: str | None
     start_va: int
     start_foff: int
     end_foff: int
@@ -155,9 +162,16 @@ class BindingTable:
     def end_va(self) -> int:
         return self.start_va + (self.end_foff - self.start_foff)
 
+    @property
+    def label(self) -> str:
+        if self.namespace:
+            return self.namespace
+        return f"table@0x{self.start_foff:08X}"
+
     def to_dict(self) -> dict[str, Any]:
         return {
-            "namespace_guess": self.namespace_guess,
+            "namespace": self.namespace,
+            "label": self.label,
             "start_va": f"0x{self.start_va:08X}",
             "start_foff": f"0x{self.start_foff:08X}",
             "end_va": f"0x{self.end_va:08X}",
@@ -271,21 +285,9 @@ def pair_to_entry(pe: ParsedPe, name_va: int, func_va: int) -> BindingEntry | No
     return BindingEntry(name=name, name_va=name_va, func_va=func_va)
 
 
-def guess_namespace(start_foff: int, entries: list[BindingEntry]) -> str:
-    if start_foff in KNOWN_TABLE_LABELS:
-        return KNOWN_TABLE_LABELS[start_foff]
-    if entries:
-        first = entries[0].name
-        if "." in first:
-            return first.split(".", 1)[0]
-    best: tuple[int, str] | None = None
-    for foff, label in KNOWN_TABLE_LABELS.items():
-        dist = abs(start_foff - foff)
-        if dist <= 0x100 and (best is None or dist < best[0]):
-            best = (dist, label)
-    if best is not None:
-        return best[1]
-    return f"unknown_0x{start_foff:08X}"
+def verified_namespace(start_foff: int) -> str | None:
+    """Return namespace only when file offset is in the verified map."""
+    return VERIFIED_TABLE_LABELS.get(start_foff)
 
 
 def parse_table_at_offset(pe: ParsedPe, start_foff: int) -> BindingTable | None:
@@ -302,7 +304,7 @@ def parse_table_at_offset(pe: ParsedPe, start_foff: int) -> BindingTable | None:
                 return None
             start_va = pe.offset_to_va(start_foff) or start_foff
             return BindingTable(
-                namespace_guess=guess_namespace(start_foff, entries),
+                namespace=verified_namespace(start_foff),
                 start_va=start_va,
                 start_foff=start_foff,
                 end_foff=end_foff,
@@ -364,7 +366,7 @@ def iter_rdata_offsets(pe: ParsedPe, step: int = 4) -> Iterator[int]:
         foff += step
 
 
-def dump_heuristic_tables(
+def dump_rdata_scan_tables(
     pe: ParsedPe,
     *,
     exclude: list[BindingTable],
@@ -388,7 +390,7 @@ def dump_heuristic_tables(
         ):
             continue
 
-        table.source = "heuristic"
+        table.source = "rdata_scan"
         found.append(table)
         claimed.append((table.start_foff, table.end_foff))
 
@@ -403,7 +405,8 @@ def write_csv(path: Path, tables: list[BindingTable]) -> None:
             [
                 "table_start_va",
                 "table_start_foff",
-                "namespace_guess",
+                "namespace",
+                "table_label",
                 "source",
                 "name",
                 "name_va",
@@ -416,7 +419,8 @@ def write_csv(path: Path, tables: list[BindingTable]) -> None:
                     [
                         f"0x{table.start_va:08X}",
                         f"0x{table.start_foff:08X}",
-                        table.namespace_guess,
+                        table.namespace or "",
+                        table.label,
                         table.source,
                         e.name,
                         f"0x{e.name_va:08X}",
@@ -446,17 +450,24 @@ def print_summary(tables: list[BindingTable], pe: ParsedPe) -> None:
         f"0x{PRIMARY_FILE_END:08X}, scan to 0x{PRIMARY_FILE_SCAN_END:08X})"
     )
     primary = [t for t in tables if t.source == "primary"]
-    secondary = [t for t in tables if t.source == "heuristic"]
-    print(f"Tables: {len(tables)} total ({len(primary)} primary, {len(secondary)} heuristic)")
+    scanned = [t for t in tables if t.source == "rdata_scan"]
+    labeled = sum(1 for t in tables if t.namespace)
+    print(
+        f"Tables: {len(tables)} total ({len(primary)} cluster, {len(scanned)} rdata_scan); "
+        f"{labeled} with verified namespace"
+    )
     total = 0
     for i, table in enumerate(tables):
         total += len(table.entries)
         print(
-            f"  [{i + 1:2d}] {table.namespace_guess:12s} "
+            f"  [{i + 1:2d}] {table.label:20s} "
             f"foff 0x{table.start_foff:08X}  "
             f"({len(table.entries):4d} entries, {table.source})"
         )
     print(f"Total bindings: {total}")
+    unlabeled = [t for t in tables if not t.namespace]
+    if unlabeled:
+        print(f"Unlabeled tables (offset only, do not treat as namespace): {len(unlabeled)}")
 
 
 def build_self_test_pe(path: Path) -> None:
@@ -540,7 +551,7 @@ def run_self_test() -> int:
         assert rdata is not None
         table = parse_table_at_offset(pe, rdata.raw_ptr + 0x60)
         assert table is not None and len(table.entries) == 2
-        secondary = dump_heuristic_tables(pe, exclude=[])
+        secondary = dump_rdata_scan_tables(pe, exclude=[])
         assert len(secondary) >= 1
     print("Self-test OK")
     return 0
@@ -564,9 +575,9 @@ def main() -> int:
     parser.add_argument("--json", type=Path, help="Write JSON output")
     parser.add_argument("--csv", type=Path, help="Write CSV output")
     parser.add_argument(
-        "--no-heuristic",
+        "--scan-rdata",
         action="store_true",
-        help="Only dump the primary registration cluster",
+        help="Also scan all of .rdata for reg-like tables (many false positives; not for docs)",
     )
     parser.add_argument("--self-test", action="store_true", help="Run minimal PE fixture test")
     args = parser.parse_args()
@@ -588,10 +599,10 @@ def main() -> int:
 
     pe = parse_pe(exe_path)
     primary = dump_primary_cluster(pe)
-    secondary: list[BindingTable] = []
-    if not args.no_heuristic:
-        secondary = dump_heuristic_tables(pe, exclude=primary)
-    tables = sorted(primary + secondary, key=lambda t: t.start_foff)
+    scanned: list[BindingTable] = []
+    if args.scan_rdata:
+        scanned = dump_rdata_scan_tables(pe, exclude=primary)
+    tables = sorted(primary + scanned, key=lambda t: t.start_foff)
 
     payload = {
         "exe": str(exe_path.resolve()),
@@ -604,20 +615,22 @@ def main() -> int:
         },
         "table_count": len(tables),
         "binding_count": sum(len(t.entries) for t in tables),
-        "primary_table_count": len(primary),
-        "primary_binding_count": sum(len(t.entries) for t in primary),
-        "heuristic_table_count": len(secondary),
-        "heuristic_binding_count": sum(len(t.entries) for t in secondary),
+        "verified_namespace_table_count": sum(1 for t in tables if t.namespace),
+        "cluster_table_count": len(primary),
+        "cluster_binding_count": sum(len(t.entries) for t in primary),
+        "rdata_scan_table_count": len(scanned),
+        "rdata_scan_binding_count": sum(len(t.entries) for t in scanned),
         "tables": [t.to_dict() for t in tables],
-        "secondary_ranges": [
+        "rdata_scan_ranges": [
             {
                 "start_foff": f"0x{t.start_foff:08X}",
                 "start_va": f"0x{t.start_va:08X}",
                 "end_foff": f"0x{t.end_foff:08X}",
-                "namespace_guess": t.namespace_guess,
+                "namespace": t.namespace,
+                "label": t.label,
                 "entry_count": len(t.entries),
             }
-            for t in secondary
+            for t in scanned
         ],
     }
 

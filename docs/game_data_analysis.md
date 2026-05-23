@@ -127,7 +127,7 @@ The 11,370 blocks decompose into the following categories:
   - The same enum definitions as `vz_base` (shared schema)
   - 400 extracted string samples referencing game system names
   - Entities reference `ObjectScript`, `SpawnAlign`, terrain materials, etc.
-- **Significance**: This is **the most important block for world layout** — it defines what static objects exist in the world and their properties. The actual placement transforms are embedded in the binary UCFX `data` segments as float4x4 matrices.
+- **Significance**: This is **the most important block for world layout** — it defines what static objects exist in the world and their properties. The actual placement transforms are embedded in the binary UCFX `data` segments as **42-byte records** containing XYZ position + unit quaternion rotation (not float4x4 matrices). See `docs/placement_data_format.md`.
 
 ### 4.3 `scripts_vz` — Compiled Lua Scripts
 - **File**: `03197_blocks__VZ__scripts_vz_P000_Q3.block.bin`
@@ -369,7 +369,7 @@ vz.wad (2.4 GB FFCS archive)
 
 ### Where Placement Data Lives
 
-1. **`layers_static`** — The primary placement layer. Binary UCFX component data containing float4x4 transforms, SceneObject references, and entity property data for static world objects. The `level_extractor.py` tool can scan this for 4x4 matrix candidates.
+1. **`layers_static`** — The primary placement layer. Binary UCFX component data containing **42-byte placement records** with XYZ position + unit quaternion rotation (qx, qy, qz, qw), SceneObject references, and entity property data for static world objects. See `docs/placement_data_format.md` for the full record specification.
 
 2. **`c3XXXX` cell blocks** — Each cell contains geometry with `world_translation` offsets and `prmg_bbox` bounding boxes that define spatial placement within the grid.
 
