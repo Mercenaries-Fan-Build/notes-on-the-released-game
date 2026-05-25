@@ -1203,6 +1203,8 @@ def _convert_body(
             return _convert_soundbank_data(body_be)
         if type_hash in _MESH_TYPES:
             return _convert_u32_array(body_be)
+        if type_hash == _TYPE_ECS_NODE:
+            return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
             body_be,
             reason="unknown data chunk type_hash",
