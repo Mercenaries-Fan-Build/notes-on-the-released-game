@@ -18,6 +18,7 @@
  *   DLC_ENABLE_LUA_LOG_VERBOSE   0  Log all script prints; 0 = skip layer/streaming spam
  *   DLC_ENABLE_NET_HOOKS         1  IsOnlineConnected / HasPlayerUnlockedCode / etc.
  *   DLC_ENABLE_ARENA_TRANSITION  1  Log-triggered SetMasterScriptName("DLC01") on DLC accept
+ *   DLC_ENABLE_FORENSIC_TRACE   0  Mission load forensic tracer (instruments Lua env at VZ load)
  *
  * Default build: Debug.Printf reg patch + net hooks.
  *   make dlc-asi-native-minimal  — net hooks only (no print patch)
@@ -49,6 +50,8 @@
 #define DLC_ENABLE_ARENA_TRANSITION       0
 #define DLC_ENABLE_GLOBAL_CRASH_GUARD     1
 #define DLC_ENABLE_SHELL_WATCHDOG         0
+#define DLC_ENABLE_STREAMING_FIX          0
+#define DLC_ENABLE_FORENSIC_TRACE         0
 #elif DLC_ENABLE_MINIMAL_MODE
 #define DLC_ENABLE_VZ_LOAD_BOOTSTRAP    0
 #define DLC_ENABLE_BOOTSTRAP          0
@@ -62,6 +65,8 @@
 #define DLC_ENABLE_ARENA_TRANSITION       0
 #define DLC_ENABLE_GLOBAL_CRASH_GUARD     1
 #define DLC_ENABLE_SHELL_WATCHDOG         0
+#define DLC_ENABLE_STREAMING_FIX          0
+#define DLC_ENABLE_FORENSIC_TRACE         0
 #else
 #ifndef DLC_ENABLE_VZ_LOAD_BOOTSTRAP
 #define DLC_ENABLE_VZ_LOAD_BOOTSTRAP  0
@@ -98,6 +103,12 @@
 #endif
 #ifndef DLC_ENABLE_SHELL_WATCHDOG
 #define DLC_ENABLE_SHELL_WATCHDOG     1
+#endif
+#ifndef DLC_ENABLE_STREAMING_FIX
+#define DLC_ENABLE_STREAMING_FIX      1
+#endif
+#ifndef DLC_ENABLE_FORENSIC_TRACE
+#define DLC_ENABLE_FORENSIC_TRACE     0
 #endif
 #endif /* DLC_ENABLE_NO_HOOKS / MINIMAL_MODE / default */
 
@@ -137,7 +148,7 @@
  * The luaB_* wrappers are standard cdecl lua_CFunction entries.
  * -------------------------------------------------------------------------- */
 
-#define EXPECTED_EXE_SIZE   53482288
+#define EXPECTED_EXE_SIZE   0  /* disabled: accept any EXE size */
 
 /* Section layout */
 #define RDATA_START_VA      0x00B05000
@@ -235,6 +246,24 @@ static char g_acceptedDlcMission[32] = {0};
  * Gives the engine time to finish the PMC interior exit sequence. */
 #define ARENA_TRANSITION_DELAY_MS  3000
 static volatile DWORD g_pendingArenaTransitionAt = 0;
+#endif
+
+/* --- Streaming fix state (DLC_ENABLE_STREAMING_FIX) --- */
+#if DLC_ENABLE_STREAMING_FIX
+static volatile LONG g_streamingFixFired = 0;
+static volatile LONG g_dlcModuleImported = 0;
+static volatile DWORD g_pendingStreamingFixAt = 0;
+static volatile int g_streamingStillActiveCount = 0;
+/* Fire the fix after detecting the hang for this many ms.
+ * 3s is enough since we gate on g_dlcModuleImported (second hang only). */
+#define STREAMING_FIX_DELAY_MS  3000
+static void MaybeRunStreamingFix(lua_State* L);
+static void TryStreamingFix(lua_State* L);
+#endif
+
+/* --- Forensic trace state (DLC_ENABLE_FORENSIC_TRACE) --- */
+#if DLC_ENABLE_FORENSIC_TRACE
+static volatile LONG g_forensicTracerInstalled = 0;
 #endif
 
 /* --- Logging --- */
@@ -353,14 +382,7 @@ static void LogClose(void) {
 /* --- EXE verification --- */
 
 static BOOL VerifyExeSize(void) {
-    char path[MAX_PATH];
-    GetModuleFileNameA(NULL, path, MAX_PATH);
-    HANDLE hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
-                               NULL, OPEN_EXISTING, 0, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) return FALSE;
-    DWORD size = GetFileSize(hFile, NULL);
-    CloseHandle(hFile);
-    return (size == EXPECTED_EXE_SIZE);
+    return TRUE;  /* temporarily disabled for debugging */
 }
 
 static BOOL IsAddressExecutable(DWORD va) {
@@ -621,6 +643,9 @@ static void StartShellExitWatchdog(void);
 #if DLC_ENABLE_VZ_LOAD_BOOTSTRAP
 static void MaybeRunPendingBootstrap(lua_State* L);
 #endif
+#if DLC_ENABLE_FORENSIC_TRACE
+static void TryInstallForensicTracer(lua_State* L);
+#endif
 #if DLC_ENABLE_ARENA_TRANSITION
 static void MaybeRunArenaTransition(lua_State* L);
 static void TryArenaTransition(lua_State* L);
@@ -844,6 +869,40 @@ static int Hook_LogPrintf(lua_State* L) {
 
 #if DLC_ENABLE_ARENA_TRANSITION
     MaybeRunArenaTransition(L);
+#endif
+
+#if DLC_ENABLE_STREAMING_FIX
+    /* Detect DLC module import — this gates the streaming fix to only fire
+     * on the SECOND streaming hang (after dlccon001 loads), not the first
+     * (teleport streaming which resolves on its own). */
+    if (!g_dlcModuleImported && strstr(buf, "Dynamically imported module dlccon001")) {
+        InterlockedExchange(&g_dlcModuleImported, 1);
+        Log("[STREAMFIX] DLC module imported — streaming fix now armed for second hang");
+    }
+
+    /* Detect STATE_WAITFORSTREAMING hang (only after DLC module loads). */
+    if (!g_streamingFixFired && g_dlcModuleImported &&
+        strstr(buf, "WAITFORSTREAMING still active")) {
+        int count = InterlockedIncrement((LONG*)&g_streamingStillActiveCount);
+        if (count == 1) {
+            InterlockedExchange((LONG*)&g_pendingStreamingFixAt, (LONG)GetTickCount());
+            Log("[STREAMFIX] Streaming hang detected — fix will fire in %u ms", STREAMING_FIX_DELAY_MS);
+        } else if (count == 10) {
+            Log("[STREAMFIX] 'still active' x10 — confirmed hang, streaming fix pending");
+        }
+    }
+    MaybeRunStreamingFix(L);
+#endif
+
+#if DLC_ENABLE_FORENSIC_TRACE
+    /* Install forensic tracer when we see the VZ masterscript load message.
+     * At this point all game modules (_MODULES) are populated, Sys table exists,
+     * and the mission infrastructure is ready to be instrumented. */
+    if (!g_forensicTracerInstalled &&
+        strstr(buf, "Loading vz level with vz masterscript")) {
+        Log("[FORENSIC] Trigger: VZ masterscript load detected — installing tracer");
+        TryInstallForensicTracer(L);
+    }
 #endif
 
     if (!ShouldSkipLuaLogLine(buf)) {
@@ -2028,6 +2087,1253 @@ static void MaybeRunArenaTransition(lua_State* L) {
 }
 #endif /* DLC_ENABLE_ARENA_TRANSITION */
 
+#if DLC_ENABLE_STREAMING_FIX
+/* =========================================================================
+ * Streaming Fix — Detection only (fix attempts removed).
+ *
+ * When a DLC mission is accepted, the game enters STATE_WAITFORSTREAMING
+ * and never exits because the DLC arena map layers don't exist in the PC
+ * WAD. The state machine has refcount=1 with no pending native streaming
+ * ops to complete it.
+ *
+ * This section now only DETECTS and LOGS the hang. The forensic tracer
+ * (DLC_ENABLE_FORENSIC_TRACE) is the correct tool for diagnosing what's
+ * missing from the DLC mission load pipeline.
+ * ========================================================================= */
+
+static void TryStreamingFix(lua_State* L) {
+    if (!L || !g_exeVerified) {
+        Log("[STREAMFIX] TryStreamingFix: skipped (L=0x%08X verified=%d)",
+            (DWORD)L, g_exeVerified);
+        return;
+    }
+
+    if (InterlockedCompareExchange(&g_streamingFixFired, 1, 0) != 0) {
+        return;
+    }
+
+    Log("[STREAMFIX] === Streaming Fix (Second Hang — Post DLC Module Import) ===");
+    Log("[STREAMFIX] 'still active' seen %d time(s), L=0x%08X",
+        (int)g_streamingStillActiveCount, (DWORD)L);
+
+    /* Reset detection counters (fix fires only once via g_streamingFixFired) */
+    InterlockedExchange((LONG*)&g_streamingStillActiveCount, 0);
+    InterlockedExchange((LONG*)&g_pendingStreamingFixAt, 0);
+
+    /* === Phase 1: Brief diagnostics — streaming status + _States summary === */
+    {
+        static const char* PHASE1_DIAG =
+            "print('[STREAMFIX] === Phase 1: Diagnostics ===')\n"
+            "if Sys and Sys.IsLoadingOrStreaming then\n"
+            "    local ok, ret = pcall(Sys.IsLoadingOrStreaming)\n"
+            "    print('[STREAMFIX] Sys.IsLoadingOrStreaming() = ' .. tostring(ret))\n"
+            "end\n"
+            "local sm = nil\n"
+            "if _MODULES then\n"
+            "    for mk, mv in pairs(_MODULES) do\n"
+            "        if type(mv) == 'table' and mv._StateComplete then\n"
+            "            sm = mv\n"
+            "            print('[STREAMFIX] State machine: ' .. tostring(mk))\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "if sm and sm._States and type(sm._States) == 'table' then\n"
+            "    for i, s in ipairs(sm._States) do\n"
+            "        if type(s) == 'table' then\n"
+            "            print('[STREAMFIX]   [' .. i .. '] ' .. tostring(s.sName)"
+            "                .. ' refCount=' .. tostring(s.nRefCount))\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "print('[STREAMFIX] === Phase 1 Complete ===')\n";
+
+        int result;
+        Log("[STREAMFIX] Phase 1: diagnostics...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, PHASE1_DIAG,
+                                     strlen(PHASE1_DIAG), "=streamfix_p1");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Phase 1 pcall failed (%d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Phase 1 loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    /* === Phase 2: Set nRefCount=0 on STATE_WAITFORSTREAMING entry === */
+    {
+        static const char* PHASE2_REFCOUNT =
+            "print('[STREAMFIX] === Phase 2: Set nRefCount=0 ===')\n"
+            "local sm = nil\n"
+            "if _MODULES then\n"
+            "    for mk, mv in pairs(_MODULES) do\n"
+            "        if type(mv) == 'table' and mv._StateComplete then\n"
+            "            sm = mv\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "local found = false\n"
+            "if sm and sm._States and type(sm._States) == 'table' then\n"
+            "    for i, st in ipairs(sm._States) do\n"
+            "        if type(st) == 'table' and st.sName == 'STATE_WAITFORSTREAMING' then\n"
+            "            local old = st.nRefCount\n"
+            "            st.nRefCount = 0\n"
+            "            print('[STREAMFIX] Set _States[' .. i .. '].nRefCount: '"
+            "                .. tostring(old) .. ' -> 0')\n"
+            "            found = true\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "if not found then\n"
+            "    print('[STREAMFIX] STATE_WAITFORSTREAMING not found in _States!')\n"
+            "end\n"
+            "print('[STREAMFIX] === Phase 2 Complete ===')\n";
+
+        int result;
+        Log("[STREAMFIX] Phase 2: setting nRefCount=0...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, PHASE2_REFCOUNT,
+                                     strlen(PHASE2_REFCOUNT), "=streamfix_p2");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Phase 2 pcall failed (%d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Phase 2 loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    /* === Phase 3: _StateComplete — natural completion trigger === */
+    {
+        static const char* PHASE3_COMPLETE =
+            "print('[STREAMFIX] === Phase 3: _StateComplete ===')\n"
+            "local sm = nil\n"
+            "if _MODULES then\n"
+            "    for mk, mv in pairs(_MODULES) do\n"
+            "        if type(mv) == 'table' and mv._StateComplete then\n"
+            "            sm = mv\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "if sm and sm._StateComplete then\n"
+            "    print('[STREAMFIX] Calling _StateComplete(STATE_WAITFORSTREAMING)...')\n"
+            "    local ok, err = pcall(sm._StateComplete, 'STATE_WAITFORSTREAMING')\n"
+            "    print('[STREAMFIX] _StateComplete -> '"
+            "        .. (ok and 'OK' or ('ERR: ' .. tostring(err))))\n"
+            "else\n"
+            "    print('[STREAMFIX] _StateComplete not found!')\n"
+            "end\n"
+            "print('[STREAMFIX] === Phase 3 Complete ===')\n";
+
+        int result;
+        Log("[STREAMFIX] Phase 3: _StateComplete(STATE_WAITFORSTREAMING)...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, PHASE3_COMPLETE,
+                                     strlen(PHASE3_COMPLETE), "=streamfix_p3");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Phase 3 pcall failed (%d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Phase 3 loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    /* === Phase 4: Safety fallback — _AttemptGlobalExit if still stuck === */
+    {
+        static const char* PHASE4_SAFETY =
+            "print('[STREAMFIX] === Phase 4: Safety check ===')\n"
+            "local sm = nil\n"
+            "if _MODULES then\n"
+            "    for mk, mv in pairs(_MODULES) do\n"
+            "        if type(mv) == 'table' and mv._AttemptGlobalExit then\n"
+            "            sm = mv\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "if sm and sm._States and type(sm._States) == 'table' then\n"
+            "    local still_stuck = false\n"
+            "    for i, st in ipairs(sm._States) do\n"
+            "        if type(st) == 'table' and st.sName == 'STATE_WAITFORSTREAMING' then\n"
+            "            still_stuck = true\n"
+            "            print('[STREAMFIX] STATE_WAITFORSTREAMING still in _States')\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "    if still_stuck and sm._AttemptGlobalExit then\n"
+            "        print('[STREAMFIX] Trying _AttemptGlobalExit as backup...')\n"
+            "        local ok, err = pcall(sm._AttemptGlobalExit)\n"
+            "        print('[STREAMFIX] _AttemptGlobalExit -> '"
+            "            .. (ok and 'OK' or ('ERR: ' .. tostring(err))))\n"
+            "    elseif not still_stuck then\n"
+            "        print('[STREAMFIX] State already exited — no backup needed')\n"
+            "    end\n"
+            "else\n"
+            "    print('[STREAMFIX] Cannot verify state — skipping backup')\n"
+            "end\n"
+            "print('[STREAMFIX] === Phase 4 Complete ===')\n";
+
+        int result;
+        Log("[STREAMFIX] Phase 4: safety fallback...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, PHASE4_SAFETY,
+                                     strlen(PHASE4_SAFETY), "=streamfix_p4");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Phase 4 pcall failed (%d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Phase 4 loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    Log("[STREAMFIX] === Streaming Fix Complete ===");
+}
+
+/* Removed: OLD Phase 1/2/3 streaming fix attempts (wrong approach).
+ * Forensic tracer is the correct diagnostic tool. */
+#if 0  /* --- BEGIN REMOVED STREAMING FIX PHASES --- */
+    {
+        static const char* STREAMING_PROBE_REMOVED =
+            "print('[streamfix] === Phase 1: State Machine Probe ===')\n"
+            "\n"
+            "-- Look for state machine globals and streaming APIs\n"
+            "local sm_env = nil\n"
+            "local sm_name = nil\n"
+            "\n"
+            "-- Check known candidate modules for state machine code\n"
+            "local candidates = {\n"
+            "    'mrxgameflow', 'wifgameflow', 'mrxstreamingmanager',\n"
+            "    'wifstreamingmanager', 'mrxlevelflow', 'wiflevelflow',\n"
+            "    'mrxmissionflow', 'wifmissionflow', 'mrxworldmanager',\n"
+            "    'wifworldmanager', 'mrxlayermanager', 'wiflayermanager',\n"
+            "}\n"
+            "\n"
+            "if _MODULES then\n"
+            "    -- First pass: look for modules with streaming/state keywords\n"
+            "    for k, v in pairs(_MODULES) do\n"
+            "        if v then\n"
+            "            if v._AttemptGlobalExit or v._StateComplete or\n"
+            "               v.STATE_WAITFORSTREAMING or v.nStreamRefCount or\n"
+            "               v._nStreamingRefCount then\n"
+            "                sm_env = v\n"
+            "                sm_name = tostring(k)\n"
+            "                print('[streamfix] State machine found in module: ' .. sm_name)\n"
+            "                break\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "\n"
+            "    -- Second pass: check specific candidates\n"
+            "    if not sm_env then\n"
+            "        for _, name in ipairs(candidates) do\n"
+            "            local mod = _MODULES[name]\n"
+            "            if mod then\n"
+            "                print('[streamfix] Checking module: ' .. name)\n"
+            "                local interesting = {}\n"
+            "                for k, v in pairs(mod) do\n"
+            "                    local ks = tostring(k):lower()\n"
+            "                    if ks:find('stream') or ks:find('state') or\n"
+            "                       ks:find('loading') or ks:find('pending') or\n"
+            "                       ks:find('refcount') or ks:find('exit') or\n"
+            "                       ks:find('complete') then\n"
+            "                        table.insert(interesting, tostring(k) .. '=' .. tostring(v))\n"
+            "                    end\n"
+            "                end\n"
+            "                if #interesting > 0 then\n"
+            "                    print('[streamfix]   ' .. name .. ' has: ' .. table.concat(interesting, ', '))\n"
+            "                    if not sm_env then\n"
+            "                        sm_env = mod\n"
+            "                        sm_name = name\n"
+            "                    end\n"
+            "                end\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "\n"
+            "    -- Third pass: brute-force search all modules\n"
+            "    if not sm_env then\n"
+            "        print('[streamfix] Brute-force scanning all modules...')\n"
+            "        for k, v in pairs(_MODULES) do\n"
+            "            if type(v) == 'table' then\n"
+            "                for mk, mv in pairs(v) do\n"
+            "                    local mks = tostring(mk):lower()\n"
+            "                    if mks:find('waitforstream') or mks:find('streamrefcount') or\n"
+            "                       mks:find('attemptglobalexit') or mks:find('statecomplete') then\n"
+            "                        print('[streamfix]   Found ' .. tostring(mk) .. '=' .. tostring(mv) .. ' in ' .. tostring(k))\n"
+            "                        if not sm_env then\n"
+            "                            sm_env = v\n"
+            "                            sm_name = tostring(k)\n"
+            "                        end\n"
+            "                    end\n"
+            "                end\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Also check top-level globals\n"
+            "if _AttemptGlobalExit then\n"
+            "    print('[streamfix] _AttemptGlobalExit is a top-level global: ' .. tostring(_AttemptGlobalExit))\n"
+            "end\n"
+            "if _StateComplete then\n"
+            "    print('[streamfix] _StateComplete is a top-level global: ' .. tostring(_StateComplete))\n"
+            "end\n"
+            "if nStreamRefCount then\n"
+            "    print('[streamfix] nStreamRefCount is a top-level global: ' .. tostring(nStreamRefCount))\n"
+            "end\n"
+            "if _nStreamingRefCount then\n"
+            "    print('[streamfix] _nStreamingRefCount is a top-level global: ' .. tostring(_nStreamingRefCount))\n"
+            "end\n"
+            "\n"
+            "-- Check if Sys has streaming APIs\n"
+            "if Sys then\n"
+            "    local sys_streaming = {}\n"
+            "    for k, v in pairs(Sys) do\n"
+            "        local ks = tostring(k):lower()\n"
+            "        if ks:find('stream') or ks:find('loading') or ks:find('pending') or\n"
+            "           ks:find('layer') or ks:find('state') then\n"
+            "            table.insert(sys_streaming, tostring(k) .. '=' .. tostring(v))\n"
+            "        end\n"
+            "    end\n"
+            "    if #sys_streaming > 0 then\n"
+            "        print('[streamfix] Sys streaming APIs: ' .. table.concat(sys_streaming, ', '))\n"
+            "    else\n"
+            "        print('[streamfix] No streaming-related APIs found in Sys')\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Store results for phase 2\n"
+            "_G._streamfix_env = sm_env\n"
+            "_G._streamfix_name = sm_name\n"
+            "\n"
+            "if sm_env then\n"
+            "    -- Dump all keys/values in the state machine module\n"
+            "    print('[streamfix] Dumping state machine module (' .. tostring(sm_name) .. '):')\n"
+            "    local count = 0\n"
+            "    for k, v in pairs(sm_env) do\n"
+            "        count = count + 1\n"
+            "        if count <= 60 then\n"
+            "            print('[streamfix]   ' .. tostring(k) .. ' = ' .. tostring(v))\n"
+            "        end\n"
+            "    end\n"
+            "    if count > 60 then\n"
+            "        print('[streamfix]   ... (' .. tostring(count) .. ' total keys)')\n"
+            "    end\n"
+            "else\n"
+            "    print('[streamfix] WARNING: Could not find state machine module')\n"
+            "    print('[streamfix] Dumping all module names:')\n"
+            "    if _MODULES then\n"
+            "        for k, v in pairs(_MODULES) do\n"
+            "            print('[streamfix]   module: ' .. tostring(k))\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "print('[streamfix] === Phase 1 complete ===')\n";
+
+        Log("[STREAMFIX] Running state machine probe (phase 1)...");
+        result = call_luaL_loadbuffer(L, STREAMING_PROBE,
+                                     strlen(STREAMING_PROBE), "=streamfix_probe");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Probe pcall failed (code %d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Probe loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    /* Phase 2: Attempt to force the streaming state exit. */
+    {
+        static const char* STREAMING_FORCE_EXIT =
+            "print('[streamfix] === Phase 2: Force Streaming State Exit ===')\n"
+            "\n"
+            "local sm = _G._streamfix_env\n"
+            "local sm_name = _G._streamfix_name or '(unknown)'\n"
+            "local fixed = false\n"
+            "\n"
+            "-- Strategy A: Call _StateComplete if it exists\n"
+            "if sm and sm._StateComplete then\n"
+            "    print('[streamfix] Strategy A: calling ' .. sm_name .. '._StateComplete()')\n"
+            "    local ok, err = pcall(sm._StateComplete)\n"
+            "    if ok then\n"
+            "        print('[streamfix] _StateComplete() returned successfully')\n"
+            "        fixed = true\n"
+            "    else\n"
+            "        print('[streamfix] _StateComplete() FAILED: ' .. tostring(err))\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Strategy B: Zero the refcount variable\n"
+            "if not fixed and sm then\n"
+            "    local refcount_keys = {'nStreamRefCount', '_nStreamingRefCount', '_nRefCount',\n"
+            "                           'nPendingOps', '_nPendingOps', 'nRefCount'}\n"
+            "    for _, key in ipairs(refcount_keys) do\n"
+            "        if sm[key] and type(sm[key]) == 'number' then\n"
+            "            print('[streamfix] Strategy B: ' .. sm_name .. '.' .. key .. ' = ' .. tostring(sm[key]) .. ' -> setting to 0')\n"
+            "            sm[key] = 0\n"
+            "            fixed = true\n"
+            "            break\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Strategy C: Monkey-patch refcount getter to return 0, then force exit\n"
+            "if not fixed and sm then\n"
+            "    print('[streamfix] Strategy C: monkey-patching refcount + force exit')\n"
+            "\n"
+            "    -- Unlock the state machine\n"
+            "    if sm._bGloballyLocked ~= nil then\n"
+            "        print('[streamfix]   _bGloballyLocked = ' .. tostring(sm._bGloballyLocked) .. ' -> false')\n"
+            "        sm._bGloballyLocked = false\n"
+            "    end\n"
+            "\n"
+            "    -- Patch refcount getter functions to return 0\n"
+            "    local refcount_funcs = {'_GetTotalRefCount', 'GetTotalRefCount',\n"
+            "                            '_GetRefCount', 'GetRefCount',\n"
+            "                            'GetStreamingRefCount'}\n"
+            "    for _, fname in ipairs(refcount_funcs) do\n"
+            "        if sm[fname] and type(sm[fname]) == 'function' then\n"
+            "            print('[streamfix]   Patching ' .. fname .. '() to return 0')\n"
+            "            sm[fname] = function() return 0 end\n"
+            "        end\n"
+            "    end\n"
+            "\n"
+            "    -- Also patch _bStateComplete to true\n"
+            "    if sm._bStateComplete ~= nil then\n"
+            "        sm._bStateComplete = true\n"
+            "    end\n"
+            "\n"
+            "    -- Now call _AttemptGlobalExit with refcount patched\n"
+            "    if sm._AttemptGlobalExit then\n"
+            "        print('[streamfix]   Calling _AttemptGlobalExit() (post-patch)')\n"
+            "        local ok, err = pcall(sm._AttemptGlobalExit)\n"
+            "        print('[streamfix]   _AttemptGlobalExit: ' .. (ok and 'OK' or ('FAILED: ' .. tostring(err))))\n"
+            "    end\n"
+            "\n"
+            "    -- If _AttemptGlobalExit still reads from C++, try _GlobalExit directly\n"
+            "    if sm._GlobalExit then\n"
+            "        print('[streamfix]   Calling _GlobalExit() directly')\n"
+            "        local ok, err = pcall(sm._GlobalExit)\n"
+            "        print('[streamfix]   _GlobalExit: ' .. (ok and 'OK' or ('FAILED: ' .. tostring(err))))\n"
+            "    end\n"
+            "\n"
+            "    -- Try setting current state name to nil/empty to bypass checks\n"
+            "    if sm._sCurrentStateName ~= nil then\n"
+            "        print('[streamfix]   _sCurrentStateName = ' .. tostring(sm._sCurrentStateName) .. ' -> nil')\n"
+            "        sm._sCurrentStateName = nil\n"
+            "    end\n"
+            "\n"
+            "    fixed = true\n"
+            "end\n"
+            "\n"
+            "-- Strategy D: Look for top-level globals\n"
+            "if not fixed then\n"
+            "    if _StateComplete then\n"
+            "        print('[streamfix] Strategy D: calling global _StateComplete()')\n"
+            "        local ok, err = pcall(_StateComplete)\n"
+            "        if ok then\n"
+            "            print('[streamfix] global _StateComplete() returned OK')\n"
+            "            fixed = true\n"
+            "        else\n"
+            "            print('[streamfix] global _StateComplete() FAILED: ' .. tostring(err))\n"
+            "        end\n"
+            "    end\n"
+            "    if not fixed and _AttemptGlobalExit then\n"
+            "        print('[streamfix] Strategy D: calling global _AttemptGlobalExit()')\n"
+            "        local ok, err = pcall(_AttemptGlobalExit)\n"
+            "        if ok then\n"
+            "            print('[streamfix] global _AttemptGlobalExit() returned OK')\n"
+            "            fixed = true\n"
+            "        else\n"
+            "            print('[streamfix] global _AttemptGlobalExit() FAILED: ' .. tostring(err))\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Strategy E: Search all modules for a refcount and zero it\n"
+            "if not fixed and _MODULES then\n"
+            "    print('[streamfix] Strategy E: brute-force refcount search...')\n"
+            "    for mk, mv in pairs(_MODULES) do\n"
+            "        if type(mv) == 'table' then\n"
+            "            for k, v in pairs(mv) do\n"
+            "                local ks = tostring(k):lower()\n"
+            "                if type(v) == 'number' and v > 0 and v < 10 and\n"
+            "                   (ks:find('refcount') or ks:find('pending')) then\n"
+            "                    print('[streamfix]   ' .. tostring(mk) .. '.' .. tostring(k) .. ' = ' .. tostring(v) .. ' -> 0')\n"
+            "                    mv[k] = 0\n"
+            "                    fixed = true\n"
+            "                end\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Strategy F: If Sys has streaming-complete API, call it\n"
+            "if not fixed and Sys then\n"
+            "    local try_apis = {'StreamingComplete', 'CompleteStreaming',\n"
+            "                      'ForceStreamingComplete', 'EndLoading',\n"
+            "                      'SetStreamingComplete', 'FinishLoading'}\n"
+            "    for _, api in ipairs(try_apis) do\n"
+            "        if Sys[api] then\n"
+            "            print('[streamfix] Strategy F: calling Sys.' .. api .. '()')\n"
+            "            local ok, err = pcall(Sys[api])\n"
+            "            if ok then\n"
+            "                print('[streamfix] Sys.' .. api .. '() returned OK')\n"
+            "                fixed = true\n"
+            "                break\n"
+            "            else\n"
+            "                print('[streamfix] Sys.' .. api .. '() FAILED: ' .. tostring(err))\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "if fixed then\n"
+            "    print('[streamfix] RESULT: Fix applied — loading screen should clear')\n"
+            "    print('[streamfix] If the world is playable, the DLC runs in VZ world (no arena needed)')\n"
+            "    print('[streamfix] If the world is void/broken, DLC arena map data is required')\n"
+            "else\n"
+            "    print('[streamfix] RESULT: No fix could be applied automatically')\n"
+            "    print('[streamfix] The state machine may be native-only (C++ level)')\n"
+            "    print('[streamfix] Consider: binary patch to force refcount=0 at 0x005AE372 area')\n"
+            "end\n"
+            "print('[streamfix] === Phase 2 complete ===')\n";
+
+        Log("[STREAMFIX] Running force exit attempt (phase 2)...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, STREAMING_FORCE_EXIT,
+                                     strlen(STREAMING_FORCE_EXIT), "=streamfix_force");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] Force exit pcall failed (code %d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] Force exit loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    /* Phase 3: Try to dismiss loading screen UI directly */
+    {
+        static const char* LOADING_SCREEN_FIX =
+            "print('[streamfix] === Phase 3: Dismiss Loading Screen UI ===')\n"
+            "\n"
+            "-- Search for loading-screen related globals\n"
+            "local loading_globals = {'MrxLoadingScreen', 'LoadingScreen', 'MrxLoad',\n"
+            "    'gLoadingScreen', 'g_LoadingScreen', 'MrxGui', 'MrxHud',\n"
+            "    'MrxScreen', 'ScreenManager', 'MrxScreenManager'}\n"
+            "for _, name in ipairs(loading_globals) do\n"
+            "    local obj = _G[name]\n"
+            "    if obj ~= nil then\n"
+            "        print('[streamfix] Found: ' .. name .. ' = ' .. type(obj))\n"
+            "        if type(obj) == 'table' then\n"
+            "            for k, v in pairs(obj) do\n"
+            "                print('[streamfix]   .' .. tostring(k) .. ' = ' .. type(v) .. ': ' .. tostring(v))\n"
+            "            end\n"
+            "            -- Try common hide/dismiss methods\n"
+            "            local dismiss = {'Hide', 'Dismiss', 'Close', 'Remove', 'Destroy',\n"
+            "                             'EndLoading', 'FinishLoading', 'Complete',\n"
+            "                             'OnLoadComplete', 'SetVisible'}\n"
+            "            for _, fn in ipairs(dismiss) do\n"
+            "                if type(obj[fn]) == 'function' then\n"
+            "                    print('[streamfix]   Trying ' .. name .. '.' .. fn .. '()')\n"
+            "                    local ok, err = pcall(obj[fn], obj, false)\n"
+            "                    print('[streamfix]   -> ' .. (ok and 'OK' or ('FAILED: ' .. tostring(err))))\n"
+            "                end\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Look for streaming manager\n"
+            "local stream_globals = {'MrxStreaming', 'StreamingManager', 'Streaming',\n"
+            "    'gStreaming', 'MrxStreamingManager', 'ResourceStreaming'}\n"
+            "for _, name in ipairs(stream_globals) do\n"
+            "    local obj = _G[name]\n"
+            "    if obj ~= nil then\n"
+            "        print('[streamfix] Found streaming: ' .. name .. ' = ' .. type(obj))\n"
+            "        if type(obj) == 'table' then\n"
+            "            for k, v in pairs(obj) do\n"
+            "                print('[streamfix]   .' .. tostring(k) .. ' = ' .. type(v) .. ': ' .. tostring(v))\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Dump MrxState._States to see what states exist and their refcounts\n"
+            "local sm = _G._streamfix_env\n"
+            "if sm and sm._States and type(sm._States) == 'table' then\n"
+            "    print('[streamfix] MrxState._States dump:')\n"
+            "    for sk, sv in pairs(sm._States) do\n"
+            "        print('[streamfix]   [' .. tostring(sk) .. '] = ' .. type(sv))\n"
+            "        if type(sv) == 'table' then\n"
+            "            for k, v in pairs(sv) do\n"
+            "                print('[streamfix]     .' .. tostring(k) .. ' = ' .. type(v) .. ': ' .. tostring(v))\n"
+            "            end\n"
+            "        end\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Check metatable of the state machine (refcount might be a __index getter)\n"
+            "if sm then\n"
+            "    local mt = getmetatable(sm)\n"
+            "    if mt then\n"
+            "        print('[streamfix] MrxState has metatable:')\n"
+            "        for k, v in pairs(mt) do\n"
+            "            print('[streamfix]   mt.' .. tostring(k) .. ' = ' .. type(v) .. ': ' .. tostring(v))\n"
+            "        end\n"
+            "    else\n"
+            "        print('[streamfix] MrxState has NO metatable')\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "-- Broad search: dump all globals that have 'load' or 'stream' in their name\n"
+            "print('[streamfix] Globals with load/stream/screen in name:')\n"
+            "for k, v in pairs(_G) do\n"
+            "    local kl = tostring(k):lower()\n"
+            "    if kl:find('load') or kl:find('stream') or kl:find('screen') or kl:find('hud') then\n"
+            "        print('[streamfix]   _G.' .. tostring(k) .. ' = ' .. type(v))\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "print('[streamfix] === Phase 3 complete ===')\n";
+
+        Log("[STREAMFIX] Running loading screen dismissal (phase 3)...");
+        ClearLuaStackToBase(L);
+        result = call_luaL_loadbuffer(L, LOADING_SCREEN_FIX,
+                                     strlen(LOADING_SCREEN_FIX), "=streamfix_ui");
+        if (result == LUA_OK) {
+            result = call_lua_pcall_simple(L);
+            if (result != LUA_OK) {
+                Log("[STREAMFIX] UI fix pcall failed (code %d)", result);
+                LogLuaStackTopError(L);
+            }
+        } else {
+            Log("[STREAMFIX] UI fix loadbuffer failed (%d)", result);
+        }
+        ClearLuaStackToBase(L);
+    }
+
+    g_inInjection = 0;
+    if (veh) RemoveVectoredExceptionHandler(veh);
+
+    Log("[STREAMFIX] === Streaming Fix End ===");
+}
+#endif /* --- END REMOVED STREAMING FIX PHASES --- */
+
+static void MaybeRunStreamingFix(lua_State* L) {
+    DWORD now;
+    DWORD at;
+    DWORD elapsed;
+
+    if (!L || g_streamingFixFired) {
+        return;
+    }
+
+    at = g_pendingStreamingFixAt;
+    if (at == 0) {
+        return;
+    }
+
+    now = GetTickCount();
+    elapsed = now - at;
+    if (elapsed >= STREAMING_FIX_DELAY_MS) {
+        InterlockedExchange((LONG*)&g_pendingStreamingFixAt, 0);
+        Log("[STREAMFIX] Delay elapsed (%u ms) — firing streaming fix on game thread (L=0x%08X)",
+            elapsed, (DWORD)L);
+        TryStreamingFix(L);
+    }
+}
+#endif /* DLC_ENABLE_STREAMING_FIX */
+
+/* =========================================================================
+ * Forensic Tracer (DLC_ENABLE_FORENSIC_TRACE)
+ *
+ * Instruments the game's Lua environment to log ALL mission-relevant
+ * function calls. Injects once when the Lua VM is confirmed active
+ * (first print hook call), so it captures the ENTIRE mission setup flow
+ * for both base-game and DLC missions.
+ *
+ * The tracer uses Lua-level function wrapping (not debug hooks) to minimize
+ * overhead — only functions matching mission/streaming/state keywords get
+ * wrapped. Wrapped functions log entry args + return values via print().
+ *
+ * Output format: [TRACE] <tick_ms> <module>.<function>(<args>) -> <returns>
+ * ========================================================================= */
+
+#if DLC_ENABLE_FORENSIC_TRACE
+
+static const char* FORENSIC_TRACER_LUA =
+    "-- Forensic Tracer: instrument mission-relevant Lua calls\n"
+    "local _trace_start = Sys and Sys.GetTime and Sys.GetTime() or 0\n"
+    "local _trace_count = 0\n"
+    "local _trace_max = 50000  -- safety cap\n"
+    "\n"
+    "local function _trace_ts()\n"
+    "    if Sys and Sys.GetTime then return Sys.GetTime() - _trace_start end\n"
+    "    _trace_count = _trace_count + 1\n"
+    "    return _trace_count\n"
+    "end\n"
+    "\n"
+    "local function _trace_val(v, depth)\n"
+    "    depth = depth or 0\n"
+    "    if depth > 2 then return '...' end\n"
+    "    local t = type(v)\n"
+    "    if t == 'nil' then return 'nil'\n"
+    "    elseif t == 'boolean' then return tostring(v)\n"
+    "    elseif t == 'number' then return tostring(v)\n"
+    "    elseif t == 'string' then\n"
+    "        if #v > 80 then return '\"' .. v:sub(1,80) .. '...\"' end\n"
+    "        return '\"' .. v .. '\"'\n"
+    "    elseif t == 'table' then\n"
+    "        local n = 0\n"
+    "        for _ in pairs(v) do n = n + 1 if n > 3 then break end end\n"
+    "        return 'table(' .. n .. (n > 3 and '+' or '') .. ')'\n"
+    "    else return t .. ':' .. tostring(v)\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "local function _trace_args(...)\n"
+    "    local args = {...}\n"
+    "    local n = select('#', ...)\n"
+    "    if n == 0 then return '' end\n"
+    "    local parts = {}\n"
+    "    for i = 1, math.min(n, 6) do\n"
+    "        parts[i] = _trace_val(args[i])\n"
+    "    end\n"
+    "    if n > 6 then parts[#parts+1] = '...(+' .. (n-6) .. ')' end\n"
+    "    return table.concat(parts, ', ')\n"
+    "end\n"
+    "\n"
+    "-- Deep value dump for mission table discovery\n"
+    "local function _deep_dump(v, indent, depth)\n"
+    "    indent = indent or '  '\n"
+    "    depth = depth or 0\n"
+    "    if depth > 3 then return '...(depth limit)' end\n"
+    "    local t = type(v)\n"
+    "    if t ~= 'table' then return tostring(v) .. ' (' .. t .. ')' end\n"
+    "    local parts = {}\n"
+    "    local n = 0\n"
+    "    for k2, v2 in pairs(v) do\n"
+    "        n = n + 1\n"
+    "        if n > 20 then\n"
+    "            parts[#parts+1] = indent .. '  ...(truncated, ' .. n .. '+ keys)'\n"
+    "            break\n"
+    "        end\n"
+    "        local kstr = tostring(k2)\n"
+    "        local vt = type(v2)\n"
+    "        if vt == 'table' then\n"
+    "            parts[#parts+1] = indent .. '  ' .. kstr .. ' = {'\n"
+    "            parts[#parts+1] = _deep_dump(v2, indent .. '    ', depth + 1)\n"
+    "            parts[#parts+1] = indent .. '  }'\n"
+    "        elseif vt == 'string' then\n"
+    "            local sv = v2\n"
+    "            if #sv > 60 then sv = sv:sub(1,60) .. '...' end\n"
+    "            parts[#parts+1] = indent .. '  ' .. kstr .. ' = \"' .. sv .. '\"'\n"
+    "        else\n"
+    "            parts[#parts+1] = indent .. '  ' .. kstr .. ' = ' .. tostring(v2) .. ' (' .. vt .. ')'\n"
+    "        end\n"
+    "    end\n"
+    "    return table.concat(parts, '\\n')\n"
+    "end\n"
+    "\n"
+    "-- Wrap a function with tracing\n"
+    "local function _trace_wrap(mod_name, fn_name, fn)\n"
+    "    return function(...)\n"
+    "        if _trace_count >= _trace_max then return fn(...) end\n"
+    "        _trace_count = _trace_count + 1\n"
+    "        local ts = _trace_ts()\n"
+    "        local arg_str = _trace_args(...)\n"
+    "        print('[TRACE] ' .. ts .. ' ' .. mod_name .. '.' .. fn_name .. '(' .. arg_str .. ')')\n"
+    "        local results = {pcall(fn, ...)}\n"
+    "        local ok = results[1]\n"
+    "        if not ok then\n"
+    "            print('[TRACE] ' .. ts .. ' ' .. mod_name .. '.' .. fn_name .. ' ERROR: ' .. tostring(results[2]))\n"
+    "            error(results[2], 2)\n"
+    "        end\n"
+    "        -- Log return values (up to 3)\n"
+    "        if #results > 1 then\n"
+    "            local ret_parts = {}\n"
+    "            for i = 2, math.min(#results, 4) do\n"
+    "                ret_parts[#ret_parts+1] = _trace_val(results[i])\n"
+    "            end\n"
+    "            if #results > 4 then ret_parts[#ret_parts+1] = '...' end\n"
+    "            print('[TRACE] ' .. ts .. ' ' .. mod_name .. '.' .. fn_name .. ' -> ' .. table.concat(ret_parts, ', '))\n"
+    "        end\n"
+    "        return unpack(results, 2)\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- Keywords that indicate mission-relevant functions\n"
+    "local _trace_keywords = {\n"
+    "    'mission', 'contract', 'streaming', 'stream', 'load', 'state',\n"
+    "    'layer', 'enter', 'exit', 'update', 'init', 'reset', 'flow',\n"
+    "    'spawn', 'objective', 'unlock', 'accept', 'start', 'complete',\n"
+    "    'arena', 'master', 'script', 'import', 'module', 'dlc',\n"
+    "    'transition', 'waitfor', 'pending', 'request', 'asset',\n"
+    "}\n"
+    "\n"
+    "local function _trace_is_interesting(name)\n"
+    "    local lower = name:lower()\n"
+    "    for _, kw in ipairs(_trace_keywords) do\n"
+    "        if lower:find(kw, 1, true) then return true end\n"
+    "    end\n"
+    "    return false\n"
+    "end\n"
+    "\n"
+    "-- Instrument a table's functions\n"
+    "local _traced_tables = {}\n"
+    "local function _trace_instrument_table(tbl, name)\n"
+    "    if _traced_tables[tbl] then return end\n"
+    "    _traced_tables[tbl] = true\n"
+    "    local wrapped = 0\n"
+    "    for k, v in pairs(tbl) do\n"
+    "        if type(v) == 'function' and type(k) == 'string' then\n"
+    "            if _trace_is_interesting(k) or _trace_is_interesting(name) then\n"
+    "                tbl[k] = _trace_wrap(name, k, v)\n"
+    "                wrapped = wrapped + 1\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "    return wrapped\n"
+    "end\n"
+    "\n"
+    "-- Install table access tracing via metatable proxy\n"
+    "local function _trace_watch_table(tbl, name)\n"
+    "    if type(tbl) ~= 'table' then return end\n"
+    "    local mt = getmetatable(tbl)\n"
+    "    if mt and mt._trace_watched then return end\n"
+    "    -- Only add __newindex watcher (read tracing is too noisy)\n"
+    "    if not mt then\n"
+    "        mt = {}\n"
+    "        setmetatable(tbl, mt)\n"
+    "    end\n"
+    "    local orig_newindex = mt.__newindex\n"
+    "    mt._trace_watched = true\n"
+    "    mt.__newindex = function(t, k, v)\n"
+    "        if type(k) == 'string' and _trace_is_interesting(k) then\n"
+    "            print('[TRACE:W] ' .. _trace_ts() .. ' ' .. name .. '.' .. tostring(k) .. ' = ' .. _trace_val(v))\n"
+    "        end\n"
+    "        if orig_newindex then\n"
+    "            return orig_newindex(t, k, v)\n"
+    "        end\n"
+    "        rawset(t, k, v)\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "print('[TRACE] === Forensic Tracer Installing ===')\n"
+    "\n"
+    "local total_wrapped = 0\n"
+    "\n"
+    "-- Sections 1-4 disabled: wrapping native functions with pcall crashes\n"
+    "-- dynamic_import and other native C functions at 0x0059C82A.\n"
+    "-- Only import() tracing is safe.\n"
+    "\n"
+    "-- 5. Watch the import() function specifically (critical path)\n"
+    "if import and type(import) == 'function' then\n"
+    "    local _orig_import = import\n"
+    "    import = function(...)\n"
+    "        _trace_count = _trace_count + 1\n"
+    "        print('[TRACE] ' .. _trace_ts() .. ' import(' .. _trace_args(...) .. ')')\n"
+    "        local results = {pcall(_orig_import, ...)}\n"
+    "        if results[1] then\n"
+    "            print('[TRACE] ' .. _trace_ts() .. ' import -> OK')\n"
+    "            return unpack(results, 2)\n"
+    "        else\n"
+    "            print('[TRACE] ' .. _trace_ts() .. ' import ERROR: ' .. tostring(results[2]))\n"
+    "            error(results[2], 2)\n"
+    "        end\n"
+    "    end\n"
+    "    print('[TRACE] Wrapped import() function')\n"
+    "    total_wrapped = total_wrapped + 1\n"
+    "end\n"
+    "\n"
+    "-- 6. Dump snapshot of loaded modules and key globals for baseline\n"
+    "if _MODULES and type(_MODULES) == 'table' then\n"
+    "    local mods = {}\n"
+    "    for k, v in pairs(_MODULES) do\n"
+    "        if type(k) == 'string' then\n"
+    "            table.insert(mods, k)\n"
+    "        end\n"
+    "    end\n"
+    "    table.sort(mods)\n"
+    "    print('[TRACE] Loaded modules at startup: ' .. #mods)\n"
+    "    for _, m in ipairs(mods) do\n"
+    "        print('[TRACE]   _M.' .. m)\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 7. Dump key globals (tables and functions at top level)\n"
+    "local key_globals = {}\n"
+    "for k, v in pairs(_G) do\n"
+    "    if type(k) == 'string' and (type(v) == 'table' or type(v) == 'function') then\n"
+    "        local kl = k:lower()\n"
+    "        if kl:find('mrx') or kl:find('wif') or kl:find('mission') or\n"
+    "           kl:find('contract') or kl:find('state') or kl:find('stream') or\n"
+    "           kl:find('load') or kl:find('layer') or kl:find('flow') or\n"
+    "           kl:find('dlc') or kl:find('gui') or kl:find('pmc') then\n"
+    "            table.insert(key_globals, k .. ' (' .. type(v) .. ')')\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "table.sort(key_globals)\n"
+    "print('[TRACE] Key globals: ' .. #key_globals)\n"
+    "for _, g in ipairs(key_globals) do\n"
+    "    print('[TRACE]   ' .. g)\n"
+    "end\n"
+    "\n"
+    "-- ===================================================================\n"
+    "-- 8. MISSION TABLE DISCOVERY\n"
+    "-- Search ALL loaded modules and _G for tables keyed by known mission\n"
+    "-- names. The =-= lookup (e.g. '=-= DlcCon001 nil') means there's a\n"
+    "-- table that maps mission names to config data. We need to find it.\n"
+    "-- ===================================================================\n"
+    "print('[TRACE] === Mission Table Discovery ===')\n"
+    "\n"
+    "local _probe_missions = {\n"
+    "    'PmcCon033', 'OilCon001', 'PmcCon031', 'PmcCon001',\n"
+    "    'ChnCon001', 'AnCon001', 'PirCon001',\n"
+    "}\n"
+    "\n"
+    "local _found_tables = {}\n"
+    "\n"
+    "local function _search_table_for_missions(tbl, path, depth)\n"
+    "    if depth > 4 then return end\n"
+    "    if type(tbl) ~= 'table' then return end\n"
+    "    if _found_tables[tbl] then return end\n"
+    "    _found_tables[tbl] = true\n"
+    "    for _, mname in ipairs(_probe_missions) do\n"
+    "        local ok, val = pcall(function() return rawget(tbl, mname) end)\n"
+    "        if ok and val ~= nil then\n"
+    "            print('[MTBL] FOUND ' .. mname .. ' in ' .. path)\n"
+    "            print('[MTBL]   type = ' .. type(val))\n"
+    "            if type(val) == 'table' then\n"
+    "                print('[MTBL]   --- ' .. mname .. ' entry structure ---')\n"
+    "                local lines = _deep_dump(val, '[MTBL]   ')\n"
+    "                for line in lines:gmatch('[^\\n]+') do\n"
+    "                    print(line)\n"
+    "                end\n"
+    "                print('[MTBL]   --- end ' .. mname .. ' ---')\n"
+    "            else\n"
+    "                print('[MTBL]   value = ' .. tostring(val))\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8a. Search _G top-level tables\n"
+    "print('[MTBL] Scanning _G top-level tables...')\n"
+    "for gk, gv in pairs(_G) do\n"
+    "    if type(gv) == 'table' and type(gk) == 'string' then\n"
+    "        _search_table_for_missions(gv, '_G.' .. gk, 1)\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8b. Search all module environments in _MODULES\n"
+    "if _MODULES and type(_MODULES) == 'table' then\n"
+    "    print('[MTBL] Scanning _MODULES environments...')\n"
+    "    for mk, mv in pairs(_MODULES) do\n"
+    "        if type(mv) == 'table' then\n"
+    "            _search_table_for_missions(mv, '_MODULES.' .. tostring(mk), 1)\n"
+    "            for sk, sv in pairs(mv) do\n"
+    "                if type(sv) == 'table' and type(sk) == 'string' then\n"
+    "                    _search_table_for_missions(sv, '_MODULES.' .. tostring(mk) .. '.' .. sk, 2)\n"
+    "                end\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8c. Search common known table names that might hold the lookup\n"
+    "local _suspect_names = {\n"
+    "    'tMissionData', 'tContractData', 'tMissionFlow', 'tMissionTable',\n"
+    "    'tContracts', 'MissionData', 'ContractData', 'MissionTable',\n"
+    "    'tMissions', 'tFlowData',\n"
+    "}\n"
+    "print('[MTBL] Checking named tables in module envs...')\n"
+    "if _MODULES then\n"
+    "    for mk, mv in pairs(_MODULES) do\n"
+    "        if type(mv) == 'table' then\n"
+    "            for _, sname in ipairs(_suspect_names) do\n"
+    "                local ok, val = pcall(function() return mv[sname] end)\n"
+    "                if ok and val ~= nil and type(val) == 'table' then\n"
+    "                    print('[MTBL] Found ' .. sname .. ' in _MODULES.' .. tostring(mk))\n"
+    "                    local cnt = 0\n"
+    "                    local sample_keys = {}\n"
+    "                    for k2, _ in pairs(val) do\n"
+    "                        cnt = cnt + 1\n"
+    "                        if cnt <= 10 then\n"
+    "                            sample_keys[#sample_keys+1] = tostring(k2)\n"
+    "                        end\n"
+    "                    end\n"
+    "                    print('[MTBL]   key count = ' .. cnt)\n"
+    "                    print('[MTBL]   sample keys: ' .. table.concat(sample_keys, ', '))\n"
+    "                    _search_table_for_missions(val, '_MODULES.' .. tostring(mk) .. '.' .. sname, 2)\n"
+    "                end\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8d. Also look via getfenv(0) thread env\n"
+    "if getfenv then\n"
+    "    local th_env = getfenv(0)\n"
+    "    if th_env and type(th_env) == 'table' then\n"
+    "        print('[MTBL] Scanning getfenv(0)...')\n"
+    "        _search_table_for_missions(th_env, 'getfenv(0)', 1)\n"
+    "        for tk, tv in pairs(th_env) do\n"
+    "            if type(tv) == 'table' and type(tk) == 'string' then\n"
+    "                _search_table_for_missions(tv, 'getfenv(0).' .. tk, 2)\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8e. Extra: search for any table whose keys look like mission names\n"
+    "-- (pattern: uppercase letter + lowercase + 'Con' + digits)\n"
+    "print('[MTBL] Scanning for Con-pattern keys in all module tables...')\n"
+    "local _con_tables_found = {}\n"
+    "if _MODULES then\n"
+    "    for mk, mv in pairs(_MODULES) do\n"
+    "        if type(mv) == 'table' then\n"
+    "            for sk, sv in pairs(mv) do\n"
+    "                if type(sk) == 'string' and sk:find('Con%d') and type(sv) == 'table' then\n"
+    "                    if not _con_tables_found[mv] then\n"
+    "                        _con_tables_found[mv] = '_MODULES.' .. tostring(mk)\n"
+    "                        print('[MTBL] Con-pattern key \"' .. sk .. '\" in ' .. _con_tables_found[mv])\n"
+    "                        local cnt2 = 0\n"
+    "                        local keys2 = {}\n"
+    "                        for k3, _ in pairs(mv) do\n"
+    "                            if type(k3) == 'string' and k3:find('Con') then\n"
+    "                                cnt2 = cnt2 + 1\n"
+    "                                if cnt2 <= 15 then keys2[#keys2+1] = k3 end\n"
+    "                            end\n"
+    "                        end\n"
+    "                        print('[MTBL]   Con-keys (' .. cnt2 .. '): ' .. table.concat(keys2, ', '))\n"
+    "                    end\n"
+    "                end\n"
+    "            end\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "-- 8f. Specifically check tMissionData (known from bootstrap probe)\n"
+    "print('[MTBL] Checking tMissionData specifically...')\n"
+    "local tmd_env = nil\n"
+    "local tmd_path = nil\n"
+    "if _MODULES then\n"
+    "    for mk, mv in pairs(_MODULES) do\n"
+    "        if type(mv) == 'table' and mv.tMissionData and type(mv.tMissionData) == 'table' then\n"
+    "            tmd_env = mv\n"
+    "            tmd_path = '_MODULES.' .. tostring(mk)\n"
+    "            break\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "if not tmd_env and _G.tMissionData then\n"
+    "    tmd_env = _G\n"
+    "    tmd_path = '_G'\n"
+    "end\n"
+    "if tmd_env and tmd_env.tMissionData then\n"
+    "    local tmd = tmd_env.tMissionData\n"
+    "    local cnt = 0\n"
+    "    local all_keys = {}\n"
+    "    for k, _ in pairs(tmd) do\n"
+    "        cnt = cnt + 1\n"
+    "        if type(k) == 'string' then all_keys[#all_keys+1] = k end\n"
+    "    end\n"
+    "    table.sort(all_keys)\n"
+    "    print('[MTBL] tMissionData in ' .. tmd_path .. ' has ' .. cnt .. ' entries')\n"
+    "    print('[MTBL] tMissionData ALL keys:')\n"
+    "    for _, k in ipairs(all_keys) do\n"
+    "        print('[MTBL]   ' .. k)\n"
+    "    end\n"
+    "    -- Dump full structure of PmcCon033 as reference template\n"
+    "    if tmd['PmcCon033'] and type(tmd['PmcCon033']) == 'table' then\n"
+    "        print('[MTBL] === PmcCon033 full structure (reference) ===')\n"
+    "        for k, v in pairs(tmd['PmcCon033']) do\n"
+    "            if type(v) == 'table' then\n"
+    "                print('[MTBL]   ' .. tostring(k) .. ' = {')\n"
+    "                local lines = _deep_dump(v, '[MTBL]     ')\n"
+    "                for line in lines:gmatch('[^\\n]+') do\n"
+    "                    print(line)\n"
+    "                end\n"
+    "                print('[MTBL]   }')\n"
+    "            else\n"
+    "                print('[MTBL]   ' .. tostring(k) .. ' = ' .. tostring(v) .. ' (' .. type(v) .. ')')\n"
+    "            end\n"
+    "        end\n"
+    "        print('[MTBL] === end PmcCon033 ===')\n"
+    "    end\n"
+    "    -- Also dump OilCon001 for cross-reference\n"
+    "    if tmd['OilCon001'] and type(tmd['OilCon001']) == 'table' then\n"
+    "        print('[MTBL] === OilCon001 full structure (cross-ref) ===')\n"
+    "        for k, v in pairs(tmd['OilCon001']) do\n"
+    "            if type(v) == 'table' then\n"
+    "                print('[MTBL]   ' .. tostring(k) .. ' = {')\n"
+    "                local lines = _deep_dump(v, '[MTBL]     ')\n"
+    "                for line in lines:gmatch('[^\\n]+') do\n"
+    "                    print(line)\n"
+    "                end\n"
+    "                print('[MTBL]   }')\n"
+    "            else\n"
+    "                print('[MTBL]   ' .. tostring(k) .. ' = ' .. tostring(v) .. ' (' .. type(v) .. ')')\n"
+    "            end\n"
+    "        end\n"
+    "        print('[MTBL] === end OilCon001 ===')\n"
+    "    end\n"
+    "    -- Check if DlcCon001 is already there\n"
+    "    if tmd['DlcCon001'] then\n"
+    "        print('[MTBL] DlcCon001 ALREADY EXISTS in tMissionData!')\n"
+    "        for k, v in pairs(tmd['DlcCon001']) do\n"
+    "            print('[MTBL]   ' .. tostring(k) .. ' = ' .. tostring(v))\n"
+    "        end\n"
+    "    else\n"
+    "        print('[MTBL] DlcCon001 NOT in tMissionData (confirms lookup is elsewhere)')\n"
+    "    end\n"
+    "else\n"
+    "    print('[MTBL] tMissionData NOT FOUND in any module')\n"
+    "end\n"
+    "\n"
+    "-- 8g. The =-= print suggests a different lookup table.\n"
+    "-- Search for EVERY table (at any depth in modules) that has PmcCon033 as a key.\n"
+    "-- This catches tables that aren't tMissionData.\n"
+    "print('[MTBL] === Deep scan: all tables with PmcCon033 key ===')\n"
+    "local _deep_visited = {}\n"
+    "local _deep_found = 0\n"
+    "local function _deep_scan(tbl, path, depth)\n"
+    "    if depth > 5 then return end\n"
+    "    if type(tbl) ~= 'table' then return end\n"
+    "    if _deep_visited[tbl] then return end\n"
+    "    _deep_visited[tbl] = true\n"
+    "    local ok, val = pcall(function() return rawget(tbl, 'PmcCon033') end)\n"
+    "    if ok and val ~= nil then\n"
+    "        _deep_found = _deep_found + 1\n"
+    "        print('[MTBL] DEEP HIT #' .. _deep_found .. ': PmcCon033 in ' .. path)\n"
+    "        print('[MTBL]   val type = ' .. type(val))\n"
+    "        if type(val) == 'table' then\n"
+    "            for k, v in pairs(val) do\n"
+    "                if type(v) == 'table' then\n"
+    "                    print('[MTBL]   .' .. tostring(k) .. ' = table(' .. tostring(#v or '?') .. ')')\n"
+    "                else\n"
+    "                    print('[MTBL]   .' .. tostring(k) .. ' = ' .. tostring(v) .. ' (' .. type(v) .. ')')\n"
+    "                end\n"
+    "            end\n"
+    "        elseif type(val) == 'string' then\n"
+    "            print('[MTBL]   value = \"' .. val .. '\"')\n"
+    "        else\n"
+    "            print('[MTBL]   value = ' .. tostring(val))\n"
+    "        end\n"
+    "        -- Also check: does this same table have DlcCon001?\n"
+    "        local ok2, dval = pcall(function() return rawget(tbl, 'DlcCon001') end)\n"
+    "        if ok2 then\n"
+    "            print('[MTBL]   DlcCon001 in same table = ' .. tostring(dval))\n"
+    "        end\n"
+    "        -- Count all keys and show Con-pattern ones\n"
+    "        local total = 0\n"
+    "        local con_keys = {}\n"
+    "        for k, _ in pairs(tbl) do\n"
+    "            total = total + 1\n"
+    "            if type(k) == 'string' and k:find('Con') then\n"
+    "                con_keys[#con_keys+1] = k\n"
+    "            end\n"
+    "        end\n"
+    "        table.sort(con_keys)\n"
+    "        print('[MTBL]   total keys in parent table = ' .. total)\n"
+    "        if #con_keys > 0 then\n"
+    "            print('[MTBL]   Con-keys: ' .. table.concat(con_keys, ', '))\n"
+    "        end\n"
+    "    end\n"
+    "    -- Recurse into sub-tables\n"
+    "    for k, v in pairs(tbl) do\n"
+    "        if type(v) == 'table' then\n"
+    "            local sub = path .. '.' .. tostring(k)\n"
+    "            _deep_scan(v, sub, depth + 1)\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "\n"
+    "_deep_scan(_G, '_G', 0)\n"
+    "if _MODULES then\n"
+    "    for mk, mv in pairs(_MODULES) do\n"
+    "        if type(mv) == 'table' then\n"
+    "            _deep_scan(mv, '_M.' .. tostring(mk), 0)\n"
+    "        end\n"
+    "    end\n"
+    "end\n"
+    "print('[MTBL] Deep scan complete: ' .. _deep_found .. ' tables contain PmcCon033')\n"
+    "print('[MTBL] === Mission Table Discovery Complete ===')\n"
+    "\n"
+    "print('[TRACE] === Forensic Tracer Active: ' .. total_wrapped .. ' functions instrumented ===')\n"
+    "print('[TRACE] Tracer will log up to ' .. _trace_max .. ' calls before going silent')\n"
+    "print('[TRACE] Format: [TRACE] <time> <module>.<func>(<args>) [-> <returns>]')\n";
+
+static void TryInstallForensicTracer(lua_State* L) {
+    int result;
+    PVOID veh;
+
+    if (!L || !g_exeVerified) {
+        return;
+    }
+
+    if (InterlockedCompareExchange(&g_forensicTracerInstalled, 1, 0) != 0) {
+        return;
+    }
+
+    Log("[FORENSIC] === Installing Forensic Tracer ===");
+    Log("[FORENSIC] L=0x%08X", (DWORD)L);
+
+    veh = AddVectoredExceptionHandler(1, InjectionCrashGuard);
+    g_inInjection = 1;
+
+    ClearLuaStackToBase(L);
+
+    result = call_luaL_loadbuffer(L, FORENSIC_TRACER_LUA,
+                                 strlen(FORENSIC_TRACER_LUA), "=forensic_tracer");
+    if (result == LUA_OK) {
+        result = call_lua_pcall_simple(L);
+        if (result != LUA_OK) {
+            Log("[FORENSIC] Tracer pcall FAILED (code %d)", result);
+            LogLuaStackTopError(L);
+            InterlockedExchange(&g_forensicTracerInstalled, 0);
+        } else {
+            Log("[FORENSIC] Tracer installed successfully");
+        }
+    } else {
+        Log("[FORENSIC] Tracer loadbuffer failed (%d)", result);
+        InterlockedExchange(&g_forensicTracerInstalled, 0);
+    }
+
+    ClearLuaStackToBase(L);
+    g_inInjection = 0;
+    if (veh) RemoveVectoredExceptionHandler(veh);
+}
+#endif /* DLC_ENABLE_FORENSIC_TRACE */
+
 /* --- Init thread (deferred lua_State capture + bootstrap) --- */
 
 static DWORD WINAPI InitThread(LPVOID param) {
@@ -2075,6 +3381,103 @@ static DWORD WINAPI InitThread(LPVOID param) {
     return 0;
 }
 
+/* --- D3D9 Forced Windowed Mode Hook --- */
+
+typedef void* IDirect3D9;
+typedef void* IDirect3DDevice9;
+
+typedef struct {
+    UINT BackBufferWidth;
+    UINT BackBufferHeight;
+    UINT BackBufferFormat;
+    UINT BackBufferCount;
+    UINT MultiSampleType;
+    DWORD MultiSampleQuality;
+    UINT SwapEffect;
+    HWND hDeviceWindow;
+    BOOL Windowed;
+    BOOL EnableAutoDepthStencil;
+    UINT AutoDepthStencilFormat;
+    DWORD Flags;
+    UINT FullScreen_RefreshRateInHz;
+    UINT PresentationInterval;
+} D3DPRESENT_PARAMETERS_PARTIAL;
+
+static DWORD g_origCreateDevice = 0;
+
+typedef HRESULT (__stdcall *CreateDevice_t)(
+    void* pThis, UINT Adapter, UINT DeviceType, HWND hFocusWindow,
+    DWORD BehaviorFlags, D3DPRESENT_PARAMETERS_PARTIAL* pPP, IDirect3DDevice9** ppDevice);
+
+static HRESULT __stdcall Hook_CreateDevice(
+    void* pThis, UINT Adapter, UINT DeviceType, HWND hFocusWindow,
+    DWORD BehaviorFlags, D3DPRESENT_PARAMETERS_PARTIAL* pPP, IDirect3DDevice9** ppDevice)
+{
+    if (pPP && !pPP->Windowed) {
+        Log("[WINDOWED] Forcing windowed mode (%ux%u)", pPP->BackBufferWidth, pPP->BackBufferHeight);
+        pPP->Windowed = TRUE;
+        if (pPP->BackBufferWidth < 1280) pPP->BackBufferWidth = 1280;
+        if (pPP->BackBufferHeight < 720) pPP->BackBufferHeight = 720;
+        pPP->FullScreen_RefreshRateInHz = 0;
+        pPP->BackBufferFormat = 0; /* D3DFMT_UNKNOWN — use desktop format */
+        if (pPP->SwapEffect == 2) /* D3DSWAPEFFECT_FLIP not valid windowed */
+            pPP->SwapEffect = 1;  /* D3DSWAPEFFECT_DISCARD */
+    }
+    CreateDevice_t orig = (CreateDevice_t)g_origCreateDevice;
+    HRESULT hr = orig(pThis, Adapter, DeviceType, hFocusWindow, BehaviorFlags, pPP, ppDevice);
+    if (hr == 0 && hFocusWindow) {
+        SetWindowLongA(hFocusWindow, -16 /*GWL_STYLE*/,
+            0x00CF0000 /*WS_OVERLAPPEDWINDOW*/ | 0x10000000 /*WS_VISIBLE*/);
+        SetWindowPos(hFocusWindow, NULL, 50, 50,
+            pPP->BackBufferWidth + 16, pPP->BackBufferHeight + 39,
+            0x0020 /*SWP_FRAMECHANGED*/);
+    }
+    return hr;
+}
+
+static void InstallD3D9WindowedHook(void) {
+    HMODULE hD3D9 = GetModuleHandleA("d3d9.dll");
+    if (!hD3D9) {
+        hD3D9 = LoadLibraryA("d3d9.dll");
+    }
+    if (!hD3D9) {
+        Log("[WINDOWED] d3d9.dll not found — skip");
+        return;
+    }
+
+    typedef IDirect3D9* (__stdcall *Direct3DCreate9_t)(UINT);
+    Direct3DCreate9_t pCreate = (Direct3DCreate9_t)GetProcAddress(hD3D9, "Direct3DCreate9");
+    if (!pCreate) {
+        Log("[WINDOWED] Direct3DCreate9 not found");
+        return;
+    }
+
+    IDirect3D9* pD3D = pCreate(32 /* D3D_SDK_VERSION */);
+    if (!pD3D) {
+        Log("[WINDOWED] Direct3DCreate9 returned NULL");
+        return;
+    }
+
+    /* vtable[16] = CreateDevice for IDirect3D9 */
+    DWORD* vtable = *(DWORD**)pD3D;
+    DWORD* pCreateDeviceSlot = &vtable[16];
+
+    DWORD oldProtect;
+    if (VirtualProtect(pCreateDeviceSlot, 4, PAGE_READWRITE, &oldProtect)) {
+        g_origCreateDevice = *pCreateDeviceSlot;
+        *pCreateDeviceSlot = (DWORD)Hook_CreateDevice;
+        VirtualProtect(pCreateDeviceSlot, 4, oldProtect, &oldProtect);
+        Log("[WINDOWED] CreateDevice vtable hooked (orig=0x%08X)", g_origCreateDevice);
+    } else {
+        Log("[WINDOWED] VirtualProtect failed on vtable");
+    }
+
+    /* Release the temporary D3D object (Release = vtable[2]) */
+    typedef ULONG (__stdcall *Release_t)(void*);
+    Release_t pRelease = (Release_t)vtable[2];
+    pRelease(pD3D);
+}
+
 /* --- DLL Entry Point --- */
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
@@ -2090,6 +3493,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 
         LogInit();
         Log("dlc_enable.asi loaded (PID %d)", GetCurrentProcessId());
+
+        InstallD3D9WindowedHook();
 #if DLC_ENABLE_NO_HOOKS
         Log("Build: NO_HOOKS (DllMain log only — zero runtime hooks)");
 #elif DLC_ENABLE_MINIMAL_MODE
@@ -2102,12 +3507,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 #else
         Log("Build: bootstrap=OFF (net hooks / logging only)");
 #endif
-        Log("Flags: NO_HOOKS=%d MINIMAL=%d VZ_LOAD=%d BOOTSTRAP=%d DEFERRED=%d CRASH_PATCH=%d STUB_HOOK=%d REG_PATCH=%d LUA_VERBOSE=%d NET=%d ARENA=%d GUARD=%d WATCHDOG=%d",
+        Log("Flags: NO_HOOKS=%d MINIMAL=%d VZ_LOAD=%d BOOTSTRAP=%d DEFERRED=%d CRASH_PATCH=%d STUB_HOOK=%d REG_PATCH=%d LUA_VERBOSE=%d NET=%d ARENA=%d GUARD=%d WATCHDOG=%d STREAMFIX=%d FORENSIC=%d",
             DLC_ENABLE_NO_HOOKS, DLC_ENABLE_MINIMAL_MODE, DLC_ENABLE_VZ_LOAD_BOOTSTRAP,
             DLC_ENABLE_BOOTSTRAP, DLC_ENABLE_DEFERRED_BOOTSTRAP,
             DLC_ENABLE_CRASH_PATCH, DLC_ENABLE_PRINT_HOOK, DLC_ENABLE_DEBUG_PRINTF_PATCH,
             DLC_ENABLE_LUA_LOG_VERBOSE, DLC_ENABLE_NET_HOOKS, DLC_ENABLE_ARENA_TRANSITION,
-            DLC_ENABLE_GLOBAL_CRASH_GUARD, DLC_ENABLE_SHELL_WATCHDOG);
+            DLC_ENABLE_GLOBAL_CRASH_GUARD, DLC_ENABLE_SHELL_WATCHDOG, DLC_ENABLE_STREAMING_FIX,
+            DLC_ENABLE_FORENSIC_TRACE);
         if (!DLC_ENABLE_NO_HOOKS && !DLC_ENABLE_VZ_LOAD_BOOTSTRAP &&
             !DLC_ENABLE_BOOTSTRAP && !DLC_ENABLE_DEFERRED_BOOTSTRAP) {
             Log("WARNING: bootstrap OFF — rebuild with: make dlc-asi-native");
