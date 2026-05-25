@@ -90,6 +90,7 @@ from dlc_aset_normalize import (  # noqa: E402
 )
 from aset_type_ids import (  # noqa: E402
     SCRIPT_ASET_TYPE_ID,
+    SCRIPT_TYPE_HASH,
     STRINGDB_ASET_TYPE_ID,
     STRINGDB_TYPE_HASH,
     type_id_for_type_hash,
@@ -319,6 +320,19 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
                 struct.pack_into("<I", data, csum_pos + 4, new_crc)
 
     return bytes(data)
+
+
+def _find_dlc_script_resident_block_index(blocks: list[PatchBlock]) -> int | None:
+    """Patch WAD index of dlc01 script resident (not vo_resident_* VO blocks)."""
+    for idx, blk in enumerate(blocks):
+        path = blk.path_string.replace("/", "\\").lower()
+        if (
+            "resident" in path
+            and "vo_resident" not in path
+            and path.endswith("p000_q3.block")
+        ):
+            return idx
+    return None
 
 
 # ── Parallel block processing ─────────────────────────────────────────
@@ -794,12 +808,11 @@ def port_x360_dlc(
     # Scan all converted blocks: for each UCFX entry whose asset_hash is
     # not already represented in the block's ASET list, add a synthetic
     # entry with the correct type_hash.
-    synth_added = 0
+    script_synth_added = 0
+    stringdb_synth_added = 0
     if not synth_stringdb_aset:
         print("\n  ASET fix: skipping synthetic stringdb rows (--no-synth-stringdb-aset)")
     for blk_idx, blk in enumerate(converted):
-        if not synth_stringdb_aset:
-            break
         existing_hashes = {e["asset_hash"] for e in blk.aset_entries}
         try:
             decomp = decompress_sges_block(
@@ -810,21 +823,32 @@ def port_x360_dlc(
         for entry in entries:
             h = entry.get("hash")
             th = entry.get("type_hash", 0)
-            if h and h != 0 and h not in existing_hashes:
-                if th == STRINGDB_TYPE_HASH:
-                    blk.aset_entries.append({
-                        "asset_hash": h,
-                        "u32_1": 0xFFFFFFFF,
-                        "u32_2": 0,
-                        "u32_3": STRINGDB_ASET_TYPE_ID,
-                    })
-                    existing_hashes.add(h)
-                    synth_added += 1
-                    if verbose:
-                        print(f"  [ASET fix] block {blk_idx}: added stringdb "
-                              f"entry 0x{h:08X} (type_id={STRINGDB_ASET_TYPE_ID})")
-    if synth_added:
-        print(f"\n  ASET fix: added {synth_added} missing stringdb "
+            if not h or h == 0 or h in existing_hashes:
+                continue
+            if th == SCRIPT_TYPE_HASH:
+                blk.aset_entries.append(script_aset_entry(h))
+                existing_hashes.add(h)
+                script_synth_added += 1
+                if verbose:
+                    print(f"  [ASET fix] block {blk_idx}: added script "
+                          f"entry 0x{h:08X} (type_id={SCRIPT_ASET_TYPE_ID})")
+            elif synth_stringdb_aset and th == STRINGDB_TYPE_HASH:
+                blk.aset_entries.append({
+                    "asset_hash": h,
+                    "u32_1": 0xFFFFFFFF,
+                    "u32_2": 0,
+                    "u32_3": STRINGDB_ASET_TYPE_ID,
+                })
+                existing_hashes.add(h)
+                stringdb_synth_added += 1
+                if verbose:
+                    print(f"  [ASET fix] block {blk_idx}: added stringdb "
+                          f"entry 0x{h:08X} (type_id={STRINGDB_ASET_TYPE_ID})")
+    if script_synth_added:
+        print(f"\n  ASET fix: added {script_synth_added} missing script "
+              f"ASET entries (import/dynamic_import lookup)")
+    if stringdb_synth_added:
+        print(f"\n  ASET fix: added {stringdb_synth_added} missing stringdb "
               f"ASET entries (required for Sys.AddStringDb)")
 
     # ── DLC Bootstrap Injection ──────────────────────────────────────
@@ -875,11 +899,7 @@ def port_x360_dlc(
     # Global Xbox ASET can leave script hashes on resident (464) AND scripts_vz;
     # engine may resolve wifmissionflow/vz to resident → crash at GameBootstrap.
     if scripts_vz_idx is not None:
-        resident_idx = None
-        for idx, blk in enumerate(converted):
-            if "resident" in blk.path_string.replace("/", "\\").lower():
-                resident_idx = idx
-                break
+        resident_idx = _find_dlc_script_resident_block_index(converted)
         if resident_idx is not None:
             script_deduped = 0
             seen: set[int] = set()

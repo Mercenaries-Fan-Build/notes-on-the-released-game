@@ -97,17 +97,36 @@ def main() -> int:
         lines.append("")
 
         pw = read_patch_wad(args.output_wad)
-        if len(pw.blocks) > 464:
-            d464 = decompress_sges_block(
-                pw.blocks[464].compressed_data, 0, len(pw.blocks[464].compressed_data))
-            le, be = _luaq_endian_counts(d464)
+        resident_idx = None
+        for idx, blk in enumerate(pw.blocks):
+            path = blk.path_string.replace("/", "\\").lower()
+            if (
+                "resident" in path
+                and "vo_resident" not in path
+                and path.endswith("p000_q3.block")
+            ):
+                resident_idx = idx
+                break
+        if resident_idx is not None:
+            res_blk = pw.blocks[resident_idx]
+            res_data = decompress_sges_block(
+                res_blk.compressed_data, 0, len(res_blk.compressed_data))
+            le, be = _luaq_endian_counts(res_data)
             lines.extend([
-                "## Resident block 464 LuaQ endian (gate 0d)",
+                "## DLC script resident block LuaQ endian (gate 0d)",
                 "",
-                f"- Path: `{pw.blocks[464].path_string}`",
+                f"- Block index: {resident_idx}",
+                f"- Path: `{res_blk.path_string}`",
                 f"- Little-endian (PC): {le}",
                 f"- Big-endian (Xbox): {be}",
                 f"- **Gate:** {'PASS — resident PC-LE' if be == 0 else 'FAIL — keep scripts_vz wrapper'}",
+                "",
+            ])
+        else:
+            lines.extend([
+                "## DLC script resident block LuaQ endian (gate 0d)",
+                "",
+                "- *not found* (expected dlc01 resident_P000_Q3, excluding vo_resident)",
                 "",
             ])
         if pw.blocks:

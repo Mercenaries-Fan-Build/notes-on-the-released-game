@@ -109,6 +109,19 @@ def decompress_block(data: bytes, page_offset: int, page_count: int) -> bytes | 
         return b"".join(segments)
 
 
+def find_dlc_script_resident_block_index(blocks: list) -> int | None:
+    """Patch WAD index of dlc01 script resident (not vo_resident_* VO blocks)."""
+    for idx, blk in enumerate(blocks):
+        path = blk.path_string.replace("/", "\\").lower()
+        if (
+            "resident" in path
+            and "vo_resident" not in path
+            and path.endswith("p000_q3.block")
+        ):
+            return idx
+    return None
+
+
 def get_block_script_names(block_data: bytes) -> set[int]:
     """Parse block header to get all name hashes."""
     entry_count = struct.unpack_from("<I", block_data, 0)[0]
@@ -296,12 +309,20 @@ def main():
                 print(f"    {label:30s}  0x{nh:08X}")
 
         block_hashes = get_block_script_names(bootstrap_data)
-        for check_name in ["dlc01", "wifmissionflow", "wifmissionflow_orig"]:
+        hook_mode = wifmf_orig_hash in block_hashes
+        for check_name in ["dlc01", "wifmissionflow"]:
             ch = pandemic_hash_m2(check_name)
             status = "PRESENT" if ch in block_hashes else "MISSING"
             if check_name == "dlc01" and status == "MISSING":
                 all_ok = False
             print(f"  {check_name:30s}  {status}")
+        if hook_mode:
+            status = "PRESENT" if wifmf_orig_hash in block_hashes else "MISSING"
+            if status == "MISSING":
+                all_ok = False
+            print(f"  {'wifmissionflow_orig':30s}  {status}")
+        else:
+            print(f"  {'wifmissionflow_orig':30s}  N/A (nohook bootstrap)")
         bootstrap_ok = True
     except Exception as exc:
         print(f"  ERROR: Could not read/decompress bootstrap block: {exc}")
@@ -309,17 +330,23 @@ def main():
     if not bootstrap_ok:
         print("  ERROR: Could not decompress bootstrap block")
 
-    # Verify LuaQ bytecodes in the DLC scripts block (block 464)
+    # Verify LuaQ bytecodes in the DLC script resident block (path-based lookup)
     print(f"\n{'─' * 60}")
-    print("DLC Scripts Block (464) LuaQ Check")
+    print("DLC Script Resident Block LuaQ Check")
     print(f"{'─' * 60}")
 
     try:
         if pw is None:
             raise RuntimeError("patch WAD not loaded")
-        blk464 = pw.blocks[464]
+        resident_idx = find_dlc_script_resident_block_index(pw.blocks)
+        if resident_idx is None:
+            raise RuntimeError(
+                "no dlc01 script resident block found "
+                "(expected *resident*P000_Q3.block, excluding vo_resident)"
+            )
+        resident_blk = pw.blocks[resident_idx]
         resident_data = decompress_sges_block(
-            blk464.compressed_data, 0, len(blk464.compressed_data))
+            resident_blk.compressed_data, 0, len(resident_blk.compressed_data))
         if resident_data:
             luaq_count = resident_data.count(b"\x1bLua")
             le_count = 0
@@ -336,7 +363,8 @@ def main():
                         be_count += 1
                 pos = idx + 1
 
-            print(f"  Path: {blk464.path_string}")
+            print(f"  Block index: {resident_idx}")
+            print(f"  Path: {resident_blk.path_string}")
             print(f"  Total LuaQ signatures: {luaq_count}")
             print(f"  Little-endian (PC):    {le_count}")
             print(f"  Big-endian (Xbox):     {be_count}")
@@ -354,7 +382,7 @@ def main():
                     all_ok = False
                 print(f"  {name:25s}  {status}")
     except Exception as exc:
-        print(f"  ERROR: Could not decompress block 464: {exc}")
+        print(f"  ERROR: Could not verify script resident block: {exc}")
         all_ok = False
 
     print(f"\n{'=' * 60}")
