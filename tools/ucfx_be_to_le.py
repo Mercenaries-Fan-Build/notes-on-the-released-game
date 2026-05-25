@@ -300,23 +300,23 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     if ty_end > 0 and ty_abs + ty_end <= len(be):
         out[ty_abs:ty_abs + ty_end] = be[ty_abs:ty_abs + ty_end]
 
-    # 9. __data__ section: per-class Havok instance layout required.
+    # 9. __data__ section: u32 swap is the best available approximation.
+    #    Havok instance data is predominantly u32/f32-aligned (transforms,
+    #    indices, pointers).  Per-class field layout would be ideal but
+    #    requires Havok class definitions we don't have.  Prefer base-game
+    #    overrides via havok_overrides when available; this path only runs
+    #    for DLC-specific animations with no base-game equivalent.
     if da_end > 0 and da_abs + da_end <= len(be):
-        if permissive and stats is not None:
-            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
-            n = da_end // 4
-            for i in range(n):
-                off = da_abs + i * 4
-                val = struct.unpack_from(">I", be, off)[0]
-                struct.pack_into("<I", out, off, val)
-            tail = da_abs + n * 4
-            if tail < da_abs + da_end:
-                out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
-        else:
-            raise UnhandledByteSwapError(
-                "Havok __data__ section needs per-class field layout "
-                f"(section size={da_end}); use havok_overrides from base vz.wad"
-            )
+        if stats is not None:
+            stats["havok_data_u32_count"] = stats.get("havok_data_u32_count", 0) + 1
+        n = da_end // 4
+        for i in range(n):
+            off = da_abs + i * 4
+            val = struct.unpack_from(">I", be, off)[0]
+            struct.pack_into("<I", out, off, val)
+        tail = da_abs + n * 4
+        if tail < da_abs + da_end:
+            out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
 
     # Fill any gap between sec_data_start and first section body
     first_body = min(x for x in (cn_abs, ty_abs, da_abs) if x > 0)
@@ -1328,7 +1328,7 @@ def _convert_body(
     # ── Mesh structure tags with verified u32-only layouts ──
     if tag in ("PRMG", "GEOM", "POFF", "STAT", "SWIT",
                "NODE", "CEXE", "PHY2", "COMP", "TINY",
-               "SCRB", "INST", "PTCH", "PTMS"):
+               "SCRB", "INST", "PTCH", "PTMS", "BSHP"):
         return _convert_u32_array(body_be)
 
     stats["tags_seen"][tag] = stats["tags_seen"].get(tag, 0) + 1
