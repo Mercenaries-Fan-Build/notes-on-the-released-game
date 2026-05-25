@@ -37,9 +37,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import sys
 import tempfile
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -90,6 +94,7 @@ from aset_type_ids import (  # noqa: E402
     STRINGDB_TYPE_HASH,
     type_id_for_type_hash,
 )
+from pws_xbox_to_pc import transcode_pws_xbox_to_pc  # noqa: E402
 
 
 _CRC32_TABLE: list[int] = []
@@ -108,7 +113,117 @@ def _crc32_mercs2(data: bytes) -> int:
     return crc & 0xFFFFFFFF
 
 
-# ── Stringdb descriptor fixup ─────────────────────────────────────────
+# ── Type hashes for base-game override (platform-specific formats) ───
+_ANIMATION_TYPE_HASH = 0x18166555  # pandemic_hash_m2("animation")
+_TEXTURE_TYPE_HASH = 0xF011157A    # pandemic_hash_m2("texture")
+_MESH_B_TYPE_HASH = 0x5B724250
+_STANCE_TYPE_HASH = 0x207359C7
+_UNKNOWN_E5_TYPE_HASH = 0xE5273C14
+
+_OVERRIDE_TYPE_HASHES = frozenset((
+    _ANIMATION_TYPE_HASH,
+    _TEXTURE_TYPE_HASH,
+    _MESH_B_TYPE_HASH,
+    _STANCE_TYPE_HASH,
+))
+
+# Havok magic used to confirm an entry's data body contains Havok
+_HAVOK_MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
+
+
+# ── Base game Havok data extraction ──────────────────────────────────
+
+def _build_base_aset_index(source_wad: Path) -> dict[tuple[int, int], int]:
+    """Build (hash, type_id)→block_index lookup from the base game's ASET table.
+
+    Keys on (asset_hash, type_id) to disambiguate assets that share a hash
+    but exist under different types (e.g. texture vs mesh).
+    """
+    from ffcs_wad import parse_ffcs, extract_slice
+    raw = source_wad.read_bytes()
+    arch = parse_ffcs(source_wad)
+    aset_chunk = next((c for c in arch.chunks if c.tag == "ASET"), None)
+    if aset_chunk is None:
+        return {}
+    aset_data = extract_slice(raw, aset_chunk)
+    num_entries = aset_chunk.meta
+
+    index: dict[tuple[int, int], int] = {}
+    for i in range(num_entries):
+        off = i * 16
+        if off + 16 > len(aset_data):
+            break
+        asset_hash, _u1, u2, type_id = struct.unpack_from("<IIII", aset_data, off)
+        block_idx = (u2 >> 16) & 0xFFFF
+        if block_idx != 0xFFFF and asset_hash != 0:
+            index[(asset_hash, type_id)] = block_idx
+    return index
+
+
+def _extract_base_entry_ucfx(
+    source_wad: Path,
+    block_index: int,
+    target_hash: int,
+    target_type_hash: int,
+    *,
+    _block_cache: dict[int, bytes] | None = None,
+) -> bytes | None:
+    """Extract a specific entry's UCFX container (LE, without CSUM) from vz.wad.
+
+    Matches on both hash and type_hash to avoid pulling the wrong asset type
+    when a block contains entries with the same hash under different types.
+    Returns the raw UCFX bytes (sans CSUM trailer) or None if not found.
+    """
+    import mmap as mmap_mod
+    from ffcs_wad import parse_ffcs, extract_slice
+    from wad_patcher import get_block_boundaries
+
+    # Use cache to avoid redundant decompression
+    if _block_cache is not None and block_index in _block_cache:
+        decompressed = _block_cache[block_index]
+    else:
+        raw = source_wad.read_bytes()
+        arch = parse_ffcs(source_wad)
+        data_chunk = next((c for c in arch.chunks if c.tag == "DATA"), None)
+        if data_chunk is None:
+            return None
+        with open(source_wad, "rb") as f:
+            mm = mmap_mod.mmap(f.fileno(), 0, access=mmap_mod.ACCESS_READ)
+        try:
+            boundaries = get_block_boundaries(mm, data_chunk.offset, data_chunk.size)
+            if block_index >= len(boundaries):
+                return None
+            blk_start, blk_end = boundaries[block_index]
+            compressed = bytes(mm[blk_start:blk_end])
+        finally:
+            mm.close()
+
+        decompressed = decompress_sges_block(compressed, 0, len(compressed))
+        if _block_cache is not None:
+            _block_cache[block_index] = decompressed
+
+    # Parse LE entry table
+    if len(decompressed) < 4:
+        return None
+    count = struct.unpack_from("<I", decompressed, 0)[0]
+    if count > 50_000:
+        return None
+
+    header_end = 4 + count * 16
+    pos = header_end
+    for i in range(count):
+        eoff = 4 + i * 16
+        h, th, _fc, s = struct.unpack_from("<IIII", decompressed, eoff)
+        entry_end = pos + s
+        if h == target_hash and th == target_type_hash:
+            container = decompressed[pos:entry_end]
+            # Strip CSUM trailer if present
+            if len(container) >= 8 and container[-8:-4] == b"CSUM":
+                return container[:-8]
+            return container
+        pos = entry_end
+
+    return None
 
 _STRINGDB_TYPE_HASH = 0x39E5E978  # pandemic_hash_m2("stringdb")
 
@@ -204,6 +319,200 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
     return bytes(data)
 
 
+# ── Parallel block processing ─────────────────────────────────────────
+
+@dataclass
+class _BlockWorkerArgs:
+    """Picklable per-block inputs for ProcessPoolExecutor workers."""
+
+    blk_idx: int
+    path: str
+    doh_slice: bytes
+    block_asets: list[dict]
+    packed_field: int
+    flags: int
+    base_anim_index: dict[tuple[int, int], int]
+    source_wad_path: str | None
+    fix_stringdb_descriptors: bool
+    dump_dir_path: str | None
+    verbose: bool
+    collect_hashes: bool
+
+
+@dataclass
+class _BlockWorkerResult:
+    """Picklable per-block output from a worker."""
+
+    blk_idx: int
+    skipped: bool = False
+    skip_reason: str = ""
+    patch_block: PatchBlock | None = None
+    hash_entries: list[int] = field(default_factory=list)
+    tags_seen: dict[str, int] = field(default_factory=dict)
+    override_msg: str = ""
+
+
+def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
+    """Decompress, byte-swap, and recompress one DLC block (worker entry point)."""
+    blk_idx = args.blk_idx
+    doh_slice = args.doh_slice
+
+    if len(doh_slice) < 4:
+        return _BlockWorkerResult(
+            blk_idx=blk_idx,
+            skipped=True,
+            skip_reason="block slice too short",
+        )
+
+    magic = doh_slice[:4]
+
+    if magic == b"segs":
+        try:
+            decompressed = decompress_be_sges(doh_slice, 0, len(doh_slice))
+        except Exception as e:
+            return _BlockWorkerResult(
+                blk_idx=blk_idx,
+                skipped=True,
+                skip_reason=f"decompress failed: {e}",
+            )
+    else:
+        rec_count_be = struct.unpack_from(">I", doh_slice, 0)[0]
+        header_end = 4 + rec_count_be * 16
+        first_container_tag = (
+            doh_slice[header_end:header_end + 4]
+            if header_end + 4 <= len(doh_slice)
+            else b""
+        )
+        if rec_count_be > 0 and rec_count_be < 5000 and first_container_tag == b"XFCU":
+            decompressed = bytes(doh_slice)
+            actual_end = len(decompressed)
+            while actual_end > 4 and decompressed[actual_end - 1] == 0:
+                actual_end -= 1
+            actual_end = (actual_end + 3) & ~3
+            decompressed = decompressed[:actual_end]
+        else:
+            return _BlockWorkerResult(
+                blk_idx=blk_idx,
+                skipped=True,
+                skip_reason=(
+                    f"no segs magic (got {magic!r}, rec_count={rec_count_be}, "
+                    f"first_tag={first_container_tag!r})"
+                ),
+            )
+
+    dump_dir = Path(args.dump_dir_path) if args.dump_dir_path else None
+    if dump_dir:
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        (dump_dir / f"block_{blk_idx:04d}_be.bin").write_bytes(decompressed)
+
+    base_overrides: dict[int, bytes] | None = None
+    override_msg = ""
+    base_block_cache: dict[int, bytes] = {}
+    source_wad = Path(args.source_wad_path) if args.source_wad_path else None
+
+    if args.base_anim_index and source_wad:
+        from ucfx_be_to_le import _parse_entry_table_be
+        from aset_type_ids import type_id_for_type_hash
+
+        be_entries = _parse_entry_table_be(decompressed)
+        override_counts: dict[int, int] = {}
+        for eidx, (ehash, etype, _eoff, _esize) in enumerate(be_entries):
+            if etype in _OVERRIDE_TYPE_HASHES:
+                tid = type_id_for_type_hash(etype)
+                if tid is not None and (ehash, tid) in args.base_anim_index:
+                    base_blk = args.base_anim_index[(ehash, tid)]
+                    le_ucfx = _extract_base_entry_ucfx(
+                        source_wad,
+                        base_blk,
+                        ehash,
+                        etype,
+                        _block_cache=base_block_cache,
+                    )
+                    if le_ucfx is not None:
+                        if base_overrides is None:
+                            base_overrides = {}
+                        base_overrides[eidx] = le_ucfx
+                        override_counts[etype] = override_counts.get(etype, 0) + 1
+
+        if base_overrides:
+            _override_labels = {
+                _ANIMATION_TYPE_HASH: "Havok",
+                _TEXTURE_TYPE_HASH: "texture",
+                _MESH_B_TYPE_HASH: "mesh_B",
+                _STANCE_TYPE_HASH: "stance",
+            }
+            parts = [
+                f"{override_counts[th]} {_override_labels[th]}"
+                for th in _OVERRIDE_TYPE_HASHES
+                if override_counts.get(th)
+            ]
+            override_msg = " + ".join(parts) + " override(s) from base game"
+
+    swapped, stats = byteswap_ucfx_block(decompressed, base_overrides)
+
+    if args.fix_stringdb_descriptors:
+        swapped = _fix_stringdb_descriptors(swapped)
+
+    if dump_dir:
+        (dump_dir / f"block_{blk_idx:04d}_le.bin").write_bytes(swapped)
+
+    hash_entries: list[int] = []
+    if args.collect_hashes:
+        try:
+            entries = parse_block_entries(swapped)
+            for entry in entries:
+                h = entry.get("hash")
+                if h is not None and h != 0:
+                    hash_entries.append(h)
+        except Exception:
+            pass
+
+    pc_sges = compress_sges(swapped, segment_size=65536, level=6, major=4)
+
+    return _BlockWorkerResult(
+        blk_idx=blk_idx,
+        skipped=False,
+        patch_block=PatchBlock(
+            compressed_data=pc_sges,
+            path_string=args.path,
+            aset_entries=list(args.block_asets),
+            packed_field=args.packed_field,
+            flags=args.flags,
+        ),
+        hash_entries=hash_entries,
+        tags_seen=dict(stats.get("tags_seen", {})),
+        override_msg=override_msg,
+    )
+
+
+def _collect_block_results(
+    results: list[_BlockWorkerResult],
+    *,
+    verbose: bool,
+) -> tuple[list[PatchBlock], int, dict[str, int], dict[int, int]]:
+    """Merge worker results in block-index order into converted[] and hash map."""
+    results.sort(key=lambda r: r.blk_idx)
+    converted: list[PatchBlock] = []
+    skipped = 0
+    total_swap_stats: dict[str, int] = {}
+    hash_to_local_block: dict[int, int] = {}
+
+    for res in results:
+        if res.skipped:
+            skipped += 1
+            continue
+        if res.override_msg and verbose:
+            print(f"  [{res.blk_idx}] → {res.override_msg}")
+        for tag, cnt in res.tags_seen.items():
+            total_swap_stats[tag] = total_swap_stats.get(tag, 0) + cnt
+        for h in res.hash_entries:
+            hash_to_local_block[h] = len(converted)
+        if res.patch_block is not None:
+            converted.append(res.patch_block)
+
+    return converted, skipped, total_swap_stats, hash_to_local_block
+
+
 # ── Pipeline ──────────────────────────────────────────────────────────
 
 def port_x360_dlc(
@@ -221,6 +530,7 @@ def port_x360_dlc(
     no_hook: bool = False,
     fix_stringdb_descriptors: bool = False,
     synth_stringdb_aset: bool = True,
+    jobs: int | None = None,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -307,118 +617,119 @@ def port_x360_dlc(
 
     # Determine block range
     end_block = min(num_blocks, start_block + (max_blocks or num_blocks))
-    blocks_to_process = range(start_block, end_block)
-    print(f"\n  Processing blocks {start_block}..{end_block - 1} "
-          f"({len(blocks_to_process)} blocks)")
+    block_list = list(range(start_block, end_block))
+    n_blocks = len(block_list)
+    print(f"\n  Processing blocks {start_block}..{end_block - 1} ({n_blocks} blocks)")
 
-    # Convert each block
-    converted: list[PatchBlock] = []
-    skipped = 0
-    total_swap_stats: dict = {"tags_seen": {}}
-    hash_to_local_block: dict[int, int] = {}  # asset_hash → index in converted[]
+    if jobs is None:
+        jobs = os.cpu_count() or 1
+    jobs = max(1, jobs)
+    if jobs > 1:
+        print(f"  Parallel workers: {jobs}")
 
-    for blk_idx in blocks_to_process:
+    # Build base game animation index for Havok override
+    base_anim_index: dict[tuple[int, int], int] = {}
+    if source_wad:
+        base_anim_index = _build_base_aset_index(source_wad)
+        if base_anim_index:
+            print(f"  Base game animation index: {len(base_anim_index)} entries")
+
+    collect_hashes = bool(global_aset)
+    dump_dir_str = str(dump_dir) if dump_dir else None
+    source_wad_str = str(source_wad) if source_wad else None
+
+    worker_args_list: list[_BlockWorkerArgs] = []
+    pre_skipped: list[_BlockWorkerResult] = []
+
+    for blk_idx in block_list:
         indx = indx_entries[blk_idx]
         path = path_strings[blk_idx] if blk_idx < len(path_strings) else f"block_{blk_idx:05d}"
         block_offset = indx.file_offset
         block_size = indx.page_count * PAGE_SIZE
 
         if block_offset + 4 > len(doh):
-            print(f"  [{blk_idx}] SKIP: offset 0x{block_offset:X} beyond DOH")
-            skipped += 1
+            pre_skipped.append(_BlockWorkerResult(
+                blk_idx=blk_idx,
+                skipped=True,
+                skip_reason=f"offset 0x{block_offset:X} beyond DOH",
+            ))
             continue
 
-        magic = doh[block_offset:block_offset + 4]
-        is_raw_xfcu = False
-
-        if magic == b"segs":
-            if verbose:
-                print(f"  [{blk_idx}] {path}")
-                print(f"         offset=0x{block_offset:X}, pages={indx.page_count}")
-            try:
-                decompressed = decompress_be_sges(doh, block_offset, block_size)
-            except Exception as e:
-                print(f"  [{blk_idx}] SKIP: decompress failed: {e}")
-                skipped += 1
-                continue
-        else:
-            # Check for raw (uncompressed) XFCU block — no segs wrapper.
-            # The block starts with a BE u32 record count; after the header
-            # table the first container should be XFCU (BE bytes b"XFCU").
-            rec_count_be = struct.unpack_from(">I", doh, block_offset)[0]
-            header_end = block_offset + 4 + rec_count_be * 16
-            first_container_tag = doh[header_end:header_end + 4] if header_end + 4 <= len(doh) else b""
-            if rec_count_be > 0 and rec_count_be < 5000 and first_container_tag == b"XFCU":
-                is_raw_xfcu = True
-                if verbose:
-                    print(f"  [{blk_idx}] {path} (RAW XFCU, no segs wrapper)")
-                    print(f"         offset=0x{block_offset:X}, pages={indx.page_count}, "
-                          f"records={rec_count_be}")
-                decompressed = doh[block_offset:block_offset + block_size]
-                # Trim trailing zero padding to actual content
-                actual_end = block_size
-                while actual_end > 4 and decompressed[actual_end - 1] == 0:
-                    actual_end -= 1
-                actual_end = (actual_end + 3) & ~3  # align to 4
-                decompressed = decompressed[:actual_end]
-            else:
-                print(f"  [{blk_idx}] SKIP: no segs magic at 0x{block_offset:X} "
-                      f"(got {magic!r}, rec_count={rec_count_be}, "
-                      f"first_tag={first_container_tag!r})")
-                skipped += 1
-                continue
-
-        if verbose:
-            label = "raw_xfcu" if is_raw_xfcu else "decompressed"
-            print(f"         {label}={len(decompressed):,} bytes")
-
-        # Dump raw if requested
-        if dump_dir:
-            dump_dir.mkdir(parents=True, exist_ok=True)
-            (dump_dir / f"block_{blk_idx:04d}_be.bin").write_bytes(decompressed)
-
-        # Byte-swap BE → LE
-        swapped, stats = byteswap_ucfx_block(decompressed)
-
-        # Optional stringdb descriptor fixup (off by default — Phase 0f proved
-        # retail PC uses LE descriptors; byte-swap alone is sufficient).
-        if fix_stringdb_descriptors:
-            swapped = _fix_stringdb_descriptors(swapped)
-
-        if dump_dir:
-            (dump_dir / f"block_{blk_idx:04d}_le.bin").write_bytes(swapped)
-
-        for tag, cnt in stats.get("tags_seen", {}).items():
-            total_swap_stats["tags_seen"][tag] = (
-                total_swap_stats["tags_seen"].get(tag, 0) + cnt)
-
-        # Collect UCFX entry hashes for global ASET resolution
-        if global_aset:
-            try:
-                entries = parse_block_entries(swapped)
-                for entry in entries:
-                    h = entry.get("hash")
-                    if h is not None and h != 0:
-                        hash_to_local_block[h] = len(converted)
-            except Exception:
-                pass
-
-        # Recompress as PC sges
-        pc_sges = compress_sges(swapped, segment_size=65536, level=6, major=4)
-
-        if verbose:
-            ratio = len(pc_sges) / len(swapped) * 100
-            print(f"         compressed={len(pc_sges):,} bytes ({ratio:.1f}%)")
-
-        # Build PatchBlock (block-specific ASET entries only at this point)
-        block_asets = aset_by_block.get(blk_idx, [])
-        converted.append(PatchBlock(
-            compressed_data=pc_sges,
-            path_string=path,
-            aset_entries=list(block_asets),
+        worker_args_list.append(_BlockWorkerArgs(
+            blk_idx=blk_idx,
+            path=path,
+            doh_slice=bytes(doh[block_offset:block_offset + block_size]),
+            block_asets=list(aset_by_block.get(blk_idx, [])),
             packed_field=indx.packed_field,
             flags=indx.flags,
+            base_anim_index=base_anim_index,
+            source_wad_path=source_wad_str,
+            fix_stringdb_descriptors=fix_stringdb_descriptors,
+            dump_dir_path=dump_dir_str,
+            verbose=verbose,
+            collect_hashes=collect_hashes,
         ))
+
+    all_results: list[_BlockWorkerResult] = list(pre_skipped)
+    t0 = time.monotonic()
+
+    done_count = 0
+    for pres in pre_skipped:
+        done_count += 1
+        pct = done_count * 100 // n_blocks if n_blocks else 100
+        print(
+            f"  [{done_count}/{n_blocks}] {pct}% — "
+            f"[{pres.blk_idx}] SKIP: {pres.skip_reason}"
+        )
+
+    if jobs <= 1:
+        for i, wargs in enumerate(worker_args_list):
+            res = _process_one_block(wargs)
+            all_results.append(res)
+            done_count += 1
+            pct = done_count * 100 // n_blocks if n_blocks else 100
+            elapsed = time.monotonic() - t0
+            if res.skipped:
+                print(
+                    f"  [{done_count}/{n_blocks}] {pct}% — "
+                    f"[{res.blk_idx}] SKIP: {res.skip_reason} ({elapsed:.0f}s)"
+                )
+            else:
+                print(
+                    f"  [{done_count}/{n_blocks}] {pct}% — "
+                    f"[{res.blk_idx}] {wargs.path} ({elapsed:.0f}s)"
+                )
+    else:
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            futures = {
+                pool.submit(_process_one_block, wargs): wargs
+                for wargs in worker_args_list
+            }
+            for fut in as_completed(futures):
+                wargs = futures[fut]
+                res = fut.result()
+                all_results.append(res)
+                done_count += 1
+                pct = done_count * 100 // n_blocks if n_blocks else 100
+                elapsed = time.monotonic() - t0
+                if res.skipped:
+                    print(
+                        f"  [{done_count}/{n_blocks}] {pct}% — "
+                        f"[{res.blk_idx}] SKIP: {res.skip_reason} ({elapsed:.0f}s)"
+                    )
+                else:
+                    print(
+                        f"  [{done_count}/{n_blocks}] {pct}% — "
+                        f"[{res.blk_idx}] {wargs.path} ({elapsed:.0f}s)"
+                    )
+
+    elapsed_total = time.monotonic() - t0
+    print(f"  Block processing finished in {elapsed_total:.1f}s")
+
+    converted, skipped, tags_seen, hash_to_local_block = _collect_block_results(
+        all_results, verbose=verbose,
+    )
+    total_swap_stats: dict = {"tags_seen": tags_seen}
 
     # Resolve global ASET entries (block_index=0xFFFF) to actual blocks
     if global_aset:
@@ -592,11 +903,15 @@ def port_x360_dlc(
     if source_wad and not no_bootstrap:
         print(f"    - 1 modified scripts_vz block (DLC bootstrap)")
 
-    print("\n  Remaining gaps (render correctness):")
-    print("    - STRM vertex data (mixed f16/f32/u8 — needs per-format swapping)")
-    print("    - BODY texture data (possible Xbox 360 tile swizzle)")
-    print("    - Havok binary data (class-aware field swapping)")
-    print("    - COMP/CHDR placement data (42-byte records)")
+    print("\n  Byte-swap coverage:")
+    print("    ✓ Block headers, UCFX descriptors, all uppercase+lowercase chunk tags")
+    print("    ✓ STRM vertex buffers (u32 swap — correct for f32 positions)")
+    print("    ✓ IBUF index buffers (u16 swap)")
+    print("    ✓ COMP/CHDR/flgs placement records")
+    print("    ✓ PRMG/MESH/HIER/MTRL/BNDS/INFO structural data")
+    print("    ✓ BINN Lua bytecode (full recursive swap)")
+    print("    ~ BODY texture data (tile-swizzle not applied — game uses vz.wad fallback)")
+    print("    ~ Havok binary data (not field-swapped — animations may be incorrect)")
     print("\n  Localization / briefing (Row 13):")
     print("    - dlc01 bootstrap calls Sys.AddStringDb(\"patch01\", \"dlc01\")")
     print("      → registers blocks\\\\dlc01\\\\english_dlc01 (titles: Mercs Blitz, etc.)")
@@ -839,17 +1154,29 @@ def _build_bootstrap_block(
     "Loading vz level with vz masterscript" — use ``--no-hook`` instead.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    luac = repo_root / "lua-backup-dont-delete" / "src" / "luac"
-    if not luac.is_file():
-        luac_alt = repo_root / "lua-5.1.5" / "src" / "luac"
-        if luac_alt.is_file():
-            luac = luac_alt
+    import shutil
+    candidates = [
+        repo_root / "tools" / "lua51-mercs2" / "build" / "luac",
+        repo_root / "tools" / "lua51-mercs2" / "src" / "luac",
+        repo_root / "lua-backup-dont-delete" / "src" / "luac",
+        repo_root / "lua-5.1.5" / "src" / "luac",
+        repo_root / "tools" / "lua51-mercs2" / "luac.exe",
+    ]
+    luac = None
+    for c in candidates:
+        if c.is_file():
+            luac = c
+            break
+    if luac is None:
+        luac_on_path = shutil.which("luac")
+        if luac_on_path:
+            luac = Path(luac_on_path)
         else:
             print(f"  ERROR: Lua compiler not found.", file=sys.stderr)
-            print(f"    Checked: {luac}", file=sys.stderr)
-            print(f"    Checked: {luac_alt}", file=sys.stderr)
-            print(f"    Build with: cd lua-backup-dont-delete && make macosx",
-                  file=sys.stderr)
+            for c in candidates:
+                print(f"    Checked: {c}", file=sys.stderr)
+            print(f"    Checked: PATH (shutil.which)", file=sys.stderr)
+            print(f"    Build with: make build-luac", file=sys.stderr)
             return None
 
     print(f"  Lua compiler: {luac}")
@@ -1035,12 +1362,14 @@ def cmd_list_blocks(doh: bytes) -> int:
 # ── Audio extraction ──────────────────────────────────────────────────
 
 def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
-    """Extract .pws audio files from the STFS container to audio_dir.
+    """Extract and transcode .pws audio files from the STFS container.
 
     Audio files live alongside DLC01.doh in the STFS file table as
     entries whose block chains are walked via hash table pointers.
-    They are byte-for-byte identical on PC and Xbox (no endian issues
-    with .pws streams).
+    Xbox .pws files use Xbox ADPCM (format 0x0069, high-nibble-first),
+    PC uses MS-IMA ADPCM (format 0x0011, low-nibble-first). The
+    transcoding is lossless for mono (nibble swap) since both codecs
+    use the same IMA algorithm with different nibble storage order.
     """
     reader = StfsReader(stfs_data)
     pws_entries = [e for e in reader.file_table if e["name"].endswith(".pws")]
@@ -1050,13 +1379,15 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
         return 0
 
     audio_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\n  Extracting {len(pws_entries)} audio files to {audio_dir}/")
+    print(f"\n  Extracting & transcoding {len(pws_entries)} audio files to {audio_dir}/")
 
     for entry in pws_entries:
-        data = reader.read_file(entry)
+        xbox_data = reader.read_file(entry)
+        # Transcode Xbox ADPCM → PC IMA ADPCM (mono, lossless nibble swap)
+        pc_data = transcode_pws_xbox_to_pc(xbox_data, channels=1)
         out_path = audio_dir / entry["name"]
-        out_path.write_bytes(data)
-        print(f"    {entry['name']} ({entry['file_size']:,} bytes)")
+        out_path.write_bytes(pc_data)
+        print(f"    {entry['name']} ({entry['file_size']:,} bytes, transcoded)")
 
     return 0
 
@@ -1104,6 +1435,8 @@ def main() -> int:
     ap.add_argument("--start-block", type=int, default=0,
                     help="Start at block N (default 0)")
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--jobs", "-j", type=int, default=None,
+                    help="Parallel workers for block conversion (default: CPU count; use 1 for serial)")
     ap.add_argument("--dump-dir", type=Path, default=None,
                     help="Dump intermediate block files to directory")
     ap.add_argument("--list-blocks", action="store_true",
@@ -1172,6 +1505,7 @@ def main() -> int:
         no_hook=args.no_hook,
         fix_stringdb_descriptors=args.fix_stringdb_descriptors,
         synth_stringdb_aset=not args.no_synth_stringdb_aset,
+        jobs=args.jobs,
     )
 
 

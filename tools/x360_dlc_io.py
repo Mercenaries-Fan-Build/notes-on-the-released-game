@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import struct
 import subprocess
+import sys
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -378,10 +379,23 @@ def extract_stfs_from_rar(rar_path: Path, work_dir: Path) -> StfsReader:
     stfs_dir = work_dir / "stfs"
     stfs_dir.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(
-        ["bsdtar", "-xf", str(rar_path), "-C", str(stfs_dir)],
-        check=True, capture_output=True,
-    )
+    if sys.platform == "win32":
+        unrar = Path(__file__).parent / "unrar" / "UnRAR.exe"
+        if unrar.exists():
+            subprocess.run(
+                [str(unrar), "x", "-o+", "-y", str(rar_path), str(stfs_dir) + "\\"],
+                check=True, capture_output=True,
+            )
+        else:
+            subprocess.run(
+                ["tar", "-xf", str(rar_path), "-C", str(stfs_dir)],
+                check=True, capture_output=True,
+            )
+    else:
+        subprocess.run(
+            ["bsdtar", "-xf", str(rar_path), "-C", str(stfs_dir)],
+            check=True, capture_output=True,
+        )
 
     stfs_file = None
     for f in sorted(stfs_dir.rglob("*"), key=lambda p: p.stat().st_size, reverse=True):

@@ -474,7 +474,7 @@ def compile_lua_source(source: str, luac_path: Path) -> bytes:
     if not luac_path.is_file():
         raise FileNotFoundError(
             f"Lua compiler not found at {luac_path}. "
-            f"Build it with: cd lua-5.1.5 && make posix"
+            f"Build it with: make build-luac"
         )
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -502,6 +502,31 @@ def compile_lua_source(source: str, luac_path: Path) -> bytes:
     return bytecode
 
 
+def _resolve_luac() -> Path:
+    """Find the best available luac compiler for the current platform."""
+    import shutil
+
+    repo_root = Path(__file__).resolve().parent.parent
+    candidates = [
+        repo_root / "tools" / "lua51-mercs2" / "build" / "luac",
+        repo_root / "tools" / "lua51-mercs2" / "src" / "luac",
+        repo_root / "lua-backup-dont-delete" / "src" / "luac",
+        repo_root / "lua-5.1.5" / "src" / "luac",
+        repo_root / "tools" / "lua51-mercs2" / "luac.exe",
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    luac_on_path = shutil.which("luac")
+    if luac_on_path:
+        return Path(luac_on_path)
+    checked = "\n    ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"Lua compiler not found. Checked:\n    {checked}\n    PATH (shutil.which)\n"
+        f"  Build with: make build-luac"
+    )
+
+
 def cmd_build_autocomplete_patch(
     source_wad: Path,
     output: Path,
@@ -520,8 +545,7 @@ def cmd_build_autocomplete_patch(
     print(f"  Output:     {output}")
 
     # Locate luac compiler
-    repo_root = Path(__file__).resolve().parent.parent
-    luac = repo_root / "lua-5.1.5" / "src" / "luac"
+    luac = _resolve_luac()
 
     # Step 1: Compile the mod source
     print("\n[1/5] Compiling auto-complete Lua source...")
@@ -607,8 +631,7 @@ def cmd_remove_boundaries(
     print(f"  Source WAD: {source_wad}")
     print(f"  Output:     {output}")
 
-    repo_root = Path(__file__).resolve().parent.parent
-    luac = repo_root / "lua-5.1.5" / "src" / "luac"
+    luac = _resolve_luac()
 
     # Step 1: Compile the noop boundary script
     print("\n[1/6] Compiling noop wifvzboundary Lua source...")
@@ -918,18 +941,11 @@ def cmd_inject_dlc_bootstrap(
     print(f"  DLC contracts: {', '.join(contracts)}")
     print(f"  Inject into vz: {inject_into_vz}")
 
-    repo_root = Path(__file__).resolve().parent.parent
-    luac = repo_root / "lua-backup-dont-delete" / "src" / "luac"
-    if not luac.is_file():
-        luac_alt = repo_root / "lua-5.1.5" / "src" / "luac"
-        if luac_alt.is_file():
-            luac = luac_alt
-        else:
-            print(f"ERROR: Lua compiler not found.", file=sys.stderr)
-            print(f"  Checked: {luac}", file=sys.stderr)
-            print(f"  Checked: {luac_alt}", file=sys.stderr)
-            print(f"  Build with: cd lua-backup-dont-delete && make macosx", file=sys.stderr)
-            return 1
+    try:
+        luac = _resolve_luac()
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     print(f"  Lua compiler: {luac}")
 
@@ -1110,15 +1126,11 @@ def cmd_inject_dlc_bootstrap_merged(
     print(f"  Output:       {output}")
     print(f"  DLC contracts: {', '.join(contracts)}")
 
-    repo_root = Path(__file__).resolve().parent.parent
-    luac = repo_root / "lua-backup-dont-delete" / "src" / "luac"
-    if not luac.is_file():
-        luac_alt = repo_root / "lua-5.1.5" / "src" / "luac"
-        if luac_alt.is_file():
-            luac = luac_alt
-        else:
-            print(f"ERROR: Lua compiler not found.", file=sys.stderr)
-            return 1
+    try:
+        luac = _resolve_luac()
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     # Compile DLC scripts
     print("\n[1/5] Compiling DLC scripts...")
