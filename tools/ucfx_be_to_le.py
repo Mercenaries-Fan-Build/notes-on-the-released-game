@@ -784,6 +784,7 @@ _TYPE_SOUNDBANK = 0x9F8BCA10
 _TYPE_LOW_RES_TERRAIN = 0x1602815C  # pandemic_hash_m2("lowresterrain")
 _TYPE_EFFECT = 0x5608BD5A
 _TYPE_OBJECT_REGISTRY = 0x6310807F  # resident entity-class registry (ASET type_id 30)
+_TYPE_CFX_PACK = 0xFE0E8320  # CFX header + zlib (fonts, effects, resident sub-assets)
 _TYPE_LEVEL = 0xEA4829D5
 _TYPE_LAYER = 0x5647C35D  # world layer / terrainfade META (type_id 8)
 
@@ -891,6 +892,43 @@ def _convert_object_registry_data(body_be: bytes) -> bytes:
     fields only (no embedded strings in the 88-byte records we have seen).
     """
     return _convert_u32_array(body_be)
+
+
+_ZLIB_CMFS = frozenset((0x01, 0x5E, 0x9C, 0xDA, 0x20, 0x7D, 0xBB, 0xFB))
+
+
+def _find_zlib_offset(data: bytes, *, search_limit: int = 512) -> int:
+    """Offset of zlib wrapper (0x78 cmf) in a CFX payload, or -1."""
+    limit = min(len(data) - 2, search_limit)
+    for i in range(limit):
+        if data[i] == 0x78 and data[i + 1] in _ZLIB_CMFS:
+            return i
+    for i in range(search_limit, len(data) - 2):
+        if data[i] == 0x78 and data[i + 1] in _ZLIB_CMFS:
+            return i
+    return -1
+
+
+def _convert_cfx_compressed_data(body_be: bytes) -> bytes:
+    """Convert CFX + zlib payloads (type_hash ``0xFE0E8320``, ASET type_id 23).
+
+    BE u32 fields precede the zlib stream; the deflate bitstream is endian-neutral
+    and is copied verbatim.
+    """
+    zoff = _find_zlib_offset(body_be)
+    if zoff < 0:
+        if len(body_be) % 4 == 0 and len(body_be) <= 256:
+            return _convert_u32_array(body_be)
+        return body_be
+
+    prefix_end = zoff - (zoff % 4)
+    out = bytearray()
+    if prefix_end > 0:
+        out += _convert_u32_array(body_be[:prefix_end])
+    if prefix_end < zoff:
+        out += body_be[prefix_end:zoff]
+    out += body_be[zoff:]
+    return bytes(out)
 
 
 def _convert_unknown_e5_data(body_be: bytes) -> bytes:
@@ -1226,6 +1264,8 @@ def _convert_body(
             return _convert_soundbank_data(body_be)
         if type_hash == _TYPE_OBJECT_REGISTRY:
             return _convert_object_registry_data(body_be)
+        if type_hash == _TYPE_CFX_PACK:
+            return _convert_cfx_compressed_data(body_be)
         if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
@@ -1244,6 +1284,8 @@ def _convert_body(
             return _convert_u16_array(body_be)
         if type_hash == _TYPE_ECS_NODE or context == "META":
             return _convert_ecs_info(body_be)
+        if type_hash == _TYPE_LOW_RES_TERRAIN:
+            return _convert_u32_array(body_be)
         if type_hash in _MESH_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
@@ -1286,6 +1328,8 @@ def _convert_body(
             return _convert_script_info(body_be)
         if type_hash == _TYPE_OBJECT_REGISTRY:
             return _convert_object_registry_data(body_be)
+        if type_hash == _TYPE_CFX_PACK:
+            return _convert_cfx_compressed_data(body_be)
         if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
@@ -1352,6 +1396,10 @@ def _convert_body(
 
     # ── BNDS: axis-aligned bounds / sphere (10 × f32 in terrain tiles) ──
     if tag == "BNDS":
+        return _convert_u32_array(body_be)
+
+    # ── ATRB: effect attribute scalars (12 B typical) ──
+    if tag == "ATRB":
         return _convert_u32_array(body_be)
 
     # ── TRFM: effect transform (particle blocks, 64 B typical) ──
