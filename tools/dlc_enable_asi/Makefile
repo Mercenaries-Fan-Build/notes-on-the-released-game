@@ -18,16 +18,16 @@ LDFLAGS     = -lkernel32 -luser32
 
 .PHONY: all clean mingw mingw-nobootstrap mingw-minimal mingw-nohooks mingw-no-crash-patch mingw-probe mingw-bootstrap mingw-bootstrap-deferred mingw-bootstrap-early mingw-debug msvc help
 
-# Default: VZ-load bootstrap (import dlc01 at masterscript). ~19.5 KB stripped.
+# Default: net hooks + logging only — WAD scripts_vz bootstrap owns dlc01 registration.
 all: mingw
 
-mingw: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1 -DDLC_ENABLE_CRASH_PATCH=1
+mingw: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=0 -DDLC_ENABLE_CRASH_PATCH=1
 mingw: $(SRC)
 	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
 	$(STRIP_MINGW) $(TARGET)
-	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) VZ_LOAD=1 CRASH_PATCH=1"
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) VZ_LOAD=0 CRASH_PATCH=1"
 	@echo "Copy to: <game>/scripts/dlc_enable.asi"
-	@echo "Log must show: VZ_LOAD=1 CRASH_PATCH=1; deferred inject ~3s after vz masterscript"
+	@echo "Log must show: VZ_LOAD=0 CRASH_PATCH=1; dlc01 loads via WAD scripts_vz hook"
 
 # Bisect: VZ bootstrap without 0x005AE372 code-cave patch (shell movie path).
 mingw-no-crash-patch: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1
@@ -64,8 +64,14 @@ mingw-probe: $(SRC)
 	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) PROBE_GLOBALS=1"
 	@echo "Log must show: [dlc_enable] PROBE type(import)= ..."
 
-# Alias for explicit bootstrap (same as default mingw).
-mingw-bootstrap: mingw
+# Explicit ASI Lua bootstrap (bisect / fallback if WAD hook fails).
+mingw-bootstrap: EXTRA_CFLAGS += -DDLC_ENABLE_VZ_LOAD_BOOTSTRAP=1 -DDLC_ENABLE_CRASH_PATCH=1
+mingw-bootstrap: $(SRC)
+	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(STRIP_MINGW) $(TARGET)
+	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes) VZ_LOAD=1 CRASH_PATCH=1"
+	@echo "Copy to: <game>/scripts/dlc_enable.asi"
+	@echo "Log must show: VZ_LOAD=1 CRASH_PATCH=1; deferred inject ~3s after vz masterscript"
 
 # InitThread waits for loadMainShell + 120s, then injects.
 mingw-bootstrap-deferred: EXTRA_CFLAGS += -DDLC_ENABLE_DEFERRED_BOOTSTRAP=1
@@ -91,12 +97,12 @@ clean:
 
 help:
 	@echo "Usage:"
-	@echo "  make mingw                  — Default (VZ bootstrap + CRASH_PATCH)"
+	@echo "  make mingw                  — Default (NET + REG_PATCH; WAD owns dlc01)"
+	@echo "  make mingw-bootstrap        — ASI VZ bootstrap + CRASH_PATCH (fallback)"
 	@echo "  make mingw-nobootstrap      — REG_PATCH + NET, no bootstrap inject"
 	@echo "  make mingw-minimal          — NET hooks only (no print patch)"
 	@echo "  make mingw-nohooks          — DllMain log only (zero hooks)"
 	@echo "  make mingw-no-crash-patch   — VZ bootstrap without 0x005AE372 patch"
-	@echo "  make mingw-bootstrap        — Alias for default mingw"
 	@echo "  make mingw-bootstrap-deferred — + import(dlc01) 120s after shell"
 	@echo "  make mingw-bootstrap-early  — + import(dlc01) at shell (unsafe)"
 	@echo "  make mingw-debug            — MessageBox popup on load (diagnostic)"
