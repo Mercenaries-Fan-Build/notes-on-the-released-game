@@ -16,6 +16,13 @@ lua-5.1.5.tar.gz
 tools/lua51-mercs2/lua
 tools/lua51-mercs2/luac
 tools/lua51-mercs2/liblua.a
+tools/lua51-mercs2/build/
+tools/lua51-mercs2/src/lua
+tools/lua51-mercs2/src/luac
+tools/lua51-mercs2/src/liblua.a
+tools/lua51-mercs2/src/*.o
+
+analysis/*
 tools/bin/
 MattiasNilsson
 MattiasNilssonExport
