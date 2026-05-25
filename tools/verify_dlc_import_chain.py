@@ -22,7 +22,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from dlc_aset_normalize import find_dlc_script_resident_block_index
+from dlc_aset_normalize import (
+    find_block_for_script_module,
+    find_dlc_script_resident_block_index,
+)
 from ffcs_patch_wad import read_patch_wad
 from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
@@ -362,13 +365,19 @@ def main():
             else:
                 print("  Gate 0d: PASS — resident scripts are PC-LE (scripts_vz still required for Row 13)")
 
-            dlccon_hashes = {pandemic_hash_m2(n): n for n in chain_scripts[2:]}
-            block_hashes = get_block_script_names(resident_data)
-            for h, name in dlccon_hashes.items():
-                status = "PRESENT" if h in block_hashes else "MISSING"
-                if status == "MISSING":
+            for name in chain_scripts[2:]:
+                in_resident = pandemic_hash_m2(name) in get_block_script_names(
+                    resident_data
+                )
+                in_patch = find_block_for_script_module(pw.blocks, name) is not None
+                if in_resident or in_patch:
+                    status = "PRESENT"
+                    where = "resident" if in_resident else "patch"
+                    print(f"  {name:25s}  {status} ({where})")
+                else:
+                    status = "MISSING"
                     all_ok = False
-                print(f"  {name:25s}  {status}")
+                    print(f"  {name:25s}  {status}")
     except Exception as exc:
         print(f"  ERROR: Could not verify script resident block: {exc}")
         all_ok = False

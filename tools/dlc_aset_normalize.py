@@ -6,7 +6,14 @@ from aset_type_ids import SCRIPT_ASET_TYPE_ID, type_id_for_type_hash
 from ffcs_patch_wad import PatchBlock
 from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
-from wad_patcher import get_script_name, parse_block_entries, script_aset_entry
+from wad_patcher import (
+    get_binn_script_ref_name,
+    get_script_name,
+    parse_block_entries,
+    script_aset_entry,
+)
+
+LUAQ_SIG = b"\x1bLua"
 
 # Contracts required for import()/dynamic_import() (verify_dlc_import_chain).
 DLC_IMPORT_CONTRACTS = (
@@ -58,6 +65,31 @@ def find_resident_block_index_from_paths(paths: list[str]) -> int | None:
     return best_idx if best_score > 0 else None
 
 
+def _entry_matches_module(
+    decomp: bytes,
+    entry: dict,
+    module_name: str,
+    target_hash: int,
+) -> bool:
+    """True if UCFX entry is *module_name* (hash, BINN ref, or name in chunk)."""
+    if entry.get("hash") == target_hash:
+        return True
+    ref_name = get_binn_script_ref_name(decomp, entry)
+    if ref_name and ref_name.lower() == module_name.lower():
+        return True
+    try:
+        binn_name = get_script_name(decomp, entry)
+    except Exception:
+        binn_name = ""
+    if binn_name.lower() == module_name.lower():
+        return True
+    entry_start = entry["offset"]
+    entry_end = entry_start + entry["size"] - 8
+    chunk = decomp[entry_start:entry_end]
+    needle = module_name.encode("ascii")
+    return needle in chunk and LUAQ_SIG in chunk
+
+
 def find_block_for_script_module(
     blocks: list[PatchBlock],
     module_name: str,
@@ -72,15 +104,54 @@ def find_block_for_script_module(
         except Exception:
             continue
         for entry in entries:
-            if entry.get("hash") == target_hash:
-                return blk_idx
-            try:
-                binn_name = get_script_name(decomp, entry)
-            except Exception:
-                continue
-            if binn_name.lower() == module_name.lower():
+            if _entry_matches_module(decomp, entry, module_name, target_hash):
                 return blk_idx
     return None
+
+
+def _local_block_index_for_path(
+    blocks: list[PatchBlock],
+    path: str,
+) -> int | None:
+    norm = path.replace("/", "\\").lower()
+    for idx, blk in enumerate(blocks):
+        if blk.path_string.replace("/", "\\").lower() == norm:
+            return idx
+    return None
+
+
+def ensure_contract_aset_from_xbox_block_aset(
+    blocks: list[PatchBlock],
+    aset_by_block: dict[int, list[dict]],
+    path_strings: list[str],
+    module_names: list[str] | tuple[str, ...] = DLC_IMPORT_CONTRACTS,
+) -> int:
+    """Copy contract script ASET rows from Xbox per-block ASET using path matching."""
+    global_hashes: set[int] = set()
+    for blk in blocks:
+        for row in blk.aset_entries:
+            global_hashes.add(row["asset_hash"])
+
+    added = 0
+    targets = {pandemic_hash_m2(n) for n in module_names}
+    for xbox_bi, rows in aset_by_block.items():
+        if xbox_bi >= len(path_strings):
+            continue
+        local_bi = _local_block_index_for_path(blocks, path_strings[xbox_bi])
+        if local_bi is None:
+            continue
+        for row in rows:
+            ah = row.get("asset_hash", 0)
+            if ah not in targets or ah in global_hashes:
+                continue
+            entry = script_aset_entry(ah)
+            entry["u32_1"] = row.get("u32_1", entry["u32_1"])
+            entry["u32_2"] = row.get("u32_2", entry["u32_2"])
+            entry["u32_3"] = SCRIPT_ASET_TYPE_ID
+            blocks[local_bi].aset_entries.append(entry)
+            global_hashes.add(ah)
+            added += 1
+    return added
 
 
 def ensure_import_chain_script_aset(

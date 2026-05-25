@@ -79,6 +79,7 @@ from pandemic_hash import pandemic_hash_m2  # noqa: E402
 from sges_decompress import decompress_sges_block  # noqa: E402
 from wad_patcher import (  # noqa: E402
     find_dlc_bootstrap_hook_script,
+    get_binn_script_ref_name,
     get_script_name,
     parse_block_entries,
     resolve_scripts_vz_block_index,
@@ -86,6 +87,7 @@ from wad_patcher import (  # noqa: E402
 )
 from dlc_aset_normalize import (  # noqa: E402
     dedupe_asset_hash_across_blocks,
+    ensure_contract_aset_from_xbox_block_aset,
     ensure_import_chain_script_aset,
     find_dlc_script_resident_block_index,
     normalize_all_block_asets,
@@ -745,6 +747,17 @@ def port_x360_dlc(
     elapsed_total = time.monotonic() - t0
     print(f"  Block processing finished in {elapsed_total:.1f}s")
 
+    skipped_details = [
+        (r.blk_idx, path_strings[r.blk_idx] if r.blk_idx < len(path_strings) else "?", r.skip_reason)
+        for r in all_results
+        if r.skipped and r.skip_reason
+    ]
+    if skipped_details:
+        print(f"  Skipped blocks ({len(skipped_details)}):")
+        for blk_idx, path, reason in skipped_details:
+            print(f"    [{blk_idx}] {path}")
+            print(f"          {reason}")
+
     converted, skipped, tags_seen, hash_to_local_block = _collect_block_results(
         all_results, verbose=verbose,
     )
@@ -848,8 +861,20 @@ def port_x360_dlc(
     if contract_aset_added:
         print(f"\n  ASET fix: added {contract_aset_added} DLC contract "
               f"ASET entries (import chain)")
+    xbox_aset_added = ensure_contract_aset_from_xbox_block_aset(
+        converted, aset_by_block, path_strings,
+    )
+    if xbox_aset_added:
+        print(f"  ASET fix: added {xbox_aset_added} contract row(s) from Xbox "
+              f"per-block ASET")
+    contracts_missing = [
+        n for n in contracts_missing
+        if pandemic_hash_m2(n) not in {
+            e["asset_hash"] for blk in converted for e in blk.aset_entries
+        }
+    ]
     if contracts_missing:
-        print(f"  WARNING: contract bytecode not found in any converted block:")
+        print(f"  WARNING: contract module not found in any converted block:")
         for name in contracts_missing:
             print(f"    - {name} (hash=0x{pandemic_hash_m2(name):08X})")
 
@@ -901,7 +926,7 @@ def port_x360_dlc(
     # Global Xbox ASET can leave script hashes on resident (464) AND scripts_vz;
     # engine may resolve wifmissionflow/vz to resident → crash at GameBootstrap.
     if scripts_vz_idx is not None:
-        resident_idx = _find_dlc_script_resident_block_index(converted)
+        resident_idx = find_dlc_script_resident_block_index(converted)
         if resident_idx is not None:
             script_deduped = 0
             seen: set[int] = set()
@@ -969,26 +994,54 @@ def port_x360_dlc(
     return 0
 
 
+def _extract_luaq_from_entry(decompressed: bytes, entry: dict) -> bytes | None:
+    """Return raw LuaQ bytes from a UCFX entry chunk, or None."""
+    entry_start = entry["offset"]
+    entry_end = entry_start + entry["size"] - 8
+    chunk = decompressed[entry_start:entry_end]
+    luaq_pos = chunk.find(b"\x1bLua")
+    if luaq_pos < 0:
+        return None
+    return chunk[luaq_pos:]
+
+
+def _contract_name_for_entry(
+    decompressed: bytes,
+    entry: dict,
+    target_hashes: dict[int, str],
+    name_by_lower: dict[str, str],
+) -> str | None:
+    cname = target_hashes.get(entry.get("hash", 0))
+    if cname is not None:
+        return cname
+    ref_name = get_binn_script_ref_name(decompressed, entry)
+    if ref_name:
+        return name_by_lower.get(ref_name.lower())
+    try:
+        binn_name = get_script_name(decompressed, entry)
+    except Exception:
+        binn_name = ""
+    return name_by_lower.get(binn_name.lower()) if binn_name else None
+
+
 def _extract_contract_bytecodes(
     converted_blocks: list[PatchBlock],
     contract_names: list[str],
     *,
     verbose: bool = False,
 ) -> dict[str, bytes]:
-    """Extract LuaQ bytecodes for DLC contracts from the resident block.
+    """Extract LuaQ bytecodes for DLC contracts from converted blocks.
 
-    Searches converted DLC blocks for UCFX entries matching the contract
-    name hashes, decompresses the block, and extracts the raw LuaQ bytecode.
-    Returns a dict mapping contract name → bytecode bytes.
+    Handles inline LuaQ and resident-style BINN references (name at +0x0F,
+    bytecode may live in another block with the same asset hash).
     """
     target_hashes: dict[int, str] = {
         pandemic_hash_m2(name): name for name in contract_names
     }
     name_by_lower = {name.lower(): name for name in contract_names}
-
-    LUAQ_SIG = b"\x1bLua"
     results: dict[str, bytes] = {}
 
+    # Pass 1: direct LuaQ on matching entries
     for blk_idx, block in enumerate(converted_blocks):
         decompressed = decompress_sges_block(
             block.compressed_data, 0, len(block.compressed_data)
@@ -999,28 +1052,47 @@ def _extract_contract_bytecodes(
             continue
 
         for entry in entries:
-            cname = target_hashes.get(entry["hash"])
-            if cname is None:
-                try:
-                    binn_name = get_script_name(decompressed, entry)
-                except Exception:
-                    binn_name = ""
-                cname = name_by_lower.get(binn_name.lower()) if binn_name else None
-            if cname is None:
+            cname = _contract_name_for_entry(
+                decompressed, entry, target_hashes, name_by_lower,
+            )
+            if cname is None or cname in results:
                 continue
-            if cname in results:
-                continue
-            entry_start = entry["offset"]
-            entry_end = entry_start + entry["size"] - 8
-            chunk = decompressed[entry_start:entry_end]
-            luaq_pos = chunk.find(LUAQ_SIG)
-            if luaq_pos >= 0:
-                results[cname] = chunk[luaq_pos:]
-            elif verbose:
-                print(f"      WARNING: {cname} in block {blk_idx} has no LuaQ signature")
+            luaq = _extract_luaq_from_entry(decompressed, entry)
+            if luaq is not None:
+                results[cname] = luaq
+                if verbose:
+                    print(f"      {cname}: LuaQ in block {blk_idx} "
+                          f"(entry hash=0x{entry['hash']:08X})")
 
         if len(results) == len(target_hashes):
-            break
+            return results
+
+    # Pass 2: BINN ref names without inline LuaQ — find bytecode by asset hash
+    missing = [n for n in contract_names if n not in results]
+    if not missing:
+        return results
+
+    for cname in list(missing):
+        chash = pandemic_hash_m2(cname)
+        for blk_idx, block in enumerate(converted_blocks):
+            decompressed = decompress_sges_block(
+                block.compressed_data, 0, len(block.compressed_data)
+            )
+            try:
+                entries = parse_block_entries(decompressed)
+            except Exception:
+                continue
+            for entry in entries:
+                if entry.get("hash") != chash:
+                    continue
+                luaq = _extract_luaq_from_entry(decompressed, entry)
+                if luaq is not None:
+                    results[cname] = luaq
+                    if verbose:
+                        print(f"      {cname}: LuaQ by hash in block {blk_idx}")
+                    break
+            if cname in results:
+                break
 
     return results
 
@@ -1242,10 +1314,8 @@ def _build_bootstrap_block(
     # a mission.  Injecting them into scripts_vz is unnecessary and risks
     # re-entrant block loading during masterscript evaluation.
     contract_bytecodes: dict[str, bytes] = {}
-    if no_hook:
-        print("\n  [bootstrap 1/6] Nohook mode — contracts remain in DLC blocks (ASET on-demand).")
-    elif converted_blocks:
-        print("\n  [bootstrap 1/6] Extracting DLC contract bytecodes from resident block...")
+    if converted_blocks:
+        print("\n  [bootstrap 1/6] Extracting DLC contract bytecodes from converted blocks...")
         contract_bytecodes = _extract_contract_bytecodes(
             converted_blocks, dlc_contracts, verbose=verbose
         )
@@ -1253,9 +1323,10 @@ def _build_bootstrap_block(
             print(f"    Extracted {len(contract_bytecodes)} contract bytecodes:")
             for name, bc in contract_bytecodes.items():
                 print(f"      {name}: {len(bc):,} bytes")
+        elif no_hook:
+            print("    Nohook: no inline LuaQ found — contracts may use resident BINN refs only.")
         else:
             print("    WARNING: No contract bytecodes found in converted blocks.")
-            print("             Contracts will only be loadable from resident block.")
     else:
         print("\n  [bootstrap 1/6] No converted blocks provided; skipping contract extraction.")
 

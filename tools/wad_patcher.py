@@ -113,8 +113,35 @@ def parse_block_entries(data: bytes) -> list[dict]:
     return entries
 
 
+def get_binn_script_ref_name(data: bytes, entry: dict) -> str | None:
+    """Parse a resident-style BINN script-reference record (no inline LuaQ).
+
+    Layout (see docs/dlc_mission_loading.md): u32 bytecode_size, two u32 zeros,
+    u8 marker 0x05, u8 meta, u8 zero, then ASCII module name at offset 0x0F.
+    """
+    chunk = data[entry["offset"]:entry["offset"] + entry["size"] - 8]
+    binn_off = chunk.find(BINN_TAG)
+    if binn_off < 0:
+        return None
+    body = chunk[binn_off + 4:]
+    if len(body) < 16 or body[12] != 0x05:
+        return None
+    name_start = 15
+    chars: list[str] = []
+    for i in range(name_start, min(len(body), name_start + 64)):
+        b = body[i]
+        if 32 <= b < 127:
+            chars.append(chr(b))
+        else:
+            break
+    return "".join(chars) if len(chars) >= 4 else None
+
+
 def get_script_name(data: bytes, entry: dict) -> str:
     """Extract the script name from a BINN section within an entry."""
+    ref = get_binn_script_ref_name(data, entry)
+    if ref:
+        return ref
     chunk = data[entry["offset"]:entry["offset"] + entry["size"] - 8]
     binn_off = chunk.find(BINN_TAG)
     if binn_off < 0:
