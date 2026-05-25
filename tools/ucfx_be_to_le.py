@@ -783,6 +783,7 @@ _TYPE_WAVEBANK = 0xF753F6D0
 _TYPE_SOUNDBANK = 0x9F8BCA10
 _TYPE_LOW_RES_TERRAIN = 0x1602815C  # pandemic_hash_m2("lowresterrain")
 _TYPE_EFFECT = 0x5608BD5A
+_TYPE_OBJECT_REGISTRY = 0x6310807F  # resident entity-class registry (ASET type_id 30)
 _TYPE_LEVEL = 0xEA4829D5
 _TYPE_LAYER = 0x5647C35D  # world layer / terrainfade META (type_id 8)
 
@@ -882,6 +883,15 @@ def _convert_schm_body(be: bytes) -> bytes:
 
 
 # ── Audio type converters (mixed-endian) ─────────────────────────────
+
+def _convert_object_registry_data(body_be: bytes) -> bytes:
+    """Convert object/entity class registry records (resident block, ~88 B).
+
+    Entries use type_hash ``0x6310807F`` (ASET type_id 30). Layout is hash/scalar
+    fields only (no embedded strings in the 88-byte records we have seen).
+    """
+    return _convert_u32_array(body_be)
+
 
 def _convert_unknown_e5_data(body_be: bytes) -> bytes:
     """Convert unknown_E5 (audio group descriptor) body from Xbox to PC.
@@ -1214,6 +1224,8 @@ def _convert_body(
             return _convert_wavebank_data(body_be)
         if type_hash == _TYPE_SOUNDBANK:
             return _convert_soundbank_data(body_be)
+        if type_hash == _TYPE_OBJECT_REGISTRY:
+            return _convert_object_registry_data(body_be)
         if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
@@ -1272,6 +1284,8 @@ def _convert_body(
             return _convert_texture_info(body_be)
         if type_hash == _TYPE_SCRIPT:
             return _convert_script_info(body_be)
+        if type_hash == _TYPE_OBJECT_REGISTRY:
+            return _convert_object_registry_data(body_be)
         if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
@@ -1335,6 +1349,14 @@ def _convert_body(
             permissive=permissive,
             stats=stats,
         )
+
+    # ── BNDS: axis-aligned bounds / sphere (10 × f32 in terrain tiles) ──
+    if tag == "BNDS":
+        return _convert_u32_array(body_be)
+
+    # ── TRFM: effect transform (particle blocks, 64 B typical) ──
+    if tag == "TRFM":
+        return _convert_u32_array(body_be)
 
     # ── Mesh structure tags with verified u32-only layouts ──
     if tag in ("PRMG", "GEOM", "POFF", "STAT", "SWIT",

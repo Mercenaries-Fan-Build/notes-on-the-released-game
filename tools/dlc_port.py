@@ -877,6 +877,9 @@ def port_x360_dlc(
         print(f"  WARNING: contract module not found in any converted block:")
         for name in contracts_missing:
             print(f"    - {name} (hash=0x{pandemic_hash_m2(name):08X})")
+        if any("resident_p000_q3" in p.lower() for _, p, _ in skipped_details):
+            print("  NOTE: blocks\\dlc01\\resident_P000_Q3.block was SKIPPED — "
+                  "contracts cannot load until that block converts.")
 
     # ── DLC Bootstrap Injection ──────────────────────────────────────
     # When --source-wad is provided, extract the scripts_vz block from the
