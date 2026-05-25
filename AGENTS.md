@@ -253,6 +253,19 @@ Within `layers_static`, **~37%** are vegetation/rocks, **~10%** street furniture
 
 ---
 
+## Byte-Swap Policy (Xbox 360 DLC → PC)
+
+All big-endian → little-endian conversion for DLC porting uses **`tools/ucfx_be_to_le.py`** (called from `tools/dlc_port.py`). Rules:
+
+- **Semantic swaps only** — use `struct.unpack('>…')` / `struct.pack('<…')` with documented field types per chunk/tag. Never reverse arbitrary byte ranges for numeric data.
+- **Tag reversal is OK** — `[::-1]` on 4-byte ASCII chunk tags (e.g. `XFCU` → `UCFX`) is intentional, not a numeric swap.
+- **No silent fallbacks** — unrecognized tags, type_hashes, Havok `__data__`, or soundbank record layouts must raise **`UnhandledByteSwapError`** in strict mode (default). A blind `_convert_u32_array()` corrupts mixed u8/u32 layouts.
+- **`--permissive`** on `dlc_port.py` / `byteswap_ucfx_block()` enables legacy u32 fallbacks with warnings — **testing only**, never production patch builds.
+- **New formats** — add typed converters; the exception message should include tag, type_hash, and body size. Validate with `tools/audit_dlc_conversion.py` (mismatch count should drop) and `tools/verify_ucfx_endian.py --report-blind-swaps` (fallback exposure should trend to zero).
+- **Deleted blind tools** — `port_xbox_dlc.py` and `dlc_port_x360_to_pc.py` were removed; do not reintroduce tag-scanning `[::-1]` u32 sweeps.
+
+---
+
 ## Common Pitfalls
 
 1. **Don't add extra coordinate swizzles** — ALL meshes (buildings AND terrain) write game LH coordinates directly into GLB. UE Interchange handles the Y-up→Z-up basis swap. Only the UV V-flip (`v = 1 - v`) is applied for the D3D9→glTF texture convention. Do NOT add Z-negates or winding flips anywhere in the mesh pipeline.

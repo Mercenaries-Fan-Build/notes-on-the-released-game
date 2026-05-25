@@ -34,7 +34,7 @@ from pathlib import Path
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 
-from dlc_port_x360_to_pc import decompress_be_sges  # noqa: E402
+from x360_dlc_io import decompress_be_sges  # noqa: E402
 
 PAGE_SIZE = 0x8000
 HDR_SIZE = 0x80800

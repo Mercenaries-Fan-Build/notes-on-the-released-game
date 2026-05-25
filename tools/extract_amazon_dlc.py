@@ -65,9 +65,9 @@ def _swap_strm_ibuf_for_extraction(data: bytearray) -> dict:
     # iter_ucfx_containers in mesh_extractor.
     for pos in find_all(data, b"UCFX"):
         if pos + 20 <= len(data):
-            data[pos + 8:pos + 12] = data[pos + 8:pos + 12][::-1]
-            data[pos + 12:pos + 16] = data[pos + 12:pos + 16][::-1]
-            data[pos + 16:pos + 20] = data[pos + 16:pos + 20][::-1]
+            for hdr_off in (8, 12, 16):
+                v = struct.unpack_from(">I", data, pos + hdr_off)[0]
+                struct.pack_into("<I", data, pos + hdr_off, v)
 
     def _find_enclosing_ucfx(pos: int) -> tuple[int, int] | None:
         """Walk backwards to find the UCFX container start and its u0 field."""
@@ -104,8 +104,8 @@ def _swap_strm_ibuf_for_extraction(data: bytearray) -> dict:
                 data[cp:cp + 4] = _BE_CHILD_TAGS[child_tag]
                 # Swap the 4 u32 header fields from BE to LE
                 for field_off in (4, 8, 12, 16):
-                    data[cp + field_off:cp + field_off + 4] = (
-                        data[cp + field_off:cp + field_off + 4][::-1])
+                    v = struct.unpack_from(">I", data, cp + field_off)[0]
+                    struct.pack_into("<I", data, cp + field_off, v)
                 child_tag = bytes(data[cp:cp + 4])
 
             tag_lc = child_tag.lower()
@@ -123,7 +123,8 @@ def _swap_strm_ibuf_for_extraction(data: bytearray) -> dict:
                     if 0 <= abs_off and end <= len(data):
                         pos = abs_off
                         while pos + 4 <= end:
-                            data[pos:pos + 4] = data[pos:pos + 4][::-1]
+                            v = struct.unpack_from(">I", data, pos)[0]
+                            struct.pack_into("<I", data, pos, v)
                             pos += 4
             elif tag_lc == b"data":
                 data_off = cu0

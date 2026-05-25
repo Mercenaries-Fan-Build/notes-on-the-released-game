@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from dlc_port_x360_to_pc import PTHS_TRAILER  # noqa: E402
+from ffcs_patch_wad import PTHS_TRAILER  # noqa: E402
 from ffcs_wad import parse_ffcs, extract_slice, dump_paths_from_pths  # noqa: E402
 
 REQUIRED_CHUNKS = ("INDX", "DATA", "CSUM", "ASET", "PTHS")

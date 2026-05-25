@@ -20,6 +20,33 @@ import zlib
 from pandemic_hash import pandemic_hash_m2
 from pws_xbox_to_pc import transcode_pws_xbox_to_pc
 
+
+class UnhandledByteSwapError(ValueError):
+    """No verified semantic BE→LE converter for this chunk; conversion refused."""
+
+
+def _fallback_u32_or_raise(
+    body_be: bytes,
+    *,
+    reason: str,
+    tag: str,
+    type_hash: int,
+    context: str | None,
+    permissive: bool,
+    stats: dict,
+) -> bytes:
+    """Strict mode raises; permissive mode logs and applies u32 array swap."""
+    if permissive:
+        stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
+        tags = stats.setdefault("fallback_u32_tags", {})
+        tags[tag] = tags.get(tag, 0) + 1
+        return _convert_u32_array(body_be)
+    raise UnhandledByteSwapError(
+        f"{reason}: tag={tag!r} type_hash=0x{type_hash:08X} "
+        f"body_size={len(body_be)} context={context!r}"
+    )
+
+
 # ── Constants ─────────────────────────────────────────────────────────
 
 CONTAINER_SENTINEL = 0xFFFFFFFF
@@ -159,7 +186,7 @@ _HAVOK_VER = b"Havok-5.5.0-r1"
 _SECTION_HDR_SIZE = 48
 
 
-def _convert_havok_be_to_le(be: bytes) -> bytes:
+def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict | None = None) -> bytes:
     """Structurally convert a Havok 5.5 packfile from BE to LE.
 
     Converts header fields, section headers, __classnames__ signatures,
@@ -181,17 +208,28 @@ def _convert_havok_be_to_le(be: bytes) -> bytes:
       [da_abs, da_abs+da_end) __data__: u32 array (instances+fixups)
     """
     if len(be) < 64:
-        return _convert_u32_array(be)
+        if permissive and stats is not None:
+            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
+            return _convert_u32_array(be)
+        raise UnhandledByteSwapError(
+            f"Havok packfile too short ({len(be)} bytes) for structural parse"
+        )
 
     ver_off = be.find(_HAVOK_VER)
     if ver_off < 0:
         ver_off = be.find(b"Havok-")
     if ver_off < 0:
-        return _convert_u32_array(be)
+        if permissive and stats is not None:
+            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
+            return _convert_u32_array(be)
+        raise UnhandledByteSwapError("Havok packfile missing version string")
 
     cn_needle_off = be.find(b"__classnames__", ver_off)
     if cn_needle_off < 0:
-        return _convert_u32_array(be)
+        if permissive and stats is not None:
+            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
+            return _convert_u32_array(be)
+        raise UnhandledByteSwapError("Havok packfile missing __classnames__ section")
 
     out = bytearray(len(be))
 
@@ -262,21 +300,23 @@ def _convert_havok_be_to_le(be: bytes) -> bytes:
     if ty_end > 0 and ty_abs + ty_end <= len(be):
         out[ty_abs:ty_abs + ty_end] = be[ty_abs:ty_abs + ty_end]
 
-    # 9. __data__ section: convert as u32 array.
-    # This is imperfect for mixed u8/u16/u32 fields in Havok instance data,
-    # but for DLC-unique animations without a base-game LE reference, it's
-    # the best we can do. The havok_overrides mechanism in byteswap_ucfx_block
-    # should be used to supply correct LE data for animations that also exist
-    # in the base game's vz.wad.
+    # 9. __data__ section: per-class Havok instance layout required.
     if da_end > 0 and da_abs + da_end <= len(be):
-        n = da_end // 4
-        for i in range(n):
-            off = da_abs + i * 4
-            val = struct.unpack_from(">I", be, off)[0]
-            struct.pack_into("<I", out, off, val)
-        tail = da_abs + n * 4
-        if tail < da_abs + da_end:
-            out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
+        if permissive and stats is not None:
+            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
+            n = da_end // 4
+            for i in range(n):
+                off = da_abs + i * 4
+                val = struct.unpack_from(">I", be, off)[0]
+                struct.pack_into("<I", out, off, val)
+            tail = da_abs + n * 4
+            if tail < da_abs + da_end:
+                out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
+        else:
+            raise UnhandledByteSwapError(
+                "Havok __data__ section needs per-class field layout "
+                f"(section size={da_end}); use havok_overrides from base vz.wad"
+            )
 
     # Fill any gap between sec_data_start and first section body
     first_body = min(x for x in (cn_abs, ty_abs, da_abs) if x > 0)
@@ -293,6 +333,33 @@ def _convert_havok_be_to_le(be: bytes) -> bytes:
 
 # ── Lua 5.1 bytecode converter ────────────────────────────────────────
 
+def _convert_binn_pre_luaq(data: bytearray, luaq_off: int) -> None:
+    """Swap BINN metadata before LuaQ (docs/modding_deep_dive.md §4.7)."""
+    if luaq_off < 4:
+        return
+    struct.pack_into("<I", data, 0, struct.unpack_from(">I", data, 0)[0])
+    if luaq_off >= 15:
+        struct.pack_into("<H", data, 13, struct.unpack_from(">H", data, 13)[0])
+    nul = data.find(b"\x00", 15, luaq_off)
+    if nul < 0:
+        return
+    pos = nul + 1
+    if luaq_off >= 4:
+        id_off = luaq_off - 4
+        struct.pack_into("<I", data, id_off, struct.unpack_from(">I", data, id_off)[0])
+        dep_end = id_off
+    else:
+        dep_end = luaq_off
+    if pos < dep_end:
+        dep_count = data[pos]
+        pos += 1
+        while pos < dep_end and (dep_end - pos) % 4 != 0:
+            pos += 1
+        while pos + 4 <= dep_end:
+            struct.pack_into("<I", data, pos, struct.unpack_from(">I", data, pos)[0])
+            pos += 4
+
+
 def _convert_binn_script_ref(be: bytes) -> bytes:
     """Convert a BINN script-reference record (no Lua bytecode).
 
@@ -305,7 +372,7 @@ def _convert_binn_script_ref(be: bytes) -> bytes:
     if len(be) < 4:
         return be
     out = bytearray(be)
-    out[0], out[1], out[2], out[3] = out[3], out[2], out[1], out[0]
+    struct.pack_into("<I", out, 0, struct.unpack_from(">I", be, 0)[0])
     return bytes(out)
 
 
@@ -330,12 +397,8 @@ def _convert_lua_be_to_le(be: bytes) -> bytes:
     if luaq_off < 0:
         return _convert_binn_script_ref(be)
 
-    # Swap BINN metadata before LuaQ if present
     if luaq_off > 0:
-        if luaq_off >= 4:
-            _lua_swap32(data, 0)
-        if luaq_off >= 0x0F:
-            _lua_swap16(data, 0x0D)
+        _convert_binn_pre_luaq(data, luaq_off)
 
     # Parse and convert the Lua bytecode
     ok = _lua_convert_bytecode(data, luaq_off, body_end)
@@ -837,7 +900,9 @@ def _convert_unknown_e5_data(body_be: bytes) -> bytes:
     struct.pack_into("<H", out, 8, struct.unpack_from(">H", body_be, 8)[0])
     # [10:12] flags — u16 BE → LE
     struct.pack_into("<H", out, 10, struct.unpack_from(">H", body_be, 10)[0])
-    # [12:16] padding — leave as-is
+    # [12:16] u32 field — BE → LE (not padding on PC base game)
+    if len(body_be) >= 16:
+        struct.pack_into("<I", out, 12, struct.unpack_from(">I", body_be, 12)[0])
     # [16:20] records_offset — u32 BE → LE
     records_offset = struct.unpack_from(">I", body_be, 16)[0]
     struct.pack_into("<I", out, 16, records_offset)
@@ -1074,12 +1139,20 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
     return bytes(out)
 
 
-def _convert_body(tag: str, body_be: bytes, context: str | None, stats: dict,
-                  type_hash: int = 0, texture_fmt: bytes = b"DXT5") -> bytes:
+def _convert_body(
+    tag: str,
+    body_be: bytes,
+    context: str | None,
+    stats: dict,
+    *,
+    type_hash: int = 0,
+    texture_fmt: bytes = b"DXT5",
+    permissive: bool = False,
+) -> bytes:
     """Convert a single chunk body from BE to LE based on tag, context, and entry type.
 
-    Dispatch is purely structural — based on (type_hash, tag) pairs verified from
-    reverse engineering. No content-sniffing or size-based heuristics.
+    Unhandled (tag, type_hash) pairs raise ``UnhandledByteSwapError`` unless
+    *permissive* is True (testing only — applies blind u32 array swap).
     """
 
     # ── Tags that are always pure ASCII regardless of type ──
@@ -1119,9 +1192,8 @@ def _convert_body(tag: str, body_be: bytes, context: str | None, stats: dict,
         if context == "IBUF":
             return _convert_u16_array(body_be)
         if type_hash == _TYPE_ANIMATION:
-            return _convert_havok_be_to_le(body_be)
+            return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
         if type_hash == _TYPE_PATH:
-            # Path data: [4 × u16 header][N × float32]
             return _convert_u16_array(body_be[:8]) + _convert_u32_array(body_be[8:])
         if type_hash == _TYPE_UNKNOWN_E5:
             return _convert_unknown_e5_data(body_be)
@@ -1129,36 +1201,52 @@ def _convert_body(tag: str, body_be: bytes, context: str | None, stats: dict,
             return _convert_wavebank_data(body_be)
         if type_hash == _TYPE_SOUNDBANK:
             return _convert_soundbank_data(body_be)
-        # Mesh types, ecs_node, scripts: float32/u32 vertex data or numeric arrays
-        return _convert_u32_array(body_be)
+        if type_hash in _MESH_TYPES:
+            return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="unknown data chunk type_hash",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
 
     # ── info (lowercase): dispatch by type_hash ──
     if tag == "info":
-        if context == "META":
-            return body_be
         if type_hash == _TYPE_ANIMATION:
-            # Always 2 bytes: u16 track count
             return _convert_u16_array(body_be)
-        if type_hash == _TYPE_ECS_NODE:
-            # [name\0][u32 hash][u32][u32][u32]
+        if type_hash == _TYPE_ECS_NODE or context == "META":
             return _convert_ecs_info(body_be)
-        # Mesh types (0x7C569307, 0x5B724250, 0x600B904E): pure u32 arrays
-        return _convert_u32_array(body_be)
+        if type_hash in _MESH_TYPES:
+            return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="unknown info chunk type_hash",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
 
     # ── enum: dispatch by type_hash ──
     if tag == "enum":
-        if context == "META":
-            return body_be
-        if type_hash == _TYPE_ECS_NODE:
-            # [u32 count][repeated: name\0 + u32 hash + u32 val_count + values...]
+        if type_hash == _TYPE_ECS_NODE or context == "META":
             return _convert_enum_body(body_be)
-        # Other types: u32 arrays
-        return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="unknown enum chunk type_hash",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
 
-    # ── flgt: u32 hash (single value or array) ──
+    # ── flgt: u32 hash array (including under META/COMP) ──
     if tag == "flgt":
-        if context == "META":
-            return body_be
         return _convert_u32_array(body_be)
 
     # ── schm: pure u32 hash/count arrays ──
@@ -1171,19 +1259,35 @@ def _convert_body(tag: str, body_be: bytes, context: str | None, stats: dict,
             return _convert_texture_info(body_be)
         if type_hash == _TYPE_SCRIPT:
             return _convert_script_info(body_be)
-        # Mesh types INFO: u32 arrays (counts, bounding box floats)
-        # Keyframe INFO: u32 arrays
-        return _convert_u32_array(body_be)
+        if type_hash in _MESH_TYPES:
+            return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="unknown INFO chunk type_hash",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
 
     # ── BODY (uppercase): dispatch by type_hash ──
     if tag == "BODY":
         if type_hash == _TYPE_TEXTURE:
             return _convert_dxt_body(body_be, texture_fmt)
-        return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="unknown BODY chunk type_hash",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
 
     # ── STRS/KEYS: string table / u32 key arrays ──
     if tag == "STRS":
-        return body_be  # Null-terminated string table, endian-neutral
+        return body_be
     if tag == "KEYS":
         return _convert_u32_array(body_be)
 
@@ -1203,21 +1307,45 @@ def _convert_body(tag: str, body_be: bytes, context: str | None, stats: dict,
     if tag in ("EFCT", "EMTR"):
         return _convert_u16_array(body_be)
 
-    # ── Mesh structure tags: u32 arrays (offsets, counts, hashes) ──
+    # ── CHDR: nested container — needs semantic parser, not u32 sweep ──
+    if tag == "CHDR":
+        return _fallback_u32_or_raise(
+            body_be,
+            reason="CHDR nested container needs semantic converter",
+            tag=tag,
+            type_hash=type_hash,
+            context=context,
+            permissive=permissive,
+            stats=stats,
+        )
+
+    # ── Mesh structure tags with verified u32-only layouts ──
     if tag in ("PRMG", "GEOM", "POFF", "STAT", "SWIT",
-               "NODE", "CEXE", "PHY2", "COMP", "CHDR", "TINY",
+               "NODE", "CEXE", "PHY2", "COMP", "TINY",
                "SCRB", "INST", "PTCH", "PTMS"):
         return _convert_u32_array(body_be)
 
-    # Unknown tag — log and use u32 (safest for numeric data)
     stats["tags_seen"][tag] = stats["tags_seen"].get(tag, 0) + 1
-    return _convert_u32_array(body_be)
+    return _fallback_u32_or_raise(
+        body_be,
+        reason="unhandled chunk tag",
+        tag=tag,
+        type_hash=type_hash,
+        context=context,
+        permissive=permissive,
+        stats=stats,
+    )
 
 
 # ── Container conversion ──────────────────────────────────────────────
 
-def _convert_container(container_be: bytes, stats: dict,
-                       type_hash: int = 0) -> bytes:
+def _convert_container(
+    container_be: bytes,
+    stats: dict,
+    *,
+    type_hash: int = 0,
+    permissive: bool = False,
+) -> bytes:
     """Parse one BE UCFX container and serialize as LE."""
     if len(container_be) < 20:
         stats["errors"].append(f"Container too short: {len(container_be)} bytes")
@@ -1236,7 +1364,11 @@ def _convert_container(container_be: bytes, stats: dict,
 
     if n_descriptors > 50_000:
         stats["errors"].append(f"Implausible descriptor count: {n_descriptors}")
-        return _convert_u32_array(container_be)
+        if permissive:
+            return _convert_u32_array(container_be)
+        raise UnhandledByteSwapError(
+            f"Implausible UCFX descriptor count: {n_descriptors}"
+        )
 
     # Parse descriptor rows (BE)
     descriptors: list[tuple[str, int, int, int, int]] = []
@@ -1275,31 +1407,43 @@ def _convert_container(container_be: bytes, stats: dict,
             texture_fmt = body_be[14:22]
 
         if row_u0 == CONTAINER_SENTINEL:
-            bodies_le.append(_convert_u32_array(body_be))
+            if permissive:
+                bodies_le.append(_convert_u32_array(body_be))
+            else:
+                raise UnhandledByteSwapError(
+                    f"CONTAINER_SENTINEL row for tag {tag!r} "
+                    f"(type_hash=0x{type_hash:08X}) needs semantic handler"
+                )
         else:
-            bodies_le.append(_convert_body(tag, body_be, contexts[idx], stats,
-                                            type_hash=type_hash,
-                                            texture_fmt=texture_fmt))
+            bodies_le.append(
+                _convert_body(
+                    tag,
+                    body_be,
+                    contexts[idx],
+                    stats,
+                    type_hash=type_hash,
+                    texture_fmt=texture_fmt,
+                    permissive=permissive,
+                )
+            )
 
     # Serialize as LE
     out = bytearray()
 
-    # For audio types, the converted body may differ in size from the original.
-    # Update descriptor body_size values to reflect actual converted sizes.
+    # Update descriptor body_size to actual converted lengths (all types).
     updated_descriptors = list(descriptors)
-    if type_hash in _AUDIO_TYPES:
-        for idx, (tag, row_u0, body_size, f3, f4) in enumerate(descriptors):
-            if row_u0 == CONTAINER_SENTINEL:
-                continue
-            new_size = len(bodies_le[idx])
-            if new_size != body_size:
-                updated_descriptors[idx] = (tag, row_u0, new_size, f3, f4)
+    for idx, (tag, row_u0, body_size, f3, f4) in enumerate(descriptors):
+        if row_u0 == CONTAINER_SENTINEL:
+            continue
+        new_size = len(bodies_le[idx])
+        if new_size != body_size:
+            updated_descriptors[idx] = (tag, row_u0, new_size, f3, f4)
 
     # UCFX header
     out += b"UCFX"
     out += struct.pack("<IIII", data_area_off, u1, u2, n_descriptors)
 
-    # Descriptor rows (with potentially updated body_size for audio types)
+    # Descriptor rows
     for tag, row_u0, body_size, f3, f4 in updated_descriptors:
         out += tag.encode("ascii", errors="replace")[:4].ljust(4, b"\x00")
         out += struct.pack("<IIII", row_u0, body_size, f3, f4)
@@ -1313,48 +1457,22 @@ def _convert_container(container_be: bytes, stats: dict,
         else:
             out += b"\x00" * pad
 
-    # Write body data area
-    body_area_out = bytearray()
-    for idx, (_, row_u0, body_size, _, _) in enumerate(updated_descriptors):
+    required_size = 0
+    for _, row_u0, body_size, _, _ in updated_descriptors:
         if row_u0 == CONTAINER_SENTINEL:
-            if data_area_off > 0:
-                target_off = data_area_off + CONTAINER_SENTINEL
-            else:
-                target_off = 8 + CONTAINER_SENTINEL
-            pass
-        body_le = bodies_le[idx]
-        if len(body_le) < body_size:
-            body_le = body_le + b"\x00" * (body_size - len(body_le))
-        elif len(body_le) > body_size:
-            body_le = body_le[:body_size]
+            continue
+        end = row_u0 + body_size
+        if end > required_size:
+            required_size = end
 
-    # The body area layout mirrors the source: bodies at their original offsets
-    # relative to data_area_off. For audio types with resized bodies, we need
-    # to compute the required body area size from the updated descriptors.
-    if type_hash in _AUDIO_TYPES:
-        # Compute required body area size from actual converted body lengths
-        required_size = 0
-        for idx, (_, row_u0, body_size, _, _) in enumerate(updated_descriptors):
-            if row_u0 == CONTAINER_SENTINEL:
-                continue
-            end = row_u0 + body_size
-            if end > required_size:
-                required_size = end
-        source_body_area_size = required_size
-    elif data_area_off > 0 and data_area_off < len(container_be):
-        source_body_area_size = len(container_be) - data_area_off
-    else:
-        source_body_area_size = len(container_be) - 8 if data_area_off == 0 else 0
-
-    body_area = bytearray(source_body_area_size)
+    body_area = bytearray(required_size)
 
     for idx, (_, row_u0, body_size, _, _) in enumerate(updated_descriptors):
         if row_u0 == CONTAINER_SENTINEL:
             continue
         body_le = bodies_le[idx]
-        actual_size = min(body_size, len(body_le))
-        if row_u0 + actual_size <= len(body_area):
-            body_area[row_u0:row_u0 + actual_size] = body_le[:actual_size]
+        if row_u0 + len(body_le) <= len(body_area):
+            body_area[row_u0:row_u0 + len(body_le)] = body_le
 
     # Handle container-sentinel rows (their body offset is CONTAINER_SENTINEL
     # which is just a marker; body data is located via the data_area_off)
@@ -1424,6 +1542,8 @@ def _serialize_entry_table_le(entries: list[tuple[int, int, int, int]]) -> bytes
 def byteswap_ucfx_block(
     block_data: bytes,
     havok_overrides: dict[int, bytes] | None = None,
+    *,
+    permissive: bool = False,
 ) -> tuple[bytes, dict]:
     """Convert a decompressed Xbox UCFX block to PC little-endian.
 
@@ -1443,6 +1563,7 @@ def byteswap_ucfx_block(
     stats: dict = {
         "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
         "tags_seen": {}, "errors": [],
+        "fallback_u32_count": 0, "fallback_u32_tags": {},
     }
 
     if len(block_data) < 4:
@@ -1486,7 +1607,9 @@ def byteswap_ucfx_block(
             ucfx_be = container_be
 
         # Convert the UCFX container
-        ucfx_le = _convert_container(ucfx_be, stats, type_hash=type_hash)
+        ucfx_le = _convert_container(
+            ucfx_be, stats, type_hash=type_hash, permissive=permissive,
+        )
         stats["ucfx_found"] += 1
 
         # Recompute CSUM over the LE output

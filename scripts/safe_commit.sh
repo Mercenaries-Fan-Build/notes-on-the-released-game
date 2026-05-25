@@ -326,7 +326,7 @@ classify_tools_file() {
 
     # CLI: DLC port, patch construction, import-chain verification.
     case "$f" in
-        tools/dlc_port.py|tools/dlc_port_x360_to_pc.py|tools/port_xbox_dlc.py|tools/x360_dlc_io.py|tools/audit_dlc_*.py|tools/verify_dlc_*.py|tools/verify_patch_dlc*.py|tools/verify_patch_vz.py|tools/verify_patch_wad_structure.py|tools/build_patch_wad.py|tools/build_dlc_asi.py|tools/build_diagnostic_asi.py|tools/inventory_dlc_patch.py|tools/dlc_aset_normalize.py|tools/fix_dlc*.py|tools/fix_patch_script_aset_dupes.py|tools/dlc_stringdb_forensic.py|tools/dlc_phase0_baseline.py|tools/validate_patch_wad.py)
+        tools/dlc_port.py|tools/x360_dlc_io.py|tools/audit_dlc_*.py|tools/verify_dlc_*.py|tools/verify_patch_dlc*.py|tools/verify_patch_vz.py|tools/verify_patch_wad_structure.py|tools/build_patch_wad.py|tools/build_dlc_asi.py|tools/build_diagnostic_asi.py|tools/inventory_dlc_patch.py|tools/dlc_aset_normalize.py|tools/fix_dlc*.py|tools/fix_patch_script_aset_dupes.py|tools/dlc_stringdb_forensic.py|tools/dlc_phase0_baseline.py|tools/validate_patch_wad.py)
             echo 'tools-cli-dlc-patch'
             return
             ;;

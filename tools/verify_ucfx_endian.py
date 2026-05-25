@@ -23,6 +23,7 @@ sys.path.insert(0, str(THIS_DIR))
 
 from ffcs_wad import dump_paths_from_pths, extract_slice, parse_ffcs  # noqa: E402
 from sges_decompress import decompress_sges_block, find_sges_offsets  # noqa: E402
+from ucfx_be_to_le import byteswap_ucfx_block, UnhandledByteSwapError  # noqa: E402
 from ucfx_mesh_codec import (  # noqa: E402
     CONTAINER_SENTINEL,
     CHUNK_HDR,
@@ -402,6 +403,12 @@ def main() -> int:
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--fail-on-issues", action="store_true")
+    ap.add_argument(
+        "--report-blind-swaps",
+        action="store_true",
+        help="Run permissive BE→LE pass and report fallback_u32_count per block; "
+        "also note blocks that fail in strict mode",
+    )
     args = ap.parse_args()
 
     if not args.wad.is_file():
@@ -422,6 +429,9 @@ def main() -> int:
     limit = min(len(offsets), len(paths))
 
     total = VerifyStats()
+    blind_swap_blocks = 0
+    strict_fail_blocks = 0
+    total_fallback_u32 = 0
     end = limit if args.max_blocks <= 0 else min(limit, args.start + args.max_blocks)
     for idx in range(args.start, end):
         off = offsets[idx]
@@ -443,11 +453,33 @@ def main() -> int:
         if args.verbose and block_stats.issues:
             print(f"[{idx}] {paths[idx]}: {len(block_stats.issues)} issue(s)")
 
+        if args.report_blind_swaps:
+            try:
+                byteswap_ucfx_block(block_data, permissive=False)
+            except UnhandledByteSwapError as exc:
+                strict_fail_blocks += 1
+                if args.verbose:
+                    print(f"[{idx}] strict swap FAIL: {exc}")
+            _, swap_stats = byteswap_ucfx_block(block_data, permissive=True)
+            fb = int(swap_stats.get("fallback_u32_count", 0))
+            if fb:
+                blind_swap_blocks += 1
+                total_fallback_u32 += fb
+                tags = swap_stats.get("fallback_u32_tags", {})
+                print(
+                    f"[{idx}] {paths[idx]}: {fb} permissive fallback u32 swap(s) "
+                    f"{tags if tags else ''}"
+                )
+
     print(f"WAD: {args.wad}")
     print(f"  Blocks scanned:     {total.blocks_scanned}")
     print(f"  UCFX containers:    {total.ucfx_containers}")
     print(f"  Descriptor rows:    {total.descriptor_rows}")
     print(f"  Endian issues:      {len(total.issues)}")
+    if args.report_blind_swaps:
+        print(f"  Strict swap failures: {strict_fail_blocks}")
+        print(f"  Blocks w/ fallback u32: {blind_swap_blocks}")
+        print(f"  Total fallback u32 ops: {total_fallback_u32}")
 
     shown = 0
     for issue in total.issues[:50]:

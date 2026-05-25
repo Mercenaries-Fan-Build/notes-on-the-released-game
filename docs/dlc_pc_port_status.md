@@ -30,13 +30,11 @@ make dlc-port OUTPUT=./output
 
 ```
 tools/
-├── dlc_port.py           ← Unified CLI (replaces port_xbox_dlc.py + dlc_port_x360_to_pc.py)
+├── dlc_port.py           ← Unified CLI (Xbox 360 DLC → vz-patch.wad)
 ├── ffcs_patch_wad.py     ← Shared FFCS assembly (single + multi-block + merge)
-├── ucfx_be_to_le.py      ← UCFX byte-swap (BE → LE, deep chunk handlers)
+├── ucfx_be_to_le.py      ← UCFX byte-swap (BE → LE, semantic chunk handlers)
 ├── x360_dlc_io.py        ← STFS I/O + BE sges decompression
-├── build_patch_wad.py    ← PC mod workflow (now calls ffcs_patch_wad)
-├── port_xbox_dlc.py      ← DEPRECATED — use dlc_port.py
-└── dlc_port_x360_to_pc.py ← DEPRECATED — use dlc_port.py
+└── build_patch_wad.py    ← PC mod workflow (now calls ffcs_patch_wad)
 ```
 
 ## Current status
@@ -75,16 +73,6 @@ python3 tools/dlc_port.py --x360-rar DLC.rar \
     --merge-into data/vz-patch.wad \
     --output data/vz-patch.wad
 ```
-
-## Deprecated tools
-
-The following scripts are superseded by `dlc_port.py` and will be removed
-in a future cleanup:
-
-| Script | Replacement |
-|--------|-------------|
-| `tools/port_xbox_dlc.py` | `tools/dlc_port.py --x360-rar` |
-| `tools/dlc_port_x360_to_pc.py` | `tools/dlc_port.py --x360-stfs` |
 
 ## PS3 status
 

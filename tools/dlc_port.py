@@ -54,7 +54,7 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
-from ucfx_be_to_le import byteswap_ucfx_block  # noqa: E402
+from ucfx_be_to_le import byteswap_ucfx_block, UnhandledByteSwapError  # noqa: E402
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -298,7 +298,9 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
                     # Swap the 4 descriptor u32s from BE to LE
                     for k in range(4):
                         off = pos + 4 + k * 4
-                        data[off:off + 4] = data[off:off + 4][::-1]
+                        struct.pack_into(
+                            "<I", data, off, struct.unpack_from(">I", data, off)[0],
+                        )
                     fixed = True
                 pos += 20
             elif tag in (b"INFO", b"CSUM"):
@@ -337,6 +339,7 @@ class _BlockWorkerArgs:
     dump_dir_path: str | None
     verbose: bool
     collect_hashes: bool
+    permissive: bool = False
 
 
 @dataclass
@@ -448,7 +451,16 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
             ]
             override_msg = " + ".join(parts) + " override(s) from base game"
 
-    swapped, stats = byteswap_ucfx_block(decompressed, base_overrides)
+    try:
+        swapped, stats = byteswap_ucfx_block(
+            decompressed, base_overrides, permissive=args.permissive,
+        )
+    except UnhandledByteSwapError as e:
+        return _BlockWorkerResult(
+            blk_idx=blk_idx,
+            skipped=True,
+            skip_reason=f"unhandled byte-swap: {e}",
+        )
 
     if args.fix_stringdb_descriptors:
         swapped = _fix_stringdb_descriptors(swapped)
@@ -531,6 +543,7 @@ def port_x360_dlc(
     fix_stringdb_descriptors: bool = False,
     synth_stringdb_aset: bool = True,
     jobs: int | None = None,
+    permissive: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -668,6 +681,7 @@ def port_x360_dlc(
             dump_dir_path=dump_dir_str,
             verbose=verbose,
             collect_hashes=collect_hashes,
+            permissive=permissive,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1422,6 +1436,9 @@ def main() -> int:
     ap.add_argument("--no-hook", action="store_true",
                     help="Add dlc01 as entry 115 only — do NOT modify "
                          "wifmissionflow (use ASI to trigger import at runtime)")
+    ap.add_argument("--permissive", action="store_true",
+                    help="Allow blind u32 fallbacks on unknown chunks (testing only; "
+                         "default is strict — unhandled tags raise)")
     ap.add_argument("--fix-stringdb-descriptors", action="store_true",
                     help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
                          "see tools/dlc_stringdb_forensic.py)")
@@ -1506,6 +1523,7 @@ def main() -> int:
         fix_stringdb_descriptors=args.fix_stringdb_descriptors,
         synth_stringdb_aset=not args.no_synth_stringdb_aset,
         jobs=args.jobs,
+        permissive=args.permissive,
     )
 
 
