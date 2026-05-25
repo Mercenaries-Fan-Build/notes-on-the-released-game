@@ -25,7 +25,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dlc_aset_normalize import (
     find_block_for_script_module,
     find_dlc_script_resident_block_index,
+    is_dlc_script_resident_path,
 )
+from wad_patcher import get_binn_script_ref_name, parse_block_entries
 from ffcs_patch_wad import read_patch_wad
 from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
@@ -227,6 +229,25 @@ def main():
     print(f"{'─' * 60}")
 
     all_ok = True
+    patch_has_resident = False
+
+    try:
+        pw = read_patch_wad(args.patch_wad)
+        patch_has_resident = any(
+            is_dlc_script_resident_path(b.path_string) for b in pw.blocks
+        )
+        if not patch_has_resident:
+            print("  FAIL  resident block missing from patch WAD")
+            print("        Expected: blocks\\dlc01\\resident_P000_Q3.block")
+            print("        Re-run: make dlc-port OUTPUT=... SOURCE_WAD=...")
+            print("        (old vz-patch.wad was built while resident was skipped)")
+            all_ok = False
+        else:
+            ri = find_dlc_script_resident_block_index(pw.blocks)
+            if ri is not None:
+                print(f"  OK    resident_P000_Q3          block={ri:>5d}  (patch)")
+    except Exception as exc:
+        print(f"  WARN  could not scan patch paths: {exc}")
 
     for name in chain_scripts:
         h = pandemic_hash_m2(name)
@@ -243,6 +264,8 @@ def main():
             block = -1
             status = "FAIL"
             all_ok = False
+            if name.startswith("dlccon") and not patch_has_resident:
+                source = "MISSING (no resident block in patch)"
 
         marker = "  ***" if status == "FAIL" else ""
         print(f"  {status:4s}  {name:25s}  0x{h:08X}  block={block:>5d}  ({source}){marker}")
@@ -274,10 +297,10 @@ def main():
     print("Bootstrap Block Verification")
     print(f"{'─' * 60}")
 
-    pw = None
     bootstrap_ok = False
     try:
-        pw = read_patch_wad(args.patch_wad)
+        if pw is None:
+            pw = read_patch_wad(args.patch_wad)
         last_block_idx = len(pw.blocks) - 1
         last_blk = pw.blocks[last_block_idx]
         bootstrap_data = decompress_sges_block(
@@ -366,18 +389,28 @@ def main():
                 print("  Gate 0d: PASS — resident scripts are PC-LE (scripts_vz still required for Row 13)")
 
             for name in chain_scripts[2:]:
-                in_resident = pandemic_hash_m2(name) in get_block_script_names(
-                    resident_data
-                )
-                in_patch = find_block_for_script_module(pw.blocks, name) is not None
-                if in_resident or in_patch:
-                    status = "PRESENT"
-                    where = "resident" if in_resident else "patch"
-                    print(f"  {name:25s}  {status} ({where})")
-                else:
-                    status = "MISSING"
+                h = pandemic_hash_m2(name)
+                in_aset = h in combined_aset
+                in_binn = False
+                try:
+                    for entry in parse_block_entries(resident_data):
+                        ref = get_binn_script_ref_name(resident_data, entry)
+                        if ref and ref.lower() == name.lower():
+                            in_binn = True
+                            break
+                except Exception:
+                    pass
+                if in_aset and in_binn:
+                    print(f"  {name:25s}  PRESENT (ASET + BINN ref)")
+                elif in_binn:
+                    print(f"  {name:25s}  PARTIAL (BINN ref, not in ASET)")
                     all_ok = False
-                    print(f"  {name:25s}  {status}")
+                elif in_aset:
+                    print(f"  {name:25s}  PARTIAL (ASET only)")
+                    all_ok = False
+                else:
+                    print(f"  {name:25s}  MISSING")
+                    all_ok = False
     except Exception as exc:
         print(f"  ERROR: Could not verify script resident block: {exc}")
         all_ok = False

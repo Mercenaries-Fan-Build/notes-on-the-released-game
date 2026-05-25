@@ -23,26 +23,37 @@ DLC_IMPORT_CONTRACTS = (
     "dlccon004a",
 )
 
+# Canonical DLC script resident (BINN refs for dlccon*, wif*, etc.)
+DLC_RESIDENT_PATH = r"blocks\dlc01\resident_P000_Q3.block"
+
+
+def _norm_path(path: str) -> str:
+    return path.replace("/", "\\").lower()
+
+
+def is_dlc_script_resident_path(path: str) -> bool:
+    """True only for the main dlc01 resident block (not dlctest / vo_resident)."""
+    p = _norm_path(path)
+    return p.endswith(_norm_path(DLC_RESIDENT_PATH))
+
 
 def _resident_path_score(path: str) -> int:
     """Rank PTHS paths; higher = preferred DLC script resident block."""
-    p = path.replace("/", "\\").lower()
-    if "vo_resident" in p or "resident" not in p:
+    p = _norm_path(path)
+    if "dlctest" in p or "vo_resident" in p:
         return -1
-    if not p.endswith("p000_q3.block"):
-        return -1
-    score = 1
-    if "\\dlc01\\" in p or p.startswith("blocks\\dlc01\\"):
-        score += 10
-    if "dlctest" in p:
-        score -= 5
-    if p.endswith("resident_p000_q3.block") or "\\resident_p000_q3.block" in p:
-        score += 100
-    return score
+    if not is_dlc_script_resident_path(path):
+        if "resident" not in p or not p.endswith("p000_q3.block"):
+            return -1
+        return 1
+    return 200
 
 
 def find_dlc_script_resident_block_index(blocks: list[PatchBlock]) -> int | None:
     """Patch WAD index of dlc01 script resident (not vo_resident / dlctest)."""
+    for idx, blk in enumerate(blocks):
+        if is_dlc_script_resident_path(blk.path_string):
+            return idx
     best_idx: int | None = None
     best_score = -1
     for idx, blk in enumerate(blocks):
@@ -86,8 +97,9 @@ def _entry_matches_module(
     entry_start = entry["offset"]
     entry_end = entry_start + entry["size"] - 8
     chunk = decomp[entry_start:entry_end]
-    needle = module_name.encode("ascii")
-    return needle in chunk and LUAQ_SIG in chunk
+    if module_name.encode("ascii") in chunk:
+        return True
+    return LUAQ_SIG in chunk and entry.get("hash") == target_hash
 
 
 def find_block_for_script_module(
@@ -152,6 +164,53 @@ def ensure_contract_aset_from_xbox_block_aset(
             global_hashes.add(ah)
             added += 1
     return added
+
+
+def ensure_contract_aset_on_resident_block(
+    blocks: list[PatchBlock],
+    module_names: list[str] | tuple[str, ...] = DLC_IMPORT_CONTRACTS,
+) -> tuple[int, bool]:
+    """Register contract ASET rows on blocks\\dlc01\\resident_P000_Q3 only.
+
+    Scans BINN script-reference records (dlccon001, etc.). Returns (rows_added,
+    resident_block_present).
+    """
+    resident_idx = _local_block_index_for_path(blocks, DLC_RESIDENT_PATH)
+    if resident_idx is None:
+        return 0, False
+
+    global_hashes: set[int] = set()
+    for blk in blocks:
+        for row in blk.aset_entries:
+            global_hashes.add(row["asset_hash"])
+
+    try:
+        decomp = decompress_sges_block(
+            blocks[resident_idx].compressed_data,
+            0,
+            len(blocks[resident_idx].compressed_data),
+        )
+        entries = parse_block_entries(decomp)
+    except Exception:
+        return 0, True
+
+    name_by_lower = {n.lower(): n for n in module_names}
+    added = 0
+    for entry in entries:
+        ref_name = get_binn_script_ref_name(decomp, entry)
+        if not ref_name:
+            continue
+        cname = name_by_lower.get(ref_name.lower())
+        if cname is None:
+            continue
+        module_hash = pandemic_hash_m2(cname)
+        if module_hash in global_hashes:
+            continue
+        blocks[resident_idx].aset_entries.append(script_aset_entry(module_hash))
+        global_hashes.add(module_hash)
+        added += 1
+
+    return added, True
 
 
 def ensure_import_chain_script_aset(

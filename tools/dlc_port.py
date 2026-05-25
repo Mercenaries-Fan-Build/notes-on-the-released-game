@@ -88,8 +88,10 @@ from wad_patcher import (  # noqa: E402
 from dlc_aset_normalize import (  # noqa: E402
     dedupe_asset_hash_across_blocks,
     ensure_contract_aset_from_xbox_block_aset,
+    ensure_contract_aset_on_resident_block,
     ensure_import_chain_script_aset,
     find_dlc_script_resident_block_index,
+    is_dlc_script_resident_path,
     normalize_all_block_asets,
 )
 from aset_type_ids import (  # noqa: E402
@@ -867,6 +869,15 @@ def port_x360_dlc(
     if xbox_aset_added:
         print(f"  ASET fix: added {xbox_aset_added} contract row(s) from Xbox "
               f"per-block ASET")
+    resident_aset_added, resident_present = ensure_contract_aset_on_resident_block(
+        converted,
+    )
+    if resident_present:
+        print(f"  ASET fix: resident_P000_Q3 present — "
+              f"added {resident_aset_added} contract row(s) from BINN refs")
+    elif not any(is_dlc_script_resident_path(p) for p in path_strings):
+        print("  WARNING: blocks\\dlc01\\resident_P000_Q3.block missing from "
+              "converted set (contracts will not resolve)")
     contracts_missing = [
         n for n in contracts_missing
         if pandemic_hash_m2(n) not in {
@@ -930,27 +941,35 @@ def port_x360_dlc(
     # engine may resolve wifmissionflow/vz to resident → crash at GameBootstrap.
     if scripts_vz_idx is not None:
         resident_idx = find_dlc_script_resident_block_index(converted)
-        if resident_idx is not None:
-            script_deduped = 0
-            seen: set[int] = set()
-            for blk in converted:
-                for entry in blk.aset_entries:
-                    if entry.get("u32_3") == SCRIPT_ASET_TYPE_ID:
-                        seen.add(entry["asset_hash"])
-            for asset_hash in seen:
-                script_deduped += dedupe_asset_hash_across_blocks(
-                    converted,
-                    asset_hash,
-                    prefer_type_id=SCRIPT_ASET_TYPE_ID,
-                    prefer_min_block_index=scripts_vz_idx,
-                )
-            if script_deduped:
-                print(f"  ASET dedupe: removed {script_deduped} script row(s) "
-                      f"conflicting with resident block {resident_idx}")
+        # Only dedupe hashes that appear on scripts_vz — do not strip resident-only
+        # contract rows (dlccon* live on resident, not bootstrap scripts_vz).
+        svz_script_hashes: set[int] = set()
+        for entry in converted[scripts_vz_idx].aset_entries:
+            if entry.get("u32_3") == SCRIPT_ASET_TYPE_ID:
+                svz_script_hashes.add(entry["asset_hash"])
+        script_deduped = 0
+        for asset_hash in svz_script_hashes:
+            script_deduped += dedupe_asset_hash_across_blocks(
+                converted,
+                asset_hash,
+                prefer_type_id=SCRIPT_ASET_TYPE_ID,
+                prefer_min_block_index=scripts_vz_idx,
+            )
+        if script_deduped:
+            label = (
+                f"resident block {resident_idx}" if resident_idx is not None
+                else "scripts_vz"
+            )
+            print(f"  ASET dedupe: removed {script_deduped} script row(s) "
+                  f"conflicting with {label}")
 
     contract_aset_added, contracts_missing = ensure_import_chain_script_aset(
         converted,
     )
+    resident_aset_added2, _ = ensure_contract_aset_on_resident_block(converted)
+    if resident_aset_added2:
+        print(f"  ASET fix (post-dedupe): added {resident_aset_added2} contract "
+              f"row(s) on resident")
     if contract_aset_added:
         print(f"  ASET fix (post-dedupe): added {contract_aset_added} contract "
               f"ASET entries")
