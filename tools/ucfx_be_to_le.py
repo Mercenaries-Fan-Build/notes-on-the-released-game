@@ -786,6 +786,14 @@ _TYPE_SOUNDBANK = 0x9F8BCA10
 _MESH_TYPES = {_TYPE_MESH_A, _TYPE_MESH_B, _TYPE_MESH_C}
 _AUDIO_TYPES = {_TYPE_UNKNOWN_E5, _TYPE_WAVEBANK, _TYPE_SOUNDBANK}
 
+# Types whose INFO/data/BODY bodies are u32/f32-aligned (verified from base game).
+# Keyframe, stance, state_machine, and path are animation-adjacent; ECS node is
+# the world entity system.  All use u32 hashes, f32 params, u32 counts.
+_U32_INFO_TYPES = (
+    _MESH_TYPES | _AUDIO_TYPES |
+    {_TYPE_KEYFRAME, _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_PATH, _TYPE_ECS_NODE}
+)
+
 
 def _convert_ecs_info(be: bytes) -> bytes:
     """Convert ecs_node 'info' body from BE to LE.
@@ -1201,9 +1209,7 @@ def _convert_body(
             return _convert_wavebank_data(body_be)
         if type_hash == _TYPE_SOUNDBANK:
             return _convert_soundbank_data(body_be)
-        if type_hash in _MESH_TYPES:
-            return _convert_u32_array(body_be)
-        if type_hash == _TYPE_ECS_NODE:
+        if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
             body_be,
@@ -1261,7 +1267,7 @@ def _convert_body(
             return _convert_texture_info(body_be)
         if type_hash == _TYPE_SCRIPT:
             return _convert_script_info(body_be)
-        if type_hash in _MESH_TYPES:
+        if type_hash in _U32_INFO_TYPES:
             return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
             body_be,
