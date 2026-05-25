@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props dlc-port dlc-port-assets-only fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac dlc-port dlc-port-assets-only fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -462,6 +462,54 @@ crack-game:
 	@echo "  Mercenaries2.exe   (patched, imports pmc_bb.dll)"
 	@echo "  pmc_bb.dll   (SecuROM spoof + debug console + ASI loader)"
 
+# ---- Native Lua 5.1 Compiler (Mercs2-compatible) ----
+# Builds a platform-native luac by copying clean upstream Lua 5.1.5 source,
+# applying Mercs2 bytecode-compatibility patches, and compiling for the host.
+# Patches live in tools/lua51-mercs2/patches/ and are applied in sorted order.
+LUAC_UPSTREAM := $(REPO_ROOT)/tools/lua51-src/src
+LUAC_BUILD_DIR := $(REPO_ROOT)/tools/lua51-mercs2/build
+LUAC_PATCHES := $(REPO_ROOT)/tools/lua51-mercs2/patches
+LUAC_NATIVE := $(LUAC_BUILD_DIR)/luac
+
+# Detect platform for the Lua Makefile target
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  LUA_PLAT := macosx
+else ifeq ($(UNAME_S),Linux)
+  LUA_PLAT := linux
+else
+  LUA_PLAT := posix
+endif
+
+build-luac: $(LUAC_NATIVE)
+
+$(LUAC_NATIVE): $(LUAC_PATCHES)/*.patch
+	@echo "Building native luac (platform: $(LUA_PLAT))..."
+	@echo "  [1/4] Copying upstream Lua 5.1.5 source..."
+	@rm -rf "$(LUAC_BUILD_DIR)"
+	@cp -r "$(LUAC_UPSTREAM)" "$(LUAC_BUILD_DIR)"
+	@echo "  [2/4] Applying Mercs2 patches..."
+	@for p in "$(LUAC_PATCHES)"/*.patch; do \
+	   echo "    - $$(basename $$p)"; \
+	   patch -d "$(LUAC_BUILD_DIR)" -p1 < "$$p" || exit 1; \
+	 done
+	@echo "  [3/4] Compiling..."
+	@$(MAKE) -C "$(LUAC_BUILD_DIR)" $(LUA_PLAT) 2>&1 | tail -3
+	@test -f "$(LUAC_NATIVE)" || (echo "  ERROR: build failed" >&2; exit 1)
+	@echo "  [4/4] Verifying bytecode header..."
+	@echo 'print("")' > /tmp/_luac_verify.lua
+	@"$(LUAC_NATIVE)" -o /tmp/_luac_verify.luac /tmp/_luac_verify.lua
+	@HDR=$$(xxd -p -l 12 /tmp/_luac_verify.luac); \
+	 if [ "$$HDR" = "1b4c75615100010404040400" ]; then \
+	   echo "  OK: $$HDR"; \
+	 else \
+	   echo "  ERROR: header mismatch: $$HDR (expected 1b4c75615100010404040400)" >&2; \
+	   rm -f "$(LUAC_NATIVE)"; \
+	   exit 1; \
+	 fi
+	@rm -f /tmp/_luac_verify.lua /tmp/_luac_verify.luac
+	@echo "  Built: $(LUAC_NATIVE)"
+
 # ---- Xbox 360 DLC Port ----
 # Produces a complete vz-patch.wad with DLC blocks + nohook bootstrap.
 # Requires SOURCE_WAD (retail vz.wad) for INDX/ASET template + bootstrap injection.
@@ -469,7 +517,10 @@ crack-game:
 DLC_RAR ?= Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar
 SOURCE_WAD ?=
 
-dlc-port:
+# Parallel block conversion workers (default: all CPUs). Override: make dlc-port JOBS=8
+JOBS ?=
+
+dlc-port: build-luac
 	@test -f "$(DLC_RAR)" || (echo "error: DLC RAR not found at $(DLC_RAR) — set DLC_RAR=path" >&2; exit 1)
 	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad (retail PC base WAD)" >&2; exit 1)
 	@test -f "$(SOURCE_WAD)" || (echo "error: vz.wad not found at $(SOURCE_WAD)" >&2; exit 1)
@@ -478,6 +529,7 @@ dlc-port:
 	  --x360-rar "$(DLC_RAR)" \
 	  --source-wad "$(SOURCE_WAD)" \
 	  --no-hook \
+	  $(if $(JOBS),--jobs $(JOBS),) \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
 	@echo ""
@@ -671,6 +723,12 @@ verify-patch-wad-structure:
 	  --variant "$(WAD_VARIANT)" \
 	  $(if $(WAD_EXPECT_BLOCKS),--expect-blocks $(WAD_EXPECT_BLOCKS),)
 
+verify-dlc-endian:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: $(OUTPUT)/data/vz-patch.wad not found" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/verify_ucfx_endian.py" \
+	  --wad "$(OUTPUT)/data/vz-patch.wad" \
+	  --fail-on-issues
+
 # PS3 EBOOT PPC analysis (requires brew install ghidra; decrypt EBOOT first)
 ghidra-ps3-eboot:
 	@chmod +x "$(REPO_ROOT)/scripts/ghidra_analyze_ps3_eboot.sh"
@@ -781,9 +839,6 @@ pmc-blackbox:
 	@echo ""
 	@echo "Install: copy dlls/pmc_bb.dll to <game>/pmc_bb.dll"
 	@echo "         (game import table must reference pmc_bb.dll)"
-
-# Backward-compat alias
-cruise-dll: pmc-blackbox
 
 # ---- Ghidra Annotation (Mercs 1 → Mercs 2 cross-reference) ----
 
