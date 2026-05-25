@@ -97,16 +97,9 @@ def main() -> int:
         lines.append("")
 
         pw = read_patch_wad(args.output_wad)
-        resident_idx = None
-        for idx, blk in enumerate(pw.blocks):
-            path = blk.path_string.replace("/", "\\").lower()
-            if (
-                "resident" in path
-                and "vo_resident" not in path
-                and path.endswith("p000_q3.block")
-            ):
-                resident_idx = idx
-                break
+        from dlc_aset_normalize import find_dlc_script_resident_block_index
+
+        resident_idx = find_dlc_script_resident_block_index(pw.blocks)
         if resident_idx is not None:
             res_blk = pw.blocks[resident_idx]
             res_data = decompress_sges_block(

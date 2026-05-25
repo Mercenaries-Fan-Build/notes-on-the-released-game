@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from dlc_aset_normalize import find_dlc_script_resident_block_index
 from ffcs_patch_wad import read_patch_wad
 from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
@@ -107,19 +108,6 @@ def decompress_block(data: bytes, page_offset: int, page_count: int) -> bytes | 
             segments.append(zlib.decompress(seg_data, -15))
             pos += seg_size
         return b"".join(segments)
-
-
-def find_dlc_script_resident_block_index(blocks: list) -> int | None:
-    """Patch WAD index of dlc01 script resident (not vo_resident_* VO blocks)."""
-    for idx, blk in enumerate(blocks):
-        path = blk.path_string.replace("/", "\\").lower()
-        if (
-            "resident" in path
-            and "vo_resident" not in path
-            and path.endswith("p000_q3.block")
-        ):
-            return idx
-    return None
 
 
 def get_block_script_names(block_data: bytes) -> set[int]:

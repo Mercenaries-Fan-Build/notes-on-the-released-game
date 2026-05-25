@@ -4,8 +4,109 @@ from __future__ import annotations
 
 from aset_type_ids import SCRIPT_ASET_TYPE_ID, type_id_for_type_hash
 from ffcs_patch_wad import PatchBlock
+from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
-from wad_patcher import parse_block_entries
+from wad_patcher import get_script_name, parse_block_entries, script_aset_entry
+
+# Contracts required for import()/dynamic_import() (verify_dlc_import_chain).
+DLC_IMPORT_CONTRACTS = (
+    "dlccon001",
+    "dlccon002",
+    "dlccon003",
+    "dlccon004a",
+)
+
+
+def _resident_path_score(path: str) -> int:
+    """Rank PTHS paths; higher = preferred DLC script resident block."""
+    p = path.replace("/", "\\").lower()
+    if "vo_resident" in p or "resident" not in p:
+        return -1
+    if not p.endswith("p000_q3.block"):
+        return -1
+    score = 1
+    if "\\dlc01\\" in p or p.startswith("blocks\\dlc01\\"):
+        score += 10
+    if "dlctest" in p:
+        score -= 5
+    if p.endswith("resident_p000_q3.block") or "\\resident_p000_q3.block" in p:
+        score += 100
+    return score
+
+
+def find_dlc_script_resident_block_index(blocks: list[PatchBlock]) -> int | None:
+    """Patch WAD index of dlc01 script resident (not vo_resident / dlctest)."""
+    best_idx: int | None = None
+    best_score = -1
+    for idx, blk in enumerate(blocks):
+        score = _resident_path_score(blk.path_string)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    return best_idx if best_score > 0 else None
+
+
+def find_resident_block_index_from_paths(paths: list[str]) -> int | None:
+    """Same as find_dlc_script_resident_block_index but for raw PTHS path strings."""
+    best_idx: int | None = None
+    best_score = -1
+    for idx, path in enumerate(paths):
+        score = _resident_path_score(path)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    return best_idx if best_score > 0 else None
+
+
+def find_block_for_script_module(
+    blocks: list[PatchBlock],
+    module_name: str,
+) -> int | None:
+    """Block index containing a UCFX entry for *module_name* (hash or BINN name)."""
+    target_hash = pandemic_hash_m2(module_name)
+    for blk_idx, blk in enumerate(blocks):
+        try:
+            decomp = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data))
+            entries = parse_block_entries(decomp)
+        except Exception:
+            continue
+        for entry in entries:
+            if entry.get("hash") == target_hash:
+                return blk_idx
+            try:
+                binn_name = get_script_name(decomp, entry)
+            except Exception:
+                continue
+            if binn_name.lower() == module_name.lower():
+                return blk_idx
+    return None
+
+
+def ensure_import_chain_script_aset(
+    blocks: list[PatchBlock],
+    module_names: list[str] | tuple[str, ...] = DLC_IMPORT_CONTRACTS,
+) -> tuple[int, list[str]]:
+    """Register script ASET rows for modules present in blocks but not yet in ASET."""
+    global_hashes: set[int] = set()
+    for blk in blocks:
+        for row in blk.aset_entries:
+            global_hashes.add(row["asset_hash"])
+
+    added = 0
+    not_in_blocks: list[str] = []
+    for name in module_names:
+        module_hash = pandemic_hash_m2(name)
+        blk_idx = find_block_for_script_module(blocks, name)
+        if blk_idx is None:
+            not_in_blocks.append(name)
+            continue
+        if module_hash in global_hashes:
+            continue
+        blocks[blk_idx].aset_entries.append(script_aset_entry(module_hash))
+        global_hashes.add(module_hash)
+        added += 1
+    return added, not_in_blocks
 
 
 def _hash_to_type_hash_map(block_data: bytes) -> dict[int, int]:

@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from aset_type_ids import SCRIPT_ASET_TYPE_ID  # noqa: E402
+from dlc_aset_normalize import find_resident_block_index_from_paths  # noqa: E402
 from ffcs_wad import dump_paths_from_pths, extract_slice, parse_ffcs  # noqa: E402
 from pandemic_hash import pandemic_hash_m2  # noqa: E402
 
@@ -37,7 +38,7 @@ KNOWN_SCRIPT_NAMES = (
 def fix_script_aset_dupes(
     wad_path: Path,
     *,
-    resident_block: int = 464,
+    resident_block: int | None = None,
     scripts_vz_block: int | None = None,
     dry_run: bool = False,
 ) -> int:
@@ -50,6 +51,12 @@ def fix_script_aset_dupes(
     n_blocks = len(pths)
     if scripts_vz_block is None:
         scripts_vz_block = n_blocks - 1
+    if resident_block is None:
+        resident_block = find_resident_block_index_from_paths(pths)
+        if resident_block is None:
+            print("  ERROR: could not find dlc01 resident block in PTHS", file=sys.stderr)
+            return 1
+        print(f"  Resident block (auto): {resident_block} ({pths[resident_block]})")
 
     # Group script rows by asset_hash
     by_hash: dict[int, list[tuple[int, int, int, int]]] = {}
@@ -97,7 +104,12 @@ def fix_script_aset_dupes(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--wad", type=Path, required=True)
-    ap.add_argument("--resident-block", type=int, default=464)
+    ap.add_argument(
+        "--resident-block",
+        type=int,
+        default=None,
+        help="dlc01 resident block index (default: path-based auto-detect)",
+    )
     ap.add_argument("--scripts-vz-block", type=int, default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

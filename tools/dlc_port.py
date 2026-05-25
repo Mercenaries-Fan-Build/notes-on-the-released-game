@@ -86,6 +86,8 @@ from wad_patcher import (  # noqa: E402
 )
 from dlc_aset_normalize import (  # noqa: E402
     dedupe_asset_hash_across_blocks,
+    ensure_import_chain_script_aset,
+    find_dlc_script_resident_block_index,
     normalize_all_block_asets,
 )
 from aset_type_ids import (  # noqa: E402
@@ -321,19 +323,6 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
                 struct.pack_into("<I", data, csum_pos + 4, new_crc)
 
     return bytes(data)
-
-
-def _find_dlc_script_resident_block_index(blocks: list[PatchBlock]) -> int | None:
-    """Patch WAD index of dlc01 script resident (not vo_resident_* VO blocks)."""
-    for idx, blk in enumerate(blocks):
-        path = blk.path_string.replace("/", "\\").lower()
-        if (
-            "resident" in path
-            and "vo_resident" not in path
-            and path.endswith("p000_q3.block")
-        ):
-            return idx
-    return None
 
 
 # ── Parallel block processing ─────────────────────────────────────────
@@ -853,6 +842,17 @@ def port_x360_dlc(
         print(f"\n  ASET fix: added {stringdb_synth_added} missing stringdb "
               f"ASET entries (required for Sys.AddStringDb)")
 
+    contract_aset_added, contracts_missing = ensure_import_chain_script_aset(
+        converted,
+    )
+    if contract_aset_added:
+        print(f"\n  ASET fix: added {contract_aset_added} DLC contract "
+              f"ASET entries (import chain)")
+    if contracts_missing:
+        print(f"  WARNING: contract bytecode not found in any converted block:")
+        for name in contracts_missing:
+            print(f"    - {name} (hash=0x{pandemic_hash_m2(name):08X})")
+
     # ── DLC Bootstrap Injection ──────────────────────────────────────
     # When --source-wad is provided, extract the scripts_vz block from the
     # retail WAD, inject the dlc01 master script, modify the vz master
@@ -920,6 +920,17 @@ def port_x360_dlc(
                 print(f"  ASET dedupe: removed {script_deduped} script row(s) "
                       f"conflicting with resident block {resident_idx}")
 
+    contract_aset_added, contracts_missing = ensure_import_chain_script_aset(
+        converted,
+    )
+    if contract_aset_added:
+        print(f"  ASET fix (post-dedupe): added {contract_aset_added} contract "
+              f"ASET entries")
+    if contracts_missing:
+        print(f"  WARNING: still missing contract blocks after dedupe:")
+        for name in contracts_missing:
+            print(f"    - {name}")
+
     # Build or merge patch WAD
     if merge_into and merge_into.is_file():
         print(f"\n  Merging into existing: {merge_into}")
@@ -970,9 +981,10 @@ def _extract_contract_bytecodes(
     name hashes, decompresses the block, and extracts the raw LuaQ bytecode.
     Returns a dict mapping contract name → bytecode bytes.
     """
-    target_hashes: dict[int, str] = {}
-    for name in contract_names:
-        target_hashes[pandemic_hash_m2(name)] = name
+    target_hashes: dict[int, str] = {
+        pandemic_hash_m2(name): name for name in contract_names
+    }
+    name_by_lower = {name.lower(): name for name in contract_names}
 
     LUAQ_SIG = b"\x1bLua"
     results: dict[str, bytes] = {}
@@ -987,18 +999,25 @@ def _extract_contract_bytecodes(
             continue
 
         for entry in entries:
-            if entry["hash"] in target_hashes:
-                cname = target_hashes[entry["hash"]]
-                if cname in results:
-                    continue
-                entry_start = entry["offset"]
-                entry_end = entry_start + entry["size"] - 8
-                chunk = decompressed[entry_start:entry_end]
-                luaq_pos = chunk.find(LUAQ_SIG)
-                if luaq_pos >= 0:
-                    results[cname] = chunk[luaq_pos:]
-                elif verbose:
-                    print(f"      WARNING: {cname} in block {blk_idx} has no LuaQ signature")
+            cname = target_hashes.get(entry["hash"])
+            if cname is None:
+                try:
+                    binn_name = get_script_name(decompressed, entry)
+                except Exception:
+                    binn_name = ""
+                cname = name_by_lower.get(binn_name.lower()) if binn_name else None
+            if cname is None:
+                continue
+            if cname in results:
+                continue
+            entry_start = entry["offset"]
+            entry_end = entry_start + entry["size"] - 8
+            chunk = decompressed[entry_start:entry_end]
+            luaq_pos = chunk.find(LUAQ_SIG)
+            if luaq_pos >= 0:
+                results[cname] = chunk[luaq_pos:]
+            elif verbose:
+                print(f"      WARNING: {cname} in block {blk_idx} has no LuaQ signature")
 
         if len(results) == len(target_hashes):
             break
