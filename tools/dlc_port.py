@@ -126,6 +126,7 @@ _OVERRIDE_TYPE_HASHES = frozenset((
     _TEXTURE_TYPE_HASH,
     _MESH_B_TYPE_HASH,
     _STANCE_TYPE_HASH,
+    _UNKNOWN_E5_TYPE_HASH,  # audio group graph — Xbox DLC differs from PC retail
 ))
 
 # Havok magic used to confirm an entry's data body contains Havok
@@ -457,6 +458,7 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
                 _TEXTURE_TYPE_HASH: "texture",
                 _MESH_B_TYPE_HASH: "mesh_B",
                 _STANCE_TYPE_HASH: "stance",
+                _UNKNOWN_E5_TYPE_HASH: "unknown_E5",
             }
             parts = [
                 f"{override_counts[th]} {_override_labels[th]}"

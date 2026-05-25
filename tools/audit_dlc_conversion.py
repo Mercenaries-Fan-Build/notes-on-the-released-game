@@ -53,6 +53,7 @@ _OVERRIDE_TYPES = frozenset({
     0x18166555,  # animation
     0x5B724250,  # mesh_B
     0x207359C7,  # stance
+    0xE5273C14,  # unknown_E5 / audio group — PC retail graph, not Xbox DLC bytes
 })
 
 
