@@ -781,17 +781,22 @@ _TYPE_KEYFRAME = 0x39E5E978
 _TYPE_UNKNOWN_E5 = 0xE5273C14  # Audio group descriptor
 _TYPE_WAVEBANK = 0xF753F6D0
 _TYPE_SOUNDBANK = 0x9F8BCA10
+_TYPE_LOW_RES_TERRAIN = 0x1602815C  # pandemic_hash_m2("lowresterrain")
+_TYPE_EFFECT = 0x5608BD5A
+_TYPE_LEVEL = 0xEA4829D5
+_TYPE_LAYER = 0x5647C35D  # world layer / terrainfade META (type_id 8)
 
 # Mesh types share identical sub-chunk formats
 _MESH_TYPES = {_TYPE_MESH_A, _TYPE_MESH_B, _TYPE_MESH_C}
 _AUDIO_TYPES = {_TYPE_UNKNOWN_E5, _TYPE_WAVEBANK, _TYPE_SOUNDBANK}
 
-# Types whose INFO/data/BODY bodies are u32/f32-aligned (verified from base game).
-# Keyframe, stance, state_machine, and path are animation-adjacent; ECS node is
-# the world entity system.  All use u32 hashes, f32 params, u32 counts.
+# Types whose INFO (and often data) bodies are u32/f32-aligned (verified from base game).
 _U32_INFO_TYPES = (
     _MESH_TYPES | _AUDIO_TYPES |
-    {_TYPE_KEYFRAME, _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_PATH, _TYPE_ECS_NODE}
+    {
+        _TYPE_KEYFRAME, _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_PATH, _TYPE_ECS_NODE,
+        _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_LEVEL, _TYPE_LAYER,
+    }
 )
 
 
