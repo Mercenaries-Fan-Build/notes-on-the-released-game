@@ -1307,11 +1307,15 @@ def _convert_body(
     if tag in ("EFCT", "EMTR"):
         return _convert_u16_array(body_be)
 
-    # ── CHDR: nested container — needs semantic parser, not u32 sweep ──
+    # ── CHDR: small headers (≤64 bytes) are u32 fields (child_count, flags,
+    # version); large bodies are nested containers with sub-chunks that
+    # need semantic parsing (see mismatch #6: 59KB CHDR).
     if tag == "CHDR":
+        if len(body_be) <= 64:
+            return _convert_u32_array(body_be)
         return _fallback_u32_or_raise(
             body_be,
-            reason="CHDR nested container needs semantic converter",
+            reason="large CHDR nested container needs semantic converter",
             tag=tag,
             type_hash=type_hash,
             context=context,
