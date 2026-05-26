@@ -652,10 +652,7 @@ def port_x360_dlc(
     source_csum_value = csum_row.offset if csum_row else 0
     source_csum_meta = csum_row.meta if csum_row else None
     if csum_row:
-        print(f"  CSUM: Xbox value=0x{csum_row.offset:08X}, meta={csum_row.meta} "
-              f"→ PC combined: value=0x{source_csum_value:08X}, "
-              f"meta={source_csum_meta} (base {_BASE_VZ_CSUM_META} + "
-              f"patch {xbox_csum_meta})")
+        print(f"  CSUM: value=0x{source_csum_value:08X}, meta={source_csum_meta}")
 
     # Parse metadata
     indx_entries = parse_be_indx(doh, indx_row.offset, num_blocks)
