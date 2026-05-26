@@ -1557,11 +1557,17 @@ def _build_bootstrap_block(
     if hook_orig_hash is not None:
         aset_entries.append(script_aset_entry(hook_orig_hash))
 
+    # Recompute packed_field from the modified block's actual size
+    orig_packed = meta["indx_entry"].get("packed_field", 1)
+    tier = (orig_packed >> 24) & 0xFF
+    correct_pages = (len(modified) + 0x7FFF) // 0x8000
+    recomputed_packed = (tier << 24) | correct_pages
+
     return PatchBlock(
         compressed_data=new_sges,
         path_string=meta["pths_string"],
         aset_entries=aset_entries,
-        packed_field=meta["indx_entry"].get("packed_field", 1),
+        packed_field=recomputed_packed,
         flags=meta["indx_entry"].get("flags", 0x8000),
     )
 
