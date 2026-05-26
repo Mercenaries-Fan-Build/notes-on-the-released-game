@@ -50,28 +50,53 @@ def decompress_sges_block(mm: mmap_mod.mmap | bytes, block_start: int, block_end
         def read_slice(a: int, b: int) -> bytes:
             return mm[a:b]
 
-    _maj, minor, total_u, _tc = parse_sges_header(read_slice(block_start, block_start + 16))
-    start_payload = block_start + sges_data_offset(minor)
+    _maj, seg_count, total_u, _tc = parse_sges_header(read_slice(block_start, block_start + 16))
     target = total_u if max_out is None else min(total_u, max_out)
-
-    out = bytearray()
-    pos = start_payload
     end = min(block_end, length)
 
-    while len(out) < target and pos < end:
-        while pos < end and read_slice(pos, pos + 1)[0] == 0:
-            pos += 1
+    # Read segment table entries to get exact offsets and compression flags.
+    # The old zero-byte-scanning approach silently skips segments whose
+    # deflate stream starts with 0x00 (stored blocks with BFINAL=0).
+    seg_entries: list[tuple[int, int, int, bool]] = []
+    for i in range(seg_count):
+        entry_off = block_start + 16 + i * 8
+        if entry_off + 8 > end:
+            break
+        entry = read_slice(entry_off, entry_off + 8)
+        comp_sz, uncomp_sz, abs_off_raw = struct.unpack_from("<HHI", entry, 0)
+        compressed_flag = bool(abs_off_raw & 1)
+        abs_off = abs_off_raw & 0xFFFFFFFE
+        if uncomp_sz == 0:
+            uncomp_sz = 65536
+        seg_entries.append((comp_sz, uncomp_sz, abs_off, compressed_flag))
+
+    out = bytearray()
+    for i, (comp_sz, uncomp_sz, abs_off, compressed_flag) in enumerate(seg_entries):
+        if len(out) >= target:
+            break
+        pos = block_start + abs_off
         if pos >= end:
             break
-        try:
-            chunk = read_slice(pos, min(pos + 131072, end))
-            dec = zlib.decompressobj(-15)
-            piece = dec.decompress(chunk)
-            consumed = len(chunk) - len(dec.unused_data)
-            out.extend(piece)
-            pos += consumed
-        except zlib.error:
-            break
+        if compressed_flag:
+            if i + 1 < len(seg_entries):
+                next_off = block_start + (seg_entries[i + 1][2])
+            else:
+                next_off = end
+            read_end = min(next_off, pos + 131072, end)
+            chunk = read_slice(pos, read_end)
+            try:
+                dec = zlib.decompressobj(-15)
+                piece = dec.decompress(chunk)
+                out.extend(piece)
+            except zlib.error:
+                break
+        else:
+            # comp_sz=0 means default size (65536), matching uncomp_sz convention
+            actual_sz = comp_sz if comp_sz > 0 else uncomp_sz
+            remaining = target - len(out)
+            read_sz = min(actual_sz, remaining)
+            raw = read_slice(pos, min(pos + read_sz, end))
+            out.extend(raw)
 
     if len(out) > target:
         del out[target:]

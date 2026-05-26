@@ -76,12 +76,18 @@ def compress_sges(
     if total_u == 0:
         raise ValueError("Cannot compress empty data")
 
-    segments: list[tuple[bytes, int]] = []
+    # compressed_flag=True means deflate-compressed; False means stored raw.
+    segments: list[tuple[bytes, int, bool]] = []
     offset = 0
     while offset < total_u:
         chunk = uncompressed[offset:offset + segment_size]
         compressed = compress_segment(chunk, level)
-        segments.append((compressed, len(chunk)))
+        # Fall back to raw storage when deflate output exceeds the u16
+        # comp_sz limit (65535) or is larger than the input (pointless).
+        if len(compressed) > 65535 or len(compressed) >= len(chunk):
+            segments.append((chunk, len(chunk), False))
+        else:
+            segments.append((compressed, len(chunk), True))
         offset += len(chunk)
 
     num_segments = len(segments)
@@ -91,12 +97,14 @@ def compress_sges(
     # Track absolute offsets (0-indexed) for the segment table.
     payload_parts: list[bytes] = []
     seg_offsets_0: list[int] = []  # 0-indexed absolute offset of each segment
+    seg_flags: list[bool] = []
     current_pos = data_start
 
-    for compressed_data, _uncomp_size in segments:
+    for stored_data, _uncomp_size, is_compressed in segments:
         seg_offsets_0.append(current_pos)
-        payload_parts.append(compressed_data)
-        current_pos += len(compressed_data)
+        seg_flags.append(is_compressed)
+        payload_parts.append(stored_data)
+        current_pos += len(stored_data)
         # Pad to 16-byte alignment for the next segment
         padding = align16(current_pos) - current_pos
         if padding > 0:
@@ -104,7 +112,7 @@ def compress_sges(
             current_pos += padding
 
     # total_c = total block size rounded up to 16-byte boundary
-    # The raw end is at the last segment's start + its compressed size (no trailing padding needed)
+    # The raw end is at the last segment's start + its stored size (no trailing padding needed)
     last_seg_end = seg_offsets_0[-1] + len(segments[-1][0])
     total_c = align16(last_seg_end)
 
@@ -118,8 +126,13 @@ def compress_sges(
 
     # Build segment table: (u16 comp_size, u16 uncomp_size, u32 offset_with_flag) per segment
     seg_table = b""
-    for i, (compressed_data, uncompressed_size) in enumerate(segments):
-        comp_sz = len(compressed_data)
+    for i, (stored_data, uncompressed_size, is_compressed) in enumerate(segments):
+        comp_sz = len(stored_data)
+        # For uncompressed segments stored raw, the "compressed size" equals the
+        # uncompressed size.  Full-size segments (65536 bytes) overflow u16, so
+        # use 0 = default (same convention as uncomp_field).
+        if not is_compressed and comp_sz > 65535:
+            comp_sz = 0
         # uncomp_size field: 0 for full-size segments, actual size for the last (short) segment
         if uncompressed_size == segment_size:
             uncomp_field = 0
@@ -129,7 +142,9 @@ def compress_sges(
         # Since all offsets are 16-byte aligned (always even), setting bit 0
         # is equivalent to adding 1. The engine masks with 0xFFFFFFFE to get
         # the actual byte offset.
-        abs_offset_flagged = seg_offsets_0[i] | 1  # bit 0 = compressed
+        abs_offset_flagged = seg_offsets_0[i]
+        if is_compressed:
+            abs_offset_flagged |= 1
         seg_table += struct.pack("<HHI", comp_sz, uncomp_field, abs_offset_flagged)
 
     header_and_table = header + seg_table
