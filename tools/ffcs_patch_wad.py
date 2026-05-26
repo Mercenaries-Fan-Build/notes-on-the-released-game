@@ -119,6 +119,7 @@ def build_patch_wad_multi(
     *,
     blocks: list[PatchBlock],
     csum_value: int = 0,
+    csum_meta: int | None = None,
     cert_blob: bytes = FFCS_CERT_BLOB,
 ) -> bytes:
     """Build a PC FFCS patch WAD containing one or more blocks.
@@ -129,6 +130,11 @@ def build_patch_wad_multi(
       [INDX_end]       ASET data (total_aset × 16 bytes)
       [ASET_end]       PTHS data (null-terminated paths + trailer)
       [0x208000]       DATA: concatenated page-aligned sges blocks
+
+    *csum_meta* sets the CSUM chunk's ``meta`` field.  In the retail WAD this
+    equals the number of ASET entries belonging to the resident (always-loaded)
+    block.  When *None* (default), auto-detected from a block whose path
+    contains ``resident_P000_Q3`` — falls back to 0 if no resident is found.
     """
     num_blocks = len(blocks)
 
@@ -163,6 +169,17 @@ def build_patch_wad_multi(
 
     file_size = current_page * PAGE_SIZE
 
+    # ── Resolve CSUM meta (resident ASET entry count) ──
+    if csum_meta is None:
+        # Auto-detect: count ASET entries for the block whose path looks
+        # like the resident pack (e.g. "resident_P000_Q3.block").
+        csum_meta = 0
+        for blk in blocks:
+            lower = blk.path_string.lower()
+            if "resident_p000_q3" in lower and "resident2" not in lower:
+                csum_meta = len(blk.aset_entries)
+                break
+
     # ── Build FFCS header (256 bytes) ──
     header = bytearray(256)
     struct.pack_into("<4sII", header, 0, b"FFCS", 2, 7)
@@ -173,7 +190,7 @@ def build_patch_wad_multi(
     struct.pack_into("<4sII", header, cr + 12,
                      b"DATA", data_offset, 36)
     struct.pack_into("<4sII", header, cr + 24,
-                     b"CSUM", csum_value, total_aset)
+                     b"CSUM", csum_value, csum_meta)
     struct.pack_into("<4sII", header, cr + 36,
                      b"ASET", aset_offset, total_aset)
     struct.pack_into("<4sII", header, cr + 48,

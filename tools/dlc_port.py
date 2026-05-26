@@ -621,6 +621,7 @@ def port_x360_dlc(
     aset_row = next((r for r in rows if r.tag == "ASET"), None)
     pths_row = next((r for r in rows if r.tag == "PTHS"), None)
     data_row = next((r for r in rows if r.tag == "DATA"), None)
+    csum_row = next((r for r in rows if r.tag == "CSUM"), None)
 
     if not all([indx_row, aset_row, pths_row, data_row]):
         print("ERROR: Missing required FFCS chunks", file=sys.stderr)
@@ -629,6 +630,13 @@ def port_x360_dlc(
     num_blocks = indx_row.meta
     print(f"  INDX: {num_blocks} blocks")
     print(f"  ASET: {aset_row.meta} entries")
+
+    # Preserve CSUM fields from the Xbox source — the engine uses CSUM.meta
+    # as the resident block ASET entry count for pre-allocation sizing.
+    source_csum_value = csum_row.offset if csum_row else 0
+    source_csum_meta = csum_row.meta if csum_row else None
+    if csum_row:
+        print(f"  CSUM: value=0x{csum_row.offset:08X}, meta={csum_row.meta}")
 
     # Parse metadata
     indx_entries = parse_be_indx(doh, indx_row.offset, num_blocks)
@@ -1027,7 +1035,11 @@ def port_x360_dlc(
         print(f"\n  Merging into existing: {merge_into}")
         patch_wad = merge_patch_wads(merge_into, converted)
     else:
-        patch_wad = build_patch_wad_multi(blocks=converted)
+        patch_wad = build_patch_wad_multi(
+            blocks=converted,
+            csum_value=source_csum_value,
+            csum_meta=source_csum_meta,
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(patch_wad)
