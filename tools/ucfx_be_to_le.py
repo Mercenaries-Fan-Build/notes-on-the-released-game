@@ -996,46 +996,31 @@ def _convert_unknown_e5_data(body_be: bytes) -> bytes:
 
 _XBOX_ADPCM_CODEC = 0x05
 _PC_IMA_ADPCM_CODEC = 0x02
-_XBOX_WAVEBANK_RECORD_SIZE = 36
-_PC_WAVEBANK_RECORD_SIZE = 40
+_WAVEBANK_RECORD_SIZE = 36
 
 
 def _convert_wavebank_data(body_be: bytes) -> bytes:
     """Convert wavebank body from Xbox to PC format.
 
+    Both platforms use 36-byte records and a 24-byte header. Xbox stores
+    an extra filename area between the header and records; PC does not.
+
     Xbox layout:
-      [0:4]    count           — u32 LE (always LE!)
+      [0:4]    count           — u32 LE (always LE on both platforms)
       [4:8]    self_hash       — u32 BE
       [8:10]   flags           — u16 BE
       [10:12]  more_flags      — u16 BE
       [12:16]  self_hash2      — u32 BE
-      [16:20]  records_offset  — u32 BE (=56 for DLC, varies)
+      [16:20]  records_offset  — u32 BE (>24 when filename area present)
       [20:24]  padding         — zeros
-      [24:records_offset]      — filename area (ASCII null-terminated strings)
-    Per Xbox record (36 bytes):
-      [0:4]    clip_hash       — u32 BE
+      [24:records_offset]      — filename area (ASCII, Xbox-only)
+    Per record (36 bytes, same on both platforms):
+      [0:4]    clip_hash       — u32
       [4:8]    format_bytes    — u8[4]: [pad, channels, codec, pad]
-      [8:12]   sample_rate     — u32 BE
-      [12:16]  data_offset     — u32 BE
-      [16:20]  data_size       — u32 BE
-      [20:36]  extra fields    — u32 BE x4
-
-    PC layout:
-      [0:4]    count           — u32 LE
-      [4:8]    self_hash       — u32 LE
-      [8:10]   flags           — u16 LE
-      [10:12]  more_flags      — u16 LE
-      [12:16]  self_hash2      — u32 LE
-      [16:20]  records_offset  — u32 LE (=24, no filename area)
-      [20:24]  padding         — zeros
-    Per PC record (40 bytes):
-      [0:4]    clip_hash       — u32 LE
-      [4:8]    format_bytes    — u8[4]: [pad, channels, codec, pad]
-      [8:12]   sample_rate     — u32 LE
-      [12:16]  data_offset     — u32 LE
-      [16:20]  data_size       — u32 LE
-      [20:36]  zeros           — 16 bytes padding
-      [36:40]  cumul_offset    — u32 LE
+      [8:12]   sample_rate     — u32
+      [12:16]  data_offset     — u32
+      [16:20]  data_size       — u32
+      [20:36]  extra fields    — 4 × u32 (zeros/metadata)
     """
     if len(body_be) < 24:
         return body_be
@@ -1047,74 +1032,51 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     self_hash2 = struct.unpack_from(">I", body_be, 12)[0]
     xbox_records_offset = struct.unpack_from(">I", body_be, 16)[0]
 
-    # Extract filenames from the area between byte 24 and records_offset
-    filename_area = body_be[24:xbox_records_offset]
-    filenames: list[str] = []
-    if filename_area:
-        for part in filename_area.split(b"\x00"):
-            if part:
-                filenames.append(part.decode("ascii", errors="replace"))
-
-    # Hash each filename for PC references
-    filename_hashes: list[int] = []
-    for fn in filenames:
-        filename_hashes.append(pandemic_hash_m2(fn))
-
-    # Parse Xbox records
-    records_start = xbox_records_offset
+    # Parse Xbox records (36 bytes each)
     xbox_records: list[tuple] = []
     for i in range(count):
-        roff = records_start + i * _XBOX_WAVEBANK_RECORD_SIZE
-        if roff + _XBOX_WAVEBANK_RECORD_SIZE > len(body_be):
+        roff = xbox_records_offset + i * _WAVEBANK_RECORD_SIZE
+        if roff + _WAVEBANK_RECORD_SIZE > len(body_be):
             break
         clip_hash = struct.unpack_from(">I", body_be, roff)[0]
-        fmt_bytes = body_be[roff + 4:roff + 8]  # u8[4] — leave as-is
+        fmt_bytes = body_be[roff + 4:roff + 8]
         sample_rate = struct.unpack_from(">I", body_be, roff + 8)[0]
         data_offset = struct.unpack_from(">I", body_be, roff + 12)[0]
         data_size = struct.unpack_from(">I", body_be, roff + 16)[0]
         extra = struct.unpack_from(">4I", body_be, roff + 20)
         xbox_records.append((clip_hash, fmt_bytes, sample_rate, data_offset, data_size, extra))
 
-    # Build PC output
-    pc_records_offset = 24  # PC has no filename area
+    pc_records_offset = 24
+    xbox_audio_start = xbox_records_offset + count * _WAVEBANK_RECORD_SIZE
+    trailing_audio = body_be[xbox_audio_start:]
+    pc_audio_start = pc_records_offset + count * _WAVEBANK_RECORD_SIZE
+
+    # Build PC output — 24-byte header + 36-byte records + trailing audio
     out = bytearray()
 
-    # Header
-    out += struct.pack("<I", count)          # [0:4] count (LE)
-    out += struct.pack("<I", self_hash)      # [4:8] self_hash (LE)
-    out += struct.pack("<H", flags)          # [8:10] flags (LE)
-    out += struct.pack("<H", more_flags)     # [10:12] more_flags (LE)
-    out += struct.pack("<I", self_hash2)     # [12:16] self_hash2 (LE)
-    out += struct.pack("<I", pc_records_offset)  # [16:20] records_offset (LE)
-    out += b"\x00" * 4                       # [20:24] padding
+    out += struct.pack("<I", count)
+    out += struct.pack("<I", self_hash)
+    out += struct.pack("<H", flags)
+    out += struct.pack("<H", more_flags)
+    out += struct.pack("<I", self_hash2)
+    out += struct.pack("<I", pc_records_offset)
+    out += b"\x00" * 4
 
-    # Detect trailing audio data beyond the Xbox records
-    xbox_audio_start = xbox_records_offset + count * _XBOX_WAVEBANK_RECORD_SIZE
-    trailing_audio = body_be[xbox_audio_start:]
-    pc_audio_start = 24 + count * _PC_WAVEBANK_RECORD_SIZE
-
-    # PC records (40 bytes each)
-    cumul_offset = 0
-    for clip_hash, fmt_bytes, sample_rate, data_offset, data_size, _extra in xbox_records:
-        out += struct.pack("<I", clip_hash)       # [0:4] clip_hash LE
-        # Format bytes: change codec from Xbox ADPCM (0x05) to IMA ADPCM (0x02)
+    for clip_hash, fmt_bytes, sample_rate, data_offset, data_size, extra in xbox_records:
+        out += struct.pack("<I", clip_hash)
         pc_fmt = bytearray(fmt_bytes)
         if pc_fmt[2] == _XBOX_ADPCM_CODEC:
             pc_fmt[2] = _PC_IMA_ADPCM_CODEC
-        out += bytes(pc_fmt)                      # [4:8] format_bytes
-        out += struct.pack("<I", sample_rate)     # [8:12] sample_rate LE
-        # Rebase data_offset from Xbox layout to PC layout
+        out += bytes(pc_fmt)
+        out += struct.pack("<I", sample_rate)
         if trailing_audio and data_offset >= xbox_audio_start:
             pc_data_offset = data_offset - xbox_audio_start + pc_audio_start
         else:
             pc_data_offset = data_offset
-        out += struct.pack("<I", pc_data_offset)  # [12:16] data_offset LE
-        out += struct.pack("<I", data_size)       # [16:20] data_size LE
-        out += b"\x00" * 16                       # [20:36] zeros
-        out += struct.pack("<I", cumul_offset)    # [36:40] cumul_offset LE
-        cumul_offset += data_size
+        out += struct.pack("<I", pc_data_offset)
+        out += struct.pack("<I", data_size)
+        out += struct.pack("<4I", *extra)
 
-    # Nibble-swap trailing audio data in-place (preserving relative layout)
     if trailing_audio:
         swapped = bytearray(trailing_audio)
         for _clip_hash, fmt_bytes, _sample_rate, data_offset, data_size, _extra in xbox_records:
@@ -1135,71 +1097,32 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
 def _convert_soundbank_data(body_be: bytes) -> bytes:
     """Convert soundbank body from Xbox to PC format.
 
-    Mixed endianness: count is LE, hashes and numeric params are BE, flag bytes
-    are individual u8 values.
+    Layout (verified against base game PC wavebank/soundbank comparison):
+      [0:4]    count       — u32 LE (same on both platforms)
+      [4:8]    self_hash   — u32 BE
+      [8:12]   flags       — u32 BE (two u16 counts packed as u32)
+      [12:16]  self_hash2  — u32 BE (duplicate of self_hash)
+      [16:20]  data_start  — u32 BE (= 0x20 = 32 consistently)
+      [20:24]  section_off1 — u32 BE (offset to section table 1)
+      [24:28]  section_off2 — u32 BE (offset to section table 2)
+      [28:32]  section_off3 — u32 BE (offset to section table 3)
+      [32:...]              — record/section data (hashes + IEEE 754 floats)
 
-    Layout (verified from raw Xbox DLC extraction):
-      [0:4]   count          — u32 LE (already LE!)
-      [4:8]   self_hash      — u32 BE
-      [8:12]  hash2          — u32 BE
-      [12:16] header_size    — u32 BE
-      [16:header_size]       — additional header fields (u32 BE each)
-    Per record (variable, typical structure):
-      Mix of u32 BE (hashes, float params) and u8 flags.
-      Records are fixed-size within a given soundbank.
-
-    Strategy: swap header fields individually, then for records determine
-    record_size = (body_len - header_size) / count. Within each record,
-    swap u32-aligned fields as BE→LE (hashes and float parameters) while
-    preserving byte-level flag fields.
+    All fields from offset 4 onwards are u32-aligned BE values (hashes, float
+    parameters, section offsets). Byte-level u8 flags are not present in
+    Mercs 2 soundbanks — the entire body after offset 0 is u32 BE→LE.
     """
     if len(body_be) < 16:
         return body_be
 
     out = bytearray(body_be)
 
-    count = struct.unpack_from("<I", body_be, 0)[0]
     # [0:4] count — already LE, do NOT swap
-    # [4:8] self_hash — u32 BE → LE
-    struct.pack_into("<I", out, 4, struct.unpack_from(">I", body_be, 4)[0])
-    # [8:12] hash2 — u32 BE → LE
-    struct.pack_into("<I", out, 8, struct.unpack_from(">I", body_be, 8)[0])
-    # [12:16] header_size/params_offset — u32 BE → LE
-    header_size = struct.unpack_from(">I", body_be, 12)[0]
-    struct.pack_into("<I", out, 12, header_size)
-
-    # Swap any additional header u32 fields between offset 16 and header_size
-    pos = 16
-    while pos + 4 <= header_size and pos + 4 <= len(body_be):
+    # Swap every u32 from offset 4 to end of body
+    pos = 4
+    while pos + 4 <= len(body_be):
         struct.pack_into("<I", out, pos, struct.unpack_from(">I", body_be, pos)[0])
         pos += 4
-
-    # Records area
-    if count == 0 or header_size >= len(body_be):
-        return bytes(out)
-
-    records_area = len(body_be) - header_size
-    if count > 0:
-        record_size = records_area // count
-    else:
-        return bytes(out)
-
-    if record_size < 4:
-        return bytes(out)
-
-    # Each record: swap all u32-aligned fields as BE→LE.
-    # Soundbank records contain hashes (u32) and float parameters (IEEE 754
-    # stored as u32) — both need byte order swap. Individual u8 flag bytes
-    # are embedded at non-u32-aligned positions in some variants, but the
-    # standard Mercs 2 soundbank uses u32-aligned records throughout.
-    for i in range(count):
-        roff = header_size + i * record_size
-        # Swap every u32 in the record
-        for j in range(0, record_size - 3, 4):
-            foff = roff + j
-            if foff + 4 > len(body_be):
-                break
-            struct.pack_into("<I", out, foff, struct.unpack_from(">I", body_be, foff)[0])
 
     return bytes(out)
 
