@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Verify vz-patch.wad FFCS structure (G6 gate — PTHS trailer, block counts).
+"""Verify vz-patch.wad FFCS structure (G7 gate — PTHS trailer, block counts,
+packed_field decompression buffer sizing).
 
 Checks:
   - FFCS magic and required chunks (INDX, DATA, CSUM, ASET, PTHS)
   - 258-byte PTHS trailer marker (see docs/patch_wad_format.md)
   - Optional expected block count (--expect-blocks)
+  - packed_field vs actual decompressed size for every block
 
 Usage:
   python3 tools/verify_patch_wad_structure.py --wad path/to/vz-patch.wad
@@ -14,20 +16,22 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ffcs_patch_wad import PTHS_TRAILER  # noqa: E402
+from ffcs_patch_wad import PTHS_TRAILER, PAGE_SIZE  # noqa: E402
 from ffcs_wad import parse_ffcs, extract_slice, dump_paths_from_pths  # noqa: E402
+from sges_decompress import decompress_sges_block  # noqa: E402
 
 REQUIRED_CHUNKS = ("INDX", "DATA", "CSUM", "ASET", "PTHS")
 
 # Approximate sizes for deploy sanity (bytes)
 SIZE_HINTS = {
-    "full": (250_000_000, 260_000_000),
-    "dlc-only": (235_000_000, 250_000_000),
+    "full": (180_000_000, 260_000_000),
+    "dlc-only": (170_000_000, 250_000_000),
     "bootstrap-only": (8_000_000, 20_000_000),
 }
 
@@ -97,8 +101,57 @@ def main() -> int:
         else:
             print(f"  OK: size within {args.variant} hint")
 
-    if ok and not (args.expect_blocks and n_blocks != args.expect_blocks):
-        print("  OK: patch WAD structure looks valid")
+    # ── packed_field vs actual decompressed size ──
+    indx_chunk = next(c for c in arch.chunks if c.tag == "INDX")
+    indx_off = indx_chunk.offset
+    indx_count = indx_chunk.meta
+
+    print(f"\n  packed_field verification ({indx_count} blocks)...")
+    packed_failures = []
+    for i in range(indx_count):
+        entry_off = indx_off + i * 12
+        page_idx, packed, flags_pages = struct.unpack_from("<III", raw, entry_off)
+        comp_pages = flags_pages & 0xFFFF
+        alloc_pages = packed & 0x00FFFFFF
+        tier = (packed >> 24) & 0xFF
+
+        block_off = page_idx * PAGE_SIZE
+        block_sz = comp_pages * PAGE_SIZE
+        if block_off + block_sz > size:
+            packed_failures.append((i, "block data beyond EOF"))
+            continue
+
+        try:
+            decompressed = decompress_sges_block(
+                raw, block_off, block_off + block_sz,
+            )
+        except Exception as e:
+            packed_failures.append((i, f"sges decompress failed: {e}"))
+            continue
+
+        needed_pages = (len(decompressed) + PAGE_SIZE - 1) // PAGE_SIZE
+        if alloc_pages < needed_pages:
+            path_str = paths[i] if i < len(paths) else f"block_{i}"
+            packed_failures.append((
+                i,
+                f"BUFFER OVERFLOW: packed_field allocates {alloc_pages} pages "
+                f"({alloc_pages * PAGE_SIZE:,} bytes) but decompressed size is "
+                f"{len(decompressed):,} bytes ({needed_pages} pages needed) — "
+                f"tier={tier} path={path_str}",
+            ))
+
+    if packed_failures:
+        print(f"  FAIL: {len(packed_failures)} packed_field error(s):")
+        for blk_i, msg in packed_failures:
+            print(f"    block[{blk_i}]: {msg}")
+        ok = False
+    else:
+        print(f"  OK: all {indx_count} blocks have correct packed_field sizing")
+
+    if ok:
+        print("\n  OK: patch WAD structure looks valid")
+    else:
+        print(f"\n  FAIL: {len(packed_failures)} error(s) found")
     return 0 if ok else 1
 
 

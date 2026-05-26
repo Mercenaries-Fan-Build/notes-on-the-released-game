@@ -646,19 +646,11 @@ def port_x360_dlc(
     print(f"  INDX: {num_blocks} blocks")
     print(f"  ASET: {aset_row.meta} entries")
 
-    # CSUM fields: CSUM.meta is a resident entry count used for pre-allocation.
-    # The base vz.wad has CSUM.meta = 7,018.  When the patch WAD overlays it,
-    # the engine may resize the table to the patch's meta value.  If the patch
-    # meta is SMALLER (e.g. Xbox DLC's 933), the engine shrinks the table,
-    # freeing heap memory that other subsystems (sound device) still reference
-    # → use-after-free crash.  Use base_meta + patch_meta so the table only
-    # grows.  CSUM.offset is an unknown hash/identifier — use the base game's
-    # value (0x02B38FCB) since the Xbox value has no PC meaning.
-    _BASE_VZ_CSUM_VALUE = 0x02B38FCB
-    _BASE_VZ_CSUM_META = 7018
-    xbox_csum_meta = csum_row.meta if csum_row else 0
-    source_csum_value = _BASE_VZ_CSUM_VALUE
-    source_csum_meta = _BASE_VZ_CSUM_META + xbox_csum_meta
+    # CSUM fields: purpose not fully understood. Pass through the Xbox source
+    # values — prior assets-only builds with these values were stable (30+ min
+    # freeplay).  Overriding with base-game values caused a regression.
+    source_csum_value = csum_row.offset if csum_row else 0
+    source_csum_meta = csum_row.meta if csum_row else None
     if csum_row:
         print(f"  CSUM: Xbox value=0x{csum_row.offset:08X}, meta={csum_row.meta} "
               f"→ PC combined: value=0x{source_csum_value:08X}, "
