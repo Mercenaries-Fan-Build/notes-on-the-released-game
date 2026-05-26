@@ -534,6 +534,21 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
 
     pc_sges = compress_sges(swapped, segment_size=65536, level=6, major=4)
 
+    roundtrip = decompress_sges_block(pc_sges, 0, len(pc_sges))
+    if roundtrip != swapped:
+        raise RuntimeError(
+            f"Block {blk_idx} ({args.path}): sges round-trip mismatch — "
+            f"expected {len(swapped)} bytes, got {len(roundtrip)}"
+        )
+
+    # Recompute packed_field: the decompressed size may differ after byte-swap
+    # + base-game overrides.  packed_field encodes (tier << 24) | decomp_pages
+    # where decomp_pages = ceil(decompressed_size / PAGE_SIZE).  Using the
+    # Xbox value after size changes causes a heap buffer overflow in the engine.
+    xbox_tier = (args.packed_field >> 24) & 0xFF
+    correct_pages = (len(swapped) + 0x7FFF) // 0x8000
+    recomputed_packed = (xbox_tier << 24) | correct_pages
+
     return _BlockWorkerResult(
         blk_idx=blk_idx,
         skipped=False,
@@ -541,7 +556,7 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
             compressed_data=pc_sges,
             path_string=args.path,
             aset_entries=list(args.block_asets),
-            packed_field=args.packed_field,
+            packed_field=recomputed_packed,
             flags=args.flags,
         ),
         hash_entries=hash_entries,
