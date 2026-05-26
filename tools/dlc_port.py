@@ -593,6 +593,31 @@ def _collect_block_results(
     return converted, skipped, total_swap_stats, hash_to_local_block
 
 
+# ── ASET sub-entry sanitization ───────────────────────────────────────
+
+def _fix_xbox_aset_sub_entry(u2: int) -> int:
+    """Sanitize Xbox ASET packed_block_ref low16 field.
+
+    In the base game, packed_block_ref (u2) = (block_index << 16) | sub_entry,
+    where sub_entry = 0xFFFF means "primary" (the asset IS the block's main
+    entry).  Xbox 360 DLC duplicates the block index into the low16 field,
+    causing heap corruption when the PC engine uses the bogus sub-entry offset
+    to index into a block's entry table.
+
+    Returns u2 with a corrected low16: 0xFFFF (primary) unless the low16 is
+    already a plausible sub-entry offset distinct from the block index.
+    """
+    high16 = (u2 >> 16) & 0xFFFF
+    low16 = u2 & 0xFFFF
+    if low16 == 0xFFFF:
+        return u2
+    if low16 == high16:
+        return (high16 << 16) | 0xFFFF
+    # Unknown low16 — could be a genuine sub-entry offset, but Xbox DLC has
+    # no known valid sub-entry refs.  Default to primary to be safe.
+    return (high16 << 16) | 0xFFFF
+
+
 # ── Pipeline ──────────────────────────────────────────────────────────
 
 def port_x360_dlc(
@@ -677,7 +702,7 @@ def port_x360_dlc(
             global_aset.append({
                 "asset_hash": ae.asset_hash,
                 "u32_1": ae.u1,
-                "u32_2": ae.u2,
+                "u32_2": _fix_xbox_aset_sub_entry(ae.u2),
                 "u32_3": ae.u3,
             })
         else:
@@ -696,7 +721,7 @@ def port_x360_dlc(
         entry_dict = {
             "asset_hash": ae.asset_hash,
             "u32_1": ae.u1,
-            "u32_2": ae.u2,
+            "u32_2": _fix_xbox_aset_sub_entry(ae.u2),
             "u32_3": ae.u3,
         }
         aset_by_block.setdefault(local_idx, []).append(entry_dict)
@@ -910,7 +935,7 @@ def port_x360_dlc(
                 blk.aset_entries.append({
                     "asset_hash": h,
                     "u32_1": 0xFFFFFFFF,
-                    "u32_2": 0,
+                    "u32_2": 0xFFFF,
                     "u32_3": STRINGDB_ASET_TYPE_ID,
                 })
                 existing_hashes.add(h)

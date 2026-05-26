@@ -72,11 +72,17 @@ SCRIPT_ASET_TYPE_ID = 35
 
 
 def script_aset_entry(asset_hash: int) -> dict:
-    """ASET row for a Lua script module (required for import() lookup)."""
+    """ASET row for a Lua script module (required for import() lookup).
+
+    u32_2 low16 = 0xFFFF marks a primary reference (the asset IS the main
+    entry in its block).  The high16 (block index) is set to 0 here and
+    remapped to the actual PC block index by ffcs_patch_wad.py during
+    WAD assembly.
+    """
     return {
         "asset_hash": asset_hash,
         "u32_1": 0xFFFFFFFF,
-        "u32_2": 0,
+        "u32_2": 0xFFFF,
         "u32_3": SCRIPT_ASET_TYPE_ID,
     }
 
