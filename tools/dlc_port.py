@@ -425,10 +425,12 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         from ucfx_be_to_le import _parse_entry_table_be
         from aset_type_ids import type_id_for_type_hash
 
+        override_all = is_dlc_script_resident_path(args.path)
+
         be_entries = _parse_entry_table_be(decompressed)
         override_counts: dict[int, int] = {}
         for eidx, (ehash, etype, _eoff, _esize) in enumerate(be_entries):
-            if etype in _OVERRIDE_TYPE_HASHES:
+            if override_all or etype in _OVERRIDE_TYPE_HASHES:
                 tid = type_id_for_type_hash(etype)
                 if tid is not None and (ehash, tid) in args.base_anim_index:
                     base_blk = args.base_anim_index[(ehash, tid)]
@@ -453,12 +455,26 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
                 _STANCE_TYPE_HASH: "stance",
                 _UNKNOWN_E5_TYPE_HASH: "unknown_E5",
             }
-            parts = [
-                f"{override_counts[th]} {_override_labels[th]}"
-                for th in _OVERRIDE_TYPE_HASHES
-                if override_counts.get(th)
-            ]
-            override_msg = " + ".join(parts) + " override(s) from base game"
+            if override_all:
+                non_labeled = sum(
+                    c for t, c in override_counts.items()
+                    if t not in _override_labels
+                )
+                parts = [
+                    f"{override_counts[th]} {_override_labels[th]}"
+                    for th in _OVERRIDE_TYPE_HASHES
+                    if override_counts.get(th)
+                ]
+                if non_labeled:
+                    parts.append(f"{non_labeled} resident-shared")
+                override_msg = " + ".join(parts) + " override(s) from base game"
+            else:
+                parts = [
+                    f"{override_counts[th]} {_override_labels[th]}"
+                    for th in _OVERRIDE_TYPE_HASHES
+                    if override_counts.get(th)
+                ]
+                override_msg = " + ".join(parts) + " override(s) from base game"
 
     try:
         swapped, stats = byteswap_ucfx_block(
