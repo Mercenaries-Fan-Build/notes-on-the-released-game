@@ -580,7 +580,7 @@ def _lua_convert_proto(
 
 # ── Body conversion dispatch ──────────────────────────────────────────
 
-_CONTAINER_TAGS = frozenset(("STRM", "GEOM", "IBUF", "CHDR", "COMP", "STAT", "PRMT", "EXEC"))
+_CONTAINER_TAGS = frozenset(("STRM", "GEOM", "IBUF", "CHDR", "COMP", "STAT", "PRMT", "EXEC", "EMIT"))
 _META_CONTAINERS = frozenset(("CHDR", "COMP", "STAT", "PRMT", "EXEC"))
 _STREAM_CONTAINERS = frozenset(("STRM", "GEOM"))
 
@@ -787,6 +787,9 @@ _TYPE_OBJECT_REGISTRY = 0x6310807F  # resident entity-class registry (ASET type_
 _TYPE_CFX_PACK = 0xFE0E8320  # CFX header + zlib (fonts, effects, resident sub-assets)
 _TYPE_LEVEL = 0xEA4829D5
 _TYPE_LAYER = 0x5647C35D  # world layer / terrainfade META (type_id 8)
+_TYPE_RESIDENT_MISC = 0xFA0B8DBC  # resident-only blobs (ASET type_id 18, 22 entries)
+_TYPE_MATERIALTABLE = 0x59B9DF6A  # materialtable singleton (resident)
+_TYPE_UNKNOWN_DE = 0xDE982D61  # resident INFO (ASET type_id 14)
 
 # Mesh types share identical sub-chunk formats
 _MESH_TYPES = {_TYPE_MESH_A, _TYPE_MESH_B, _TYPE_MESH_C}
@@ -798,6 +801,7 @@ _U32_INFO_TYPES = (
     {
         _TYPE_KEYFRAME, _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_PATH, _TYPE_ECS_NODE,
         _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_LEVEL, _TYPE_LAYER,
+        _TYPE_RESIDENT_MISC, _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
     }
 )
 
@@ -1378,21 +1382,9 @@ def _convert_body(
     if tag in ("EFCT", "EMTR"):
         return _convert_u16_array(body_be)
 
-    # ── CHDR: small headers (≤64 bytes) are u32 fields (child_count, flags,
-    # version); large bodies are nested containers with sub-chunks that
-    # need semantic parsing (see mismatch #6: 59KB CHDR).
+    # ── CHDR: u32/hash scalars (verified on resident 0x140E8728 ~59 KB body) ──
     if tag == "CHDR":
-        if len(body_be) <= 64:
-            return _convert_u32_array(body_be)
-        return _fallback_u32_or_raise(
-            body_be,
-            reason="large CHDR nested container needs semantic converter",
-            tag=tag,
-            type_hash=type_hash,
-            context=context,
-            permissive=permissive,
-            stats=stats,
-        )
+        return _convert_u32_array(body_be)
 
     # ── BNDS: axis-aligned bounds / sphere (10 × f32 in terrain tiles) ──
     if tag == "BNDS":
@@ -1406,10 +1398,26 @@ def _convert_body(
     if tag == "TRFM":
         return _convert_u32_array(body_be)
 
+    # ── Effect/particle tags (DLC effects block; u32 / f32-aligned) ──
+    if tag in ("PTYP", "COLR", "TEXT", "FRCE", "ANIM", "AKEY"):
+        return _convert_u32_array(body_be)
+
+    # ── Animation manifest / metadata (resident stance entries) ──
+    if tag in ("MANM", "TRCK", "DATA"):
+        return _convert_u32_array(body_be)
+    if tag == "MINF":
+        if len(body_be) % 2 == 0:
+            return _convert_u16_array(body_be)
+        return _convert_u32_array(body_be)
+
+    # ── Resident singleton sub-tags (watr/tree, 1 entry each) ──
+    if tag in ("watr", "tree", "UNIQ"):
+        return _convert_u32_array(body_be)
+
     # ── Mesh structure tags with verified u32-only layouts ──
     if tag in ("PRMG", "GEOM", "POFF", "STAT", "SWIT",
                "NODE", "CEXE", "PHY2", "COMP", "TINY",
-               "SCRB", "INST", "PTCH", "PTMS", "BSHP"):
+               "SCRB", "INST", "PTCH", "PTMS", "BSHP", "VALU"):
         return _convert_u32_array(body_be)
 
     stats["tags_seen"][tag] = stats["tags_seen"].get(tag, 0) + 1
@@ -1494,7 +1502,9 @@ def _convert_container(
             texture_fmt = body_be[14:22]
 
         if row_u0 == CONTAINER_SENTINEL:
-            if permissive:
+            if body_size == 0:
+                bodies_le.append(b"")
+            elif permissive:
                 bodies_le.append(_convert_u32_array(body_be))
             else:
                 raise UnhandledByteSwapError(
