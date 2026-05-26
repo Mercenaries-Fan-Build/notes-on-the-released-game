@@ -171,12 +171,13 @@ def build_patch_wad_multi(
 
     # ── Resolve CSUM meta (resident ASET entry count) ──
     if csum_meta is None:
-        # Auto-detect: count ASET entries for the block whose path looks
-        # like the resident pack (e.g. "resident_P000_Q3.block").
+        # Auto-detect: count ASET entries for the block whose path ends
+        # with "\resident_P000_Q3.block" (the always-loaded resident pack).
+        # Exclude "resident2", "dlctest_resident", "vo_resident", etc.
         csum_meta = 0
         for blk in blocks:
-            lower = blk.path_string.lower()
-            if "resident_p000_q3" in lower and "resident2" not in lower:
+            lower = blk.path_string.lower().replace("/", "\\")
+            if lower.endswith("\\resident_p000_q3.block"):
                 csum_meta = len(blk.aset_entries)
                 break
 
