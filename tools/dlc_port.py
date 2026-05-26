@@ -447,6 +447,34 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
                         base_overrides[eidx] = le_ucfx
                         override_counts[etype] = override_counts.get(etype, 0) + 1
 
+        if override_all:
+            not_overridden = [
+                (eidx, ehash, etype)
+                for eidx, (ehash, etype, _, _) in enumerate(be_entries)
+                if base_overrides is None or eidx not in base_overrides
+            ]
+            if not_overridden and base_block_cache:
+                for base_blk_idx in list(base_block_cache.keys()):
+                    still_missing = not_overridden[:]
+                    for eidx, ehash, etype in still_missing:
+                        le_ucfx = _extract_base_entry_ucfx(
+                            source_wad,
+                            base_blk_idx,
+                            ehash,
+                            etype,
+                            _block_cache=base_block_cache,
+                        )
+                        if le_ucfx is not None:
+                            if base_overrides is None:
+                                base_overrides = {}
+                            base_overrides[eidx] = le_ucfx
+                            override_counts[etype] = (
+                                override_counts.get(etype, 0) + 1
+                            )
+                            not_overridden.remove((eidx, ehash, etype))
+                    if not not_overridden:
+                        break
+
         if base_overrides:
             _override_labels = {
                 _ANIMATION_TYPE_HASH: "Havok",
