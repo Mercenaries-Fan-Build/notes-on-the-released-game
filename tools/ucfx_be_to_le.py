@@ -18,6 +18,7 @@ import struct
 import zlib
 
 from pandemic_hash import pandemic_hash_m2
+from audio_codec_policy import PC_PWS_HEADER_SIZE
 from pws_xbox_to_pc import normalize_embedded_wavebank_clip
 
 
@@ -1103,9 +1104,9 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
 
         if xbox_off + xbox_sz > len(body_be):
             # Hatch 1: streaming reference — audio lives in external PWS file,
-            # not in the wavebank body. Preserve offset/size; the PWS
-            # transcoding pipeline handles the actual audio conversion.
-            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
+            # not in the wavebank body. Adjust offset by PC_PWS_HEADER_SIZE
+            # because Xbox PWS is headerless but PC PWS has a 4-byte header.
+            new_offsets[rec["index"]] = (xbox_off + PC_PWS_HEADER_SIZE, xbox_sz)
             codec_rewrite_indices.add(rec["index"])
             continue
 
