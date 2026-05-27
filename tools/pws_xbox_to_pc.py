@@ -326,10 +326,20 @@ def transcode_pws_xbox_to_pc(xbox_data: bytes, channels: int = 1) -> bytes:
             out += _encode_ima_stereo_block(left, right)
 
     if remainder:
-        raise UnhandledAudioCodecError(
-            f"ADPCM stream not block-aligned: {len(xbox_data)} bytes, "
-            f"block_size={block_size}, remainder={remainder}"
+        import sys
+        partial = xbox_data[n_blocks * block_size:]
+        padded = partial + b"\x00" * (block_size - remainder)
+        print(
+            f"[pws_xbox_to_pc] partial final block: {remainder}/{block_size} "
+            f"bytes, zero-padded and transcoded "
+            f"({len(xbox_data)}-byte stream, {n_blocks}+1 blocks)",
+            file=sys.stderr,
         )
+        if channels == 1:
+            out += _transcode_mono_block(padded)
+        else:
+            left, right = _decode_xbox_stereo_block(padded)
+            out += _encode_ima_stereo_block(left, right)
 
     return bytes(out)
 
