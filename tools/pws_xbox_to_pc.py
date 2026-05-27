@@ -122,7 +122,7 @@ def _transcode_mono_block(xbox_block: bytes) -> bytes:
     """
     if len(xbox_block) < XBOX_MONO_BLOCK:
         raise UnhandledAudioCodecError(
-            f"mono ADPCM block undersized: {len(xbox_block)} bytes "
+            f"[Hatch 6] mono ADPCM block undersized: {len(xbox_block)} bytes "
             f"(need {XBOX_MONO_BLOCK})"
         )
 
@@ -330,7 +330,7 @@ def transcode_pws_xbox_to_pc(xbox_data: bytes, channels: int = 1) -> bytes:
         partial = xbox_data[n_blocks * block_size:]
         padded = partial + b"\x00" * (block_size - remainder)
         print(
-            f"[pws_xbox_to_pc] partial final block: {remainder}/{block_size} "
+            f"[Hatch 7] partial final block: {remainder}/{block_size} "
             f"bytes, zero-padded and transcoded "
             f"({len(xbox_data)}-byte stream, {n_blocks}+1 blocks)",
             file=sys.stderr,

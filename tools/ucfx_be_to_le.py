@@ -956,7 +956,7 @@ def _convert_unknown_e5_data(body_be: bytes) -> bytes:
     """
     if len(body_be) < 28:
         raise UnhandledByteSwapError(
-            f"audio group descriptor (unknown_E5) body too short: "
+            f"[Hatch 5] audio group descriptor (unknown_E5) body too short: "
             f"{len(body_be)} bytes (need 28)"
         )
 
@@ -1036,7 +1036,8 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     """
     if len(body_be) < 24:
         raise UnhandledByteSwapError(
-            f"wavebank body too short for header: {len(body_be)} bytes (need 24)"
+            f"[Hatch 3] wavebank body too short for header: "
+            f"{len(body_be)} bytes (need 24)"
         )
 
     count = struct.unpack_from("<I", body_be, 0)[0]
@@ -1048,11 +1049,11 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
 
     if count > 10000:
         raise UnhandledByteSwapError(
-            f"wavebank record count implausible: {count} (max 10000)"
+            f"[Hatch 3] wavebank record count implausible: {count} (max 10000)"
         )
     if xbox_records_offset > len(body_be):
         raise UnhandledByteSwapError(
-            f"wavebank records_offset {xbox_records_offset} exceeds "
+            f"[Hatch 3] wavebank records_offset {xbox_records_offset} exceeds "
             f"body length {len(body_be)}"
         )
 
@@ -1094,19 +1095,19 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     pc_audio_blob = bytearray()
     pc_audio_start = pc_records_offset + count * _WAVEBANK_RECORD_SIZE
     new_offsets: dict[int, tuple[int, int]] = {}
-    transcoded_indices: set[int] = set()
+    codec_rewrite_indices: set[int] = set()
 
     for rec in populated:
         xbox_off = rec["data_offset"]
         xbox_sz = rec["data_size"]
 
         if xbox_off + xbox_sz > len(body_be):
-            raise UnhandledByteSwapError(
-                f"wavebank clip OOB: clip_hash=0x{rec['clip_hash']:08X} "
-                f"codec=0x{rec['fmt_bytes'][2]:02X} "
-                f"data_offset={xbox_off} data_size={xbox_sz} "
-                f"body_len={len(body_be)} — clip data extends past wavebank body"
-            )
+            # Hatch 1: streaming reference — audio lives in external PWS file,
+            # not in the wavebank body. Preserve offset/size; the PWS
+            # transcoding pipeline handles the actual audio conversion.
+            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
+            codec_rewrite_indices.add(rec["index"])
+            continue
 
         xbox_clip = body_be[xbox_off:xbox_off + xbox_sz]
         channels = rec["fmt_bytes"][1] if rec["fmt_bytes"][1] > 0 else 1
@@ -1119,7 +1120,7 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
         pc_offset = pc_audio_start + len(pc_audio_blob)
         pc_size = len(pc_clip)
         new_offsets[rec["index"]] = (pc_offset, pc_size)
-        transcoded_indices.add(rec["index"])
+        codec_rewrite_indices.add(rec["index"])
         pc_audio_blob.extend(pc_clip)
 
     # Build PC output
@@ -1138,7 +1139,7 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     for i, rec in enumerate(xbox_records):
         out += struct.pack("<I", rec["clip_hash"])
         pc_fmt = bytearray(rec["fmt_bytes"])
-        if i in transcoded_indices and pc_fmt[2] in (_XBOX_ADPCM_CODEC, 0x01, 0x69):
+        if i in codec_rewrite_indices and pc_fmt[2] in (_XBOX_ADPCM_CODEC, 0x01, 0x69):
             pc_fmt[2] = _PC_IMA_ADPCM_CODEC
         out += bytes(pc_fmt)
         out += struct.pack("<I", rec["sample_rate"])
@@ -1233,7 +1234,8 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
     """
     if len(body_be) < 32:
         raise UnhandledByteSwapError(
-            f"soundbank body too short for header: {len(body_be)} bytes (need 32)"
+            f"[Hatch 4] soundbank body too short for header: "
+            f"{len(body_be)} bytes (need 32)"
         )
 
     out = bytearray(body_be)
