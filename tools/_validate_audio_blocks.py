@@ -177,7 +177,11 @@ def validate_wavebank_body(body, label):
             if sample_rate == 0 or sample_rate > 192000:
                 issues.append(
                     f"  {label}: Record {i}: implausible sample_rate {sample_rate}")
-            if codec not in (0x01, 0x02, 0x03, 0x05, 0x11, 0x69):
+            if codec in (0x01, 0x05, 0x69):
+                issues.append(
+                    f"  {label}: Record {i}: unsupported codec 0x{codec:02X} on PC "
+                    f"(requires port transcode to 0x02)")
+            elif codec not in (0x00, 0x02, 0x03, 0x11):
                 issues.append(
                     f"  {label}: Record {i}: unusual codec 0x{codec:02X}")
             if channels == 0 or channels > 8:

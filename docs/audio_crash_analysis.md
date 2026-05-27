@@ -184,9 +184,12 @@ Remove or zero the 10 soundbank (type `0x9F8BCA10`) and 11 wavebank (type `0xF75
 entries from `vz-patch.wad`. The DLC missions/content can still load — they just won't
 have custom audio, falling back to the base game's sound banks.
 
-### Option 2: Convert XMA → PC codec
-Re-encode the `.pws` files from Xbox 360 XMA to the PC's expected audio format. Requires
-reverse-engineering the PC `.pws` container structure.
+### Option 2: Convert XMA → PC codec (implemented in port pipeline)
+`tools/pws_xbox_to_pc.py` transcodes Xbox ADPCM (nibble swap / stereo re-encode) and XMA
+payloads (via `ffmpeg` decode → PCM → IMA ADPCM). Wavebank embedded clips use
+`normalize_embedded_wavebank_clip()` from `tools/ucfx_be_to_le.py`. Standalone `.pws`
+get the PC 4-byte header (`u16 param + version=1`) via `transcode_pws_file_to_pc()`.
+Verify with `make audio-verify-dlc` and [audio_runtime_verification.md](audio_runtime_verification.md).
 
 ### Option 3: ASI hook — null guard on MixSources
 In `dlc_enable.asi`, patch the instruction at `0x83664C` or intercept the global pointer
@@ -196,3 +199,13 @@ existing null check at `0x83661D` skips the call safely.
 ### Option 4: ASI hook — proper shutdown synchronization
 Hook the PalSoundEngine destructor to set `[0x01175FFF] = 1` and signal the wait handle
 before freeing the object. This is the correct fix but requires identifying the destructor.
+
+## Runtime Trace Integration
+
+For repeatable runtime investigation and reuse-oriented artifact handling, use:
+
+- `docs/runtime_trace_loop.md` for the operational loop and acceptance criteria
+- `mods/engine_trace_asi/` for trace probe scaffolding
+- `tools/runtime_trace/` for normalization, migrations, and simulator bundle assembly
+
+The first probe priority remains the mixer call-chain up to `PalSoundEngine::MixSources`.

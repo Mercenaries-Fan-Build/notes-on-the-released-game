@@ -18,7 +18,7 @@ import struct
 import zlib
 
 from pandemic_hash import pandemic_hash_m2
-from pws_xbox_to_pc import transcode_pws_xbox_to_pc
+from pws_xbox_to_pc import normalize_embedded_wavebank_clip
 
 
 class UnhandledByteSwapError(ValueError):
@@ -955,7 +955,10 @@ def _convert_unknown_e5_data(body_be: bytes) -> bytes:
       [10:12] padding        — u16 (zero)
     """
     if len(body_be) < 28:
-        return body_be
+        raise UnhandledByteSwapError(
+            f"audio group descriptor (unknown_E5) body too short: "
+            f"{len(body_be)} bytes (need 28)"
+        )
 
     out = bytearray(body_be)
 
@@ -1032,7 +1035,9 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     offsets preserved as-is since they reference external PWS data.
     """
     if len(body_be) < 24:
-        return body_be
+        raise UnhandledByteSwapError(
+            f"wavebank body too short for header: {len(body_be)} bytes (need 24)"
+        )
 
     count = struct.unpack_from("<I", body_be, 0)[0]
     self_hash = struct.unpack_from(">I", body_be, 4)[0]
@@ -1041,8 +1046,15 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     self_hash2 = struct.unpack_from(">I", body_be, 12)[0]
     xbox_records_offset = struct.unpack_from(">I", body_be, 16)[0]
 
-    if count > 10000 or xbox_records_offset > len(body_be):
-        return body_be
+    if count > 10000:
+        raise UnhandledByteSwapError(
+            f"wavebank record count implausible: {count} (max 10000)"
+        )
+    if xbox_records_offset > len(body_be):
+        raise UnhandledByteSwapError(
+            f"wavebank records_offset {xbox_records_offset} exceeds "
+            f"body length {len(body_be)}"
+        )
 
     pop = min(populated_count, count) if populated_count > 0 else count
     pc_records_offset = 24
@@ -1082,27 +1094,32 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     pc_audio_blob = bytearray()
     pc_audio_start = pc_records_offset + count * _WAVEBANK_RECORD_SIZE
     new_offsets: dict[int, tuple[int, int]] = {}
+    transcoded_indices: set[int] = set()
 
     for rec in populated:
         xbox_off = rec["data_offset"]
         xbox_sz = rec["data_size"]
 
         if xbox_off + xbox_sz > len(body_be):
-            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
-            continue
+            raise UnhandledByteSwapError(
+                f"wavebank clip OOB: clip_hash=0x{rec['clip_hash']:08X} "
+                f"codec=0x{rec['fmt_bytes'][2]:02X} "
+                f"data_offset={xbox_off} data_size={xbox_sz} "
+                f"body_len={len(body_be)} — clip data extends past wavebank body"
+            )
 
         xbox_clip = body_be[xbox_off:xbox_off + xbox_sz]
         channels = rec["fmt_bytes"][1] if rec["fmt_bytes"][1] > 0 else 1
         codec = rec["fmt_bytes"][2]
 
-        if codec == _XBOX_ADPCM_CODEC:
-            pc_clip = transcode_pws_xbox_to_pc(bytes(xbox_clip), channels=channels)
-        else:
-            pc_clip = bytes(xbox_clip)
+        pc_clip, _new_codec = normalize_embedded_wavebank_clip(
+            bytes(xbox_clip), codec, channels,
+        )
 
         pc_offset = pc_audio_start + len(pc_audio_blob)
         pc_size = len(pc_clip)
         new_offsets[rec["index"]] = (pc_offset, pc_size)
+        transcoded_indices.add(rec["index"])
         pc_audio_blob.extend(pc_clip)
 
     # Build PC output
@@ -1121,7 +1138,7 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     for i, rec in enumerate(xbox_records):
         out += struct.pack("<I", rec["clip_hash"])
         pc_fmt = bytearray(rec["fmt_bytes"])
-        if pc_fmt[2] == _XBOX_ADPCM_CODEC:
+        if i in transcoded_indices and pc_fmt[2] in (_XBOX_ADPCM_CODEC, 0x01, 0x69):
             pc_fmt[2] = _PC_IMA_ADPCM_CODEC
         out += bytes(pc_fmt)
         out += struct.pack("<I", rec["sample_rate"])
@@ -1215,7 +1232,9 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
     (record data) respect the u8x4 field map.
     """
     if len(body_be) < 32:
-        return body_be
+        raise UnhandledByteSwapError(
+            f"soundbank body too short for header: {len(body_be)} bytes (need 32)"
+        )
 
     out = bytearray(body_be)
 

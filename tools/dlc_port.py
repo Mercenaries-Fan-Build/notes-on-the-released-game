@@ -101,7 +101,7 @@ from aset_type_ids import (  # noqa: E402
     STRINGDB_TYPE_HASH,
     type_id_for_type_hash,
 )
-from pws_xbox_to_pc import transcode_pws_xbox_to_pc  # noqa: E402
+from pws_xbox_to_pc import transcode_pws_file_to_pc  # noqa: E402
 
 
 _CRC32_TABLE: list[int] = []
@@ -1653,11 +1653,19 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
 
     for entry in pws_entries:
         xbox_data = reader.read_file(entry)
-        # Transcode Xbox ADPCM → PC IMA ADPCM (mono, lossless nibble swap)
-        pc_data = transcode_pws_xbox_to_pc(xbox_data, channels=1)
-        out_path = audio_dir / entry["name"]
+        name = entry["name"]
+        try:
+            pc_data = transcode_pws_file_to_pc(
+                xbox_data,
+                filename=name,
+                add_pc_header=True,
+            )
+        except Exception as exc:
+            print(f"    ERROR {name}: {exc}", file=sys.stderr)
+            return 1
+        out_path = audio_dir / name
         out_path.write_bytes(pc_data)
-        print(f"    {entry['name']} ({entry['file_size']:,} bytes, transcoded)")
+        print(f"    {name} ({entry['file_size']:,} → {len(pc_data):,} bytes, transcoded)")
 
     return 0
 

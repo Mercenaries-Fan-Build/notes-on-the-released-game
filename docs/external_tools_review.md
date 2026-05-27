@@ -480,3 +480,14 @@ Curated from [awesome-game-file-format-reversing](https://github.com/) and suppl
 
 *Generated from awesome-game-file-format-reversing repository review, May 2026.*
 *For Mercenaries 2: World in Flames RE project.*
+
+## Runtime Trace Framework Cross-Link
+
+The current repository now includes a local-first runtime trace/reuse framework:
+
+- runbook: `docs/runtime_trace_loop.md`
+- trace mod scaffold: `mods/engine_trace_asi/`
+- reusable artifact contracts: `.cursor/research/`
+- host tooling: `tools/runtime_trace/`
+
+Use this framework before introducing additional external tracing tools so captures remain schema-versioned, deduplicated, and migration-safe.

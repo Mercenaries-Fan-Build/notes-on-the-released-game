@@ -1,26 +1,32 @@
 #!/usr/bin/env python3
-"""Xbox ADPCM (.pws) to PC IMA ADPCM (.pws) transcoder.
+"""Xbox / XMA audio payloads → PC IMA ADPCM transcoder.
 
-Mercenaries 2 .pws files are raw ADPCM streams with no header.
-- Xbox: Xbox ADPCM (format 0x0069), 36-byte mono / 72-byte stereo blocks
-- PC: MS-IMA ADPCM (format 0x0011), same block sizes
-
-Both codecs use the identical IMA step table and decode algorithm. The only
-difference is nibble ordering within each byte of the data area:
-- Xbox: high nibble = first sample, low nibble = second sample
-- MS-IMA: low nibble = first sample, high nibble = second sample
-
-For mono blocks, conversion is a lossless nibble swap (no decode/re-encode
-needed, no quality loss). For stereo blocks, channel interleaving may differ
-so a full decode/re-encode is used.
+Mercenaries 2 standalone ``.pws`` and embedded wavebank clips use:
+- Xbox ADPCM: 36-byte mono / 72-byte stereo blocks (nibble order differs from PC)
+- PC retail ``.pws``: 4-byte LE header (u16 param + version=1) + MS-IMA ADPCM
+- DLC may ship XMA (codec 0x01) — decoded via ffmpeg when available, then IMA-encoded
 
 Usage:
-    from pws_xbox_to_pc import transcode_pws_xbox_to_pc
-    pc_data = transcode_pws_xbox_to_pc(xbox_data, channels=1)
+    from pws_xbox_to_pc import transcode_pws_file_to_pc, transcode_pws_xbox_to_pc
+    pc_data = transcode_pws_file_to_pc(xbox_data, channels=1, filename="vo.pws")
 """
 from __future__ import annotations
 
+import io
+import shutil
 import struct
+import subprocess
+import tempfile
+import wave
+from pathlib import Path
+
+from audio_codec_policy import (
+    PC_PWS_HEADER_SIZE,
+    PC_PWS_VERSION_LE,
+    PwsLayout,
+    UnhandledAudioCodecError,
+    probe_pws_payload,
+)
 
 # IMA ADPCM tables (standard, shared by both Xbox and PC codecs)
 _IMA_INDEX_TABLE = [
@@ -115,7 +121,10 @@ def _transcode_mono_block(xbox_block: bytes) -> bytes:
     swap nibbles in the 32-byte data area. The 4-byte header is unchanged.
     """
     if len(xbox_block) < XBOX_MONO_BLOCK:
-        return xbox_block
+        raise UnhandledAudioCodecError(
+            f"mono ADPCM block undersized: {len(xbox_block)} bytes "
+            f"(need {XBOX_MONO_BLOCK})"
+        )
 
     header = xbox_block[:XBOX_HEADER_SIZE]
     data = xbox_block[XBOX_HEADER_SIZE:XBOX_MONO_BLOCK]
@@ -316,11 +325,187 @@ def transcode_pws_xbox_to_pc(xbox_data: bytes, channels: int = 1) -> bytes:
             left, right = _decode_xbox_stereo_block(block)
             out += _encode_ima_stereo_block(left, right)
 
-    # Append any trailing bytes unchanged (shouldn't happen in well-formed data)
     if remainder:
-        out += xbox_data[n_blocks * block_size:]
+        raise UnhandledAudioCodecError(
+            f"ADPCM stream not block-aligned: {len(xbox_data)} bytes, "
+            f"block_size={block_size}, remainder={remainder}"
+        )
 
     return bytes(out)
+
+
+def wrap_pc_pws_header(ima_payload: bytes, param: int = 0) -> bytes:
+    """Prefix PC retail ``.pws`` header (u16 param + version=1)."""
+    return struct.pack("<HH", param & 0xFFFF, PC_PWS_VERSION_LE) + ima_payload
+
+
+def _pcm16_to_ima_stream(samples: list[int], channels: int) -> bytes:
+    """Encode interleaved PCM16 samples to raw MS-IMA block stream."""
+    if channels == 1:
+        out = bytearray()
+        for start in range(0, len(samples), 65):
+            chunk = samples[start : start + 65]
+            if not chunk:
+                break
+            out += _encode_ima_mono_block(chunk)
+        return bytes(out)
+
+    if channels != 2:
+        raise UnhandledAudioCodecError(f"unsupported channel count {channels}")
+
+    left = samples[0::2]
+    right = samples[1::2]
+    n_frames = min(len(left), len(right))
+    out = bytearray()
+    for i in range(0, n_frames, 65):
+        l_chunk = left[i : i + 65]
+        r_chunk = right[i : i + 65]
+        if not l_chunk and not r_chunk:
+            break
+        while len(l_chunk) < 65:
+            l_chunk.append(l_chunk[-1] if l_chunk else 0)
+        while len(r_chunk) < 65:
+            r_chunk.append(r_chunk[-1] if r_chunk else 0)
+        out += _encode_ima_stereo_block(l_chunk[:65], r_chunk[:65])
+    return bytes(out)
+
+
+def _wav_bytes_to_ima_payload(wav_bytes: bytes) -> tuple[bytes, int]:
+    """Decode RIFF WAVE bytes to raw PC IMA ADPCM block stream."""
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+        channels = wf.getnchannels()
+        if wf.getsampwidth() != 2:
+            raise UnhandledAudioCodecError(
+                f"WAV sample width {wf.getsampwidth()} (expected 16-bit)"
+            )
+        rate = wf.getframerate()
+        if rate <= 0:
+            raise UnhandledAudioCodecError("invalid WAV sample rate")
+        frames = wf.readframes(wf.getnframes())
+    samples = list(struct.unpack(f"<{len(frames) // 2}h", frames))
+    return _pcm16_to_ima_stream(samples, channels), channels
+
+
+def transcode_xma_to_pc_ima(xma_data: bytes, *, channels: int = 1) -> bytes:
+    """Decode XMA payload to PCM via ffmpeg, then encode PC IMA ADPCM blocks."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise UnhandledAudioCodecError(
+            "XMA payload requires ffmpeg on PATH for decode→IMA transcode"
+        )
+
+    with tempfile.TemporaryDirectory(prefix="mercs2_xma_") as tmp:
+        tmp_path = Path(tmp)
+        inp = tmp_path / "input.xma"
+        wav_out = tmp_path / "decoded.wav"
+        inp.write_bytes(xma_data)
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(inp),
+            "-ac",
+            str(max(1, channels)),
+            str(wav_out),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0 or not wav_out.is_file():
+            err = (proc.stderr or proc.stdout or "").strip()
+            raise UnhandledAudioCodecError(
+                f"ffmpeg XMA decode failed (exit {proc.returncode}): {err[:500]}"
+            )
+        ima_payload, detected_ch = _wav_bytes_to_ima_payload(wav_out.read_bytes())
+        return ima_payload if detected_ch == channels else ima_payload
+
+
+def transcode_audio_payload_to_pc(
+    data: bytes,
+    *,
+    channels: int = 1,
+    filename: str = "",
+) -> bytes:
+    """Dispatch on detected layout → PC raw IMA ADPCM (no header)."""
+    if filename:
+        name_ch = None
+        from audio_codec_policy import pws_stereo_from_name
+
+        name_ch = pws_stereo_from_name(filename)
+        if name_ch is not None:
+            channels = name_ch
+
+    probe = probe_pws_payload(data)
+    ch = probe.channels if probe.channels > 0 else channels
+    payload = data[probe.payload_offset : probe.payload_offset + probe.payload_size]
+
+    if probe.layout in (PwsLayout.RAW_PC_IMA_MONO, PwsLayout.RAW_PC_IMA_STEREO):
+        return payload
+
+    if probe.layout == PwsLayout.PC_HEADER_IMA:
+        return payload
+
+    if probe.layout in (PwsLayout.RAW_XBOX_ADPCM_MONO, PwsLayout.RAW_XBOX_ADPCM_STEREO):
+        return transcode_pws_xbox_to_pc(payload, channels=ch)
+
+    if probe.layout == PwsLayout.XMA_PAYLOAD:
+        return transcode_xma_to_pc_ima(data, channels=ch)
+
+    # Last resort: try Xbox ADPCM if block-aligned
+    if len(data) >= XBOX_MONO_BLOCK and len(data) % XBOX_MONO_BLOCK == 0:
+        return transcode_pws_xbox_to_pc(data, channels=1)
+    if len(data) >= XBOX_STEREO_BLOCK and len(data) % XBOX_STEREO_BLOCK == 0:
+        return transcode_pws_xbox_to_pc(data, channels=2)
+
+    raise UnhandledAudioCodecError(
+        f"unrecognized audio layout for {filename or 'blob'} "
+        f"(size={len(data)}, probe={probe.layout.value})"
+    )
+
+
+def transcode_pws_file_to_pc(
+    data: bytes,
+    *,
+    channels: int = 1,
+    filename: str = "",
+    add_pc_header: bool = True,
+    header_param: int = 0,
+) -> bytes:
+    """Transcode a ``.pws`` file payload to PC format (optional 4-byte header)."""
+    ima = transcode_audio_payload_to_pc(data, channels=channels, filename=filename)
+    if add_pc_header:
+        return wrap_pc_pws_header(ima, param=header_param)
+    return ima
+
+
+def normalize_embedded_wavebank_clip(
+    clip: bytes,
+    codec: int,
+    channels: int,
+) -> tuple[bytes, int]:
+    """Convert embedded wavebank clip bytes to PC-loadable codec 0x02."""
+    from audio_codec_policy import (
+        CODEC_IMA_PC,
+        CODEC_PCM,
+        CODEC_XBOX_ADPCM,
+        CODEC_XMA,
+        CODEC_XMA2,
+        PC_WAVEBANK_TARGET_CODEC,
+    )
+
+    ch = channels if channels > 0 else 1
+    if codec == CODEC_PCM:
+        return clip, CODEC_PCM
+    if codec == CODEC_IMA_PC:
+        return clip, CODEC_IMA_PC
+    if codec == CODEC_XBOX_ADPCM:
+        return transcode_pws_xbox_to_pc(clip, channels=ch), PC_WAVEBANK_TARGET_CODEC
+    if codec in (CODEC_XMA, CODEC_XMA2):
+        return transcode_audio_payload_to_pc(clip, channels=ch), PC_WAVEBANK_TARGET_CODEC
+    raise UnhandledAudioCodecError(
+        f"no embedded clip transcode for codec 0x{codec:02X} ({len(clip)} bytes)"
+    )
 
 
 if __name__ == "__main__":
@@ -342,7 +527,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     xbox_data = args.input.read_bytes()
-    pc_data = transcode_pws_xbox_to_pc(xbox_data, channels=args.channels)
+    pc_data = transcode_pws_file_to_pc(
+        xbox_data,
+        channels=args.channels,
+        filename=args.input.name,
+    )
     args.output.write_bytes(pc_data)
 
     block_size = XBOX_MONO_BLOCK if args.channels == 1 else XBOX_STEREO_BLOCK

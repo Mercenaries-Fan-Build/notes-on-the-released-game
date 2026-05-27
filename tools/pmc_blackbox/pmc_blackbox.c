@@ -128,14 +128,44 @@ static void InitDebugConsole(void) {
 
 /* --- Underground spawn fix --- */
 
-static void FixSpawnValidation(void) {
-    BYTE* flag = (BYTE*)0x00DFBD74;
+#define SPAWN_FLAG_VA  0x00DFBD74
+#define SPAWN_FIX_REAPPLY_DELAY_MS  5000
+#define SPAWN_FIX_REAPPLY_COUNT     4
+#define SPAWN_FIX_REAPPLY_INTERVAL  3000
+
+static void WriteSpawnFlag(void) {
+    BYTE* flag = (BYTE*)SPAWN_FLAG_VA;
     DWORD oldProtect;
     if (VirtualProtect(flag, 1, PAGE_READWRITE, &oldProtect)) {
         *flag = 0x01;
         VirtualProtect(flag, 1, oldProtect, &oldProtect);
-        pmc_log("blackbox", "Spawn validation flag set (0x00DFBD74 = 0x01)");
     }
+}
+
+static void FixSpawnValidation(void) {
+    WriteSpawnFlag();
+    pmc_log("blackbox", "Spawn validation flag set (0x%08X = 0x01)", SPAWN_FLAG_VA);
+}
+
+/*
+ * The game's initialization (MOVQ store at ~0x006CEEBA) zeroes the .data region
+ * containing the spawn flag AFTER DllMain has already set it.  Re-apply the flag
+ * on a background thread after a delay so it persists past that zeroing.
+ */
+static DWORD WINAPI SpawnFlagWatchdog(LPVOID param) {
+    (void)param;
+    Sleep(SPAWN_FIX_REAPPLY_DELAY_MS);
+    for (int i = 0; i < SPAWN_FIX_REAPPLY_COUNT; i++) {
+        BYTE current = *(volatile BYTE*)SPAWN_FLAG_VA;
+        if (current != 0x01) {
+            WriteSpawnFlag();
+            pmc_log("blackbox", "Spawn flag re-applied (was 0x%02X, pass %d/%d)",
+                    current, i + 1, SPAWN_FIX_REAPPLY_COUNT);
+        }
+        if (i < SPAWN_FIX_REAPPLY_COUNT - 1)
+            Sleep(SPAWN_FIX_REAPPLY_INTERVAL);
+    }
+    return 0;
 }
 
 /* --- ASI plugin loader --- */
@@ -267,8 +297,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
 
-        /* Fix underground spawn — must run before first spawn call */
+        /* Fix underground spawn — early write + deferred watchdog thread.
+         * Game init zeroes this flag; the watchdog re-applies it. */
         FixSpawnValidation();
+        CreateThread(NULL, 0, SpawnFlagWatchdog, NULL, 0, NULL);
 
         /* Load all .asi plugins (replaces external ASI loader) */
         LoadASIPlugins();
