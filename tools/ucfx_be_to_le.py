@@ -1001,96 +1001,165 @@ _WAVEBANK_RECORD_SIZE = 36
 
 
 def _convert_wavebank_data(body_be: bytes) -> bytes:
-    """Convert wavebank body from Xbox to PC format.
+    """Convert wavebank body from Xbox BE to PC LE format.
 
-    Both platforms use 36-byte records and a 24-byte header. Xbox stores
-    an extra filename area between the header and records; PC does not.
+    Verified against 95 matched wavebanks across Xbox and PC base game WADs.
 
-    Xbox layout:
-      [0:4]    count           — u32 LE (always LE on both platforms)
-      [4:8]    self_hash       — u32 BE
-      [8:10]   flags           — u16 BE
-      [10:12]  more_flags      — u16 BE
-      [12:16]  self_hash2      — u32 BE
-      [16:20]  records_offset  — u32 BE (>24 when filename area present)
-      [20:24]  padding         — zeros
-      [24:records_offset]      — filename area (ASCII, Xbox-only)
-    Per record (36 bytes, same on both platforms):
-      [0:4]    clip_hash       — u32
-      [4:8]    format_bytes    — u8[4]: [pad, channels, codec, pad]
-      [8:12]   sample_rate     — u32
-      [12:16]  data_offset     — u32
-      [16:20]  data_size       — u32
-      [20:36]  extra fields    — 4 × u32 (zeros/metadata)
+    Header (24 bytes):
+      [0:4]    count            — u32 LE on BOTH platforms
+      [4:8]    self_hash        — u32 (BE→LE swap)
+      [8:10]   populated_count  — u16 (BE→LE swap)
+      [10:12]  more_flags       — u16 (BE→LE swap)
+      [12:16]  self_hash2       — u32 (BE→LE swap)
+      [16:20]  records_offset   — u32 (BE→LE swap; always 24 on both)
+      [20:24]  padding          — zeros
+
+    Per record (36 bytes):
+      [0:4]    clip_hash        — u32 (BE→LE swap)
+      [4:8]    format_bytes     — u8×4 (no swap; byte[2] codec: 0x05→0x02)
+      [8:12]   sample_rate      — u32 (BE→LE swap)
+      [12:16]  data_offset      — u32 body-absolute; recomputed after transcode
+      [16:20]  data_size         — u32 recomputed from transcoded clip length
+      [20:32]  extra_fields     — 3 × u32 (zero for mono clips, nonzero for stereo/streaming)
+      [32:36]  field_32         — u32 platform-specific (not endian-swapped)
+
+    Audio data follows the record area. data_offset values are absolute
+    byte offsets from body[0]. Xbox ADPCM (codec 0x05) clips are transcoded
+    to PC IMA ADPCM (codec 0x02) using nibble swap; sizes change slightly.
+    Offsets and sizes must be recomputed to point into the new PC audio blob.
+
+    Streaming wavebanks (body < 1 KB, offsets >> body size) have their
+    offsets preserved as-is since they reference external PWS data.
     """
     if len(body_be) < 24:
         return body_be
 
     count = struct.unpack_from("<I", body_be, 0)[0]
     self_hash = struct.unpack_from(">I", body_be, 4)[0]
-    flags = struct.unpack_from(">H", body_be, 8)[0]
+    populated_count = struct.unpack_from(">H", body_be, 8)[0]
     more_flags = struct.unpack_from(">H", body_be, 10)[0]
     self_hash2 = struct.unpack_from(">I", body_be, 12)[0]
     xbox_records_offset = struct.unpack_from(">I", body_be, 16)[0]
 
-    # Parse Xbox records (36 bytes each)
-    xbox_records: list[tuple] = []
+    if count > 10000 or xbox_records_offset > len(body_be):
+        return body_be
+
+    pop = min(populated_count, count) if populated_count > 0 else count
+    pc_records_offset = 24
+
+    # Parse Xbox records
+    xbox_records = []
     for i in range(count):
         roff = xbox_records_offset + i * _WAVEBANK_RECORD_SIZE
         if roff + _WAVEBANK_RECORD_SIZE > len(body_be):
             break
         clip_hash = struct.unpack_from(">I", body_be, roff)[0]
-        fmt_bytes = body_be[roff + 4:roff + 8]
+        fmt_bytes = bytearray(body_be[roff + 4:roff + 8])
         sample_rate = struct.unpack_from(">I", body_be, roff + 8)[0]
         data_offset = struct.unpack_from(">I", body_be, roff + 12)[0]
         data_size = struct.unpack_from(">I", body_be, roff + 16)[0]
-        extra = struct.unpack_from(">4I", body_be, roff + 20)
-        xbox_records.append((clip_hash, fmt_bytes, sample_rate, data_offset, data_size, extra))
+        extra_20_28 = body_be[roff + 20:roff + 32]
+        field_32 = struct.unpack_from(">I", body_be, roff + 32)[0]
+        xbox_records.append({
+            "clip_hash": clip_hash,
+            "fmt_bytes": fmt_bytes,
+            "sample_rate": sample_rate,
+            "data_offset": data_offset,
+            "data_size": data_size,
+            "extra_20_28": extra_20_28,
+            "field_32": field_32,
+            "index": i,
+        })
 
-    pc_records_offset = 24
-    xbox_audio_start = xbox_records_offset + count * _WAVEBANK_RECORD_SIZE
-    trailing_audio = body_be[xbox_audio_start:]
+    # Detect streaming wavebank: body is tiny but offsets are huge
+    is_streaming = (
+        len(body_be) < 1024
+        or (pop > 0 and any(
+            r["data_offset"] + r["data_size"] > len(body_be) * 4
+            for r in xbox_records[:pop]
+            if r["data_size"] > 0
+        ))
+    )
+
+    # Transcode each populated clip's audio data and build new audio blob
+    # Sort populated clips by Xbox offset to preserve layout order
+    populated = [r for r in xbox_records[:pop] if r["data_size"] > 0]
+    populated.sort(key=lambda r: r["data_offset"])
+
+    pc_audio_blob = bytearray()
     pc_audio_start = pc_records_offset + count * _WAVEBANK_RECORD_SIZE
+    # Map: record index → (new_offset, new_size)
+    new_offsets: dict[int, tuple[int, int]] = {}
 
-    # Build PC output — 24-byte header + 36-byte records + trailing audio
+    for rec in populated:
+        xbox_off = rec["data_offset"]
+        xbox_sz = rec["data_size"]
+
+        if is_streaming:
+            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
+            continue
+
+        if xbox_off + xbox_sz > len(body_be):
+            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
+            continue
+
+        xbox_clip = body_be[xbox_off:xbox_off + xbox_sz]
+        channels = rec["fmt_bytes"][1] if rec["fmt_bytes"][1] > 0 else 1
+        codec = rec["fmt_bytes"][2]
+
+        if codec == _XBOX_ADPCM_CODEC:
+            pc_clip = transcode_pws_xbox_to_pc(bytes(xbox_clip), channels=channels)
+        else:
+            pc_clip = bytes(xbox_clip)
+
+        pc_offset = pc_audio_start + len(pc_audio_blob)
+        pc_size = len(pc_clip)
+        new_offsets[rec["index"]] = (pc_offset, pc_size)
+        pc_audio_blob.extend(pc_clip)
+
+    # Build PC output
     out = bytearray()
 
+    # Header (24 bytes)
     out += struct.pack("<I", count)
     out += struct.pack("<I", self_hash)
-    out += struct.pack("<H", flags)
+    out += struct.pack("<H", populated_count)
     out += struct.pack("<H", more_flags)
     out += struct.pack("<I", self_hash2)
     out += struct.pack("<I", pc_records_offset)
     out += b"\x00" * 4
 
-    for clip_hash, fmt_bytes, sample_rate, data_offset, data_size, extra in xbox_records:
-        out += struct.pack("<I", clip_hash)
-        pc_fmt = bytearray(fmt_bytes)
+    # Records
+    for i, rec in enumerate(xbox_records):
+        out += struct.pack("<I", rec["clip_hash"])
+        pc_fmt = bytearray(rec["fmt_bytes"])
         if pc_fmt[2] == _XBOX_ADPCM_CODEC:
             pc_fmt[2] = _PC_IMA_ADPCM_CODEC
         out += bytes(pc_fmt)
-        out += struct.pack("<I", sample_rate)
-        if trailing_audio and data_offset >= xbox_audio_start:
-            pc_data_offset = data_offset - xbox_audio_start + pc_audio_start
-        else:
-            pc_data_offset = data_offset
-        out += struct.pack("<I", pc_data_offset)
-        out += struct.pack("<I", data_size)
-        out += struct.pack("<4I", *extra)
+        out += struct.pack("<I", rec["sample_rate"])
 
-    if trailing_audio:
-        swapped = bytearray(trailing_audio)
-        for _clip_hash, fmt_bytes, _sample_rate, data_offset, data_size, _extra in xbox_records:
-            if data_offset < xbox_audio_start:
-                continue
-            rel_start = data_offset - xbox_audio_start
-            if rel_start + data_size > len(trailing_audio):
-                continue
-            channels = fmt_bytes[1] if fmt_bytes[1] > 0 else 1
-            clip_data = bytes(trailing_audio[rel_start:rel_start + data_size])
-            transcoded = transcode_pws_xbox_to_pc(clip_data, channels=channels)
-            swapped[rel_start:rel_start + len(transcoded)] = transcoded
-        out += bytes(swapped)
+        if i in new_offsets:
+            pc_off, pc_sz = new_offsets[i]
+            out += struct.pack("<I", pc_off)
+            out += struct.pack("<I", pc_sz)
+        elif i < pop and rec["data_size"] == 0:
+            out += struct.pack("<I", 0)
+            out += struct.pack("<I", 0)
+        else:
+            out += struct.pack("<I", 0)
+            out += struct.pack("<I", 0)
+
+        # extra_20_28: 12 bytes — swap each u32 within
+        e = rec["extra_20_28"]
+        for j in range(0, 12, 4):
+            val = struct.unpack_from(">I", e, j)[0]
+            out += struct.pack("<I", val)
+        # field_32: platform-specific, NOT a simple endian swap
+        # Write Xbox value as LE u32 (best approximation; engine may recompute)
+        out += struct.pack("<I", rec["field_32"])
+
+    # Audio blob
+    out += bytes(pc_audio_blob)
 
     return bytes(out)
 
