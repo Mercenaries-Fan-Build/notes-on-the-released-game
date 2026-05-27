@@ -1071,33 +1071,21 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
             "index": i,
         })
 
-    # Detect streaming wavebank: body is tiny but offsets are huge
-    is_streaming = (
-        len(body_be) < 1024
-        or (pop > 0 and any(
-            r["data_offset"] + r["data_size"] > len(body_be) * 4
-            for r in xbox_records[:pop]
-            if r["data_size"] > 0
-        ))
-    )
-
-    # Transcode each populated clip's audio data and build new audio blob
-    # Sort populated clips by Xbox offset to preserve layout order
+    # Transcode each populated clip's audio data and build new audio blob.
+    # Sort populated clips by Xbox offset to preserve layout order.
+    # Per-clip decision: if offset+size fits within Xbox body, transcode and
+    # repack into the new PC blob. Otherwise the clip references external
+    # streaming data (PWS) — preserve its offset and size as-is.
     populated = [r for r in xbox_records[:pop] if r["data_size"] > 0]
     populated.sort(key=lambda r: r["data_offset"])
 
     pc_audio_blob = bytearray()
     pc_audio_start = pc_records_offset + count * _WAVEBANK_RECORD_SIZE
-    # Map: record index → (new_offset, new_size)
     new_offsets: dict[int, tuple[int, int]] = {}
 
     for rec in populated:
         xbox_off = rec["data_offset"]
         xbox_sz = rec["data_size"]
-
-        if is_streaming:
-            new_offsets[rec["index"]] = (xbox_off, xbox_sz)
-            continue
 
         if xbox_off + xbox_sz > len(body_be):
             new_offsets[rec["index"]] = (xbox_off, xbox_sz)
