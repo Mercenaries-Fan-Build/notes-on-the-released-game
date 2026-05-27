@@ -126,6 +126,8 @@ _TEXTURE_TYPE_HASH = 0xF011157A    # pandemic_hash_m2("texture")
 _MESH_B_TYPE_HASH = 0x5B724250
 _STANCE_TYPE_HASH = 0x207359C7
 _UNKNOWN_E5_TYPE_HASH = 0xE5273C14
+_SOUNDBANK_TYPE_HASH = 0x9F8BCA10   # pandemic_hash_m2("soundbank")
+_WAVEBANK_TYPE_HASH = 0xF753F6D0    # pandemic_hash_m2("wavebank")
 
 _OVERRIDE_TYPE_HASHES = frozenset((
     _ANIMATION_TYPE_HASH,
@@ -133,6 +135,8 @@ _OVERRIDE_TYPE_HASHES = frozenset((
     _MESH_B_TYPE_HASH,
     _STANCE_TYPE_HASH,
     _UNKNOWN_E5_TYPE_HASH,  # audio group graph — Xbox DLC differs from PC retail
+    _SOUNDBANK_TYPE_HASH,   # soundbank header has mixed u16/u8 fields
+    _WAVEBANK_TYPE_HASH,    # wavebank data includes embedded audio clips
 ))
 
 # Havok magic used to confirm an entry's data body contains Havok
@@ -348,6 +352,7 @@ class _BlockWorkerArgs:
     verbose: bool
     collect_hashes: bool
     permissive: bool = False
+    strip_audio: bool = False
 
 
 @dataclass
@@ -482,6 +487,8 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
                 _MESH_B_TYPE_HASH: "mesh_B",
                 _STANCE_TYPE_HASH: "stance",
                 _UNKNOWN_E5_TYPE_HASH: "unknown_E5",
+                _SOUNDBANK_TYPE_HASH: "soundbank",
+                _WAVEBANK_TYPE_HASH: "wavebank",
             }
             if override_all:
                 non_labeled = sum(
@@ -504,9 +511,14 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
                 ]
                 override_msg = " + ".join(parts) + " override(s) from base game"
 
+    strip_hashes: frozenset[int] | None = None
+    if args.strip_audio:
+        strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
+
     try:
         swapped, stats = byteswap_ucfx_block(
             decompressed, base_overrides, permissive=args.permissive,
+            strip_type_hashes=strip_hashes,
         )
     except UnhandledByteSwapError as e:
         return _BlockWorkerResult(
@@ -514,6 +526,11 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
             skipped=True,
             skip_reason=f"unhandled byte-swap: {e}",
         )
+
+    stripped_count = stats.get("stripped_count", 0)
+    if stripped_count:
+        strip_msg = f"{stripped_count} audio entry(ies) stripped"
+        override_msg = f"{override_msg}; {strip_msg}" if override_msg else strip_msg
 
     if args.fix_stringdb_descriptors:
         swapped = _fix_stringdb_descriptors(swapped)
@@ -637,6 +654,7 @@ def port_x360_dlc(
     synth_stringdb_aset: bool = True,
     jobs: int | None = None,
     permissive: bool = False,
+    strip_audio: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -784,6 +802,7 @@ def port_x360_dlc(
             verbose=verbose,
             collect_hashes=collect_hashes,
             permissive=permissive,
+            strip_audio=strip_audio,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1676,6 +1695,10 @@ def main() -> int:
     ap.add_argument("--permissive", action="store_true",
                     help="Allow blind u32 fallbacks on unknown chunks (testing only; "
                          "default is strict — unhandled tags raise)")
+    ap.add_argument("--strip-audio", action="store_true",
+                    help="Strip soundbank/wavebank UCFX entries from blocks when no "
+                         "base-game override is available (prevents crash in "
+                         "PalSoundEngine::MixSources from malformed audio data)")
     ap.add_argument("--fix-stringdb-descriptors", action="store_true",
                     help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
                          "see tools/dlc_stringdb_forensic.py)")
@@ -1761,6 +1784,7 @@ def main() -> int:
         synth_stringdb_aset=not args.no_synth_stringdb_aset,
         jobs=args.jobs,
         permissive=args.permissive,
+        strip_audio=args.strip_audio,
     )
 
 

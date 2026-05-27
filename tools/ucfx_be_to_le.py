@@ -794,6 +794,7 @@ _TYPE_UNKNOWN_DE = 0xDE982D61  # resident INFO (ASET type_id 14)
 # Mesh types share identical sub-chunk formats
 _MESH_TYPES = {_TYPE_MESH_A, _TYPE_MESH_B, _TYPE_MESH_C}
 _AUDIO_TYPES = {_TYPE_UNKNOWN_E5, _TYPE_WAVEBANK, _TYPE_SOUNDBANK}
+_SOUNDBANK_WAVEBANK_TYPES = {_TYPE_WAVEBANK, _TYPE_SOUNDBANK}
 
 # Types whose INFO (and often data) bodies are u32/f32-aligned (verified from base game).
 _U32_INFO_TYPES = (
@@ -1094,35 +1095,118 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
     return bytes(out)
 
 
+# Body offsets containing u8x4 (flag/config) bytes that must NOT be swapped.
+#
+# Derived from aggregate cross-platform comparison of 9 matched Xbox vs PC
+# soundbank entries using tools/_wad_audio_compare.py.  Each 4-byte-aligned
+# offset in the body was classified by comparing the Xbox (BE) and PC (LE)
+# bytes: u32/f32 fields show reversed bytes, u8x4 fields are identical, and
+# u16x2 fields show per-u16 swaps.
+#
+# Coverage: body offsets 0x20–0xFF (first 256 bytes).  Beyond 0xFF, the
+# comparison aggregate does not extend; those offsets default to u32 swap
+# (u32+f32 cover ~64% of all soundbank fields, zero ~23% is unaffected).
+#
+# The soundbank body has four sections delineated by header offsets:
+#   Section 1 [data_start, section_off1):  per-sound record data (mixed types)
+#   Section 2 [section_off1, section_off2): sub_count × u32 index values
+#   Section 3 [section_off2, section_off3): per-sound parameter data (mixed)
+#   Section 4 [section_off3, end):          sub_count2 × u32 index values
+#
+# Sections 2 and 4 are confirmed pure u32 arrays (all entries consistent).
+# Sections 1 and 3 contain the u8x4 flag fields that caused the crash in
+# PalSoundEngine::MixSources when blindly byte-swapped.
+#
+# Mixed fields (~0.2%, all in section 3) are platform-specific audio
+# parameters; they get u32-swapped which may produce slightly wrong values,
+# but the engine tolerates this far better than corrupted flag bytes.
+_SOUNDBANK_U8X4_BODY_OFFSETS = frozenset({
+    0x2C,  # u8x4 77.8% consensus (codec/channel flags)
+    0x34,  # u8x4 66.7% consensus (playback flags)
+    0x4C,  # u8x4 66.7% consensus (effect/routing flags)
+    0xA0,  # u8x4 55.6% consensus (secondary flags)
+    0xA8,  # u8x4 55.6% consensus (secondary flags)
+    0xC0,  # u8x4 75.0% consensus (tertiary flags)
+})
+
+
 def _convert_soundbank_data(body_be: bytes) -> bytes:
     """Convert soundbank body from Xbox to PC format.
 
-    Layout (verified against base game PC wavebank/soundbank comparison):
-      [0:4]    count       — u32 LE (same on both platforms)
-      [4:8]    self_hash   — u32 BE
-      [8:12]   flags       — u32 BE (two u16 counts packed as u32)
-      [12:16]  self_hash2  — u32 BE (duplicate of self_hash)
-      [16:20]  data_start  — u32 BE (= 0x20 = 32 consistently)
+    Header layout (32 bytes, verified against 76 base game PC soundbanks):
+      [0:4]    count        — u32 LE (same on both platforms; always 0x1D=29)
+      [4:8]    self_hash    — u32 BE
+      [8:10]   sub_count    — u16 BE (entry/group count; base range 1–172)
+      [10:12]  sub_count2   — u16 BE (second count; base range 1–185)
+      [12:16]  self_hash2   — u32 BE (duplicate of self_hash)
+      [16:20]  data_start   — u32 BE (= 0x20 = 32 consistently)
       [20:24]  section_off1 — u32 BE (offset to section table 1)
       [24:28]  section_off2 — u32 BE (offset to section table 2)
       [28:32]  section_off3 — u32 BE (offset to section table 3)
-      [32:...]              — record/section data (hashes + IEEE 754 floats)
 
-    All fields from offset 4 onwards are u32-aligned BE values (hashes, float
-    parameters, section offsets). Byte-level u8 flags are not present in
-    Mercs 2 soundbanks — the entire body after offset 0 is u32 BE→LE.
+    Record area (offset 32 onwards) contains per-sound entries with mixed
+    field types: u32 hashes, IEEE 754 f32 parameters, u8x4 flag arrays, and
+    u16x2 pairs.  A blind u32 sweep corrupts u8x4 flag fields (~10%) and
+    u16x2 paired fields (~3.4%), causing a crash in PalSoundEngine::MixSources.
+
+    This function uses a typed field map derived from cross-platform comparison
+    of all 76 soundbank entries between Xbox 360 and PC WADs
+    (tools/_wad_audio_compare.py).  u8x4 offsets in the first 256 bytes of
+    the body are left untouched; all other offsets are swapped as u32/f32.
+    The four body sections are parsed from header offsets: sections 2 and 4
+    (u32 index tables) are swapped unconditionally; sections 1 and 3
+    (record data) respect the u8x4 field map.
     """
-    if len(body_be) < 16:
+    if len(body_be) < 32:
         return body_be
 
     out = bytearray(body_be)
 
+    # Parse header BE values before overwriting
+    data_start = struct.unpack_from(">I", body_be, 16)[0]
+    section_off1 = struct.unpack_from(">I", body_be, 20)[0]
+    section_off2 = struct.unpack_from(">I", body_be, 24)[0]
+    section_off3 = struct.unpack_from(">I", body_be, 28)[0]
+
+    # Validate section offsets; fall back to header-only swap if nonsensical
+    body_len = len(body_be)
+    sections_valid = (
+        data_start <= section_off1 <= section_off2
+        <= section_off3 <= body_len
+        and data_start >= 32
+    )
+
+    # ── Header (32 bytes): typed conversion ──
     # [0:4] count — already LE, do NOT swap
-    # Swap every u32 from offset 4 to end of body
-    pos = 4
-    while pos + 4 <= len(body_be):
-        struct.pack_into("<I", out, pos, struct.unpack_from(">I", body_be, pos)[0])
-        pos += 4
+    struct.pack_into("<I", out, 4, struct.unpack_from(">I", body_be, 4)[0])
+    struct.pack_into("<H", out, 8, struct.unpack_from(">H", body_be, 8)[0])
+    struct.pack_into("<H", out, 10, struct.unpack_from(">H", body_be, 10)[0])
+    struct.pack_into("<I", out, 12, struct.unpack_from(">I", body_be, 12)[0])
+    struct.pack_into("<I", out, 16, data_start)
+    struct.pack_into("<I", out, 20, section_off1)
+    struct.pack_into("<I", out, 24, section_off2)
+    struct.pack_into("<I", out, 28, section_off3)
+
+    # ── Body: per-offset typed conversion ──
+    for off in range(data_start, body_len - 3, 4):
+        if sections_valid and (
+            section_off1 <= off < section_off2
+            or off >= section_off3
+        ):
+            # Sections 2 and 4: pure u32 index tables — always swap
+            struct.pack_into(
+                "<I", out, off, struct.unpack_from(">I", body_be, off)[0],
+            )
+            continue
+
+        if off in _SOUNDBANK_U8X4_BODY_OFFSETS:
+            # u8x4 flag bytes — leave untouched (no endian dependency)
+            continue
+
+        # u32 / f32 field — standard 4-byte swap
+        struct.pack_into(
+            "<I", out, off, struct.unpack_from(">I", body_be, off)[0],
+        )
 
     return bytes(out)
 
@@ -1564,6 +1648,7 @@ def byteswap_ucfx_block(
     havok_overrides: dict[int, bytes] | None = None,
     *,
     permissive: bool = False,
+    strip_type_hashes: frozenset[int] | None = None,
 ) -> tuple[bytes, dict]:
     """Convert a decompressed Xbox UCFX block to PC little-endian.
 
@@ -1574,6 +1659,11 @@ def byteswap_ucfx_block(
     LE UCFX container bytes (without CSUM).  Entries in the map bypass BE→LE
     conversion entirely — used to substitute base-game data for formats that
     cannot be field-level byte-swapped (Havok, textures, meshes, etc.).
+
+    If *strip_type_hashes* is provided, entries whose type_hash is in the set
+    AND which have no override in *havok_overrides* are dropped from the output
+    block entirely (removed from both the entry table and the container data).
+    Use this to strip audio entries that would crash PalSoundEngine.
 
     When an override or audio conversion produces output larger than the
     original Xbox entry slot, the entry table size field is expanded to
@@ -1594,7 +1684,8 @@ def byteswap_ucfx_block(
     header_end = 4 + len(entries) * 16
 
     # Phase 1: Convert all containers, collecting LE output bytes
-    converted_containers: list[bytes] = []
+    converted_containers: list[bytes | None] = []
+    stripped_indices: set[int] = set()
     pos = header_end
     for entry_idx, (_, type_hash, _, orig_size) in enumerate(entries):
         if pos + orig_size > len(block_data):
@@ -1610,6 +1701,15 @@ def byteswap_ucfx_block(
             stats["ucfx_found"] += 1
             stats["csum_swapped"] += 1
             converted_containers.append(container_le)
+            pos += orig_size
+            continue
+
+        # Strip entry if its type is in the strip set and no override was found
+        if strip_type_hashes and type_hash in strip_type_hashes:
+            stripped_indices.add(entry_idx)
+            converted_containers.append(None)
+            stats.setdefault("stripped_count", 0)
+            stats["stripped_count"] += 1
             pos += orig_size
             continue
 
@@ -1640,20 +1740,23 @@ def byteswap_ucfx_block(
         converted_containers.append(container_le)
         pos += orig_size
 
-    # Phase 2: Build entry table with actual output sizes
-    corrected_entries = list(entries)
+    # Phase 2: Build entry table with actual output sizes, omitting stripped
+    kept_entries: list[tuple[int, int, int, int]] = []
+    kept_containers: list[bytes] = []
     for entry_idx, container_le in enumerate(converted_containers):
-        h, t, o, orig_size = corrected_entries[entry_idx]
+        if container_le is None:
+            continue
+        h, t, o, orig_size = entries[entry_idx]
         actual_size = len(container_le)
-        if actual_size != orig_size:
-            corrected_entries[entry_idx] = (h, t, o, actual_size)
+        kept_entries.append((h, t, o, actual_size))
+        kept_containers.append(container_le)
 
     # Serialize entry table as LE with corrected sizes
-    out = bytearray(_serialize_entry_table_le(corrected_entries))
+    out = bytearray(_serialize_entry_table_le(kept_entries))
 
     # Phase 3: Append converted containers, padding to declared sizes
-    for entry_idx, container_le in enumerate(converted_containers):
-        declared_size = corrected_entries[entry_idx][3]
+    for entry_idx, container_le in enumerate(kept_containers):
+        declared_size = kept_entries[entry_idx][3]
         if len(container_le) < declared_size:
             container_le = container_le + b"\x00" * (declared_size - len(container_le))
         out += container_le
