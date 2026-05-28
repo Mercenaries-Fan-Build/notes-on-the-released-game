@@ -1196,13 +1196,15 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
 # Mixed fields (~0.2%, all in section 3) are platform-specific audio
 # parameters; they get u32-swapped which may produce slightly wrong values,
 # but the engine tolerates this far better than corrupted flag bytes.
-_SOUNDBANK_U8X4_BODY_OFFSETS = frozenset({
-    0x2C,  # u8x4 77.8% consensus (codec/channel flags)
-    0x34,  # u8x4 66.7% consensus (playback flags)
-    0x4C,  # u8x4 66.7% consensus (effect/routing flags)
-    0xA0,  # u8x4 55.6% consensus (secondary flags)
-    0xA8,  # u8x4 55.6% consensus (secondary flags)
-    0xC0,  # u8x4 75.0% consensus (tertiary flags)
+# Relative to each record start within section A/C (see docs/pandemic_audio_system_design.md
+# §4.2: absolute 0x2C/0x34/0x4C/0xA0/0xA8/0xC0 with 0x20-byte record header).
+_SOUNDBANK_U8X4_RECORD_RELATIVE = frozenset({
+    12,   # 0x0C — codec/channel flags (u8x4)
+    20,   # 0x14 — playback flags (u8x4)
+    44,   # 0x2C — effect/routing flags (u8x4)
+    128,  # 0x80
+    136,  # 0x88
+    160,  # 0xA0
 })
 
 
@@ -1220,18 +1222,18 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
       [24:28]  section_off2 — u32 BE (offset to section table 2)
       [28:32]  section_off3 — u32 BE (offset to section table 3)
 
-    Record area (offset 32 onwards) contains per-sound entries with mixed
-    field types: u32 hashes, IEEE 754 f32 parameters, u8x4 flag arrays, and
-    u16x2 pairs.  A blind u32 sweep corrupts u8x4 flag fields (~10%) and
-    u16x2 paired fields (~3.4%), causing a crash in PalSoundEngine::MixSources.
+    Sections 1 and 3 contain per-sound records of
+    ``(section_off1 - data_start) / sub_count`` bytes each (section C uses
+    ``sub_count2``).
+    Each record has u8x4 flag fields at fixed relative offsets (codec/channel
+    flags, playback flags, effect/routing flags).  These must NOT be
+    byte-swapped.  Sections 2 and 4 are pure u32 index tables.
 
-    This function uses a typed field map derived from cross-platform comparison
-    of all 76 soundbank entries between Xbox 360 and PC WADs
-    (tools/_wad_audio_compare.py).  u8x4 offsets in the first 256 bytes of
-    the body are left untouched; all other offsets are swapped as u32/f32.
-    The four body sections are parsed from header offsets: sections 2 and 4
-    (u32 index tables) are swapped unconditionally; sections 1 and 3
-    (record data) respect the u8x4 field map.
+    The u8x4 field positions were derived from cross-platform comparison of
+    all 76 soundbank entries between Xbox 360 and PC base game WADs
+    (tools/_wad_audio_compare.py).  Relative offsets within each record:
+    12 (field 3), 20 (field 5), 44 (field 11).  These are applied
+    periodically to every record in sections 1 and 3.
     """
     if len(body_be) < 32:
         raise UnhandledByteSwapError(
@@ -1242,10 +1244,13 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
     out = bytearray(body_be)
 
     # Parse header BE values before overwriting
+    # [0:4] is u8×4 format/version (e.g. 0x1D) — already LE, not a record count.
     data_start = struct.unpack_from(">I", body_be, 16)[0]
     section_off1 = struct.unpack_from(">I", body_be, 20)[0]
     section_off2 = struct.unpack_from(">I", body_be, 24)[0]
     section_off3 = struct.unpack_from(">I", body_be, 28)[0]
+    sub_count = struct.unpack_from(">H", body_be, 8)[0]
+    sub_count2 = struct.unpack_from(">H", body_be, 10)[0]
 
     # Validate section offsets; fall back to header-only swap if nonsensical
     body_len = len(body_be)
@@ -1254,6 +1259,16 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
         <= section_off3 <= body_len
         and data_start >= 32
     )
+
+    record_stride_a = 4
+    record_stride_c = 4
+    if sections_valid:
+        sec_a = section_off1 - data_start
+        if sub_count > 0 and sec_a > 0 and sec_a % sub_count == 0:
+            record_stride_a = sec_a // sub_count
+        sec_c = section_off3 - section_off2
+        if sub_count2 > 0 and sec_c > 0 and sec_c % sub_count2 == 0:
+            record_stride_c = sec_c // sub_count2
 
     # ── Header (32 bytes): typed conversion ──
     # [0:4] count — already LE, do NOT swap
@@ -1278,9 +1293,18 @@ def _convert_soundbank_data(body_be: bytes) -> bytes:
             )
             continue
 
-        if off in _SOUNDBANK_U8X4_BODY_OFFSETS:
-            # u8x4 flag bytes — leave untouched (no endian dependency)
-            continue
+        # Sections 1 (data_start..section_off1) and 3 (section_off2..section_off3)
+        # contain periodic records.  u8x4 flag fields at
+        # _SOUNDBANK_U8X4_RECORD_RELATIVE must not be byte-swapped.
+        if sections_valid:
+            if off < section_off1:
+                rel = (off - data_start) % record_stride_a
+            elif section_off2 <= off < section_off3:
+                rel = (off - section_off2) % record_stride_c
+            else:
+                rel = -1
+            if rel in _SOUNDBANK_U8X4_RECORD_RELATIVE:
+                continue
 
         # u32 / f32 field — standard 4-byte swap
         struct.pack_into(

@@ -151,19 +151,42 @@ Only 4 frames — this is a thread entry function, not called from deep game log
 
 The context object itself is healthy — the problem is solely with the PalSoundEngine it references.
 
-## Crash Timeline
+## Crash Timeline (Revised — May 28, 2026)
 
-1. **Game loads DLC WAD** containing Xbox 360 XMA-encoded audio entries
-2. **Audio streaming begins** — the mixer thread runs its WaitForSingleObject/MixSources loop normally
-3. **Engine encounters XMA codec** — attempts to stream `dlctest_streaming.pws` or `vo_stream_dlctest.pws` which are XMA-encoded (Xbox 360 format, not PC ADPCM/PCM)
-4. **PalSoundEngine self-destructs** — the engine hits a fatal error, zeros its vtable, and frees its memory at `0x2006FBA8`. **Critical bug**: it does NOT:
-   - Clear the global pointer at `[0x01176404]`
-   - Set the shutdown flag at `[0x01175FFF]`
-   - Signal the mixer thread's wait handle to wake it
-5. **Mixer thread wakes up** (5ms WaitForSingleObject timeout), sees shutdown flag = 0
-6. **Thread enters critical section** and calls `MixSources`
-7. **MixSources reads stale pointer** → `[0x01176404]` is non-null → passes null check
-8. **Vtable dereference fails** → `[0x2006FBA8]` = 0 → `[0x00000000 + 4]` → **ACCESS VIOLATION**
+Previous analysis theorized a self-destruct path. x32dbg hardware breakpoint tracing
+revealed the actual mechanism is a **buffer overflow from the audio mixing loop**.
+
+1. **Game loads DLC WAD** — soundbank/wavebank entries are byte-swapped by
+   `_convert_soundbank_data` and `_convert_wavebank_data` in `ucfx_be_to_le.py`
+2. **Soundbank byte-swap corruption** — the u8x4 flag field map was absolute (covered
+   only the first 2 records of section 1), not periodic.  Soundbanks with 3+ sounds
+   have their codec/channel/flag bytes corrupted for the 3rd+ sound (record stride =
+   `count × 4` = 116 bytes; u8x4 relative offsets 12, 20, 44 within each record)
+3. **Game tries to play a sound** from a corrupted soundbank record — the audio setup
+   function at `0x416C90` fails to resolve the clip (wrong codec byte → wrong lookup
+   path → no matching clip) and **returns without initializing the local mixing buffer**
+4. **Caller at `0x409457` doesn't check** the setup return value and calls the mixing
+   function (`0x4157C0` → `0x57EBAB`) with the uninitialized buffer
+5. **Mixing loop reads stale stack data** as audio parameters:
+   - `[EDI+0x18]` = `0x3C0282B0` → points to a **LAYER-type UCFX container's data area**
+     containing script text (`"FireAngleEnum"`, `"Narrow"`, `"Medium"`)
+   - `[EDI+0x04]` = `0xE6B81A54` → `TYPE_HASH_LAYER` (stale from prior frame)
+   - Loop counter (EBX) ≈ `0x72656D61` → ASCII `"amer"` (from "Camera") → **~1.9 billion**
+6. **Buffer overflow** — the mixing loop at `0x28CB273`–`0x28CB2A7` writes 8 bytes per
+   iteration to the output buffer (EBP).  After ~86K iterations, EBP reaches `0x2006FBA8`
+   (the **PalSoundEngine object**) and overwrites its vtable and fields with zeros
+7. **MixSources crash** — on the next mixer tick, `PalSoundEngine::MixSources` at
+   `0x83664E` dereferences the zeroed vtable → `[0x00000000 + 4]` → ACCESS VIOLATION
+
+### Root Cause: Periodic u8x4 soundbank byte-swap bug
+
+The `_SOUNDBANK_U8X4_BODY_OFFSETS` set contained absolute offsets `{0x2C, 0x34, 0x4C,
+0xA0, 0xA8, 0xC0}` — exactly covering records 0 and 1 of the 116-byte record stride.
+Records 2+ had their u8x4 fields (codec, channels, flags) byte-swapped, corrupting them.
+
+**Fix**: replaced absolute offset set with `_SOUNDBANK_U8X4_RECORD_RELATIVE = {12, 20, 44}`
+applied periodically to every record in sections 1 and 3 using modular arithmetic:
+`(off - section_start) % record_stride in u8x4_set`.
 
 ## Key Functions Identified
 
@@ -177,28 +200,24 @@ The context object itself is healthy — the problem is solely with the PalSound
 | `0xBE1D48` | Mixer context vtable (8 entries, all valid code pointers) |
 | `0xBE2440` | PalSoundWave static vtable ("PalSoundWave::UpdateMixVolumes" at +0x14) |
 
-## Remediation Options
+## Remediation
 
-### Option 1: Strip DLC audio entries from WAD (recommended)
-Remove or zero the 10 soundbank (type `0x9F8BCA10`) and 11 wavebank (type `0xF753F6D0`)
-entries from `vz-patch.wad`. The DLC missions/content can still load — they just won't
-have custom audio, falling back to the base game's sound banks.
+### Fix applied: periodic u8x4 soundbank byte-swap (primary)
+`_convert_soundbank_data` in `tools/ucfx_be_to_le.py` now uses periodic u8x4 field
+protection: the relative offsets `{12, 20, 44}` within each 116-byte record are applied
+to **every** record in sections 1 and 3 via `(off - section_start) % record_stride`.
+This replaces the old absolute offset set that only covered 2 records.
 
-### Option 2: Convert XMA → PC codec (implemented in port pipeline)
-`tools/pws_xbox_to_pc.py` transcodes Xbox ADPCM (nibble swap / stereo re-encode) and XMA
-payloads (via `ffmpeg` decode → PCM → IMA ADPCM). Wavebank embedded clips use
-`normalize_embedded_wavebank_clip()` from `tools/ucfx_be_to_le.py`. Standalone `.pws`
-get the PC 4-byte header (`u16 param + version=1`) via `transcode_pws_file_to_pc()`.
-Verify with `make audio-verify-dlc` and [audio_runtime_verification.md](audio_runtime_verification.md).
+Rebuild the WAD with `make dlc-port` to apply the fix.
 
-### Option 3: ASI hook — null guard on MixSources
-In `dlc_enable.asi`, patch the instruction at `0x83664C` or intercept the global pointer
-read. If `[0x01176404]` points to freed memory (vtable == 0), set it to NULL so the
-existing null check at `0x83661D` skips the call safely.
+### Fallback: Strip DLC audio entries from WAD
+Pass `--strip-audio` to `dlc_port.py` to remove soundbank/wavebank entries entirely.
+The DLC content loads without custom audio (falls back to base game sound banks).
 
-### Option 4: ASI hook — proper shutdown synchronization
-Hook the PalSoundEngine destructor to set `[0x01175FFF] = 1` and signal the wait handle
-before freeing the object. This is the correct fix but requires identifying the destructor.
+### Fallback: ASI hook — null guard on MixSources
+In `dlc_enable.asi`, guard the vtable dereference at `0x83664C`: if `[0x01176404]`
+has vtable == 0, set the pointer to NULL so the existing null check at `0x83661D`
+skips the call.  This doesn't fix the overflow but prevents the crash symptom.
 
 ## Runtime Trace Integration
 
