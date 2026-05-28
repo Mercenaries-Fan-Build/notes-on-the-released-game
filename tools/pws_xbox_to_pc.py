@@ -436,16 +436,38 @@ def transcode_audio_payload_to_pc(
     *,
     channels: int = 1,
     filename: str = "",
+    source_codec: int | None = None,
 ) -> bytes:
-    """Dispatch on detected layout → PC raw IMA ADPCM (no header)."""
-    if filename:
-        name_ch = None
-        from audio_codec_policy import pws_stereo_from_name
+    """Dispatch to the correct transcoder → PC raw IMA ADPCM (no header).
 
+    When *source_codec* is provided the probe is skipped entirely and the
+    codec-specific transcoder is called directly.  This is the expected
+    path for Xbox 360 DLC where the source format is known.
+    """
+    from audio_codec_policy import (
+        CODEC_XBOX_ADPCM,
+        CODEC_XMA,
+        CODEC_XMA2,
+        pws_stereo_from_name,
+    )
+
+    if filename:
         name_ch = pws_stereo_from_name(filename)
         if name_ch is not None:
             channels = name_ch
 
+    # ── Known codec: skip probe, dispatch directly ────────────────────
+    if source_codec is not None:
+        if source_codec == CODEC_XBOX_ADPCM:
+            return transcode_pws_xbox_to_pc(data, channels=channels)
+        if source_codec in (CODEC_XMA, CODEC_XMA2):
+            return transcode_xma_to_pc_ima(data, channels=channels)
+        raise UnhandledAudioCodecError(
+            f"no transcode path for source codec 0x{source_codec:02X} "
+            f"({len(data)} bytes, {filename or 'blob'})"
+        )
+
+    # ── Unknown codec: probe the payload ──────────────────────────────
     probe = probe_pws_payload(data)
     ch = probe.channels if probe.channels > 0 else channels
     payload = data[probe.payload_offset : probe.payload_offset + probe.payload_size]
@@ -462,12 +484,6 @@ def transcode_audio_payload_to_pc(
     if probe.layout == PwsLayout.XMA_PAYLOAD:
         return transcode_xma_to_pc_ima(data, channels=ch)
 
-    # Last resort: try Xbox ADPCM if block-aligned
-    if len(data) >= XBOX_MONO_BLOCK and len(data) % XBOX_MONO_BLOCK == 0:
-        return transcode_pws_xbox_to_pc(data, channels=1)
-    if len(data) >= XBOX_STEREO_BLOCK and len(data) % XBOX_STEREO_BLOCK == 0:
-        return transcode_pws_xbox_to_pc(data, channels=2)
-
     raise UnhandledAudioCodecError(
         f"unrecognized audio layout for {filename or 'blob'} "
         f"(size={len(data)}, probe={probe.layout.value})"
@@ -481,9 +497,16 @@ def transcode_pws_file_to_pc(
     filename: str = "",
     add_pc_header: bool = True,
     header_param: int = 0,
+    source_codec: int | None = None,
 ) -> bytes:
-    """Transcode a ``.pws`` file payload to PC format (optional 4-byte header)."""
-    ima = transcode_audio_payload_to_pc(data, channels=channels, filename=filename)
+    """Transcode a ``.pws`` file payload to PC format (optional 4-byte header).
+
+    Pass *source_codec* to skip format probing when the codec is known
+    (e.g. ``CODEC_XBOX_ADPCM`` for Xbox 360 DLC files).
+    """
+    ima = transcode_audio_payload_to_pc(
+        data, channels=channels, filename=filename, source_codec=source_codec,
+    )
     if add_pc_header:
         return wrap_pc_pws_header(ima, param=header_param)
     return ima

@@ -101,6 +101,7 @@ from aset_type_ids import (  # noqa: E402
     STRINGDB_TYPE_HASH,
     type_id_for_type_hash,
 )
+from audio_codec_policy import CODEC_XBOX_ADPCM  # noqa: E402
 from pws_xbox_to_pc import transcode_pws_file_to_pc  # noqa: E402
 
 
@@ -1651,6 +1652,7 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
     audio_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n  Extracting & transcoding {len(pws_entries)} audio files to {audio_dir}/")
 
+    errors = 0
     for entry in pws_entries:
         xbox_data = reader.read_file(entry)
         name = entry["name"]
@@ -1659,15 +1661,20 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
                 xbox_data,
                 filename=name,
                 add_pc_header=True,
+                source_codec=CODEC_XBOX_ADPCM,
             )
         except Exception as exc:
             print(f"    ERROR {name}: {exc}", file=sys.stderr)
-            return 1
+            errors += 1
+            continue
         out_path = audio_dir / name
         out_path.write_bytes(pc_data)
         print(f"    {name} ({entry['file_size']:,} → {len(pc_data):,} bytes, transcoded)")
 
-    return 0
+    if errors:
+        print(f"  {errors}/{len(pws_entries)} audio files failed transcoding",
+              file=sys.stderr)
+    return errors
 
 
 # ── CLI ───────────────────────────────────────────────────────────────

@@ -105,19 +105,24 @@ MONO_BLOCK = 36
 STEREO_BLOCK = 72
 
 
-def _looks_like_ima_block_header(data: bytes, off: int) -> bool:
+def _valid_ima_block_header(data: bytes, off: int) -> bool:
+    """Check IMA ADPCM block header at *off* against format constraints.
+
+    Layout (4 bytes): int16 predictor | uint8 step_index | uint8 reserved
+    - step_index must be 0..88 (89 entries in the IMA step-size table)
+    - reserved must be 0
+    """
     if off + 4 > len(data):
         return False
-    predictor = int.from_bytes(data[off : off + 2], "little", signed=True)
     step_index = data[off + 2]
     reserved = data[off + 3]
-    return -32768 <= predictor <= 32767 and step_index <= 88 and reserved == 0
+    return step_index <= 88 and reserved == 0
 
 
 def _probe_raw_adpcm(data: bytes, block_size: int, channels: int) -> PwsProbe | None:
     if len(data) < block_size or len(data) % block_size != 0:
         return None
-    if not _looks_like_ima_block_header(data, 0):
+    if not _valid_ima_block_header(data, 0):
         return None
     layout = (
         PwsLayout.RAW_PC_IMA_MONO
@@ -137,7 +142,7 @@ def _probe_raw_adpcm(data: bytes, block_size: int, channels: int) -> PwsProbe | 
 def _probe_xbox_adpcm(data: bytes, block_size: int, channels: int) -> PwsProbe | None:
     if len(data) < block_size or len(data) % block_size != 0:
         return None
-    if not _looks_like_ima_block_header(data, 0):
+    if not _valid_ima_block_header(data, 0):
         return None
     layout = (
         PwsLayout.RAW_XBOX_ADPCM_MONO
@@ -176,7 +181,7 @@ def probe_pws_payload(data: bytes) -> PwsProbe:
                 (STEREO_BLOCK, 2, PwsLayout.PC_HEADER_IMA),
             ):
                 if len(payload) >= block_size and len(payload) % block_size == 0:
-                    if _looks_like_ima_block_header(payload, 0):
+                    if _valid_ima_block_header(payload, 0):
                         return PwsProbe(
                             layout=layout,
                             channels=ch,
@@ -197,7 +202,7 @@ def probe_pws_payload(data: bytes) -> PwsProbe:
     # differs from PC (heuristic: byte at 4 has both nibbles non-zero — weak).
     for block_size, channels in ((MONO_BLOCK, 1), (STEREO_BLOCK, 2)):
         if len(data) >= block_size and len(data) % block_size == 0:
-            if _looks_like_ima_block_header(data, 0):
+            if _valid_ima_block_header(data, 0):
                 return PwsProbe(
                     layout=PwsLayout.RAW_XBOX_ADPCM_MONO
                     if block_size == MONO_BLOCK
@@ -209,10 +214,8 @@ def probe_pws_payload(data: bytes) -> PwsProbe:
                     block_size=block_size,
                 )
 
-    # XMA: not block-aligned to 36/72, or known RIFF/WMAP-ish signatures
-    if data[:4] in (b"RIFF", b"XMA2", b"WMAP") or (
-        len(data) % MONO_BLOCK != 0 and len(data) % STEREO_BLOCK != 0
-    ):
+    # XMA: only when an actual XMA container signature is present.
+    if data[:4] in (b"RIFF", b"XMA2", b"WMAP"):
         return PwsProbe(
             layout=PwsLayout.XMA_PAYLOAD,
             channels=1,
