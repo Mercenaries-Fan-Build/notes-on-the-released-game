@@ -878,6 +878,7 @@ _U32_DATA_TYPES = (
     {
         _TYPE_UNKNOWN_E5,  # Audio group descriptor — has own converter but INFO is u32
         _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_PATH,
+        _TYPE_RESIDENT_MISC,  # verified pure u32/f32 from DLC block 464 analysis
     }
 )
 
@@ -885,7 +886,7 @@ _U32_DATA_TYPES = (
 # If encountered during DLC port, raise rather than blindly swapping.
 _RESIDENT_ONLY_TYPES = {
     _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_LEVEL, _TYPE_LAYER,
-    _TYPE_RESIDENT_MISC, _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
+    _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
 }
 
 # Combined set for INFO tag dispatch (all are u32-safe for INFO bodies).
