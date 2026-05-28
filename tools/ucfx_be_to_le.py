@@ -1467,7 +1467,12 @@ def _convert_body(
         if type_hash == _TYPE_ANIMATION:
             return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
         if type_hash == _TYPE_ECS_NODE:
-            return _convert_transform_records(body_be)
+            if len(body_be) % 42 == 0:
+                return _convert_transform_records(body_be)
+            # vz_state COMP data: entity name strings + enum tables (text-heavy,
+            # endian-neutral).  No verified binary field map exists for this
+            # mixed-content body; pass through to preserve string integrity.
+            return body_be
         if type_hash == _TYPE_KEYFRAME:
             return body_be  # Stringdb body is natively BE on all platforms
         if type_hash == _TYPE_PATH:
