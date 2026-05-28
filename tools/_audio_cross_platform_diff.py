@@ -18,6 +18,7 @@ Usage:
     --pc-wad game-files/vz.wad \
     --xbox-wad <path-to-xbox-vz.wad> \
     [--output analysis/audio_format]
+    [--write-spec analysis/audio_endian/audio_field_spec.json]
 """
 from __future__ import annotations
 
@@ -31,17 +32,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from audio_endian_spec import (  # noqa: E402
+    classify_4byte_diff,
+    build_audio_field_spec,
+    write_spec,
+    TYPE_SOUNDBANK as _TYPE_SOUNDBANK,
+    TYPE_WAVEBANK as _TYPE_WAVEBANK,
+    AUDIO_TYPES as _AUDIO_TYPES,
+    TYPE_NAMES as _TYPE_NAMES,
+)
+
 PAGE_SIZE = 0x8000
 FFCS_MAGIC = b"FFCS"
 SCFF_MAGIC = b"SCFF"
 SGES_MAGIC = b"sges"
 SEGS_MAGIC = b"segs"
-
-_TYPE_SOUNDBANK = 0x9F8BCA10
-_TYPE_WAVEBANK = 0xF753F6D0
-
-_AUDIO_TYPES = {_TYPE_SOUNDBANK, _TYPE_WAVEBANK}
-_TYPE_NAMES = {_TYPE_SOUNDBANK: "soundbank", _TYPE_WAVEBANK: "wavebank"}
 
 
 # ── WAD parsing (both endiannesses) ──────────────────────────────────
@@ -100,14 +105,16 @@ def _parse_aset(raw: bytes, off: int, n: int, endian: str) -> list[dict]:
     entries = []
     for i in range(n):
         o = off + i * 16
-        if endian == "be":
-            u0, u1, u2 = struct.unpack_from(">III", raw, o)
-            u3 = struct.unpack_from("<I", raw, o + 12)[0]  # type_id is always LE
-        else:
-            u0, u1, u2, u3 = struct.unpack_from("<IIII", raw, o)
+        u0, u1 = struct.unpack_from(f"{fmt}II", raw, o)
+        # packed_block_ref at +8 is u16x2: sub_entry(+8) and block_idx(+10)
+        sub_entry = struct.unpack_from(f"{fmt}H", raw, o + 8)[0]
+        block_idx = struct.unpack_from(f"{fmt}H", raw, o + 10)[0]
+        u3 = struct.unpack_from("<I", raw, o + 12)[0]  # type_id is always LE
         entries.append({
-            "hash": u0, "u1": u1, "u2": u2, "type_id": u3,
-            "block_idx": (u2 >> 16) & 0xFFFF,
+            "hash": u0, "u1": u1,
+            "u2": (block_idx << 16) | sub_entry,
+            "type_id": u3,
+            "block_idx": block_idx,
         })
     return entries
 
@@ -227,24 +234,7 @@ def collect_audio_bodies(ctx: WADContext) -> dict[tuple[int, int], bytes]:
 
 
 # ── Byte-level comparison ────────────────────────────────────────────
-
-def classify_4byte_diff(xbox_bytes: bytes, pc_bytes: bytes) -> str:
-    """Classify a 4-byte field based on how Xbox (BE) maps to PC (LE).
-
-    Returns: 'u32' (full reversal), 'u16x2' (two pairs reversed),
-             'u8x4' (identical), 'zero' (both zero), or 'mixed'.
-    """
-    if xbox_bytes == pc_bytes == b'\x00\x00\x00\x00':
-        return "zero"
-    if xbox_bytes == pc_bytes:
-        return "u8x4"
-    if xbox_bytes == pc_bytes[::-1]:
-        return "u32"
-    # Check u16x2: Xbox [A,B,C,D] → PC [B,A,D,C]
-    if (xbox_bytes[0] == pc_bytes[1] and xbox_bytes[1] == pc_bytes[0] and
-            xbox_bytes[2] == pc_bytes[3] and xbox_bytes[3] == pc_bytes[2]):
-        return "u16x2"
-    return "mixed"
+# classify_4byte_diff is imported from audio_endian_spec
 
 
 @dataclass
@@ -514,6 +504,8 @@ def main():
                     help="Path to Xbox 360 vz.wad (auto-detected from game-files/ if omitted)")
     ap.add_argument("--output", type=Path, default=None,
                     help="Output directory for reports")
+    ap.add_argument("--write-spec", type=Path, default=None,
+                    help="Write machine-readable audio_field_spec.json to this path")
     ap.add_argument("--max-sample-diffs", type=int, default=3,
                     help="Number of per-entry byte diffs to print")
     args = ap.parse_args()
@@ -605,13 +597,20 @@ def main():
     print_field_map(results, xbox_bodies, pc_bodies)
     print_per_entry_diff(xbox_bodies, pc_bodies, args.max_sample_diffs)
 
+    # Write machine-readable spec if requested
+    if args.write_spec:
+        xbox_sb = {k[0]: v for k, v in xbox_bodies.items() if k[1] == _TYPE_SOUNDBANK}
+        pc_sb = {k[0]: v for k, v in pc_bodies.items() if k[1] == _TYPE_SOUNDBANK}
+        xbox_wb = {k[0]: v for k, v in xbox_bodies.items() if k[1] == _TYPE_WAVEBANK}
+        pc_wb = {k[0]: v for k, v in pc_bodies.items() if k[1] == _TYPE_WAVEBANK}
+        spec = build_audio_field_spec(xbox_sb, pc_sb, xbox_wb, pc_wb)
+        write_spec(spec, args.write_spec)
+        print(f"\n  Wrote spec: {args.write_spec}")
+
     # Save results
     if args.output:
         args.output.mkdir(parents=True, exist_ok=True)
         report_path = args.output / "audio_field_map.txt"
-        import io
-        buf = io.StringIO()
-        # Re-run with output capture... actually just tell user to redirect
         print(f"\n  To save report: redirect stdout to {report_path}")
 
     print(f"\n{'=' * 80}")
