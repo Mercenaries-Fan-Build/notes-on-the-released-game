@@ -123,14 +123,17 @@ def _convert_deps_body(be: bytes) -> bytes:
     return count_byte + _convert_u32_array(hashes_be)
 
 
-# ── Placement record converter (flgs) ────────────────────────────────
+# ── Placement record converters ───────────────────────────────────────
 
-def _convert_flgs_records(be: bytes) -> bytes:
-    """Convert 42-byte placement records: 10 x u32 + 1 x u16 per record."""
+def _convert_transform_records(be: bytes) -> bytes:
+    """Convert layers_static Transform records (ECS_NODE 'data' body).
+
+    Format: [u32 entity_key][8×f32 pos/quat][u32 tail_a][u16 tail_b] = 42 bytes.
+    """
     STRIDE = 42
     if len(be) % STRIDE != 0:
         raise UnhandledByteSwapError(
-            f"flgs body size {len(be)} is not a multiple of {STRIDE}; "
+            f"Transform data body size {len(be)} is not a multiple of {STRIDE}; "
             f"corrupt or unknown record format"
         )
     out = bytearray()
@@ -142,6 +145,73 @@ def _convert_flgs_records(be: bytes) -> bytes:
         out += struct.pack("<10I", *u32s)
         out += struct.pack("<H", u16)
         pos += STRIDE
+    return bytes(out)
+
+
+_BE_ONE_F = b"\x3f\x80\x00\x00"  # float 1.0 in big-endian
+
+
+def _convert_vz_state_flgs(be: bytes) -> bytes:
+    """Convert vz_state placement body: variable header + 42-byte packed records.
+
+    Record layout (42 bytes, packed — u16 at offset 12 breaks u32 alignment):
+        [0:12]  3×u32  (state_flags, boot_float, type_hash)
+        [12:14] 1×u16  (extra_flags)
+        [14:42] 7×u32  (entity_id, pos_x, pos_y, pos_z, rot_0, rot_1, rot_y)
+
+    The header region (before records) contains entity name strings (u8 data)
+    interspersed with u32 hashes.  Since the boundary between string bytes and
+    hash u32s is ambiguous, the header is passed through as raw bytes — strings
+    are ASCII (endian-neutral) and the game resolves names by string matching.
+    """
+    STRIDE = 42
+
+    # Find record start: first BE 1.0f is the boot_float field at record+4
+    marker_pos = be.find(_BE_ONE_F)
+    if marker_pos >= 4:
+        rec_start = marker_pos - 4
+    elif marker_pos >= 0:
+        rec_start = 0
+    else:
+        # No 1.0f marker — likely layers_static-style u32 flags (no records)
+        if len(be) % 4 == 0:
+            return _convert_u32_array(be)
+        raise UnhandledByteSwapError(
+            f"ECS_NODE flgs body ({len(be)} bytes): no 1.0f marker found "
+            f"and body is not u32-aligned"
+        )
+
+    # Header: pass through as-is (entity name strings, endian-neutral)
+    header = be[:rec_start]
+
+    # Records region
+    rec_data = be[rec_start:]
+    n_full = len(rec_data) // STRIDE
+    rec_used = n_full * STRIDE
+    tail = rec_data[rec_used:]
+
+    out = bytearray(header)
+    pos = 0
+    while pos + STRIDE <= len(rec_data):
+        record = rec_data[pos:pos + STRIDE]
+        # 3×u32 at [0:12]
+        u32_head = struct.unpack_from(">3I", record, 0)
+        # 1×u16 at [12:14]
+        u16_flags = struct.unpack_from(">H", record, 12)[0]
+        # 7×u32 at [14:42]
+        u32_tail = struct.unpack_from(">7I", record, 14)
+        out += struct.pack("<3I", *u32_head)
+        out += struct.pack("<H", u16_flags)
+        out += struct.pack("<7I", *u32_tail)
+        pos += STRIDE
+
+    # Tail bytes after last full record (should be rare/zero)
+    if tail:
+        if len(tail) % 4 == 0:
+            out += _convert_u32_array(tail)
+        else:
+            out += tail  # preserve as-is (endian-neutral residual)
+
     return bytes(out)
 
 
@@ -1367,9 +1437,16 @@ def _convert_body(
     if tag == "BINN":
         return _convert_lua_be_to_le(body_be)
 
-    # ── flgs: 42-byte placement records ──
+    # ── flgs: format depends on type ──
     if tag == "flgs":
-        return _convert_flgs_records(body_be)
+        if type_hash == _TYPE_ECS_NODE:
+            return _convert_vz_state_flgs(body_be)
+        if len(body_be) % 4 == 0:
+            return _convert_u32_array(body_be)
+        raise UnhandledByteSwapError(
+            f"flgs body ({len(body_be)} bytes) for type_hash=0x{type_hash:08X} "
+            f"is not u32-aligned and format is unknown"
+        )
 
     # ── evnt: [u32 count][per event: float32 timestamp + 2 × cstring] ──
     if tag == "evnt":
@@ -1390,7 +1467,7 @@ def _convert_body(
         if type_hash == _TYPE_ANIMATION:
             return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
         if type_hash == _TYPE_ECS_NODE:
-            return _convert_flgs_records(body_be)
+            return _convert_transform_records(body_be)
         if type_hash == _TYPE_KEYFRAME:
             return body_be  # Stringdb body is natively BE on all platforms
         if type_hash == _TYPE_PATH:
