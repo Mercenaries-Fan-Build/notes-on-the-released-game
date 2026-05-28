@@ -835,7 +835,7 @@ def _convert_enum_body(be: bytes) -> bytes:
     Structure (verified from base game):
       [u32 total_enum_count]
       repeated: [null-terminated enum name] [u32 name_hash] [u32 value_count]
-               [value_count × (null-terminated value name + u32 value_hash)]
+               [value_count × (null-terminated value name + u32 value_hash + u32 ordinal)]
     Only the u32 fields need byte-swapping; all strings are ASCII passthrough.
     """
     if len(be) < 4:
@@ -865,7 +865,7 @@ def _convert_enum_body(be: bytes) -> bytes:
         val_count = struct.unpack_from(">I", be, pos)[0]
         struct.pack_into("<I", out, pos, val_count)
         pos += 4
-        # Walk values
+        # Walk values: each is [name\0] [u32 hash] [u32 ordinal]
         for _ in range(val_count):
             if pos >= len(be):
                 break
@@ -873,8 +873,13 @@ def _convert_enum_body(be: bytes) -> bytes:
             if nul < 0:
                 break
             pos = nul + 1
-            if pos + 4 > len(be):
+            if pos + 8 > len(be):
                 break
+            # Swap value_hash
+            v = struct.unpack_from(">I", be, pos)[0]
+            struct.pack_into("<I", out, pos, v)
+            pos += 4
+            # Swap ordinal
             v = struct.unpack_from(">I", be, pos)[0]
             struct.pack_into("<I", out, pos, v)
             pos += 4

@@ -669,7 +669,7 @@ def port_x360_dlc(
     (entry 115) without modifying ``wifmissionflow`` — the original 114 entries
     remain byte-identical.  The ASI triggers ``import("dlc01")`` at runtime.
     """
-    print("Xbox 360 DLC → PC Patch WAD Porter (unified)")
+    print("Xbox 360 DLC -> PC Patch WAD Porter (unified)")
     print("=" * 60)
 
     # Parse BE FFCS
@@ -1669,7 +1669,7 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
             continue
         out_path = audio_dir / name
         out_path.write_bytes(pc_data)
-        print(f"    {name} ({entry['file_size']:,} → {len(pc_data):,} bytes, transcoded)")
+        print(f"    {name} ({entry['file_size']:,} -> {len(pc_data):,} bytes, transcoded)")
 
     if errors:
         print(f"  {errors}/{len(pws_entries)} audio files failed transcoding",
