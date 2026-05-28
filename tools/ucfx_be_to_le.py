@@ -36,11 +36,20 @@ def _fallback_u32_or_raise(
     permissive: bool,
     stats: dict,
 ) -> bytes:
-    """Strict mode raises; permissive mode logs and applies u32 array swap."""
+    """Strict mode raises; permissive mode logs and applies u32 array swap.
+
+    WARNING: The permissive path is a KNOWN BLIND SWAP for testing only.
+    It will corrupt any body containing u8, u16, or string fields.
+    """
     if permissive:
         stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
         tags = stats.setdefault("fallback_u32_tags", {})
         tags[tag] = tags.get(tag, 0) + 1
+        blind_detail = stats.setdefault("blind_swap_detail", [])
+        blind_detail.append(
+            f"BLIND_SWAP: tag={tag!r} type_hash=0x{type_hash:08X} "
+            f"body_size={len(body_be)} context={context!r} reason={reason}"
+        )
         return _convert_u32_array(body_be)
     raise UnhandledByteSwapError(
         f"{reason}: tag={tag!r} type_hash=0x{type_hash:08X} "
@@ -119,6 +128,11 @@ def _convert_deps_body(be: bytes) -> bytes:
 def _convert_flgs_records(be: bytes) -> bytes:
     """Convert 42-byte placement records: 10 x u32 + 1 x u16 per record."""
     STRIDE = 42
+    if len(be) % STRIDE != 0:
+        raise UnhandledByteSwapError(
+            f"flgs body size {len(be)} is not a multiple of {STRIDE}; "
+            f"corrupt or unknown record format"
+        )
     out = bytearray()
     pos = 0
     while pos + STRIDE <= len(be):
@@ -128,8 +142,6 @@ def _convert_flgs_records(be: bytes) -> bytes:
         out += struct.pack("<10I", *u32s)
         out += struct.pack("<H", u16)
         pos += STRIDE
-    if pos < len(be):
-        out += _convert_u32_array(be[pos:])
     return bytes(out)
 
 
@@ -209,9 +221,6 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
       [da_abs, da_abs+da_end) __data__: u32 array (instances+fixups)
     """
     if len(be) < 64:
-        if permissive and stats is not None:
-            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
-            return _convert_u32_array(be)
         raise UnhandledByteSwapError(
             f"Havok packfile too short ({len(be)} bytes) for structural parse"
         )
@@ -220,16 +229,10 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     if ver_off < 0:
         ver_off = be.find(b"Havok-")
     if ver_off < 0:
-        if permissive and stats is not None:
-            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
-            return _convert_u32_array(be)
         raise UnhandledByteSwapError("Havok packfile missing version string")
 
     cn_needle_off = be.find(b"__classnames__", ver_off)
     if cn_needle_off < 0:
-        if permissive and stats is not None:
-            stats["fallback_u32_count"] = stats.get("fallback_u32_count", 0) + 1
-            return _convert_u32_array(be)
         raise UnhandledByteSwapError("Havok packfile missing __classnames__ section")
 
     out = bytearray(len(be))
@@ -301,15 +304,17 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     if ty_end > 0 and ty_abs + ty_end <= len(be):
         out[ty_abs:ty_abs + ty_end] = be[ty_abs:ty_abs + ty_end]
 
-    # 9. __data__ section: u32 swap is the best available approximation.
-    #    Havok instance data is predominantly u32/f32-aligned (transforms,
-    #    indices, pointers).  Per-class field layout would be ideal but
-    #    requires Havok class definitions we don't have.  Prefer base-game
-    #    overrides via havok_overrides when available; this path only runs
-    #    for DLC-specific animations with no base-game equivalent.
+    # 9. __data__ section: contains mixed-width Havok class instances.
+    #    A u32 sweep is NOT correct for classes with u8/u16 members.
+    #    In strict mode, raise. In permissive mode, apply u32 sweep with tracking.
     if da_end > 0 and da_abs + da_end <= len(be):
+        if not permissive:
+            raise UnhandledByteSwapError(
+                f"Havok __data__ section ({da_end} bytes) requires class-aware "
+                f"converter; blind u32 sweep corrupts u8/u16 fields"
+            )
         if stats is not None:
-            stats["havok_data_u32_count"] = stats.get("havok_data_u32_count", 0) + 1
+            stats["havok_blind_data_sweep"] = stats.get("havok_blind_data_sweep", 0) + 1
         n = da_end // 4
         for i in range(n):
             off = da_abs + i * 4
@@ -797,15 +802,24 @@ _MESH_TYPES = {_TYPE_MESH_A, _TYPE_MESH_B, _TYPE_MESH_C}
 _AUDIO_TYPES = {_TYPE_UNKNOWN_E5, _TYPE_WAVEBANK, _TYPE_SOUNDBANK}
 _SOUNDBANK_WAVEBANK_TYPES = {_TYPE_WAVEBANK, _TYPE_SOUNDBANK}
 
-# Types whose INFO (and often data) bodies are u32/f32-aligned (verified from base game).
-_U32_INFO_TYPES = (
-    _MESH_TYPES | _AUDIO_TYPES |
+# Types whose data bodies are verified pure u32/f32-aligned from cross-platform evidence.
+_U32_DATA_TYPES = (
+    _MESH_TYPES |
     {
-        _TYPE_KEYFRAME, _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_PATH, _TYPE_ECS_NODE,
-        _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_LEVEL, _TYPE_LAYER,
-        _TYPE_RESIDENT_MISC, _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
+        _TYPE_UNKNOWN_E5,  # Audio group descriptor — has own converter but INFO is u32
+        _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_PATH,
     }
 )
+
+# Types whose INFO is u32 but only exist in the resident block (never in DLC).
+# If encountered during DLC port, raise rather than blindly swapping.
+_RESIDENT_ONLY_TYPES = {
+    _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_LEVEL, _TYPE_LAYER,
+    _TYPE_RESIDENT_MISC, _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
+}
+
+# Combined set for INFO tag dispatch (all are u32-safe for INFO bodies).
+_U32_INFO_TYPES = _U32_DATA_TYPES | _RESIDENT_ONLY_TYPES | _AUDIO_TYPES
 
 
 def _convert_ecs_info(be: bytes) -> bytes:
@@ -928,9 +942,10 @@ def _convert_cfx_compressed_data(body_be: bytes) -> bytes:
     """
     zoff = _find_zlib_offset(body_be)
     if zoff < 0:
-        if len(body_be) % 4 == 0 and len(body_be) <= 256:
-            return _convert_u32_array(body_be)
-        return body_be
+        raise UnhandledByteSwapError(
+            f"CFX body ({len(body_be)} bytes) contains no detectable zlib stream; "
+            f"cannot determine field layout without structural evidence"
+        )
 
     prefix_end = zoff - (zoff % 4)
     out = bytearray()
@@ -1030,7 +1045,7 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
       [12:16]  data_offset      — u32 body-absolute; recomputed after transcode
       [16:20]  data_size         — u32 recomputed from transcoded clip length
       [20:32]  extra_fields     — 3 × u32 (zero for mono clips, nonzero for stereo/streaming)
-      [32:36]  field_32         — u32 platform-specific (not endian-swapped)
+      [32:36]  field_32         — u32 (BE→LE swap; verified from cross-platform diff)
 
     Audio data follows the record area. data_offset values are absolute
     byte offsets from body[0]. Xbox ADPCM (codec 0x05) clips are transcoded
@@ -1166,8 +1181,9 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
         for j in range(0, 12, 4):
             val = struct.unpack_from(">I", e, j)[0]
             out += struct.pack("<I", val)
-        # field_32: platform-specific, NOT a simple endian swap
-        # Write Xbox value as LE u32 (best approximation; engine may recompute)
+        # field_32: verified as u32 endian swap from cross-platform diff (95 matched
+        # entries). The value differs semantically between platforms but byte order
+        # still follows the platform's native endianness.
         out += struct.pack("<I", rec["field_32"])
 
     # Audio blob
@@ -1373,6 +1389,10 @@ def _convert_body(
             return _convert_u16_array(body_be)
         if type_hash == _TYPE_ANIMATION:
             return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
+        if type_hash == _TYPE_ECS_NODE:
+            return _convert_flgs_records(body_be)
+        if type_hash == _TYPE_KEYFRAME:
+            return body_be  # Stringdb body is natively BE on all platforms
         if type_hash == _TYPE_PATH:
             return _convert_u16_array(body_be[:8]) + _convert_u32_array(body_be[8:])
         if type_hash == _TYPE_UNKNOWN_E5:
@@ -1385,8 +1405,13 @@ def _convert_body(
             return _convert_object_registry_data(body_be)
         if type_hash == _TYPE_CFX_PACK:
             return _convert_cfx_compressed_data(body_be)
-        if type_hash in _U32_INFO_TYPES:
+        if type_hash in _U32_DATA_TYPES:
             return _convert_u32_array(body_be)
+        if type_hash in _RESIDENT_ONLY_TYPES:
+            raise UnhandledByteSwapError(
+                f"Resident-only type 0x{type_hash:08X} encountered in data chunk "
+                f"(body_size={len(body_be)}); this type should not appear in DLC blocks"
+            )
         return _fallback_u32_or_raise(
             body_be,
             reason="unknown data chunk type_hash",
@@ -1445,6 +1470,10 @@ def _convert_body(
             return _convert_texture_info(body_be)
         if type_hash == _TYPE_SCRIPT:
             return _convert_script_info(body_be)
+        if type_hash == _TYPE_ECS_NODE:
+            return _convert_ecs_info(body_be)
+        if type_hash == _TYPE_KEYFRAME:
+            return body_be  # Stringdb INFO is natively BE on all platforms
         if type_hash == _TYPE_OBJECT_REGISTRY:
             return _convert_object_registry_data(body_be)
         if type_hash == _TYPE_CFX_PACK:
@@ -1497,8 +1526,13 @@ def _convert_body(
     if tag in ("EFCT", "EMTR"):
         return _convert_u16_array(body_be)
 
-    # ── CHDR: u32/hash scalars (verified on resident 0x140E8728 ~59 KB body) ──
+    # ── CHDR: u32/hash scalars (verified 8 bytes = 2 x u32 for ECS_NODE blocks) ──
     if tag == "CHDR":
+        if len(body_be) not in (8, 12, 16) and len(body_be) % 4 != 0:
+            raise UnhandledByteSwapError(
+                f"CHDR body has unexpected size {len(body_be)} bytes "
+                f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
+            )
         return _convert_u32_array(body_be)
 
     # ── BNDS: axis-aligned bounds / sphere (10 × f32 in terrain tiles) ──
@@ -1523,7 +1557,10 @@ def _convert_body(
     if tag == "MINF":
         if len(body_be) % 2 == 0:
             return _convert_u16_array(body_be)
-        return _convert_u32_array(body_be)
+        raise UnhandledByteSwapError(
+            f"MINF body has odd size {len(body_be)} bytes (not u16-aligned); "
+            f"type_hash=0x{type_hash:08X}"
+        )
 
     # ── Resident singleton sub-tags (watr/tree, 1 entry each) ──
     if tag in ("watr", "tree", "UNIQ"):
@@ -1575,6 +1612,14 @@ def _convert_container(
     if n_descriptors > 50_000:
         stats["errors"].append(f"Implausible descriptor count: {n_descriptors}")
         if permissive:
+            stats["container_corrupt_blind_sweep"] = (
+                stats.get("container_corrupt_blind_sweep", 0) + 1
+            )
+            blind_detail = stats.setdefault("blind_swap_detail", [])
+            blind_detail.append(
+                f"BLIND_SWAP: implausible descriptor count {n_descriptors} "
+                f"type_hash=0x{type_hash:08X} container_size={len(container_be)}"
+            )
             return _convert_u32_array(container_be)
         raise UnhandledByteSwapError(
             f"Implausible UCFX descriptor count: {n_descriptors}"
@@ -1620,6 +1665,14 @@ def _convert_container(
             if body_size == 0:
                 bodies_le.append(b"")
             elif permissive:
+                stats["container_sentinel_blind_sweep"] = (
+                    stats.get("container_sentinel_blind_sweep", 0) + 1
+                )
+                blind_detail = stats.setdefault("blind_swap_detail", [])
+                blind_detail.append(
+                    f"BLIND_SWAP: CONTAINER_SENTINEL tag={tag!r} "
+                    f"type_hash=0x{type_hash:08X} body_size={body_size}"
+                )
                 bodies_le.append(_convert_u32_array(body_be))
             else:
                 raise UnhandledByteSwapError(
