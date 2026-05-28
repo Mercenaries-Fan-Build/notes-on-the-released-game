@@ -269,14 +269,244 @@ _HAVOK_VER = b"Havok-5.5.0-r1"
 _SECTION_HDR_SIZE = 48
 
 
+def _havok_parse_classnames_be(be: bytes, cn_abs: int, cn_end: int) -> dict[int, str]:
+    """Parse __classnames__ table from BE packfile data.
+
+    Returns {relative_offset_in_cn_section: class_name}.
+    """
+    names: dict[int, str] = {}
+    p = cn_abs
+    body_end = cn_abs + cn_end
+    while p + 5 <= body_end:
+        sig = struct.unpack_from(">I", be, p)[0]
+        if sig == 0xFFFFFFFF:
+            break
+        rel_off = p - cn_abs
+        q = p + 5
+        while q < body_end and be[q] != 0:
+            q += 1
+        name = be[p + 5:q].decode("ascii", errors="replace")
+        names[rel_off + 5] = name
+        q += 1
+        p = q
+    return names
+
+
+def _havok_parse_virtual_fixups_be(
+    be: bytes, da_abs: int, vf_off: int, da_end: int
+) -> list[tuple[int, int, int]]:
+    """Parse virtual fixup stream from BE __data__ section.
+
+    Returns list of (src_offset_in_data, section_index, classname_offset).
+    """
+    fixups: list[tuple[int, int, int]] = []
+    p = da_abs + vf_off
+    end = da_abs + da_end
+    while p + 12 <= end:
+        src = struct.unpack_from(">I", be, p)[0]
+        sec = struct.unpack_from(">I", be, p + 4)[0]
+        cn_off = struct.unpack_from(">I", be, p + 8)[0]
+        if src == 0xFFFFFFFF:
+            break
+        fixups.append((src, sec, cn_off))
+        p += 12
+    return fixups
+
+
+def _havok_parse_local_fixups_be(
+    be: bytes, da_abs: int, lf_off: int, gf_off: int
+) -> list[tuple[int, int]]:
+    """Parse local fixup stream from BE __data__ section.
+
+    Returns list of (src_offset_in_data, dst_offset_in_data).
+    """
+    fixups: list[tuple[int, int]] = []
+    p = da_abs + lf_off
+    end = da_abs + gf_off
+    while p + 8 <= end:
+        src = struct.unpack_from(">I", be, p)[0]
+        dst = struct.unpack_from(">I", be, p + 4)[0]
+        if src == 0xFFFFFFFF:
+            break
+        fixups.append((src, dst))
+        p += 8
+    return fixups
+
+
+def _havok_swap_data_class_aware(
+    be: bytes, out: bytearray, da_abs: int, sections: list[tuple],
+    cn_abs: int, cn_end: int, *, stats: dict | None = None
+) -> bool:
+    """Class-aware BE→LE swap of Havok __data__ section.
+
+    Uses virtual fixups to identify objects by class, then applies per-field
+    byte-swapping according to HK550 32-bit class layouts from HavokLib.
+
+    Returns True if conversion succeeded, False if it had to fall back.
+    """
+    from hk_class_layouts import CLASS_REGISTRY, U8, U16, U32
+
+    da_abs_v, da_lf, da_gf, da_vf, _, _, da_end = sections[2]
+
+    if da_end == 0:
+        return True
+
+    cn_names = _havok_parse_classnames_be(be, cn_abs, cn_end)
+    vfixups = _havok_parse_virtual_fixups_be(be, da_abs, da_vf, da_end)
+    lfixups = _havok_parse_local_fixups_be(be, da_abs, da_lf, da_gf)
+
+    obj_map: dict[int, str] = {}
+    for src, _sec, cn_off in vfixups:
+        name = cn_names.get(cn_off, "")
+        if name:
+            obj_map[src] = name
+
+    lf_map: dict[int, int] = {src: dst for src, dst in lfixups}
+
+    no_swap_regions: list[tuple[int, int]] = []
+
+    for obj_off, class_name in obj_map.items():
+        cls = CLASS_REGISTRY.get(class_name)
+        if cls is None:
+            continue
+        arrays = cls.get("arrays", {})
+        for arr_name, arr_info in arrays.items():
+            if arr_info.get("elem_swap") == U8:
+                ptr_off = arr_info.get("ptr_off")
+                count_off = arr_info.get("count_off")
+                if ptr_off is not None and count_off is not None:
+                    ptr_src = obj_off + ptr_off
+                    buf_dst = lf_map.get(ptr_src)
+                    if buf_dst is not None:
+                        count_abs = da_abs + obj_off + count_off
+                        if count_abs + 4 <= len(be):
+                            n = struct.unpack_from(">I", be, count_abs)[0]
+                            if n < 0x1000000:
+                                no_swap_regions.append((buf_dst, buf_dst + n))
+
+    no_swap_regions.sort()
+
+    def _in_no_swap(off: int) -> bool:
+        for start, end in no_swap_regions:
+            if start <= off < end:
+                return True
+            if start > off:
+                break
+        return False
+
+    obj_offsets_sorted = sorted(obj_map.keys())
+
+    swap_width = bytearray(da_end)
+
+    for obj_off, class_name in obj_map.items():
+        cls = CLASS_REGISTRY.get(class_name)
+        if cls is None:
+            obj_size = 4
+            if obj_off + obj_size <= da_end:
+                for i in range(0, obj_size, 4):
+                    if obj_off + i < da_end:
+                        swap_width[obj_off + i] = U32
+            continue
+
+        obj_size = cls["size"]
+        swap_spec = cls["swap"]
+
+        if swap_spec == "all_u32":
+            for i in range(0, min(obj_size, da_end - obj_off), 4):
+                swap_width[obj_off + i] = U32
+        else:
+            for field_off, w in swap_spec:
+                abs_off = obj_off + field_off
+                if abs_off < da_end:
+                    swap_width[abs_off] = w
+
+        arrays = cls.get("arrays", {})
+        for arr_name, arr_info in arrays.items():
+            ptr_off = arr_info.get("ptr_off")
+            count_off = arr_info.get("count_off")
+            elem_size = arr_info["elem_size"]
+            elem_swap = arr_info["elem_swap"]
+
+            if ptr_off is None or count_off is None:
+                continue
+
+            ptr_src = obj_off + ptr_off
+            buf_dst = lf_map.get(ptr_src)
+            if buf_dst is None:
+                continue
+
+            count_abs = da_abs + obj_off + count_off
+            if count_abs + 4 > len(be):
+                continue
+            count = struct.unpack_from(">I", be, count_abs)[0]
+            if count > 0x1000000:
+                continue
+
+            if elem_swap == U8:
+                pass
+            elif elem_swap == U32:
+                total = count * elem_size
+                for i in range(0, total, 4):
+                    pos = buf_dst + i
+                    if pos < da_end:
+                        swap_width[pos] = U32
+            elif elem_swap == U16:
+                total = count * elem_size
+                for i in range(0, total, 2):
+                    pos = buf_dst + i
+                    if pos < da_end:
+                        swap_width[pos] = U16
+
+    for off in range(0, da_lf, 4):
+        if swap_width[off] == 0 and not _in_no_swap(off):
+            swap_width[off] = U32
+
+    for off in range(da_lf, da_end, 4):
+        if swap_width[off] == 0:
+            swap_width[off] = U32
+
+    off = 0
+    while off < da_end:
+        w = swap_width[off]
+        abs_off = da_abs + off
+        if w == U32:
+            if abs_off + 4 <= len(be):
+                val = struct.unpack_from(">I", be, abs_off)[0]
+                struct.pack_into("<I", out, abs_off, val)
+            off += 4
+        elif w == U16:
+            if abs_off + 2 <= len(be):
+                val = struct.unpack_from(">H", be, abs_off)[0]
+                struct.pack_into("<H", out, abs_off, val)
+            off += 2
+        elif w == U8:
+            if abs_off < len(be):
+                out[abs_off] = be[abs_off]
+            off += 1
+        else:
+            if abs_off < len(be):
+                out[abs_off] = be[abs_off]
+            off += 1
+
+    if stats is not None:
+        stats["havok_class_aware_objects"] = len(obj_map)
+        stats["havok_no_swap_regions"] = len(no_swap_regions)
+
+    return True
+
+
 def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict | None = None) -> bytes:
     """Structurally convert a Havok 5.5 packfile from BE to LE.
 
     Converts header fields, section headers, __classnames__ signatures,
-    and __data__ (as u32 array). The __data__ u32 conversion is imperfect
-    for fields that are u16/u8, but is necessary because the game's Havok
-    runtime does not perform endian conversion — it reads fields directly
-    assuming LE format.
+    and __data__ using class-aware per-field byte-swapping derived from
+    PredatorCZ/HavokLib class layouts for HK550 32-bit.
+
+    The class-aware converter identifies objects via virtual fixups, applies
+    per-field swap widths (u32 for pointers/floats/enums, u16 for refcounts
+    and bone indices, u8/no-swap for QuantizationFormat bytes and compressed
+    bitstream buffers). Falls back to permissive u32 sweep only if class-aware
+    conversion reports failure.
 
     Layout (verified from base game):
       [0,8)     Magic (palindromic, copy as-is)
@@ -288,7 +518,7 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
       [sec,sec+144) 3 x 48-byte section headers: 20-byte name + 7 x u32
       [cn_abs, cn_abs+cn_end) __classnames__: u32 sigs + ASCII
       [ty_abs, ty_abs+ty_end) __types__: copy as-is
-      [da_abs, da_abs+da_end) __data__: u32 array (instances+fixups)
+      [da_abs, da_abs+da_end) __data__: class-aware per-field swap
     """
     if len(be) < 64:
         raise UnhandledByteSwapError(
@@ -374,25 +604,31 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     if ty_end > 0 and ty_abs + ty_end <= len(be):
         out[ty_abs:ty_abs + ty_end] = be[ty_abs:ty_abs + ty_end]
 
-    # 9. __data__ section: contains mixed-width Havok class instances.
-    #    A u32 sweep is NOT correct for classes with u8/u16 members.
-    #    In strict mode, raise. In permissive mode, apply u32 sweep with tracking.
+    # 9. __data__ section: class-aware byte-swap using HavokLib layouts.
+    #    Virtual fixups identify each object's class; per-field swap widths
+    #    are applied (u32 for most fields, u16 for refcounts/indices, u8 for
+    #    QuantizationFormat bytes and raw bitstream buffers).
     if da_end > 0 and da_abs + da_end <= len(be):
-        if not permissive:
-            raise UnhandledByteSwapError(
-                f"Havok __data__ section ({da_end} bytes) requires class-aware "
-                f"converter; blind u32 sweep corrupts u8/u16 fields"
-            )
-        if stats is not None:
-            stats["havok_blind_data_sweep"] = stats.get("havok_blind_data_sweep", 0) + 1
-        n = da_end // 4
-        for i in range(n):
-            off = da_abs + i * 4
-            val = struct.unpack_from(">I", be, off)[0]
-            struct.pack_into("<I", out, off, val)
-        tail = da_abs + n * 4
-        if tail < da_abs + da_end:
-            out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
+        da_local = sections[2][1]
+        success = _havok_swap_data_class_aware(
+            be, out, da_abs, sections, cn_abs, cn_end, stats=stats
+        )
+        if not success:
+            if not permissive:
+                raise UnhandledByteSwapError(
+                    f"Havok __data__ section ({da_end} bytes) class-aware "
+                    f"conversion failed and permissive mode is off"
+                )
+            if stats is not None:
+                stats["havok_blind_data_sweep"] = stats.get("havok_blind_data_sweep", 0) + 1
+            n = da_end // 4
+            for i in range(n):
+                off = da_abs + i * 4
+                val = struct.unpack_from(">I", be, off)[0]
+                struct.pack_into("<I", out, off, val)
+            tail = da_abs + n * 4
+            if tail < da_abs + da_end:
+                out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
 
     # Fill any gap between sec_data_start and first section body
     first_body = min(x for x in (cn_abs, ty_abs, da_abs) if x > 0)
