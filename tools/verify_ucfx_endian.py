@@ -313,12 +313,129 @@ def _check_ibuf_data(
         )
 
 
+HAVOK_MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
+HAVOK_LE_FLAG_OFFSET = 17
+VALID_ANIMATION_TYPES = (1, 2, 3)
+
+
+def _find_havok_data_section(data: bytes, packfile_start: int) -> int | None:
+    """Return offset of the __data__ section within a Havok packfile, or None."""
+    marker = b"__data__"
+    pos = data.find(marker, packfile_start)
+    if pos == -1:
+        return None
+    # Section header: after the name there's padding to 16-byte alignment,
+    # then absolute/local/virtual fixup offsets and section data.
+    # The actual data payload starts after the section header (0x40 bytes past
+    # the 16-aligned start of the section entry).  We search for the next
+    # 16-aligned boundary after the marker string.
+    entry_start = pos
+    # Havok section entries are 0x40 bytes; data begins right after.
+    data_start = entry_start + 0x40
+    if data_start < len(data):
+        return data_start
+    return None
+
+
+def _check_havok_packfile(
+    block_data: bytes,
+    stats: VerifyStats,
+    *,
+    block_index: int,
+    block_path: str,
+    havok_decode_gate: bool = False,
+) -> dict[str, int]:
+    """Scan block for Havok packfile magic and validate LE conversion."""
+    havok_stats: dict[str, int] = {
+        "packfiles_found": 0,
+        "le_flag_ok": 0,
+        "le_flag_bad": 0,
+        "anim_type_ok": 0,
+        "anim_type_bad": 0,
+        "wavelet_decode_ok": 0,
+        "wavelet_decode_fail": 0,
+    }
+    search_from = 0
+    while True:
+        pos = block_data.find(HAVOK_MAGIC, search_from)
+        if pos == -1:
+            break
+        havok_stats["packfiles_found"] += 1
+
+        # Check is_little_endian flag at offset +17 from magic
+        le_flag_off = pos + HAVOK_LE_FLAG_OFFSET
+        if le_flag_off < len(block_data):
+            le_flag = block_data[le_flag_off]
+            if le_flag == 1:
+                havok_stats["le_flag_ok"] += 1
+            else:
+                havok_stats["le_flag_bad"] += 1
+                _add_issue(
+                    stats,
+                    block_index=block_index,
+                    block_path=block_path,
+                    ucfx_off=pos,
+                    tag="HavokPF",
+                    field_name="is_little_endian",
+                    offset=le_flag_off,
+                    value_le=le_flag,
+                    value_be=1,
+                    message=f"Havok packfile is_little_endian={le_flag} (expected 1)",
+                )
+
+        # Try to find __data__ section and check animationType
+        data_sec = _find_havok_data_section(block_data, pos)
+        if data_sec is not None and data_sec + 12 <= len(block_data):
+            # animationType lives at offset +8 within __data__ payload objects
+            # (first object after virtual fixup base). We sample the u32 at +8.
+            anim_type_off = data_sec + 8
+            if anim_type_off + 4 <= len(block_data):
+                anim_type = struct.unpack_from("<I", block_data, anim_type_off)[0]
+                if anim_type in VALID_ANIMATION_TYPES:
+                    havok_stats["anim_type_ok"] += 1
+                elif anim_type == 0:
+                    # 0 could mean non-animation data in __data__; not an issue
+                    pass
+                elif anim_type > 0xFFFF:
+                    havok_stats["anim_type_bad"] += 1
+                    be_anim = struct.unpack_from(">I", block_data, anim_type_off)[0]
+                    _add_issue(
+                        stats,
+                        block_index=block_index,
+                        block_path=block_path,
+                        ucfx_off=pos,
+                        tag="HavokPF",
+                        field_name="animationType",
+                        offset=anim_type_off,
+                        value_le=anim_type,
+                        value_be=be_anim,
+                        message="animationType looks like garbage (still BE?)",
+                    )
+
+            # --havok-decode-gate: attempt wavelet decode
+            if havok_decode_gate and data_sec + 8 + 4 <= len(block_data):
+                atype = struct.unpack_from("<I", block_data, data_sec + 8)[0]
+                if atype == 3:
+                    try:
+                        from hk_anim.wavelet import decode_wavelet  # type: ignore[import-untyped]
+                        decode_wavelet(block_data[data_sec:])
+                        havok_stats["wavelet_decode_ok"] += 1
+                    except Exception:
+                        havok_stats["wavelet_decode_fail"] += 1
+
+        # Advance past this packfile to find next
+        search_from = pos + len(HAVOK_MAGIC)
+
+    return havok_stats
+
+
 def verify_block(
     block_data: bytes,
     *,
     block_index: int,
     block_path: str,
-) -> VerifyStats:
+    havok_decode_gate: bool = False,
+) -> tuple[VerifyStats, dict[str, int]]:
     stats = VerifyStats(blocks_scanned=1)
     for container in iter_ucfx_containers(block_data):
         stats.ucfx_containers += 1
@@ -393,7 +510,16 @@ def verify_block(
                         body_len=body_len,
                     )
 
-    return stats
+    # Havok packfile scan — independent of UCFX chunk structure
+    havok_stats = _check_havok_packfile(
+        block_data,
+        stats,
+        block_index=block_index,
+        block_path=block_path,
+        havok_decode_gate=havok_decode_gate,
+    )
+
+    return stats, havok_stats
 
 
 def main() -> int:
@@ -408,6 +534,11 @@ def main() -> int:
         action="store_true",
         help="Run permissive BE→LE pass and report fallback_u32_count per block; "
         "also note blocks that fail in strict mode",
+    )
+    ap.add_argument(
+        "--havok-decode-gate",
+        action="store_true",
+        help="Attempt wavelet decode on blocks with animationType==3; report success/failure",
     )
     args = ap.parse_args()
 
@@ -432,6 +563,19 @@ def main() -> int:
     blind_swap_blocks = 0
     strict_fail_blocks = 0
     total_fallback_u32 = 0
+    # Havok aggregate stats
+    total_havok_packfiles = 0
+    total_havok_le_ok = 0
+    total_havok_le_bad = 0
+    total_havok_anim_ok = 0
+    total_havok_anim_bad = 0
+    total_wavelet_ok = 0
+    total_wavelet_fail = 0
+    # Havok class-aware stats from byteswap (aggregated under --report-blind-swaps)
+    total_havok_class_aware = 0
+    total_havok_no_swap_regions = 0
+    total_havok_blind_sweep = 0
+
     end = limit if args.max_blocks <= 0 else min(limit, args.start + args.max_blocks)
     for idx in range(args.start, end):
         off = offsets[idx]
@@ -442,13 +586,25 @@ def main() -> int:
             print(f"[{idx}] FAIL decompress {paths[idx]}: {exc}", file=sys.stderr)
             continue
 
-        block_stats = verify_block(
-            block_data, block_index=idx, block_path=paths[idx]
+        block_stats, havok_block = verify_block(
+            block_data,
+            block_index=idx,
+            block_path=paths[idx],
+            havok_decode_gate=args.havok_decode_gate,
         )
         total.blocks_scanned += block_stats.blocks_scanned
         total.ucfx_containers += block_stats.ucfx_containers
         total.descriptor_rows += block_stats.descriptor_rows
         total.issues.extend(block_stats.issues)
+
+        # Accumulate Havok per-block stats
+        total_havok_packfiles += havok_block.get("packfiles_found", 0)
+        total_havok_le_ok += havok_block.get("le_flag_ok", 0)
+        total_havok_le_bad += havok_block.get("le_flag_bad", 0)
+        total_havok_anim_ok += havok_block.get("anim_type_ok", 0)
+        total_havok_anim_bad += havok_block.get("anim_type_bad", 0)
+        total_wavelet_ok += havok_block.get("wavelet_decode_ok", 0)
+        total_wavelet_fail += havok_block.get("wavelet_decode_fail", 0)
 
         if args.verbose and block_stats.issues:
             print(f"[{idx}] {paths[idx]}: {len(block_stats.issues)} issue(s)")
@@ -470,16 +626,38 @@ def main() -> int:
                     f"[{idx}] {paths[idx]}: {fb} permissive fallback u32 swap(s) "
                     f"{tags if tags else ''}"
                 )
+            # Havok class-aware converter stats
+            total_havok_class_aware += int(
+                swap_stats.get("havok_class_aware_objects", 0)
+            )
+            total_havok_no_swap_regions += int(
+                swap_stats.get("havok_no_swap_regions", 0)
+            )
+            total_havok_blind_sweep += int(
+                swap_stats.get("havok_blind_data_sweep", 0)
+            )
 
     print(f"WAD: {args.wad}")
     print(f"  Blocks scanned:     {total.blocks_scanned}")
     print(f"  UCFX containers:    {total.ucfx_containers}")
     print(f"  Descriptor rows:    {total.descriptor_rows}")
     print(f"  Endian issues:      {len(total.issues)}")
+    if total_havok_packfiles:
+        print(f"  Havok packfiles:    {total_havok_packfiles}")
+        print(f"    LE flag OK:       {total_havok_le_ok}")
+        print(f"    LE flag BAD:      {total_havok_le_bad}")
+        print(f"    animType OK:      {total_havok_anim_ok}")
+        print(f"    animType BAD:     {total_havok_anim_bad}")
+    if args.havok_decode_gate and (total_wavelet_ok or total_wavelet_fail):
+        print(f"  Wavelet decode OK:  {total_wavelet_ok}")
+        print(f"  Wavelet decode FAIL:{total_wavelet_fail}")
     if args.report_blind_swaps:
         print(f"  Strict swap failures: {strict_fail_blocks}")
         print(f"  Blocks w/ fallback u32: {blind_swap_blocks}")
         print(f"  Total fallback u32 ops: {total_fallback_u32}")
+        print(f"  Havok class-aware objects: {total_havok_class_aware}")
+        print(f"  Havok no-swap regions:     {total_havok_no_swap_regions}")
+        print(f"  Havok blind data sweep:    {total_havok_blind_sweep}")
 
     shown = 0
     for issue in total.issues[:50]:
