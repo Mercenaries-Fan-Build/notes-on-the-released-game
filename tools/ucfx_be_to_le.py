@@ -17,6 +17,8 @@ from __future__ import annotations
 import struct
 import zlib
 
+from dataclasses import dataclass
+
 from pandemic_hash import pandemic_hash_m2
 from audio_codec_policy import PC_PWS_HEADER_SIZE
 from pws_xbox_to_pc import normalize_embedded_wavebank_clip
@@ -145,6 +147,36 @@ def _convert_transform_records(be: bytes) -> bytes:
         out += struct.pack("<10I", *u32s)
         out += struct.pack("<H", u16)
         pos += STRIDE
+    return bytes(out)
+
+
+def _convert_numeric_records(be: bytes, stride: int) -> bytes:
+    """Convert fixed-stride numeric records where stride is not a multiple of 4.
+
+    Each record is swapped as u32 words followed by a u16 remainder (if the
+    stride mod 4 is 2) or a raw byte tail (if mod 4 is 1 or 3).
+    """
+    if stride <= 0 or len(be) == 0:
+        return be
+    out = bytearray()
+    pos = 0
+    while pos + stride <= len(be):
+        record = be[pos:pos + stride]
+        n_u32 = stride // 4
+        tail = stride % 4
+        if n_u32 > 0:
+            vals = struct.unpack_from(f">{n_u32}I", record, 0)
+            out += struct.pack(f"<{n_u32}I", *vals)
+        if tail >= 2:
+            v16 = struct.unpack_from(">H", record, n_u32 * 4)[0]
+            out += struct.pack("<H", v16)
+            if tail > 2:
+                out += record[n_u32 * 4 + 2:]
+        elif tail > 0:
+            out += record[n_u32 * 4:]
+        pos += stride
+    if pos < len(be):
+        out += _convert_u32_array(be[pos:])
     return bytes(out)
 
 
@@ -897,6 +929,26 @@ _META_CONTAINERS = frozenset(("CHDR", "COMP", "STAT", "PRMT", "EXEC"))
 _STREAM_CONTAINERS = frozenset(("STRM", "GEOM"))
 
 
+@dataclass
+class _CompInfo:
+    """Active COMP component identity from the info/schm descriptors."""
+    component_name: str
+    schema_stride: int
+
+
+_ECS_STRING_COMPONENTS = frozenset({
+    "Name", "ModelName",
+})
+
+_ECS_NUMERIC_COMPONENTS = frozenset({
+    "LightObject", "Road", "RoadIntersection",
+    "DestructionLink", "PhysicalLink", "ObjectScript",
+    "ModifierKey", "ScrubObject", "LineRegion", "MaterialMapping",
+    "LandingZone", "Label", "Anchor", "LowResTerrainObject",
+    "HibernationControl",
+})
+
+
 def _classify_contexts(descriptors: list[tuple[str, int, int, int, int]]) -> list[str | None]:
     """Determine the container context for each descriptor row.
 
@@ -914,6 +966,116 @@ def _classify_contexts(descriptors: list[tuple[str, int, int, int, int]]) -> lis
                 current = "META"
         contexts.append(current)
     return contexts
+
+
+def _build_ecs_comp_map(
+    descriptors: list[tuple[str, int, int, int, int]],
+    container_be: bytes,
+    data_area_off: int,
+) -> dict[int, _CompInfo]:
+    """Pre-scan ECS_NODE descriptors to map each ``data`` row to its COMP component.
+
+    Walks the descriptor table recognizing the repeating pattern:
+        COMP (sentinel) -> info -> schm -> data
+    Reads the ``info`` body to extract the component name (null-terminated
+    ASCII string) and the ``schm`` body to extract the record stride
+    (second u32 in the schema header, in BE).
+
+    Returns ``{descriptor_index: _CompInfo}`` for each ``data`` row that
+    belongs to a recognized COMP group.
+    """
+    comp_map: dict[int, _CompInfo] = {}
+    in_comp = False
+    current_name: str | None = None
+    current_stride: int = 0
+
+    for idx, (tag, row_u0, body_size, _f3, _f4) in enumerate(descriptors):
+        if row_u0 == CONTAINER_SENTINEL:
+            if tag == "COMP":
+                in_comp = True
+                current_name = None
+                current_stride = 0
+            else:
+                in_comp = False
+            continue
+
+        if not in_comp:
+            continue
+
+        body_start = (data_area_off + row_u0) if data_area_off > 0 else (8 + row_u0)
+        body_end = min(body_start + body_size, len(container_be))
+        if body_start >= len(container_be) or body_size == 0:
+            continue
+        body = container_be[body_start:body_end]
+
+        if tag == "info" and current_name is None:
+            nul = body.find(b"\x00")
+            if nul > 0:
+                current_name = body[:nul].decode("ascii", errors="replace")
+            elif nul == 0:
+                current_name = ""
+            else:
+                current_name = body.decode("ascii", errors="replace")
+
+        elif tag == "schm" and len(body) >= 8:
+            current_stride = struct.unpack_from(">I", body, 4)[0]
+
+        elif tag == "data" and current_name is not None:
+            comp_map[idx] = _CompInfo(
+                component_name=current_name,
+                schema_stride=current_stride,
+            )
+
+    return comp_map
+
+
+def _convert_ecs_comp_data(
+    body_be: bytes,
+    comp_info: _CompInfo,
+    stats: dict,
+    *,
+    permissive: bool = False,
+) -> bytes:
+    """Convert an ECS_NODE COMP ``data`` body using structural component dispatch.
+
+    Uses the component name from the preceding ``info`` descriptor to choose
+    the correct byte-swap strategy instead of the old ``body_size % 42``
+    heuristic.
+    """
+    if len(body_be) == 0:
+        return body_be
+
+    name = comp_info.component_name
+    stride = comp_info.schema_stride
+
+    if name == "Transform":
+        if stride == 42:
+            return _convert_transform_records(body_be)
+        if stride > 0 and stride != 42:
+            if stride % 4 == 0:
+                return _convert_u32_array(body_be)
+            return _convert_numeric_records(body_be, stride)
+        if len(body_be) % 42 == 0:
+            return _convert_transform_records(body_be)
+        return _convert_u32_array(body_be)
+
+    if name in _ECS_STRING_COMPONENTS:
+        return body_be
+
+    if name in _ECS_NUMERIC_COMPONENTS:
+        if stride > 0 and stride % 4 != 0:
+            return _convert_numeric_records(body_be, stride)
+        return _convert_u32_array(body_be)
+
+    return _fallback_u32_or_raise(
+        body_be,
+        reason=f"unknown ECS component '{name}' (stride={stride})",
+        tag="data",
+        type_hash=_TYPE_ECS_NODE,
+        context="META",
+        permissive=permissive,
+        stats=stats,
+    )
 
 
 def _convert_type_body(be: bytes) -> bytes:
@@ -1651,6 +1813,7 @@ def _convert_body(
     type_hash: int = 0,
     texture_fmt: bytes = b"DXT5",
     permissive: bool = False,
+    comp_info: _CompInfo | None = None,
 ) -> bytes:
     """Convert a single chunk body from BE to LE based on tag, context, and entry type.
 
@@ -1704,12 +1867,19 @@ def _convert_body(
         if type_hash == _TYPE_ANIMATION:
             return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
         if type_hash == _TYPE_ECS_NODE:
-            if len(body_be) % 42 == 0:
-                return _convert_transform_records(body_be)
-            # vz_state COMP data: entity name strings + enum tables (text-heavy,
-            # endian-neutral).  No verified binary field map exists for this
-            # mixed-content body; pass through to preserve string integrity.
-            return body_be
+            if comp_info is not None:
+                return _convert_ecs_comp_data(
+                    body_be, comp_info, stats, permissive=permissive,
+                )
+            return _fallback_u32_or_raise(
+                body_be,
+                reason="ECS_NODE data outside COMP triplet (no component identity)",
+                tag=tag,
+                type_hash=type_hash,
+                context=context,
+                permissive=permissive,
+                stats=stats,
+            )
         if type_hash == _TYPE_KEYFRAME:
             return body_be  # Stringdb body is natively BE on all platforms
         if type_hash == _TYPE_PATH:
@@ -1958,6 +2128,12 @@ def _convert_container(
     # Classify contexts
     contexts = _classify_contexts(descriptors)
 
+    # Build COMP component map for ECS_NODE containers so that each 'data'
+    # descriptor is dispatched by component name instead of size heuristics.
+    comp_map: dict[int, _CompInfo] = {}
+    if type_hash == _TYPE_ECS_NODE:
+        comp_map = _build_ecs_comp_map(descriptors, container_be, data_area_off)
+
     # Extract and convert each body
     bodies_le: list[bytes] = []
     texture_fmt = b"DXT5"  # Default; overwritten from INFO if type is texture
@@ -2008,6 +2184,7 @@ def _convert_container(
                     type_hash=type_hash,
                     texture_fmt=texture_fmt,
                     permissive=permissive,
+                    comp_info=comp_map.get(idx),
                 )
             )
 

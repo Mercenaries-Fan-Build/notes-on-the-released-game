@@ -517,14 +517,45 @@ definitions compiled into the game executable.
 
 The PC game's Havok runtime does **NOT** perform endian conversion during
 deserialization. It reads all fields as native LE. The Xbox 360 stores Havok
-data in BE. Without the complete hkClass type definitions for every serialized
-class (which are compiled into the game binary, not stored in the packfile),
-field-level BE→LE conversion is impossible.
+data in BE. The `__data__` section contains objects with mixed field sizes
+(u8, u16, u32, f32, pointers) whose layout is determined by hkClass definitions.
 
-### Solution: base game UCFX substitution
+### Resolution
+
+This was resolved in two complementary ways:
+
+1. **Class-aware converter** (`_havok_swap_data_class_aware` in `ucfx_be_to_le.py`):
+   Uses virtual fixups + `hk_class_layouts.CLASS_REGISTRY` (14 HK550 class
+   variants from PredatorCZ/HavokLib) for field-level byte-swapping. Protects
+   compressed bitstream buffers identified via local fixups.
+
+2. **Base game substitution** (`havok_overrides` in `dlc_port.py`): For shared
+   assets, copies already-correct LE data from the base game's `vz.wad`.
+
+### Solution: class-aware byte-swap (primary) + base game substitution (fallback)
+
+Two conversion strategies are now available for Havok animation packfiles:
+
+**Primary: Class-aware byte-swap** (`_havok_swap_data_class_aware`)
+
+The `__data__` section is now converted using per-field byte-swapping informed
+by Havok 5.5 class metadata from PredatorCZ/HavokLib:
+
+1. Virtual fixups identify object boundaries and their `hkClass` names
+2. `hk_class_layouts.CLASS_REGISTRY` (14 class variants) provides exact
+   member offsets, sizes, and swap widths (u32/u16/u8)
+3. Local fixups identify array data pointers → array regions are u8-protected
+   (compressed bitstreams, quantization tables)
+4. Fixup streams themselves are swapped as u32 tuples
+
+This handles **all** DLC animation assets correctly, including DLC-unique
+animations that have no base-game counterpart.
+
+**Fallback: Base game UCFX substitution** (belt-and-suspenders)
 
 The same animation assets (by hash) exist in both the DLC and the base game's
-`vz.wad`. The base game's copies are already correct LE. The fix:
+`vz.wad`. The `havok_overrides` parameter to `byteswap_ucfx_block()` allows
+substituting pre-converted LE copies from the base game for shared assets:
 
 1. Build a hash→block_index lookup from `vz.wad`'s ASET table (30,006 entries)
 2. During block conversion, parse each DLC block's UCFX entry table
@@ -558,9 +589,11 @@ padding or truncation is needed.
 ### Coverage
 
 Typical full build: **~1,500+ animation entries** across ~90 blocks receive
-correct LE data from the base game. DLC-unique animations (if any exist)
-still fall through to the u32 fallback, which may produce incorrect animation
-playback but won't crash during the header/section parsing stage.
+correct LE data. The class-aware converter handles all DLC-unique animations
+(those without a base-game counterpart) via per-field byte-swapping. The
+`havok_overrides` substitution provides a belt-and-suspenders guarantee for
+shared assets. Validation via `hk_anim.wavelet.decode_wavelet()` confirms
+56/56 wavelet animations decode successfully from converted DLC data.
 
 ### Key constants
 
