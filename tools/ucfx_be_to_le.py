@@ -946,7 +946,65 @@ _ECS_NUMERIC_COMPONENTS = frozenset({
     "ModifierKey", "ScrubObject", "LineRegion", "MaterialMapping",
     "LandingZone", "Label", "Anchor", "LowResTerrainObject",
     "HibernationControl",
+    "AtmosphereBase", "IntersectionToIntersection",
+    "SoundAmbience", "AiBehavior", "Path",
 })
+
+# Hash → component name lookup for compact-format info bodies (16-byte binary,
+# no ASCII string). These are pandemic_hash_m2(component_name).
+_ECS_COMP_HASH_TO_NAME: dict[int, str] = {
+    0x753EB623: "Transform",
+    0x1DE5C824: "Name",
+    0x5CF81991: "ModelName",
+    0x97E8EE92: "LightObject",
+    0xEA0F3AA3: "Road",
+    0x6FD048F4: "RoadIntersection",
+    0xBCE6FAD7: "DestructionLink",
+    0x7FBCE14E: "PhysicalLink",
+    0xD81512A1: "ObjectScript",
+    0x99C2B81F: "ModifierKey",
+    0xAB92C697: "ScrubObject",
+    0x6310807F: "LineRegion",
+    0x49F0D0EC: "MaterialMapping",
+    0x2A20B640: "LandingZone",
+    0x06DA8775: "Label",
+    0xFA55F6BA: "Anchor",
+    0x2D8D2435: "LowResTerrainObject",
+    0xE18AFD65: "HibernationControl",
+    0xB8D2B506: "AtmosphereBase",
+    0xEB6DE962: "IntersectionToIntersection",
+    0x514CAD3A: "SoundAmbience",
+    0xDECD8889: "AiBehavior",
+    0xBCFE6314: "Path",
+}
+
+# Known strides for compact-format COMP groups (no schm descriptor).
+# Values from full-format blocks' schm second u32.
+_ECS_COMP_DEFAULT_STRIDE: dict[str, int] = {
+    "Transform": 52,
+    "Name": 5,
+    "HibernationControl": 6,
+    "Label": 4,
+    "ScrubObject": 4,
+    "LineRegion": 4,
+    "Road": 40,
+    "RoadIntersection": 124,
+    "ObjectScript": 8,
+    "Anchor": 16,
+    "AiBehavior": 48,
+    "SoundAmbience": 20,
+    "AtmosphereBase": 740,
+    "IntersectionToIntersection": 8,
+    "ModelName": 4,
+    "LightObject": 4,
+    "DestructionLink": 4,
+    "PhysicalLink": 4,
+    "ModifierKey": 4,
+    "MaterialMapping": 4,
+    "LandingZone": 4,
+    "LowResTerrainObject": 4,
+    "Path": 4,
+}
 
 
 def _classify_contexts(descriptors: list[tuple[str, int, int, int, int]]) -> list[str | None]:
@@ -1009,13 +1067,23 @@ def _build_ecs_comp_map(
         body = container_be[body_start:body_end]
 
         if tag == "info" and current_name is None:
+            # Two info body formats:
+            # 1) Full: "ComponentName\0" + hash(4) + metadata (size > 16, starts with ASCII)
+            # 2) Compact: hash(4 BE) + metadata (exactly 16 bytes, no ASCII)
             nul = body.find(b"\x00")
-            if nul > 0:
-                current_name = body[:nul].decode("ascii", errors="replace")
-            elif nul == 0:
-                current_name = ""
-            else:
-                current_name = body.decode("ascii", errors="replace")
+            candidate = body[:nul] if nul > 0 else b""
+            if candidate and all(32 <= b < 127 for b in candidate):
+                # Full format: name string at start
+                current_name = candidate.decode("ascii")
+            elif len(body) >= 4:
+                # Compact format: first 4 bytes = component hash (BE)
+                comp_hash = struct.unpack_from(">I", body, 0)[0]
+                current_name = _ECS_COMP_HASH_TO_NAME.get(
+                    comp_hash, f"__hash_0x{comp_hash:08X}"
+                )
+                # No schm in compact format — use default stride
+                if current_name in _ECS_COMP_DEFAULT_STRIDE:
+                    current_stride = _ECS_COMP_DEFAULT_STRIDE[current_name]
 
         elif tag == "schm" and len(body) >= 8:
             current_stride = struct.unpack_from(">I", body, 4)[0]
@@ -1066,6 +1134,22 @@ def _convert_ecs_comp_data(
         if stride > 0 and stride % 4 != 0:
             return _convert_numeric_records(body_be, stride)
         return _convert_u32_array(body_be)
+
+    # Unrecognized hash-identified components: swap as numeric if stride known
+    if name.startswith("__hash_0x"):
+        if stride > 0 and stride % 4 != 0:
+            return _convert_numeric_records(body_be, stride)
+        if len(body_be) % 4 == 0:
+            return _convert_u32_array(body_be)
+        return _fallback_u32_or_raise(
+            body_be,
+            reason=f"unknown ECS component hash '{name}' (stride={stride}, size={len(body_be)} not u32-aligned)",
+            tag="data",
+            type_hash=_TYPE_ECS_NODE,
+            context="META",
+            permissive=permissive,
+            stats=stats,
+        )
 
     return _fallback_u32_or_raise(
         body_be,
