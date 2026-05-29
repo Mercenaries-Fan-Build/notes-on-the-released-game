@@ -947,7 +947,7 @@ _ECS_NUMERIC_COMPONENTS = frozenset({
     "LandingZone", "Label", "Anchor", "LowResTerrainObject",
     "HibernationControl",
     "AtmosphereBase", "IntersectionToIntersection",
-    "SoundAmbience", "AiBehavior", "Path",
+    "SoundAmbience", "AiBehavior", "Path", "LaneData",
 })
 
 # Hash → component name lookup for compact-format info bodies (16-byte binary,
