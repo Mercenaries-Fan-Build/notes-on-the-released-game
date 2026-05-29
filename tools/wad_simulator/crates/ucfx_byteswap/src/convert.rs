@@ -37,6 +37,7 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
     struct EntryInfo {
         name_hash: u32,
         type_hash: u32,
+        #[allow(dead_code)]
         field_c: u32,
         chunk_size: u32,
     }
@@ -81,18 +82,12 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
     }
 
     // --- Actual conversion ---
-    let mut output = Vec::with_capacity(be_data.len());
+    // Two-pass: first convert all containers to compute correct sizes,
+    // then write the entry table with correct chunk_size (including CSUM)
+    // and offset (cumulative position in the data area).
 
-    // Write LE entry table
-    output.extend_from_slice(&(entry_count as u32).to_le_bytes());
-    for entry in &entries {
-        output.extend_from_slice(&entry.name_hash.to_le_bytes());
-        output.extend_from_slice(&entry.type_hash.to_le_bytes());
-        output.extend_from_slice(&entry.field_c.to_le_bytes());
-        output.extend_from_slice(&entry.chunk_size.to_le_bytes());
-    }
-
-    // Convert each container
+    // Pass 1: Convert all containers and collect results
+    let mut converted_containers: Vec<Vec<u8>> = Vec::with_capacity(entry_count);
     let mut offset = header_size;
     for (ei, entry) in entries.iter().enumerate() {
         let container_end = offset + entry.chunk_size as usize;
@@ -108,12 +103,7 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
 
         let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE;
         let converted = convert_container(container, is_ecs, ei, entry.type_hash)?;
-
-        // Compute CSUM and append trailer
-        let crc = crc32_mercs2(&converted);
-        output.extend_from_slice(&converted);
-        output.extend_from_slice(b"CSUM");
-        output.extend_from_slice(&crc.to_le_bytes());
+        converted_containers.push(converted);
 
         offset = container_end;
         // Skip original CSUM trailer
@@ -123,6 +113,39 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
                 offset += 8;
             }
         }
+    }
+
+    // Pass 2: Compute correct chunk_sizes (UCFX + 8 for CSUM) and offsets
+    // PC format: chunk_size includes the 8-byte CSUM trailer.
+    // Offset = cumulative position within the data area.
+    let pc_chunk_sizes: Vec<u32> = converted_containers.iter()
+        .map(|c| (c.len() as u32) + 8)
+        .collect();
+    let mut pc_offsets: Vec<u32> = Vec::with_capacity(entry_count);
+    let mut cumulative: u32 = 0;
+    for &sz in &pc_chunk_sizes {
+        pc_offsets.push(cumulative);
+        cumulative += sz;
+    }
+
+    // Write output: entry table then containers
+    let mut output = Vec::with_capacity(be_data.len());
+
+    // Write LE entry table with corrected offset and chunk_size
+    output.extend_from_slice(&(entry_count as u32).to_le_bytes());
+    for (ei, entry) in entries.iter().enumerate() {
+        output.extend_from_slice(&entry.name_hash.to_le_bytes());
+        output.extend_from_slice(&entry.type_hash.to_le_bytes());
+        output.extend_from_slice(&pc_offsets[ei].to_le_bytes());
+        output.extend_from_slice(&pc_chunk_sizes[ei].to_le_bytes());
+    }
+
+    // Append converted containers with CSUM trailers
+    for converted in &converted_containers {
+        let crc = crc32_mercs2(converted);
+        output.extend_from_slice(converted);
+        output.extend_from_slice(b"CSUM");
+        output.extend_from_slice(&crc.to_le_bytes());
     }
 
     eprintln!("  Output size: {} bytes", output.len());

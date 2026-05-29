@@ -363,21 +363,17 @@ def _apply_overrides_and_strips(
         h, t, o, s = struct.unpack_from("<IIII", le_block, off)
         entries.append((h, t, o, s))
 
-    # Walk containers and collect (entry_tuple, container_bytes) pairs
+    # Walk containers — chunk_size includes CSUM trailer (PC format).
     pos = header_size
-    kept: list[tuple[tuple[int, int, int, int], bytes]] = []
+    kept: list[tuple[int, int, bytes]] = []  # (name_hash, type_hash, full_chunk_with_csum)
     for ei, (h, t, o, s) in enumerate(entries):
         chunk_size = s
         container_end = pos + chunk_size
         if container_end > len(le_block):
-            container_data = le_block[pos:]
+            chunk_data = le_block[pos:]
         else:
-            container_data = le_block[pos:container_end]
+            chunk_data = le_block[pos:container_end]
         pos = container_end
-
-        # Skip CSUM trailer
-        if pos + 8 <= len(le_block) and le_block[pos:pos + 4] == b"CSUM":
-            pos += 8
 
         # Strip?
         if strip_hashes and t in strip_hashes and (
@@ -389,21 +385,21 @@ def _apply_overrides_and_strips(
         if base_overrides and ei in base_overrides:
             ucfx_le = base_overrides[ei]
             csum_val = _crc32_mercs2(ucfx_le)
-            final = ucfx_le + b"CSUM" + struct.pack("<I", csum_val)
-            kept.append(((h, t, o, len(ucfx_le)), final))
+            full_chunk = ucfx_le + b"CSUM" + struct.pack("<I", csum_val)
+            kept.append((h, t, full_chunk))
         else:
-            # Keep the Rust-converted container + original CSUM trailer
-            # Reconstruct container + CSUM from original block
-            csum_val = _crc32_mercs2(container_data)
-            final = container_data + b"CSUM" + struct.pack("<I", csum_val)
-            kept.append(((h, t, o, chunk_size), final))
+            kept.append((h, t, bytes(chunk_data)))
 
-    # Rebuild block
+    # Rebuild block with recomputed offsets and chunk_sizes.
+    # PC format: chunk_size includes CSUM; offset = cumulative position.
     out = struct.pack("<I", len(kept))
-    for (h, t, o, s), _ in kept:
-        out += struct.pack("<IIII", h, t, o, s)
-    for _, container_with_csum in kept:
-        out += container_with_csum
+    cumulative_offset = 0
+    for h, t, full_chunk in kept:
+        chunk_sz = len(full_chunk)
+        out += struct.pack("<IIII", h, t, cumulative_offset, chunk_sz)
+        cumulative_offset += chunk_sz
+    for _, _, full_chunk in kept:
+        out += full_chunk
 
     stripped_count = entry_count - len(kept)
     return out, stripped_count
