@@ -115,28 +115,21 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
         }
     }
 
-    // Pass 2: Compute correct chunk_sizes (UCFX + 8 for CSUM) and offsets
-    // PC format: chunk_size includes the 8-byte CSUM trailer.
-    // Offset = cumulative position within the data area.
+    // Pass 2: Compute correct chunk_sizes (UCFX + 8 for CSUM trailer).
+    // field_c is always 0 on both platforms — engine walks sequentially, no offset lookup.
     let pc_chunk_sizes: Vec<u32> = converted_containers.iter()
         .map(|c| (c.len() as u32) + 8)
         .collect();
-    let mut pc_offsets: Vec<u32> = Vec::with_capacity(entry_count);
-    let mut cumulative: u32 = 0;
-    for &sz in &pc_chunk_sizes {
-        pc_offsets.push(cumulative);
-        cumulative += sz;
-    }
 
     // Write output: entry table then containers
     let mut output = Vec::with_capacity(be_data.len());
 
-    // Write LE entry table with corrected offset and chunk_size
+    // Write LE entry table
     output.extend_from_slice(&(entry_count as u32).to_le_bytes());
     for (ei, entry) in entries.iter().enumerate() {
         output.extend_from_slice(&entry.name_hash.to_le_bytes());
         output.extend_from_slice(&entry.type_hash.to_le_bytes());
-        output.extend_from_slice(&pc_offsets[ei].to_le_bytes());
+        output.extend_from_slice(&0u32.to_le_bytes());
         output.extend_from_slice(&pc_chunk_sizes[ei].to_le_bytes());
     }
 

@@ -390,14 +390,11 @@ def _apply_overrides_and_strips(
         else:
             kept.append((h, t, bytes(chunk_data)))
 
-    # Rebuild block with recomputed offsets and chunk_sizes.
-    # PC format: chunk_size includes CSUM; offset = cumulative position.
+    # Rebuild block: field_c is always 0 (engine walks sequentially via chunk_size).
     out = struct.pack("<I", len(kept))
-    cumulative_offset = 0
     for h, t, full_chunk in kept:
         chunk_sz = len(full_chunk)
-        out += struct.pack("<IIII", h, t, cumulative_offset, chunk_sz)
-        cumulative_offset += chunk_sz
+        out += struct.pack("<IIII", h, t, 0, chunk_sz)
     for _, _, full_chunk in kept:
         out += full_chunk
 
