@@ -345,7 +345,9 @@ fn convert_ecs_bodies(
                     let body_local_start = start - data_start;
                     let body_local_end = end - data_start;
                     if body_local_end <= data_area.len() {
-                        if desc.tag.is_native_be() {
+                        if desc.tag == ChunkTag::Enum {
+                            convert_enum_body_inplace(&mut data_area[body_local_start..body_local_end]);
+                        } else if desc.tag.is_native_be() {
                             // No swap
                         } else {
                             swap_u32_array(&mut data_area[body_local_start..body_local_end]);
@@ -523,6 +525,14 @@ fn convert_generic_bodies(
                     tag if is_string_tag(tag) => {
                         // String data — no swap
                     }
+                    ChunkTag::Prmt => {
+                        // Mesh draw-call parameter binding: 16-byte records of u16 fields
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Enum => {
+                        // Enum definitions: mixed strings + u32 fields
+                        convert_enum_body_inplace(&mut data_area[body_local_start..body_local_end]);
+                    }
                     ChunkTag::Ibuf => {
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
@@ -538,6 +548,8 @@ fn convert_generic_bodies(
                     }
                     _ => {
                         // Default: safe for GEOM, STRM positions, BNDS, HIER, PRMG, etc.
+                        // TODO: Flgt, Swit, Cexe, Sequ may also contain embedded strings;
+                        // move them to the no-swap arm above if they cause crashes.
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
                     }
                 }
@@ -593,6 +605,70 @@ fn convert_texture_info(body: &mut [u8]) {
     swap_u32(body, 22); // total_size
     swap_u32(body, 26);
     swap_u32(body, 30);
+}
+
+/// Convert an `enum` body in-place from BE to LE.
+///
+/// Layout (verified from base game):
+///   [u32 total_enum_count]
+///   repeated total_enum_count times:
+///     [null-terminated ASCII enum name]
+///     [u32 name_hash]
+///     [u32 value_count]
+///     repeated value_count times:
+///       [null-terminated ASCII value name]
+///       [u32 value_hash]
+///       [u32 ordinal]
+fn convert_enum_body_inplace(data: &mut [u8]) {
+    if data.len() < 4 {
+        return;
+    }
+
+    let total = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+    swap_u32(data, 0);
+    eprintln!("      enum body: total_enum_count={}", total);
+
+    let mut pos = 4usize;
+    for _ in 0..total {
+        if pos >= data.len() {
+            break;
+        }
+        // Skip null-terminated enum name string
+        match data[pos..].iter().position(|&b| b == 0) {
+            Some(nul_rel) => pos += nul_rel + 1,
+            None => break,
+        }
+        // Swap name_hash (u32)
+        if pos + 4 > data.len() {
+            break;
+        }
+        swap_u32(data, pos);
+        pos += 4;
+        // Swap value_count (u32)
+        if pos + 4 > data.len() {
+            break;
+        }
+        let val_count = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+        swap_u32(data, pos);
+        pos += 4;
+        // Walk each value: [name\0] [u32 hash] [u32 ordinal]
+        for _ in 0..val_count {
+            if pos >= data.len() {
+                break;
+            }
+            match data[pos..].iter().position(|&b| b == 0) {
+                Some(nul_rel) => pos += nul_rel + 1,
+                None => break,
+            }
+            if pos + 8 > data.len() {
+                break;
+            }
+            swap_u32(data, pos);     // value_hash
+            pos += 4;
+            swap_u32(data, pos);     // ordinal
+            pos += 4;
+        }
+    }
 }
 
 /// Swap every aligned 4-byte word in a slice. Trailing bytes (< 4) are left untouched.

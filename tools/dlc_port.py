@@ -4,7 +4,7 @@
 Replaces both ``port_xbox_dlc.py`` and ``dlc_port_x360_to_pc.py`` with a
 single CLI that uses shared modules:
   - x360_dlc_io: STFS I/O, BE sges decompression, FFCS parsing
-  - ucfx_be_to_le: UCFX byte-swap (BE → LE)
+  - ucfx_byteswap (Rust): UCFX byte-swap (BE → LE)
   - ffcs_patch_wad: patch WAD assembly + merge
 
 The ``--source-wad`` option enables integrated DLC bootstrap injection:
@@ -54,8 +54,7 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
-from ucfx_be_to_le import byteswap_ucfx_block, UnhandledByteSwapError  # noqa: E402
-from ucfx_byteswap_wrapper import byteswap_block_rust, rust_binary_available  # noqa: E402
+from ucfx_byteswap_wrapper import byteswap_block_rust  # noqa: E402
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -335,6 +334,81 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
     return bytes(data)
 
 
+def _apply_overrides_and_strips(
+    le_block: bytes,
+    base_overrides: dict[int, bytes] | None,
+    strip_hashes: frozenset[int] | None,
+) -> tuple[bytes, int]:
+    """Apply entry-level overrides and type_hash stripping to an LE block.
+
+    - base_overrides: maps entry index → LE UCFX container bytes (no CSUM).
+      Replaces the Rust-converted container with the pre-converted PC version.
+    - strip_hashes: type_hashes to remove from the block entirely.
+
+    Returns (modified_block, stripped_count).
+    """
+    if not base_overrides and not strip_hashes:
+        return le_block, 0
+    if len(le_block) < 4:
+        return le_block, 0
+
+    entry_count = struct.unpack_from("<I", le_block, 0)[0]
+    header_size = 4 + entry_count * 16
+    if header_size > len(le_block):
+        return le_block, 0
+
+    entries: list[tuple[int, int, int, int]] = []
+    for i in range(entry_count):
+        off = 4 + i * 16
+        h, t, o, s = struct.unpack_from("<IIII", le_block, off)
+        entries.append((h, t, o, s))
+
+    # Walk containers and collect (entry_tuple, container_bytes) pairs
+    pos = header_size
+    kept: list[tuple[tuple[int, int, int, int], bytes]] = []
+    for ei, (h, t, o, s) in enumerate(entries):
+        chunk_size = s
+        container_end = pos + chunk_size
+        if container_end > len(le_block):
+            container_data = le_block[pos:]
+        else:
+            container_data = le_block[pos:container_end]
+        pos = container_end
+
+        # Skip CSUM trailer
+        if pos + 8 <= len(le_block) and le_block[pos:pos + 4] == b"CSUM":
+            pos += 8
+
+        # Strip?
+        if strip_hashes and t in strip_hashes and (
+            base_overrides is None or ei not in base_overrides
+        ):
+            continue
+
+        # Override?
+        if base_overrides and ei in base_overrides:
+            ucfx_le = base_overrides[ei]
+            csum_val = _crc32_mercs2(ucfx_le)
+            final = ucfx_le + b"CSUM" + struct.pack("<I", csum_val)
+            kept.append(((h, t, o, len(ucfx_le)), final))
+        else:
+            # Keep the Rust-converted container + original CSUM trailer
+            # Reconstruct container + CSUM from original block
+            csum_val = _crc32_mercs2(container_data)
+            final = container_data + b"CSUM" + struct.pack("<I", csum_val)
+            kept.append(((h, t, o, chunk_size), final))
+
+    # Rebuild block
+    out = struct.pack("<I", len(kept))
+    for (h, t, o, s), _ in kept:
+        out += struct.pack("<IIII", h, t, o, s)
+    for _, container_with_csum in kept:
+        out += container_with_csum
+
+    stripped_count = entry_count - len(kept)
+    return out, stripped_count
+
+
 # ── Parallel block processing ─────────────────────────────────────────
 
 @dataclass
@@ -355,7 +429,6 @@ class _BlockWorkerArgs:
     collect_hashes: bool
     permissive: bool = False
     strip_audio: bool = False
-    use_python_swap: bool = False
 
 
 @dataclass
@@ -518,51 +591,28 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     if args.strip_audio:
         strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
 
-    use_rust = (
-        not args.use_python_swap
-        and not base_overrides
-        and not strip_hashes
-        and rust_binary_available()
-    )
-
     try:
-        if use_rust:
-            swapped = byteswap_block_rust(decompressed)
-            stats: dict = {
-                "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
-                "tags_seen": {}, "errors": [],
-                "fallback_u32_count": 0, "fallback_u32_tags": {},
-            }
-        else:
-            swapped, stats = byteswap_ucfx_block(
-                decompressed, base_overrides, permissive=args.permissive,
-                strip_type_hashes=strip_hashes,
-            )
-    except UnhandledByteSwapError as e:
+        swapped = byteswap_block_rust(decompressed)
+        stats: dict = {
+            "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
+            "tags_seen": {}, "errors": [],
+            "fallback_u32_count": 0, "fallback_u32_tags": {},
+        }
+    except (RuntimeError, FileNotFoundError) as e:
         return _BlockWorkerResult(
             blk_idx=blk_idx,
             skipped=True,
-            skip_reason=f"unhandled byte-swap: {e}",
+            skip_reason=f"byte-swap failed: {e}",
         )
-    except (RuntimeError, FileNotFoundError) as e:
-        if use_rust:
-            try:
-                swapped, stats = byteswap_ucfx_block(
-                    decompressed, base_overrides, permissive=args.permissive,
-                    strip_type_hashes=strip_hashes,
-                )
-            except UnhandledByteSwapError as e2:
-                return _BlockWorkerResult(
-                    blk_idx=blk_idx,
-                    skipped=True,
-                    skip_reason=f"unhandled byte-swap: {e2}",
-                )
-        else:
-            return _BlockWorkerResult(
-                blk_idx=blk_idx,
-                skipped=True,
-                skip_reason=f"byte-swap failed: {e}",
-            )
+
+    # Post-processing: apply base_overrides and strip_hashes on the LE output
+    if base_overrides or strip_hashes:
+        swapped, stripped_count = _apply_overrides_and_strips(
+            swapped, base_overrides, strip_hashes,
+        )
+        if base_overrides:
+            stats["overrides_applied"] = len(base_overrides)
+        stats["stripped_count"] = stripped_count
 
     stripped_count = stats.get("stripped_count", 0)
     if stripped_count:
@@ -692,7 +742,6 @@ def port_x360_dlc(
     jobs: int | None = None,
     permissive: bool = False,
     strip_audio: bool = False,
-    use_python_swap: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -708,13 +757,7 @@ def port_x360_dlc(
     """
     print("Xbox 360 DLC -> PC Patch WAD Porter (unified)")
     print("=" * 60)
-
-    if use_python_swap:
-        print("  Byte-swap backend: Python (forced via --use-python-swap)")
-    elif rust_binary_available():
-        print("  Byte-swap backend: Rust (ucfx_byteswap binary)")
-    else:
-        print("  Byte-swap backend: Python (Rust binary not found)")
+    print("  Byte-swap backend: Rust (ucfx_byteswap)")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -848,7 +891,6 @@ def port_x360_dlc(
             collect_hashes=collect_hashes,
             permissive=permissive,
             strip_audio=strip_audio,
-            use_python_swap=use_python_swap,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1759,9 +1801,6 @@ def main() -> int:
                     help="Strip soundbank/wavebank UCFX entries from blocks when no "
                          "base-game override is available (prevents crash in "
                          "PalSoundEngine::MixSources from malformed audio data)")
-    ap.add_argument("--use-python-swap", action="store_true",
-                    help="Force Python byte-swap path instead of the Rust binary "
-                         "(for debugging / comparison)")
     ap.add_argument("--fix-stringdb-descriptors", action="store_true",
                     help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
                          "see tools/dlc_stringdb_forensic.py)")
@@ -1848,7 +1887,6 @@ def main() -> int:
         jobs=args.jobs,
         permissive=args.permissive,
         strip_audio=args.strip_audio,
-        use_python_swap=args.use_python_swap,
     )
 
 
