@@ -4,9 +4,9 @@ use colored::*;
 use std::collections::HashMap;
 use std::fs::File;
 
-use crate::ffcs::load_ffcs_archive;
-use crate::sges::decompress_block;
-use crate::ucfx::{parse_block_entry_table, BlockTableEntry};
+use mercs2_formats::ffcs::load_ffcs_archive;
+use mercs2_formats::sges::decompress_block;
+use mercs2_formats::ucfx::{parse_block_entry_table, BlockTableEntry};
 
 #[derive(Debug)]
 pub struct OobDetail {
@@ -39,10 +39,10 @@ fn read_garbage_entry(decompressed: &[u8], sub_entry: u16) -> Option<BlockTableE
         return None;
     }
     Some(BlockTableEntry {
-        name_hash: crate::ffcs::read_u32_le(decompressed, offset),
-        type_hash: crate::ffcs::read_u32_le(decompressed, offset + 4),
-        field_c: crate::ffcs::read_u32_le(decompressed, offset + 8),
-        chunk_size: crate::ffcs::read_u32_le(decompressed, offset + 12),
+        name_hash: mercs2_formats::ffcs::read_u32_le(decompressed, offset),
+        type_hash: mercs2_formats::ffcs::read_u32_le(decompressed, offset + 4),
+        field_c: mercs2_formats::ffcs::read_u32_le(decompressed, offset + 8),
+        chunk_size: mercs2_formats::ffcs::read_u32_le(decompressed, offset + 12),
     })
 }
 

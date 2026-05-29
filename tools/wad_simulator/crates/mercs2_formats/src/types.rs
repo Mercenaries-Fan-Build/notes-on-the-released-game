@@ -83,6 +83,15 @@ pub fn type_id_for_type_hash(type_hash: u32) -> Option<u32> {
         .map(|(_, id)| *id)
 }
 
+pub fn type_name_from_hash(hash: u32) -> &'static str {
+    for &(th, tid) in TYPE_HASH_REGISTRY {
+        if th == hash {
+            return type_name(tid);
+        }
+    }
+    "unknown"
+}
+
 pub fn type_name(type_id: u32) -> &'static str {
     match type_id {
         0 => "singleton",

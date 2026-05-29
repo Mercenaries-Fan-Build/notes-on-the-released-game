@@ -55,6 +55,7 @@ from ffcs_patch_wad import (  # noqa: E402
 )
 from sges_compress import compress_sges  # noqa: E402
 from ucfx_be_to_le import byteswap_ucfx_block, UnhandledByteSwapError  # noqa: E402
+from ucfx_byteswap_wrapper import byteswap_block_rust, rust_binary_available  # noqa: E402
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -354,6 +355,7 @@ class _BlockWorkerArgs:
     collect_hashes: bool
     permissive: bool = False
     strip_audio: bool = False
+    use_python_swap: bool = False
 
 
 @dataclass
@@ -516,17 +518,51 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     if args.strip_audio:
         strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
 
+    use_rust = (
+        not args.use_python_swap
+        and not base_overrides
+        and not strip_hashes
+        and rust_binary_available()
+    )
+
     try:
-        swapped, stats = byteswap_ucfx_block(
-            decompressed, base_overrides, permissive=args.permissive,
-            strip_type_hashes=strip_hashes,
-        )
+        if use_rust:
+            swapped = byteswap_block_rust(decompressed)
+            stats: dict = {
+                "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
+                "tags_seen": {}, "errors": [],
+                "fallback_u32_count": 0, "fallback_u32_tags": {},
+            }
+        else:
+            swapped, stats = byteswap_ucfx_block(
+                decompressed, base_overrides, permissive=args.permissive,
+                strip_type_hashes=strip_hashes,
+            )
     except UnhandledByteSwapError as e:
         return _BlockWorkerResult(
             blk_idx=blk_idx,
             skipped=True,
             skip_reason=f"unhandled byte-swap: {e}",
         )
+    except (RuntimeError, FileNotFoundError) as e:
+        if use_rust:
+            try:
+                swapped, stats = byteswap_ucfx_block(
+                    decompressed, base_overrides, permissive=args.permissive,
+                    strip_type_hashes=strip_hashes,
+                )
+            except UnhandledByteSwapError as e2:
+                return _BlockWorkerResult(
+                    blk_idx=blk_idx,
+                    skipped=True,
+                    skip_reason=f"unhandled byte-swap: {e2}",
+                )
+        else:
+            return _BlockWorkerResult(
+                blk_idx=blk_idx,
+                skipped=True,
+                skip_reason=f"byte-swap failed: {e}",
+            )
 
     stripped_count = stats.get("stripped_count", 0)
     if stripped_count:
@@ -656,6 +692,7 @@ def port_x360_dlc(
     jobs: int | None = None,
     permissive: bool = False,
     strip_audio: bool = False,
+    use_python_swap: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -671,6 +708,13 @@ def port_x360_dlc(
     """
     print("Xbox 360 DLC -> PC Patch WAD Porter (unified)")
     print("=" * 60)
+
+    if use_python_swap:
+        print("  Byte-swap backend: Python (forced via --use-python-swap)")
+    elif rust_binary_available():
+        print("  Byte-swap backend: Rust (ucfx_byteswap binary)")
+    else:
+        print("  Byte-swap backend: Python (Rust binary not found)")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -804,6 +848,7 @@ def port_x360_dlc(
             collect_hashes=collect_hashes,
             permissive=permissive,
             strip_audio=strip_audio,
+            use_python_swap=use_python_swap,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1714,6 +1759,9 @@ def main() -> int:
                     help="Strip soundbank/wavebank UCFX entries from blocks when no "
                          "base-game override is available (prevents crash in "
                          "PalSoundEngine::MixSources from malformed audio data)")
+    ap.add_argument("--use-python-swap", action="store_true",
+                    help="Force Python byte-swap path instead of the Rust binary "
+                         "(for debugging / comparison)")
     ap.add_argument("--fix-stringdb-descriptors", action="store_true",
                     help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
                          "see tools/dlc_stringdb_forensic.py)")
@@ -1800,6 +1848,7 @@ def main() -> int:
         jobs=args.jobs,
         permissive=args.permissive,
         strip_audio=args.strip_audio,
+        use_python_swap=args.use_python_swap,
     )
 
 

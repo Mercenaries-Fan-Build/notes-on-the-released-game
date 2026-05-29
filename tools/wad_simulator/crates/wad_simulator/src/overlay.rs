@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
-use crate::ffcs::{load_ffcs_archive, FfcsArchive};
+use mercs2_formats::ffcs::{load_ffcs_archive, FfcsArchive};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AsetSource {
@@ -92,7 +92,7 @@ impl VirtualDisk {
         self.resolved.get(&asset_hash)
     }
 
-    pub fn indx_for(&self, entry: &ResolvedAset) -> Option<&[crate::ffcs::IndxEntry]> {
+    pub fn indx_for(&self, entry: &ResolvedAset) -> Option<&[mercs2_formats::ffcs::IndxEntry]> {
         match entry.source {
             AsetSource::Base => self.base.as_ref().map(|a| a.indx.as_slice()),
             AsetSource::Patch => self.patch.as_ref().map(|a| a.indx.as_slice()),
@@ -119,7 +119,7 @@ impl VirtualDisk {
                 .as_slice(),
         };
         let mut file = File::open(path).map_err(|e| e.to_string())?;
-        crate::sges::decompress_block(&mut file, indx, entry.block_index())
+        mercs2_formats::sges::decompress_block(&mut file, indx, entry.block_index())
     }
 }
 

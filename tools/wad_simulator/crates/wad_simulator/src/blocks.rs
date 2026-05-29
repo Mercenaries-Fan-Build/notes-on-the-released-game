@@ -10,8 +10,8 @@ use rayon::ThreadPoolBuilder;
 
 use crate::overlay::{AsetSource, ResolvedAset, VirtualDisk};
 use crate::progress::{log, log_every};
-use crate::sges::decompress_block;
-use crate::ucfx::{walk_decompressed_block, ParsedBlock, UcfxWalkIssue};
+use mercs2_formats::sges::decompress_block;
+use mercs2_formats::ucfx::{walk_decompressed_block, ParsedBlock, UcfxWalkIssue};
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct BlockKey {
@@ -104,6 +104,31 @@ pub fn prefetch_blocks_parallel(
         keys.par_iter()
             .map(|key| {
                 let result = decompress_one(key, vd);
+
+                // P2-8: packed_field page_count verification
+                if let Ok(ref decompressed) = result {
+                    let indx = match key.source {
+                        AsetSource::Base => vd.base.as_ref().map(|a| a.indx.as_slice()),
+                        AsetSource::Patch => vd.patch.as_ref().map(|a| a.indx.as_slice()),
+                    };
+                    if let Some(entries) = indx {
+                        let idx = key.block_idx as usize;
+                        if idx < entries.len() {
+                            let actual_pages = entries[idx].decompressed_page_count() as usize;
+                            let expected_pages = (decompressed.len() + 32767) / 32768;
+                            if expected_pages != actual_pages && actual_pages > 0 {
+                                log(format!(
+                                    "  [P2-8] block[{}] page_count mismatch: \
+                                     INDX says {actual_pages}, decompressed needs {expected_pages} \
+                                     (len={})",
+                                    key.block_idx,
+                                    decompressed.len()
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
                 log_every(n, progress_every, || {
                     format!("  Prefetch decompress: {n}/{total} blocks")
@@ -160,7 +185,21 @@ pub fn parse_blocks_parallel(
             .map(|key| {
                 let bytes = raw[key].as_ref().expect("ok key");
                 let label = format!("block[{}]", key.block_idx);
-                let (parsed, issues) = walk_decompressed_block(bytes, &label);
+                let (parsed, mut issues) = walk_decompressed_block(bytes, &label);
+
+                // P2-9: entry table sum(chunk_sizes) == data region
+                let header_size = 4 + parsed.entry_count as usize * 16;
+                let sum_chunks: usize = parsed.entries.iter().map(|e| e.chunk_size as usize).sum();
+                let data_region = bytes.len().saturating_sub(header_size);
+                if sum_chunks != data_region && !parsed.entries.is_empty() {
+                    issues.push(UcfxWalkIssue {
+                        context: label.clone(),
+                        detail: format!(
+                            "entry table sum(chunk_sizes)={sum_chunks} != data_region={data_region}"
+                        ),
+                    });
+                }
+
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
                 log_every(n, progress_every, || {
                     format!("  Prefetch parse: {n}/{total} blocks")

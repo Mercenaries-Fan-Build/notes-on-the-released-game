@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::audio::ima::{validate_ima_payload, DecodeError};
-use crate::safe_slice::{AccessViolation, SafeSlice};
+use mercs2_formats::safe_slice::{AccessViolation, SafeSlice};
 
 pub const RECORD_SIZE: usize = 36;
 pub const HEADER_SIZE: usize = 24;
@@ -128,6 +128,29 @@ pub fn consume_wavebank_with_options(
                     "codec 0x{codec:02X} (XMA) on PC build for clip_hash=0x{clip_hash:08X}"
                 ),
             });
+        }
+
+        // P2-6: Structural checks for embedded clips
+        if codec != CODEC_IMA {
+            issues.push(format!(
+                "clip[{i}] 0x{clip_hash:08X}: unexpected codec 0x{codec:02X} (expected 0x02 IMA ADPCM)"
+            ));
+        }
+
+        if sample_rate < 8000 || sample_rate > 48000 {
+            issues.push(format!(
+                "clip[{i}] 0x{clip_hash:08X}: sample_rate {sample_rate} outside [8000, 48000]"
+            ));
+        }
+
+        if data_size > 0 && codec == CODEC_IMA {
+            let block_align = 36 * channels as u32;
+            if block_align > 0 && data_size % block_align != 0 {
+                issues.push(format!(
+                    "clip[{i}] 0x{clip_hash:08X}: IMA data_size {data_size} not aligned to block size {} (36*{channels}ch)",
+                    block_align
+                ));
+            }
         }
 
         let mut decoded_samples = None;

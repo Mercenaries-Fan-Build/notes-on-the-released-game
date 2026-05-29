@@ -1,6 +1,6 @@
 //! Engine-accurate soundbank consumption (LoadSoundBank path).
 
-use crate::safe_slice::{AccessResult, SafeSlice};
+use mercs2_formats::safe_slice::{AccessResult, SafeSlice};
 
 pub const HEADER_SIZE: usize = 32;
 
@@ -40,6 +40,18 @@ pub fn consume_soundbank(
     let section_off2 = body.read_u32_le(24, "section_off2")? as usize;
     let section_off3 = body.read_u32_le(28, "section_off3")? as usize;
 
+    // P2-7: sub_count upper bound
+    if sub_count > 1024 {
+        issues.push(format!("sub_count {sub_count} exceeds upper bound 1024"));
+    }
+
+    // P2-7: Section A size > 0 when sub_count > 0
+    if sub_count > 0 && section_off1 <= data_start {
+        issues.push(format!(
+            "section_a size is 0 (data_start={data_start}, section_off1={section_off1}) but sub_count={sub_count}"
+        ));
+    }
+
     if !(data_start <= section_off1 && section_off1 <= section_off2 && section_off2 <= section_off3) {
         issues.push(format!(
             "section offsets not monotonic: {data_start} {section_off1} {section_off2} {section_off3}"
@@ -54,6 +66,17 @@ pub fn consume_soundbank(
         let _sec_a = body.subslice(data_start, section_off1, "section_a")?;
         if (section_off1 - data_start) % sub_count as usize == 0 {
             let record_size = (section_off1 - data_start) / sub_count as usize;
+
+            // P2-7: record stride sanity
+            if record_size < 48 {
+                issues.push(format!(
+                    "section_a record stride {record_size} < 48 (suspiciously small)"
+                ));
+            } else if record_size != 116 && record_size != 118 {
+                issues.push(format!(
+                    "section_a record stride {record_size} not in known set {{116, 118}}"
+                ));
+            }
             for r in 0..sub_count as usize {
                 let rec_off = data_start + r * record_size;
                 for &fo in U8X4_RECORD_RELATIVE {

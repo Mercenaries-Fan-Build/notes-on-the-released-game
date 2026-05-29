@@ -8,6 +8,6 @@ pub use wavebank::{
     WavebankConsumeOptions, CODEC_XBOX_ADPCM,
 };
 
-pub use crate::types::{
+pub use mercs2_formats::types::{
     TYPE_HASH_SOUNDBANK, TYPE_HASH_WAVEBANK, TYPE_ID_SOUNDBANK, TYPE_ID_WAVEBANK,
 };

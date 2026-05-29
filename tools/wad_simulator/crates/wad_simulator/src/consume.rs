@@ -6,8 +6,12 @@ pub struct ConsumeResult {
     pub issues: Vec<String>,
     pub xref_hashes: Vec<u32>,
     pub placements_validated: usize,
+    pub flgs_placements_validated: usize,
     pub meshes_validated: usize,
     pub textures_validated: usize,
+    pub vertex_violations: usize,
+    pub bounds_violations: usize,
+    pub structural_violations: u32,
 }
 
 pub trait AssetConsumer {

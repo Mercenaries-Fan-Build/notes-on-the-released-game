@@ -69,8 +69,24 @@ pub fn read_u32_le(data: &[u8], offset: usize) -> u32 {
     ])
 }
 
+pub fn read_u32_be(data: &[u8], offset: usize) -> u32 {
+    u32::from_be_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]])
+}
+
+pub fn read_u16_le(data: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes([data[offset], data[offset + 1]])
+}
+
+pub fn read_u16_be(data: &[u8], offset: usize) -> u16 {
+    u16::from_be_bytes([data[offset], data[offset + 1]])
+}
+
 pub fn read_f32_le(data: &[u8], offset: usize) -> f32 {
     f32::from_bits(read_u32_le(data, offset))
+}
+
+pub fn read_f32_be(data: &[u8], offset: usize) -> f32 {
+    f32::from_bits(read_u32_be(data, offset))
 }
 
 pub fn parse_ffcs_header(header: &[u8; FFCS_HEADER_SIZE]) -> Result<Vec<ChunkRow>, String> {

@@ -75,7 +75,12 @@ _LUA_TSTRING = 4
 # ── CRC ───────────────────────────────────────────────────────────────
 
 def crc32_mercs2(data: bytes) -> int:
-    """CRC-32 with init=0xFFFFFFFF, no final XOR (Mercenaries 2 CSUM)."""
+    """CRC-32 with init=0, no final XOR (Mercenaries 2 CSUM).
+
+    Implementation detail: zlib.crc32(data, 0xFFFFFFFF) uses effective init=0
+    internally (zlib XORs the seed with 0xFFFFFFFF), and the outer ^0xFFFFFFFF
+    cancels zlib's own final inversion — net result is init=0, no final XOR.
+    """
     return (zlib.crc32(data, 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
 
 

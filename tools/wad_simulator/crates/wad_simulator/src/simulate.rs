@@ -20,14 +20,14 @@ use crate::overlay::{overlay_stats, ResolvedAset, VirtualDisk};
 use crate::placement::consume_layer;
 use crate::progress::{log, log_every};
 use crate::pws::audit_audios_dir;
-use crate::safe_slice::SafeSlice;
 use crate::script::consume_script;
 use crate::texture::consume_texture;
-use crate::types::{
-    type_hash_for_type_id, type_name, TYPE_ID_ANIMATION, TYPE_ID_LAYER, TYPE_ID_MODEL,
-    TYPE_ID_SCRIPT, TYPE_ID_TEXTURE,
+use mercs2_formats::safe_slice::SafeSlice;
+use mercs2_formats::types::{
+    type_hash_for_type_id, type_name, TYPE_ID_ANIMATION, TYPE_ID_LAYER, TYPE_ID_LOWRES_TERRAIN,
+    TYPE_ID_MODEL, TYPE_ID_SCRIPT, TYPE_ID_TERRAIN_MESH, TYPE_ID_TEXTURE,
 };
-use crate::ucfx::{
+use mercs2_formats::ucfx::{
     extract_data_chunk, get_container_by_type_hash, ParsedBlock,
 };
 
@@ -58,6 +58,10 @@ pub struct SimulateReport {
     pub has_base_wad: bool,
     pub placements_checked: usize,
     pub position_violations: usize,
+    pub flgs_placements_checked: usize,
+    pub vertex_violations: usize,
+    pub bounds_violations: usize,
+    pub structural_violations: u32,
 }
 
 pub struct SimulateOptions<'a> {
@@ -195,6 +199,10 @@ pub fn run_simulate_with_options(
         let result = dispatch_consume(entry.type_id, &container, data_body.as_deref(), &label);
         record_type_stats(&mut report, entry.type_id, &result);
         report.placements_checked += result.placements_validated;
+        report.flgs_placements_checked += result.flgs_placements_validated;
+        report.vertex_violations += result.vertex_violations;
+        report.bounds_violations += result.bounds_violations;
+        report.structural_violations += result.structural_violations;
         for h in &result.xref_hashes {
             xref_targets.insert(*h);
         }
@@ -450,7 +458,9 @@ fn dispatch_consume(
     label: &str,
 ) -> ConsumeResult {
     match type_id {
-        TYPE_ID_MODEL => consume_model(container, data_body, label),
+        TYPE_ID_MODEL | TYPE_ID_LOWRES_TERRAIN | TYPE_ID_TERRAIN_MESH => {
+            consume_model(container, data_body, label)
+        }
         TYPE_ID_TEXTURE => consume_texture(container, data_body, label),
         TYPE_ID_LAYER => consume_layer(container, data_body, label),
         TYPE_ID_SCRIPT => consume_script(container, data_body, label),
@@ -541,6 +551,30 @@ pub fn print_simulate_report(report: &SimulateReport) {
             );
         }
     }
+    if report.flgs_placements_checked > 0 {
+        println!(
+            "  Flgs placements:      {}",
+            report.flgs_placements_checked.to_string().bright_white()
+        );
+    }
+    if report.vertex_violations > 0 {
+        println!(
+            "  Vertex violations:    {}",
+            report.vertex_violations.to_string().red().bold()
+        );
+    }
+    if report.bounds_violations > 0 {
+        println!(
+            "  Bounds violations:    {}",
+            report.bounds_violations.to_string().red().bold()
+        );
+    }
+    if report.structural_violations > 0 {
+        println!(
+            "  Structural violations:{}",
+            report.structural_violations.to_string().red().bold()
+        );
+    }
     println!();
 
     if !report.assets_by_type.is_empty() {
@@ -563,6 +597,9 @@ pub fn print_simulate_report(report: &SimulateReport) {
     let has_issues = !report.access_violations.is_empty()
         || !report.decode_errors.is_empty()
         || report.position_violations > 0
+        || report.vertex_violations > 0
+        || report.bounds_violations > 0
+        || report.structural_violations > 0
         || xref_fatal;
 
     if !report.access_violations.is_empty() {
@@ -658,6 +695,9 @@ pub fn simulate_exit_code(report: &SimulateReport) -> i32 {
     if report.access_violations.is_empty()
         && report.decode_errors.is_empty()
         && report.position_violations == 0
+        && report.vertex_violations == 0
+        && report.bounds_violations == 0
+        && report.structural_violations == 0
         && !xref_fatal
         && !has_fatal_ucfx
     {

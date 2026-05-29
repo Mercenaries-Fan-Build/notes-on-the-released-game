@@ -1,0 +1,12 @@
+[package]
+name = "ucfx_byteswap"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ucfx_byteswap"
+path = "src/main.rs"
+
+[dependencies]
+mercs2_formats = { path = "../mercs2_formats" }
+clap = { version = "4", features = ["derive"] }
