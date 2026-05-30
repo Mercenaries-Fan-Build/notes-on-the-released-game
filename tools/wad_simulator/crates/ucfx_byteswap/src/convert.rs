@@ -1,8 +1,10 @@
 use mercs2_formats::crc32::crc32_mercs2;
 use mercs2_formats::ffcs::read_u32_be;
-use mercs2_formats::schema::ComponentSchema;
+use mercs2_formats::schema::{ComponentSchema, SchemaFieldType};
 use mercs2_formats::tags::ChunkTag;
 use mercs2_formats::types;
+
+use crate::report::SchemaCoverageReport;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
 
@@ -29,7 +31,12 @@ struct Descriptor {
 }
 
 /// Convert a decompressed BE block to LE format.
-pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
+/// When `report` is `Some`, collects schema field coverage stats.
+pub fn convert_block(
+    be_data: &[u8],
+    dry_run: bool,
+    mut report: Option<&mut SchemaCoverageReport>,
+) -> Result<Vec<u8>, String> {
     if be_data.len() < 4 {
         return Err("Block too small".into());
     }
@@ -113,7 +120,7 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
             ei, entry.type_hash, type_name, entry.chunk_size, container.len());
 
         let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE;
-        let converted = convert_container(container, is_ecs, ei, entry.type_hash)?;
+        let converted = convert_container(container, is_ecs, ei, entry.type_hash, report.as_deref_mut())?;
         converted_containers.push(converted);
 
         offset = container_end;
@@ -150,7 +157,13 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
 }
 
 /// Convert a single BE UCFX container to LE.
-fn convert_container(container: &[u8], is_ecs: bool, entry_idx: usize, type_hash: u32) -> Result<Vec<u8>, String> {
+fn convert_container(
+    container: &[u8],
+    is_ecs: bool,
+    entry_idx: usize,
+    type_hash: u32,
+    report: Option<&mut SchemaCoverageReport>,
+) -> Result<Vec<u8>, String> {
     if container.len() < 20 {
         return Err(format!("Entry {} container too small ({})", entry_idx, container.len()));
     }
@@ -234,9 +247,9 @@ fn convert_container(container: &[u8], is_ecs: bool, entry_idx: usize, type_hash
 
     // For ECS containers, we need to identify COMP groups and convert them using schemas
     if is_ecs {
-        convert_ecs_bodies(&mut out, container, &descriptors, data_area_off, is_be, entry_idx)?;
+        convert_ecs_bodies(&mut out, container, &descriptors, data_area_off, is_be, entry_idx, report)?;
     } else {
-        convert_generic_bodies(&mut out, container, &descriptors, data_area_off, is_be, type_hash)?;
+        convert_generic_bodies(&mut out, container, &descriptors, data_area_off, is_be, type_hash, entry_idx, report)?;
     }
 
     Ok(out)
@@ -269,6 +282,7 @@ fn convert_ecs_bodies(
     data_area_off: usize,
     is_be: bool,
     _entry_idx: usize,
+    mut report: Option<&mut SchemaCoverageReport>,
 ) -> Result<(), String> {
     // We need to write body data at the correct offsets.
     // Strategy: build the entire data area as a mutable copy, then do in-place swaps.
@@ -315,16 +329,32 @@ fn convert_ecs_bodies(
             };
             let comp_name_str = comp_name.as_deref().unwrap_or("unknown");
 
-            // Parse schema from schm body
-            let schema = if let Some(si) = schm_idx {
-                if let Some((start, end)) = body_range(container, descriptors[si].row_u0, descriptors[si].body_size, data_area_off) {
-                    ComponentSchema::from_schm_body(&container[start..end], is_be)
-                } else {
-                    None
+            // Parse schema from schm body; pre-scan type codes for reporting
+            let schm_body_range = schm_idx.and_then(|si| {
+                body_range(container, descriptors[si].row_u0, descriptors[si].body_size, data_area_off)
+            });
+
+            let schema = schm_body_range.and_then(|(start, end)| {
+                ComponentSchema::from_schm_body(&container[start..end], is_be)
+            });
+
+            // Report schema field type codes
+            if let Some(ref mut rpt) = report {
+                if let Some((start, end)) = schm_body_range {
+                    let scanned = scan_schm_type_codes(&container[start..end], is_be);
+                    let mut unknown_in_body = Vec::new();
+                    for &(type_code, name_hash, byte_offset) in &scanned {
+                        rpt.record_field(type_code);
+                        if SchemaFieldType::from_code(type_code).is_none() {
+                            rpt.record_unknown_field(comp_name_str, type_code, name_hash, byte_offset);
+                            unknown_in_body.push(type_code);
+                        }
+                    }
+                    if schema.is_none() && !scanned.is_empty() {
+                        rpt.record_schema_parse_failure(comp_name_str, unknown_in_body);
+                    }
                 }
-            } else {
-                None
-            };
+            }
 
             // Convert the data body using the schema
             if let Some(di) = data_idx {
@@ -333,8 +363,9 @@ fn convert_ecs_bodies(
                     let body_local_start = start - data_start;
                     let body_local_end = end - data_start;
                     if body_local_end <= data_area.len() {
+                        let data_size = body_local_end - body_local_start;
                         let body_slice = &mut data_area[body_local_start..body_local_end];
-                        convert_comp_data_inplace(body_slice, schema.as_ref(), comp_name_str);
+                        convert_comp_data_inplace(body_slice, schema.as_ref(), comp_name_str, report.as_deref_mut(), data_size);
                     }
                 }
             }
@@ -480,8 +511,54 @@ fn extract_comp_name(
     None
 }
 
+/// Pre-scan a schm body to extract raw type codes for reporting.
+/// Unlike ComponentSchema::from_schm_body, this does NOT bail on unknown codes.
+/// Returns Vec<(type_code, name_hash, byte_offset)>.
+fn scan_schm_type_codes(body: &[u8], is_be: bool) -> Vec<(u32, u32, u16)> {
+    if body.len() < 8 {
+        return vec![];
+    }
+
+    let n_fields = if is_be {
+        u32::from_be_bytes([body[0], body[1], body[2], body[3]])
+    } else {
+        u32::from_le_bytes([body[0], body[1], body[2], body[3]])
+    };
+
+    if n_fields > 200 || (8 + n_fields as usize * 16) > body.len() {
+        return vec![];
+    }
+
+    let mut result = Vec::with_capacity(n_fields as usize);
+    for i in 0..n_fields as usize {
+        let off = 8 + i * 16;
+        let (type_code, name_hash, raw_offset) = if is_be {
+            (
+                u32::from_be_bytes([body[off], body[off + 1], body[off + 2], body[off + 3]]),
+                u32::from_be_bytes([body[off + 4], body[off + 5], body[off + 6], body[off + 7]]),
+                u32::from_be_bytes([body[off + 12], body[off + 13], body[off + 14], body[off + 15]]),
+            )
+        } else {
+            (
+                u32::from_le_bytes([body[off], body[off + 1], body[off + 2], body[off + 3]]),
+                u32::from_le_bytes([body[off + 4], body[off + 5], body[off + 6], body[off + 7]]),
+                u32::from_le_bytes([body[off + 12], body[off + 13], body[off + 14], body[off + 15]]),
+            )
+        };
+        let byte_offset = ((raw_offset >> 16) & 0xFFFF) as u16;
+        result.push((type_code, name_hash, byte_offset));
+    }
+    result
+}
+
 /// Convert a COMP data body in-place using schema-driven field swaps.
-fn convert_comp_data_inplace(data: &mut [u8], schema: Option<&ComponentSchema>, comp_name: &str) {
+fn convert_comp_data_inplace(
+    data: &mut [u8],
+    schema: Option<&ComponentSchema>,
+    comp_name: &str,
+    mut report: Option<&mut SchemaCoverageReport>,
+    data_size: usize,
+) {
     if data.is_empty() {
         return;
     }
@@ -489,10 +566,16 @@ fn convert_comp_data_inplace(data: &mut [u8], schema: Option<&ComponentSchema>, 
     // Special cases
     match comp_name {
         "Name" => {
+            if let Some(ref mut rpt) = report {
+                rpt.record_no_schema(comp_name, data_size, "hardcoded handler");
+            }
             convert_name_data_inplace(data);
             return;
         }
         "ModelName" => {
+            if let Some(ref mut rpt) = report {
+                rpt.record_no_schema(comp_name, data_size, "hardcoded handler");
+            }
             convert_modelname_data_inplace(data);
             return;
         }
@@ -502,7 +585,9 @@ fn convert_comp_data_inplace(data: &mut [u8], schema: Option<&ComponentSchema>, 
     let total_stride = if let Some(s) = schema {
         4 + s.payload_stride as usize
     } else {
-        // No schema: fallback to u32 array swap
+        if let Some(ref mut rpt) = report {
+            rpt.record_no_schema(comp_name, data_size, "u32_array sweep");
+        }
         swap_u32_array(data);
         return;
     };
@@ -511,6 +596,9 @@ fn convert_comp_data_inplace(data: &mut [u8], schema: Option<&ComponentSchema>, 
     let stride = if comp_name == "Transform" { 42 } else { total_stride };
 
     if stride == 0 {
+        if let Some(ref mut rpt) = report {
+            rpt.record_no_schema(comp_name, data_size, "u32_array sweep (stride=0)");
+        }
         swap_u32_array(data);
         return;
     }
@@ -606,6 +694,8 @@ fn convert_generic_bodies(
     data_area_off: usize,
     _is_be: bool,
     type_hash: u32,
+    entry_idx: usize,
+    mut report: Option<&mut SchemaCoverageReport>,
 ) -> Result<(), String> {
     let data_start = if data_area_off > 0 { data_area_off } else {
         20 + descriptors.len() * 20
@@ -655,10 +745,17 @@ fn convert_generic_bodies(
                     ChunkTag::Decl | ChunkTag::Schm | ChunkTag::Flgs => {
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
                     }
-                    _ => {
-                        // Default: safe for GEOM, STRM positions, BNDS, HIER, PRMG, etc.
-                        // TODO: Flgt, Swit, Cexe, Sequ may also contain embedded strings;
-                        // move them to the no-swap arm above if they cause crashes.
+                    other_tag => {
+                        if let Some(ref mut rpt) = report {
+                            let type_name = types::type_name_from_hash(type_hash);
+                            rpt.record_generic_fallback(
+                                entry_idx,
+                                type_hash,
+                                type_name,
+                                &format!("{}", other_tag),
+                                desc.body_size,
+                            );
+                        }
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
                     }
                 }

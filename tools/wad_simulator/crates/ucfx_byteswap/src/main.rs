@@ -1,9 +1,12 @@
 mod convert;
+mod report;
 mod validate;
 
 use clap::Parser;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+
+use report::SchemaCoverageReport;
 
 #[derive(Parser)]
 #[command(name = "ucfx_byteswap", about = "Convert Xbox 360 BE UCFX blocks to PC LE format")]
@@ -34,6 +37,10 @@ struct Cli {
     /// Treat validation errors as fatal (non-zero exit, skip writing)
     #[arg(long)]
     strict: bool,
+
+    /// Print a schema field coverage report after conversion
+    #[arg(long)]
+    report_schema_coverage: bool,
 }
 
 fn main() {
@@ -68,8 +75,18 @@ fn main() {
         println!("ucfx_byteswap: processing ({} bytes)", input_data.len());
     }
 
-    match convert::convert_block(&input_data, cli.dry_run) {
+    let mut report = if cli.report_schema_coverage {
+        Some(SchemaCoverageReport::default())
+    } else {
+        None
+    };
+
+    match convert::convert_block(&input_data, cli.dry_run, report.as_mut()) {
         Ok(output) => {
+            if let Some(rpt) = &report {
+                rpt.print_report();
+            }
+
             if cli.dry_run {
                 if !pipe_mode {
                     println!("Dry run complete.");
