@@ -32,6 +32,8 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 | [`build_pmc_base_block_set.py`](build_pmc_base_block_set.py) | `output/pmc_base_block_set.json` — PMC stems + HQ bbox |
 | [`ucfx_ecs_codec.py`](ucfx_ecs_codec.py) | ECS `COMP` blob harvest helpers |
 | [`ecs_metadata_extract.py`](ecs_metadata_extract.py) | `ecs_components.json` + merge into placements |
+| [`road_graph_extractor.py`](road_graph_extractor.py) | Road / RoadIntersection ECS → `road_graph.json` (nodes, edges, topology validation); optional GeoJSON/SVG |
+| [`destruction_link_resolver.py`](destruction_link_resolver.py) | `destruction_graph.json` — DestructionLink pairs + optional vz_state overlay cross-ref |
 | [`aset_decoder.py`](aset_decoder.py) | `block_dependency_graph.json` from `aset.bin` |
 | [`lua_script_chunks.py`](lua_script_chunks.py) | Split `scripts_vz` `LuaQ` chunks + PMC string harvest |
 | [`lua_roundtrip_test.py`](lua_roundtrip_test.py) | Decompile + recompile LuaQ chunks and verify round-trip |
@@ -52,6 +54,50 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 ```
 
 Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, `regen-pmc-glbs` (see `make help`).
+
+**Road graph + destruction links** (after `make extract-placements` merges ECS into `layers_static.json`):
+
+```bash
+.venv/bin/python3 tools/road_graph_extractor.py --self-test
+.venv/bin/python3 tools/destruction_link_resolver.py --self-test
+
+.venv/bin/python3 tools/road_graph_extractor.py \
+  --placements output/placements/layers_static.json \
+  --out output/placements/road_graph.json
+
+# Maracaibo subset + debug map (game LH bbox: X -1200..1400, Z -1100..600)
+.venv/bin/python3 tools/road_graph_extractor.py \
+  --placements output/placements/layers_static.json \
+  --bbox -1200 1400 -1100 600 \
+  --out output/placements/maracaibo_road_graph.json \
+  --export-geojson output/placements/maracaibo_road_graph.geojson \
+  --export-svg output/placements/maracaibo_road_graph.svg
+
+.venv/bin/python3 tools/destruction_link_resolver.py \
+  --layers-static output/placements/layers_static.json \
+  --vz-state-json output/placements/vz_state/all_vz_state.json \
+  --out output/placements/destruction_graph.json
+```
+
+`road_graph.json` includes `topology_validation` (orphan intersections, dangling refs, anchor count checks). `destruction_graph.json` adds `vz_state_cross_reference` when vz_state JSON is supplied (`mesh_name_pairs` via stem + proximity; `model_name_hash` resolved through `hash_resolver.py` / `rainbow_table.json`).
+
+### Audio, FX, resident singletons, skin (added 2026-05)
+
+| Script | Purpose |
+|--------|---------|
+| [`extract_single_block.py`](extract_single_block.py) | One WAD block → decompress → optional `--decode`; scratch cleaned unless `--keep` (see [`AGENTS.md`](../AGENTS.md)) |
+| [`wavebank_extractor.py`](wavebank_extractor.py) | Embedded IMA ADPCM (`0x02`) → WAV under `extracted/audio/wavebanks/` |
+| [`ima_adpcm.py`](ima_adpcm.py) | Codec helper for wavebank extractor |
+| [`audio_ue5_manifest.py`](audio_ue5_manifest.py) | Hash → WAV path + UE content paths (`scan_decoded_wavebanks()`) |
+| [`fxdict_parser.py`](fxdict_parser.py) / [`fxdict_codec.py`](fxdict_codec.py) | Resident **fxdict** INFO+DICT → JSON ([`docs/fxdict_format.md`](../docs/fxdict_format.md)) |
+| [`effect_block_probe.py`](effect_block_probe.py) | `effects` block UCFX chunk survey |
+| [`watermap_decode.py`](watermap_decode.py) / [`watermap_probe.py`](watermap_probe.py) | `watr` grid decode + PNG ([`docs/watermap_format.md`](../docs/watermap_format.md)) |
+| [`lineregion_probe.py`](lineregion_probe.py) | Resident **lineregion** polygons (game XZ) |
+| [`material_probe.py`](material_probe.py) | SCRB/MTRL texture-hash survey in scrub/resident blocks |
+| [`export_skinned_mesh.py`](export_skinned_mesh.py) | One mesh block → skinned `.glb` (HIER + STRM weights) |
+| [`script_hash_map.py`](script_hash_map.py) | ObjectScript hash ↔ Lua chunk paths → `placements/script_hash_map.json` |
+
+Rust validation mirror: [`wad_simulator/README.md`](wad_simulator/README.md). Integration backlog: [`docs/glue_gap_closeout.md`](../docs/glue_gap_closeout.md).
 
 ## From retail zip (full pipeline)
 
@@ -160,6 +206,21 @@ Run logs / failure lists (`stage2_parallel_*.log`, `*_failures.txt`, batch `logs
 
 Each path in `paths.txt` maps to the **n-th** `sges` magic in `data.bin`. Payloads use **raw deflate**
 (`zlib` windowBits `-15`) in one or more segments; compressed streams are separated by zero padding.
+
+### Single-block extraction (disk-conscious)
+
+For one-off block work (watermap, road graph, FaceFX, effect decoders, etc.), prefer
+[`extract_single_block.py`](extract_single_block.py) over bulk batching. It mmap-reads one block from
+the WAD, decompresses to a scratch dir, optionally runs `--decode`, and **deletes scratch on success**
+unless `--keep` is set. Parallel decode tracks should follow this pattern.
+
+```bash
+.venv/bin/python3 tools/extract_single_block.py --wad path/to/vz.wad --block-index 3197 --keep --scratch-root output/_scratch
+.venv/bin/python3 tools/extract_single_block.py --wad path/to/vz.wad --path scripts_vz --decode ".venv/bin/python3 tools/lua_script_chunks.py {bin} --out-dir output/_scratch/lua"
+.venv/bin/python3 tools/extract_single_block.py --wad path/to/vz.wad --aset-hash 0x12345678 --filter-type-hash 0x5608BD5A --metadata-out output/_scratch/meta.json
+```
+
+See **Single-block extraction** in [`AGENTS.md`](../AGENTS.md) for the project policy.
 
 ```bash
 /usr/bin/python3 tools/sges_decompress.py --data-bin output/ffcs_shell/data.bin --ffcs-out output/ffcs_shell --list

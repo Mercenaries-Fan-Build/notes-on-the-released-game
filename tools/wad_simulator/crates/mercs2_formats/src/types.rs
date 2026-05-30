@@ -20,6 +20,8 @@ pub const TYPE_ID_MUSIC_CUE_TABLE: u32 = 4;
 pub const TYPE_ID_ANIM_STATE_MACHINE: u32 = 31;
 pub const TYPE_ID_WORLD_ENTITY_DATA: u32 = 8;
 pub const TYPE_ID_FX_DICTIONARY: u32 = 25;
+/// Singleton `watermap` in resident block (`pandemic_hash_m2("watermap")`).
+pub const TYPE_ID_WATERMAP: u32 = 0;
 
 pub const TYPE_HASH_WAVEBANK: u32 = 0xF753F6D0;
 pub const TYPE_HASH_SOUNDBANK: u32 = 0x9F8BCA10;
@@ -41,6 +43,7 @@ pub const TYPE_HASH_MUSIC_CUE_TABLE: u32 = 0xE8DF4D87;
 pub const TYPE_HASH_ANIM_STATE_MACHINE: u32 = 0xECE70371;
 pub const TYPE_HASH_WORLD_ENTITY_DATA: u32 = 0x5647C35D;
 pub const TYPE_HASH_FX_DICTIONARY: u32 = 0xFA46D8A8;
+pub const TYPE_HASH_WATERMAP: u32 = 0x4D7D30C4;
 
 /// All known type_hash → type_id mappings from retail census.
 pub const TYPE_HASH_REGISTRY: &[(u32, u32)] = &[
@@ -96,6 +99,9 @@ pub fn type_id_for_type_hash(type_hash: u32) -> Option<u32> {
 }
 
 pub fn type_name_from_hash(hash: u32) -> &'static str {
+    if hash == TYPE_HASH_WATERMAP {
+        return "watermap";
+    }
     for &(th, tid) in TYPE_HASH_REGISTRY {
         if th == hash {
             return type_name(tid);

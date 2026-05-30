@@ -1,3 +1,4 @@
+pub mod chunk_validate;
 pub mod crc32;
 pub mod ffcs;
 pub mod safe_slice;

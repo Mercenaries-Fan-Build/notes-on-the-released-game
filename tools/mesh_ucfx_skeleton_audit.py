@@ -94,9 +94,9 @@ def audit_mesh_entry(
     for tag, u0, u1, _u2, _u3 in _iter_ucfx_chunks(data, entry_offset, entry_size):
         if tag == b"HIER" and u0 != CONTAINER_SENTINEL and u1 >= _HIER_NODE_STRIDE:
             hier_bytes = int(u1)
-        elif tag == b"SKIN" and u0 != CONTAINER_SENTINEL and u1 > 0:
+        elif tag == b"SKIN" and u0 == CONTAINER_SENTINEL and u3 > 0:
             skin_count += 1
-            skin_sizes.append(int(u1))
+            skin_sizes.append(int(u3))
         elif tag == b"BSHP" and u0 != CONTAINER_SENTINEL and u1 > 0:
             bshp_count += 1
 

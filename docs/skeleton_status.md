@@ -25,10 +25,27 @@ Surveying 35 distinct asset type hashes across 3,997 VZ blocks: only textures (`
 Each mesh block may contain:
 
 - **`HIER` chunk**: Bone hierarchy with per-node 176-byte records containing world transforms. The count of records (implied by `hier_bytes / 176`) correlates with animation track counts.
-- **`SKIN` chunks**: Per-submesh skinning weights (one per PRMG/submesh).
+- **`SKIN` chunks**: Per-submesh **markers** (UCFX containers, `u0 = 0xFFFFFFFF`, `u3` = child count). Each `SKIN` holds a 4-byte `INFO` hash plus a nested `PRMG` row that points at the **same** `STRM`/`IBUF` buffers as the render mesh. Bone indices and weights are **not** in a separate blob — they live in the mesh vertex buffer.
 - **`BSHP` chunks**: Blend shape / morph target data.
 
-For example, Mattias `pmc_hum_mattias_v2` has a 16,720-byte HIER chunk (implying ~95 hierarchy nodes), 17 SKIN chunks, and 9 BSHP chunks.
+For example, Mattias `pmc_hum_mattias_v2` has a 16,720-byte HIER chunk (implying ~95 hierarchy nodes), **17** `SKIN` containers, and 9 BSHP chunks.
+
+### SKIN / vertex-buffer layout (verified 2026-05 on `pmc_hum_mattias_v2`)
+
+| Field | Detail |
+|-------|--------|
+| Container | `SKIN` tag, `u0 = 0xFFFFFFFF`, `u3` = number of child chunk rows (typically 11: `INFO` + nested `PRMG` tree) |
+| `INFO` (4 B) | `u32` submesh/name hash (e.g. `0x36bfb9a6` on skin0); not vertex count |
+| Nested `PRMG` | Same structure as render `PRMG` (`INFO`, `STRM`/`decl`/`data`, `IBUF`, `PRMT`); `vb_off` / `ib_off` are **relative to UCFX `data_base`** (same buffers as the paired draw) |
+| Influences | D3D9-style **`BLENDINDICES` @ +16**, **`BLENDWEIGHT` @ +20** (4× `uint8` each, weights sum to **255**) for strides 24/28/32/40 (see `decl` or fallback table in `ucfx_mesh_codec.py`) |
+| Joint indices | **HIER node index** (0 … `hier_bytes/176 − 1`), not animation track index |
+| IBM | HIER `+80..+143` inverse bind matrix (row-major) → glTF `inverseBindMatrices` |
+
+Decode API: `decode_skin_chunk()`, `decode_prmg_skin_influences()`, `parse_hier_inverse_bind_matrices()` in `tools/ucfx_mesh_codec.py`.
+
+CLI export: `tools/export_skinned_mesh.py` (one block → `.glb` with `JOINTS_0` / `WEIGHTS_0` + full HIER skeleton).
+
+**Self-test** (`pmc_hum_mattias_v2` P000 Q3, largest multi-bone PRMG): 4091 vertices, 95 bones, weight sums 1.0, 1850 multi-influence verts.
 
 ### Animation track counts are real and asset-specific
 
@@ -72,6 +89,15 @@ Run `tools/mesh_ucfx_skeleton_audit.py` to scan all extracted blocks and produce
 ### Skeleton Probe
 
 Run `tools/ucfx_skeleton_codec.py` to validate the HIER layout on a fixed test set and write `tools/_skeleton_probe.json`.
+
+### Skinned mesh GLB (single block)
+
+```bash
+# After extracting one character block (see tools/extract_single_block.py):
+.venv/Scripts/python.exe tools/export_skinned_mesh.py \
+  --block output/_scratch/.../pmc_hum_mattias_v2_P000_Q3.block.bin \
+  --out output/_scratch/mattias_skinned.glb
+```
 
 ### Skeleton Families
 

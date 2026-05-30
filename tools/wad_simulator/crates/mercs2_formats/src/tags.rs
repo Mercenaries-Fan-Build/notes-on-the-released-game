@@ -60,6 +60,10 @@ pub enum ChunkTag {
     // Dependency list
     Deps,      // "DEPS"
 
+    // Skinned mesh marker + resident watermap
+    Skin,      // "SKIN"
+    Watr,      // "watr"
+
     // Unknown tag (carries raw bytes for diagnostics)
     Unknown([u8; 4]),
 }
@@ -108,6 +112,8 @@ impl ChunkTag {
             b"actn" => Self::Actn,
             b"DICT" => Self::Dict,
             b"DEPS" => Self::Deps,
+            b"SKIN" => Self::Skin,
+            b"watr" => Self::Watr,
             _ => Self::Unknown(b),
         }
     }
@@ -161,6 +167,8 @@ impl ChunkTag {
             Self::Actn => *b"actn",
             Self::Dict => *b"DICT",
             Self::Deps => *b"DEPS",
+            Self::Skin => *b"SKIN",
+            Self::Watr => *b"watr",
             Self::Unknown(b) => *b,
         }
     }

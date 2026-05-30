@@ -1,9 +1,10 @@
 """Rebuild Mercenaries 2 world after a clean-slate Content wipe.
 
-Thin wrapper around ``setup_all.py``. Runs the full setup pipeline including
-import and populate unless skipped via environment variables.
+Thin wrapper around ``setup_all.py``. Runs the full 15-step setup pipeline
+(scaffold, import, populate, vz visibility preset, collision, atmosphere, verify)
+unless skipped via environment variables.
 
-See ``setup_all.py`` for step list and MERCS2_SETUP_* skip flags.
+See ``setup_all.py`` for step list and MERCS2_SETUP_* / MERCS2_VZ_* flags.
 
 Run via:
     Tools → Execute Python Script → rebuild_world.py

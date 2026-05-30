@@ -35,10 +35,20 @@ mercenaries-game/
 │   ├── format_reference.md Master format doc (FFCS, sges, UCFX, textures, Havok, etc.)
 │   ├── placement_data_format.md Complete placement record specification
 │   ├── vz_state_analysis.md     State overlay layer analysis
+│   ├── gameplay_data_ue5_mapping.md  Non-mesh data → UE5 systems
+│   ├── glue_gap_closeout.md     Pipeline ↔ UE5 integration backlog
+│   ├── watermap_format.md / fxdict_format.md / audio_ue5_path.md
 │   └── game_data_analysis.md    Game data directory walkthrough
 ├── game-scripts/           UE5 Editor Python scripts (import, populate, setup)
 │   ├── mercs2_data_layers.py  Shared Data Layer helpers
+│   ├── mercs2_visibility_runtime.py  Editor/PIE vz_state preset toggles
+│   ├── mercs2_mission_data.py     Mission overlay stem helpers
+│   ├── setup_all.py           Master orchestrator (15 steps; see script header)
+│   ├── import_mission_data.py   DT_MissionRegistry + DT_SpawnRegistry from docs/data/examples
+│   ├── mission_layer_activator.py  Contract vz_state Data Layer activation (Editor/PIE)
+│   ├── import_audio.py        SoundWave batch import from audio_ue5_manifest (stub)
 │   ├── setup_project.py       Project setup (plugins, directories, map)
+│   ├── setup_audio_import.py  Audio Content folder scaffold (no WAV import yet)
 │   ├── import_world.py        Import all world mesh GLBs
 │   ├── import_pmc_base.py     Import PMC base mesh GLBs
 │   ├── populate_world.py      Place 62k+ world entities + lights + Data Layers
@@ -111,6 +121,43 @@ make review-all OUTPUT=./output                    # re-run stage 2
 make ue5-bundle OUTPUT=./output                    # rebuild UE5 bundle
 STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 make review-all OUTPUT=./output  # skip already-done steps
 ```
+
+---
+
+## Single-block extraction
+
+When decoding or probing **one** WAD block (watermap, road graph, FaceFX, effect blocks, etc.), do **not** run `make extract-all` or bulk `sges_decompress --bulk-out-dir`. Use **`tools/extract_single_block.py`** instead: extract → decompress → optional decode hook → delete scratch on success.
+
+**Policy:** one block at a time, explicit selector, clean up unless `--keep`.
+
+```bash
+# Windows (.venv/Scripts/python.exe) or Unix (.venv/bin/python3)
+.venv/Scripts/python.exe tools/extract_single_block.py \
+  --wad game-files/pc-game-vz.wad \
+  --block-index 29 \
+  --decode ".venv/Scripts/python.exe tools/ucfx_parser.py {bin} --out output/_scratch/ucfx.json"
+
+# By PTHS path (unique substring OK)
+.venv/Scripts/python.exe tools/extract_single_block.py \
+  --wad game-files/pc-game-vz.wad \
+  --path "blocks\\VZ\\layers_static_P000_Q3.block" \
+  --keep --scratch-root output/_scratch
+
+# By ASET asset hash (add --filter-type-hash if ambiguous)
+.venv/Scripts/python.exe tools/extract_single_block.py \
+  --wad game-files/pc-game-vz.wad \
+  --aset-hash 0xDEADBEEF --filter-type-hash 0x5608BD5A
+
+# Persist metadata without keeping the decompressed blob
+.venv/Scripts/python.exe tools/extract_single_block.py \
+  --wad game-files/pc-game-vz.wad --block-index 0 \
+  --metadata-out output/_scratch/block0_meta.json
+```
+
+- Default: temp scratch dir removed after success.
+- `--keep --scratch-root output/_scratch`: retain `{index:05d}_{stem}.block.bin` and print its path.
+- `--decode CMD`: `{bin}` / `{path}` placeholders, or append `.block.bin` as the last argument.
+- New decoders should accept a decompressed `.block.bin` path (from `--decode` or `--keep`) rather than assuming `output/extracted/batch_*/blocks/` exists.
 
 ---
 
@@ -361,12 +408,16 @@ make ue5-bundle OUTPUT=./output
 make regen-maracaibo-glbs OUTPUT=./output
 ```
 
-For UE5: open `UnrealEngineGame/` in Unreal Engine 5.7, enable Editor Python + Interchange plugins, then run scripts from `game-scripts/` in order:
+For UE5: open `UnrealEngineGame/` in Unreal Engine 5.7, enable Editor Python + Interchange plugins, then run **`game-scripts/setup_all.py`** (recommended) or individual scripts:
 
 ```
-1. setup_project.py    — create content directories, verify plugins
-2. import_world.py     — import mesh GLBs from extraction output
-3. populate_world.py   — place 62k+ entities with Data Layers + lights
+setup_all.py  — full pipeline: project + data structs + player/HUD/audio/weather
+                scaffold → import_world → populate_world → vz visibility preset
+                → terrain collision → player start → water → atmosphere → verify
 ```
+
+Skip slow or post-wipe steps with env vars (see `setup_all.py` header): `MERCS2_SETUP_SKIP_WORLD=1`, `MERCS2_SETUP_SKIP_VZ_VISIBILITY=1`, `MERCS2_SETUP_SKIP_VERIFY=1`, etc. After a Content wipe, **`rebuild_world.py`** calls `setup_all.run()` with the same flags.
+
+PMC testbed uses `import_pmc_base.py` + `populate_pmc_base.py` instead of the world import/populate steps. Diagnostic only: `setup_rotation_test_grid.py` (not in `setup_all`).
 
 Run via **Tools → Execute Python Script** or the output log `py` command with the full path to the script.

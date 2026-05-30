@@ -6,32 +6,53 @@ on failure so you get a full status report in one pass.
 
 Default order:
   1. setup_project          — plugins, folders, Mercs2World map (no WP)
-  2. setup_data_structs     — enums, structs, data tables
+  2. setup_data_structs     — enums, structs, data tables (incl. mission/spawn DTs)
   3. setup_player_character — Mattias mesh / anim assets
   4. setup_player_controller — Enhanced Input, GameMode BP
   5. setup_basic_hud        — HUD widgets
-  6. setup_weather_system   — weather enums / BP scaffold
-  7. import_world           — GLB mesh import (slow; skippable)
-  8. populate_world         — place meshes + terrain (skippable)
-  9. setup_terrain_collision
- 10. setup_player_start
- 11. setup_water
- 12. setup_atmosphere
- 13. verify_player_setup    — read-only smoke test (skippable)
+  6. setup_audio_import     — /Game/Mercs2/Audio/... directory scaffold (no WAV import)
+  7. setup_weather_system   — weather enums / BP scaffold
+  8. import_world           — GLB mesh import (slow; skippable)
+  9. populate_world         — place meshes + terrain (skippable)
+ 10. toggle_vz_visibility   — vz_state Data Layer preset (skippable; needs step 9)
+ 10b. import_mission_data    — DT_MissionRegistry + DT_SpawnRegistry (optional)
+ 10c. mission_layer_activator — mission vz_state layers (optional; needs 9–10)
+ 11. setup_terrain_collision
+ 12. setup_player_start
+ 13. setup_water
+ 14. setup_atmosphere
+ 15. verify_player_setup    — read-only smoke test (skippable)
+
+Not in this pipeline (run manually when needed):
+  - setup_rotation_test_grid.py — yaw diagnostic grid near PMC HQ
+  - mercs2_visibility_runtime.py — library imported by toggle_vz_visibility
+  - import_mission_data.py / mission_layer_activator.py — mission DT import + layer toggle
+  - populate_pmc_base.py / import_pmc_base.py — PMC base testbed workflow
+  - fix_*.py — post-setup repairs (Nanite, WP streaming, map errors, etc.)
 
 Environment variables (optional):
-  MERCS2_SETUP_SKIP_IMPORT=1      Skip import_world (step 7)
-  MERCS2_SETUP_SKIP_POPULATE=1    Skip populate_world (step 8)
-  MERCS2_SETUP_SKIP_VERIFY=1      Skip verify_player_setup (step 13)
-  MERCS2_SETUP_SKIP_WORLD=1       Skip import + populate (steps 7–8)
-  MERCS2_SETUP_STOP_ON_ERROR=1    Abort remaining steps after first failure
-  MERCS2_IMPORT_LIMIT=N           Pass limit to import_world.run_import(N)
-  MERCS2_IMPORT_WORLD_CELLS=1     Import ~1.3k c3 cell glTFs (off by default — Nanite risk)
-  MERCS2_POPULATE_WORLD_CELLS=1   Place world-cell actors (off by default)
-  MERCS2_WORLD_CELLS_MAX=N        Cap cell actors when populating (0 = unlimited)
+  MERCS2_SETUP_SKIP_IMPORT=1        Skip import_world (step 8)
+  MERCS2_SETUP_SKIP_POPULATE=1      Skip populate_world (step 9)
+  MERCS2_SETUP_SKIP_VZ_VISIBILITY=1 Skip toggle_vz_visibility (step 10)
+  MERCS2_SETUP_SKIP_VERIFY=1        Skip verify_player_setup (step 15)
+  MERCS2_SETUP_SKIP_WORLD=1         Skip import + populate (steps 8–9)
+  MERCS2_SETUP_STOP_ON_ERROR=1      Abort remaining steps after first failure
+  MERCS2_IMPORT_LIMIT=N             Pass limit to import_world.run_import(N)
+  MERCS2_IMPORT_WORLD_CELLS=1       Import ~1.3k c3 cell glTFs (off by default — Nanite risk)
+  MERCS2_POPULATE_WORLD_CELLS=1     Place world-cell actors (off by default)
+  MERCS2_WORLD_CELLS_MAX=N          Cap cell actors when populating (0 = unlimited)
+  MERCS2_VZ_PRESET=...              Preset for step 10 (default act1_default)
+  MERCS2_VZ_PREFIX=VZ|PMC           Data layer prefix for step 10 (default VZ)
+  MERCS2_VZ_SMOKE=1                 Step 10: count layers only, no toggles
+  MERCS2_SETUP_IMPORT_MISSION=1     Run import_mission_data after step 2
+  MERCS2_MISSION_ID=PmcCon001       Run import (if needed) + mission_layer_activator after step 10
+  MERCS2_MISSION_LAYERS=first       Activator: only first layer (baby-step slice)
+  MERCS2_SETUP_SKIP_MISSION=1       Skip steps 10b–10c even when MERCS2_MISSION_ID is set
 
 Run via:
     Tools → Execute Python Script → setup_all.py
+
+``rebuild_world.py`` is a thin wrapper that calls ``run()`` here.
 """
 
 from __future__ import annotations
@@ -55,6 +76,7 @@ import mercs2_data_layers as m2dl
 import import_world
 import populate_world
 import setup_atmosphere
+import setup_audio_import
 import setup_basic_hud
 import setup_data_structs
 import setup_player_character
@@ -64,7 +86,11 @@ import setup_project
 import setup_terrain_collision
 import setup_water
 import setup_weather_system
+import toggle_vz_visibility
 import verify_player_setup
+
+import import_mission_data
+import mission_layer_activator
 
 
 LOG_PREFIX = "[Mercs2SetupAll]"
@@ -102,6 +128,34 @@ def _run_import() -> None:
     import_world.run_import(limit=limit)
 
 
+def _mission_id() -> str:
+    return os.environ.get("MERCS2_MISSION_ID", "").strip()
+
+
+def _should_run_mission_import() -> bool:
+    if _env_flag("MERCS2_SETUP_SKIP_MISSION"):
+        return False
+    return _env_flag("MERCS2_SETUP_IMPORT_MISSION") or bool(_mission_id())
+
+
+def _should_run_mission_activator() -> bool:
+    if _env_flag("MERCS2_SETUP_SKIP_MISSION"):
+        return False
+    return bool(_mission_id())
+
+
+def _run_mission_import() -> None:
+    if not _should_run_mission_import():
+        return
+    import_mission_data.run()
+
+
+def _run_mission_activator() -> None:
+    if not _should_run_mission_activator():
+        return
+    mission_layer_activator.run()
+
+
 def _build_steps() -> list[SetupStep]:
     skip_world = _env_flag("MERCS2_SETUP_SKIP_WORLD")
     return [
@@ -118,6 +172,11 @@ def _build_steps() -> list[SetupStep]:
             setup_player_controller.run,
         ),
         SetupStep("basic_hud", "HUD widgets", setup_basic_hud.run),
+        SetupStep(
+            "audio_import",
+            "Audio import directories",
+            setup_audio_import.run,
+        ),
         SetupStep("weather", "Weather system scaffold", setup_weather_system.run),
         SetupStep(
             "import_world",
@@ -130,6 +189,22 @@ def _build_steps() -> list[SetupStep]:
             "Populate world placements",
             populate_world.run,
             skip_env="MERCS2_SETUP_SKIP_POPULATE" if not skip_world else "MERCS2_SETUP_SKIP_WORLD",
+        ),
+        SetupStep(
+            "vz_visibility",
+            "vz_state Data Layer visibility preset",
+            toggle_vz_visibility.run,
+            skip_env="MERCS2_SETUP_SKIP_VZ_VISIBILITY",
+        ),
+        SetupStep(
+            "import_mission",
+            "Import mission/spawn DataTables",
+            _run_mission_import,
+        ),
+        SetupStep(
+            "mission_layers",
+            "Activate mission vz_state Data Layers",
+            _run_mission_activator,
         ),
         SetupStep(
             "terrain_collision",
@@ -161,6 +236,7 @@ def _reload_child_modules() -> None:
         import_world,
         populate_world,
         setup_atmosphere,
+        setup_audio_import,
         setup_basic_hud,
         setup_data_structs,
         setup_player_character,
@@ -170,7 +246,10 @@ def _reload_child_modules() -> None:
         setup_terrain_collision,
         setup_water,
         setup_weather_system,
+        toggle_vz_visibility,
         verify_player_setup,
+        import_mission_data,
+        mission_layer_activator,
     )
     for mod in modules:
         importlib.reload(mod)
@@ -190,6 +269,14 @@ def run() -> dict[str, str]:
     for index, step in enumerate(steps, start=1):
         if _should_skip(step):
             _log(f"[{index}/{len(steps)}] SKIP  {step.title} ({step.skip_env})")
+            results[step.step_id] = "skipped"
+            continue
+        if step.step_id == "import_mission" and not _should_run_mission_import():
+            _log(f"[{index}/{len(steps)}] SKIP  {step.title} (no MERCS2_MISSION_ID / IMPORT)")
+            results[step.step_id] = "skipped"
+            continue
+        if step.step_id == "mission_layers" and not _should_run_mission_activator():
+            _log(f"[{index}/{len(steps)}] SKIP  {step.title} (MERCS2_MISSION_ID unset)")
             results[step.step_id] = "skipped"
             continue
 

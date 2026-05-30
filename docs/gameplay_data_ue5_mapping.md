@@ -49,10 +49,21 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 - Source file → overlay name mapping
 - ~1,260 have human-readable entity names
 - ~2,241 have only `entity_id` + `type_hash` (names unresolved)
+- **Implemented:** `populate_world.py` / `populate_pmc_base.py` assign actors to a three-level Data Layer hierarchy (`VZ_ActN_Region` → leaf per overlay) via `mercs2_data_layers.py` + `mercs2_vz_taxonomy.py`
+- **Implemented:** Initial PIE states — Act1 + pristine ACTIVATED; Act2/3 and staging/destroyed UNLOADED (`initial_runtime_activated()`)
+- **Starter runtime API:** `game-scripts/mercs2_visibility_runtime.py` + `toggle_vz_visibility.py` for preset-based layer toggling in Editor/PIE
 
 ### Gap
 - `type_hash` → friendly name decoder not built yet
 - vz_state COMP data not parsed into per-entity records (different binary structure)
+- No in-game mission manager driving layer changes at runtime (Editor Python activator only)
+- `populate_world.py` does not set per-actor hibernation/streaming distances yet
+
+### Mission overlay activator (Editor)
+- **Data:** `docs/data/examples/pmccon001_mission.json` → `DT_MissionRegistry` via `import_mission_data.py`
+- **Runtime (Editor/PIE):** `mission_layer_activator.py` with `MERCS2_MISSION_ID=PmcCon001` activates
+  `VZ_Contract` parent + mission leaf layers (`VZ_pmccon001`, …) using `mercs2_visibility_runtime.py`
+- **Runbook:** `docs/data/README.md` — PMC vertical slice baby-step sequence
 
 ---
 
@@ -71,7 +82,8 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 ### UE5 implementation
 
 - **System:** Custom `ASpawnPointActor` Blueprint + `USpawnManagerSubsystem`
-- **Data flow:** `FillDataTableFromJSONFile` loads placement JSON → DataTable rows → SpawnManager reads at runtime
+- **Data flow:** `import_mission_data.py` loads `docs/data/examples/*_spawn_table.json` → `DT_SpawnRegistry`;
+  future `SpawnManager` subsystem reads rows at runtime
 - **Actor classes:** Map entity name patterns to UE5 actor classes:
   - `*Soldier*` / `*Heavy*` → `ACharacter` subclass with AI Controller
   - `*Ammo Pickup*` → `APickupActor` with inventory data
@@ -115,6 +127,7 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 ### What we have now
 - Complete light data for 1,197 lights (color, intensity, radius)
 - World positions and rotations
+- **Implemented:** `populate_world.py`, `populate_pmc_base.py`, and `populate_radius_zone.py` spawn `APointLight` actors from `ecs.LightObject` via `place_light_from_placement()`
 
 ### Gap
 - Light type (point vs spot vs directional) not distinguished
@@ -133,8 +146,10 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `destruction_ref_key` | u32 hex | References the linked entity (rubble variant or parent) |
-| `destruction_u32_1` | u32 | Behavior flags (not fully decoded) |
+| `destruction_ref_key` | u32 hex | Primary ref key (schm type6 @0) |
+| `destruction_u32_1` | u32 | Behavior flags (schm type9 @4; not fully decoded) |
+| `destruction_link_key` | u32 hex | Secondary ref key (schm type7 @8) |
+| `destruction_u32_3` | u32 | Additional hash (schm type6 @12) |
 
 ### UE5 implementation
 
@@ -145,13 +160,15 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 - **Data flow:** Build a destruction graph from `destruction_ref_key` → entity_id cross-references
 
 ### What we have now
-- 672 entity pairs with destruction links
+- 672 entities with `DestructionLink` ECS payloads (merged into `layers_static.json`)
 - Entity positions (so we know which buildings are destructible)
+- **Implemented:** `tools/destruction_link_resolver.py` resolves ref keys → placement targets and emits `output/placements/destruction_graph.json` (pairs, orphans, DangerousBuilding tags)
+- **Implemented:** optional `--vz-state-json` / `--vz-state-glob` merges `vz_state_cross_reference` (destroyed/ruined overlays matched by `entity_id` and `mesh_stem` + proximity; `model_name_hash` annotated via `tools/hash_resolver.py`)
 
 ### Gap
-- `destruction_ref_key` → target entity resolution not implemented
-- Destruction behavior flags not decoded
-- Intact → rubble mesh pairing not established
+- Destruction behavior flags (`destruction_u32_1`) not decoded
+- Intact → rubble mesh pairing not wired in UE5 (graph JSON only; no Chaos GC swap component)
+- vz_state overlay pairing is heuristic (name stem + distance); not validated against in-engine swap tables
 
 ---
 
@@ -201,12 +218,14 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 
 ### What we have now
 - Road and intersection entity positions
-- Lane data and intersection connectivity (payload bytes, not yet decoded into graph form)
+- **Implemented:** `tools/road_graph_extractor.py` builds `road_graph.json` from `road_ref_key_0/1` ↔ `RoadIntersection` entity keys (stats: fully linked / partial / unresolved edges; `topology_validation` block)
+- Optional Maracaibo debug maps: `--bbox -1200 1400 -1100 600` with `--export-geojson` / `--export-svg`
+- Lane endpoint Vec3s exported per edge; intersection `lane_hints` (6× Vec3) attached to nodes
 
 ### Gap
-- Road topology (which road connects which intersections) not extracted from payload
-- Lane count, direction, speed limits not decoded
-- No spline generation tool yet
+- Lane count, direction, speed limits not decoded (`road_lane_hash_*` unresolved to traffic rules)
+- `IntersectionToIntersection` / `LaneData` COMPs not harvested into the graph
+- No spline generation tool yet (graph JSON is input-only)
 
 ---
 
@@ -230,12 +249,12 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 
 ### What we have now
 - Script hash → entity cross-reference
+- **`tools/script_hash_map.py`** → `output/placements/script_hash_map.json` (ObjectScript `script_hash_0` ↔ Lua chunk paths; runs as part of **`make extract-placements`**)
 - Lua string harvest (function names, region names, trigger identifiers)
 - Lua chunk binaries (need LuaDisAss for decompilation)
 
 ### Gap
 - Full Lua decompilation not done (LuaDisAss integration incomplete)
-- Script hash → Lua chunk mapping not built
 - Blueprint translation not started
 
 ---
@@ -260,8 +279,67 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 - Entity names that encode region purpose
 
 ### Gap
-- Region geometry (extent, shape) not decoded from payload
-- LineRegion vertex data not extracted (just entity position, not the line points)
+- ~~Region geometry (extent, shape) not decoded from payload~~ — **resident `lineregion` polygons decoded** (see §16); `layers_static` `LineRegion` COMP still only a 4-byte ref
+- Link lineregion asset_hash → weather zone name / `Graphics.ChangeLineRegionSetting` IDs (Lua harvest)
+
+---
+
+## 16. Weather / `lineregion` (resident) → Zones & splines
+
+### Source data
+- **625** `lineregion` assets (`0x6310807F`, ASET type_id 30) in `resident_P000_Q3`
+- Sizes 88–1424 B (variable point count)
+- **77** `LineRegion` ECS placements in `layers_static` reference regions by hash
+
+### Decoded format (confirmed)
+- UCFX → single `data` chunk
+- Header: `u16 kind` (= 2), `u16 point_count`, `u32` zero
+- Vertices: `point_count × (float x, float z)` in **game metres** (world span ≈ ±4036 m)
+- Tool: `tools/lineregion_probe.py`
+
+### UE5 implementation
+- **Weather zones (track 16):** `ATriggerVolume` or closed spline mesh from polygon; tie to `setup_weather_system.py` / `Weather` plugin volumes
+- **Patrol / triggers:** same geometry for AI splines and mission `LineRegion` triggers
+
+### Gap
+- asset_hash → human zone name (path table / Lua string xref)
+- Which of 625 regions are weather vs patrol vs mission (heuristic by size/name TBD)
+- `LineRegion` COMP 4-byte ref → resident `lineregion` index map
+
+---
+
+## 17. Water / `watermap` → Ocean & water bodies
+
+### Source data
+- Singleton `watermap` (`0x4D7D30C4`) in `resident`, `watr` payload **495,669 B**
+- **257×257** grid, **32 m** cells, **8192×8192 m** XZ span (see [`watermap_format.md`](watermap_format.md))
+
+### Decoded layers (retail PC)
+| Layer | Format | Role | Status |
+|-------|--------|------|--------|
+| 0 | f32 | Water surface / bathymetry height (m) | confirmed |
+| 1 | u8 | Wet mask (`0` dry, `255` wet) | confirmed |
+| 2 | u8 | Coastal variant (mostly 255) | hypothesis |
+| 3 | u8 | Sparse overrides | hypothesis |
+| 4 | blob | 33,290 B footer | size confirmed, semantics unknown |
+
+**Sea level in raster:** wet cells ≈ **-36 m** game Y; dry sentinel **-50 m**.
+
+### UE5 implementation
+- **Current:** `game-scripts/setup_water.py` — hand-tuned `WaterBodyOcean` square, `SEA_LEVEL_UE = -2500` (not tied to `watr`)
+- **Target:** sample mask + height → `WaterBodyOcean` Z from `game_to_ue`; optional river/lake meshes where mask=255 and height > sea
+
+### Tools & artifacts
+```bash
+.venv/Scripts/python tools/watermap_decode.py --wad game-files/pc-game-vz.wad --png
+# JSON: output/watermap_decode.json
+# PNG: output/_scratch/watermap/layer00_height_u16.png
+```
+
+### Gap
+- Footer blob decode
+- Grid origin vs world (0,0) — EXE validation
+- Calibrate `SEA_LEVEL_UE` to -36 m game height via coastal probe
 
 ---
 
@@ -316,18 +394,25 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 ## Implementation Roadmap
 
 ### Phase 1: Immediate (populate scripts)
-- [ ] **Lights** — spawn PointLight actors with color/intensity/radius from ECS
-- [ ] **Data Layers** — assign all vz_state actors to named Data Layers
-- [ ] **Hibernation** — set streaming distance from HibernationControl values
+
+| Item | Status | Implementation |
+|------|--------|----------------|
+| **Lights** | Done | `populate_world.py` / `populate_pmc_base.py` / `populate_radius_zone.py` → `place_light_from_placement()` |
+| **Data Layers** | Done | `mercs2_data_layers.py` + `mercs2_vz_taxonomy.py`; populate scripts assign vz_state actors to hierarchical layers |
+| **Hibernation** | Not started | ECS decoded in `ucfx_ecs_codec.py`; no populate-script wiring yet |
+| **Runtime visibility (stretch)** | Starter stub | `mercs2_visibility_runtime.py` — Editor/PIE preset toggles only |
+
+**World diorama subset (Item 1):** use `make filter-pool-200m` → `import_radius_zone.py` → `populate_radius_zone.py` for a ~200 m test cell without full-world populate.
 
 ### Phase 2: Near-term (new tools + Blueprints)
 - [ ] **Spawn point actors** — Blueprint that reads entity_name, spawns correct actor class
-- [ ] **Destruction links** — resolve entity pairs, set up Chaos destruction swap
+- [ ] **Destruction links** — wire `destruction_graph.json` pairs + vz_state overlays into Chaos GC swap Blueprint
 - [ ] **type_hash decoder** — resolve unnamed vz_state entities to friendly names
 
 ### Phase 3: Medium-term (systems)
-- [ ] **Road network** — decode Road/RoadIntersection payloads into graph, generate splines
-- [ ] **Region volumes** — decode LineRegion geometry, spawn trigger volumes
+- [ ] **Road network** — generate splines / nav from `road_graph.json` (topology extract done)
+- [ ] **Region volumes** — wire `lineregion_probe` polygons to trigger volumes + weather zones
+- [ ] **Water raster** — drive `setup_water.py` from `watermap_decode` height/mask
 - [ ] **Mission framework** — data-driven contract system from overlay naming + Lua harvest
 
 ### Phase 4: Long-term (full game logic)
@@ -335,3 +420,95 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 - [ ] **AI behavior** — patrol routes from road network + spawn data
 - [ ] **Interior streaming** — portal system from EntranceLink data
 - [ ] **Briefing UI** — UMG widgets from scaleform texture reference
+
+---
+
+## 11. Audio (wavebank / soundbank) → UE5 Sound System
+
+### Source data
+- **95** wavebank entries (`0xF753F6D0`) — embedded IMA ADPCM clips
+- **76** soundbank entries (`0x9F8BCA10`) — event → clip routing
+- **77** sounddb entries (`0xE5273C14`) — block-level audio package manifests
+- **PWS** streams under `data/Audios/` — music, VO, ambience
+
+### UE5 implementation
+- **System:** `USoundWave` + `USoundCue` / MetaSounds, `USoundAttenuation`, `USoundConcurrency`
+- **Manifest:** [`tools/audio_ue5_manifest.py`](../tools/audio_ue5_manifest.py) maps hashes → WAV paths + `/Game/Mercs2/Audio/...` content paths
+- **Editor scaffold:** [`game-scripts/setup_audio_import.py`](../game-scripts/setup_audio_import.py)
+- **Runtime:** DataTable `event_hash → SoundCue` to replace Lua `Sound.CueSound(name)`
+
+### What we have now
+- Full audio engine design doc ([`pandemic_audio_system_design.md`](pandemic_audio_system_design.md))
+- PWS extraction via `make extract-audio`
+- DLC clip inventory via `dlc_audio_manifest.py`
+- WAD simulator audio consumption modules (Rust)
+
+### Gap
+- Full-archive wavebank decode optional — **`wavebank_extractor.py`** + **`ima_adpcm.py`** decode embedded IMA ADPCM (`0x02`) → WAV (verified on `ui_hud`; see [`audio_ue5_path.md`](audio_ue5_path.md))
+- **`import_audio.py`** stub exists; Interchange batch import needs in-Editor validation
+- Soundbank event names hash-only; `sounddb` load order not in manifest
+
+**Full plan:** [`audio_ue5_path.md`](audio_ue5_path.md) §1 and §5
+
+---
+
+## 12. Effects + SCRB materials → Niagara + UE Materials
+
+### Source data
+- **1** fxdict (`0xFA46D8A8`) — global FX parameter dictionary in **`resident`** block (not the `effects` block file — see [`fxdict_format.md`](fxdict_format.md))
+- **314** effect entries (`0x5608BD5A`) — particle/VFX definitions in `effects` block
+- **1,026** scrub packages (`0x600B904E`) — SCRB+MTRL compiled shaders in c3 cells
+- **1,033** `ScrubObject` ECS placements — scrub hash per instance
+
+### UE5 implementation
+- **fxdict →** `UNiagaraParameterCollection` or DataTable
+- **effect →** `UNiagaraSystem` (one per effect hash)
+- **scrub →** `UMaterialInstanceConstant` (manual rebuild from MTRL texture slots; SCRB bytecode not portable)
+- **Placements →** `ANiagaraActor` via extended populate script
+
+### Gap
+- **Partial decode:** [`fxdict_parser.py`](../tools/fxdict_parser.py) + [`effect_block_probe.py`](../tools/effect_block_probe.py) — INFO+DICT stride and effect chunk tags documented in [`fxdict_format.md`](fxdict_format.md); parameter names still hash-only
+- No Niagara template library; no `effect_extractor.py` catalog JSON yet
+- SCRB → UE material auto-conversion not feasible — probe with [`material_probe.py`](../tools/material_probe.py)
+
+**Full plan:** [`audio_ue5_path.md`](audio_ue5_path.md) §2
+
+---
+
+## 13. FaceFX → Lip-sync (Morph Targets / Audio2Face)
+
+### Source data
+- **86** facefxanimationset (`0x665EF13E`) — contract/briefing dialogue curves
+- **31** facefxactor (`0x1CF649BB`) — facial rig definitions
+
+### UE5 implementation
+- **Phase 1:** Subtitles only (stringdb + dialog fragments)
+- **Phase 2:** Import FaceFX curves → morph target AnimSequences
+- **Phase 3:** Sync to VO WAV from PWS / dialog audio
+- **Long-term:** MetaHuman + Audio2Face for new content
+
+### Gap
+- No FaceFX extraction or format decoder
+- Morph target name map unknown
+
+**Full plan:** [`audio_ue5_path.md`](audio_ue5_path.md) §3
+
+---
+
+## 14. Scaleform GFX → UMG
+
+### Source data
+- **60** scaleformgfx entries (`0xFE0E8320`) — CFX/zlib Flash UI
+- Briefing **textures** already in UE bundle; layouts not decoded
+
+### UE5 implementation
+- **System:** UMG Widget Blueprints (not Scaleform GFx plugin)
+- **Existing:** `WBP_HUDRoot`, `WBP_PauseMenu` ([`setup_basic_hud.py`](../game-scripts/setup_basic_hud.py))
+- **Migration:** Screenshot/reference layout + imported briefing PNGs; do not depend on SWF decompilation
+
+### Gap
+- CFX payload not decoded
+- HUD widget bindings not wired
+- No contract briefing widget scaffold
+
+**Full plan:** [`audio_ue5_path.md`](audio_ue5_path.md) §4

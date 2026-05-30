@@ -87,7 +87,7 @@ The **n-th** `sges` in `data.bin` corresponds to the **n-th** line in `paths.txt
 **Deep mesh / texture layout:** [`tools/ucfx_mesh_codec.py`](../tools/ucfx_mesh_codec.py), [`tools/mesh_extractor.py`](../tools/mesh_extractor.py), [`tools/texture_extractor.py`](../tools/texture_extractor.py)
 
 - **UCFX** root: magic + four u32 header fields (`u0`–`u3`); `data_base = ucfx_off + u0` for child chunks.
-- **Chunk table:** 20-byte rows: 4-byte tag + four u32s (`read_chunk_header`). Tags parsed in mesh path include **GEOM**, **MESH**, **PRMG**, **STRM**, **IBUF**, **INFO**, **MTRL**, **PRMT**, **HIER**, **SWIT**, **NAME**, **BODY** (texture). Others (**CHDR**, **STAT**, **CEXE**, **enum**, **flgt**, **flgs**, **INDX**, …) may appear in **`tag_occurrences`** without a dedicated decoder.
+- **Chunk table:** 20-byte rows: 4-byte tag + four u32s (`read_chunk_header`). Tags parsed in mesh path include **GEOM**, **MESH**, **PRMG**, **STRM**, **IBUF**, **INFO**, **MTRL**, **PRMT**, **HIER**, **SWIT**, **NAME**, **BODY** (texture). **SKIN** containers are markers (`u0 = 0xFFFFFFFF`); bone indices and weights live in the paired **STRM** vertex buffer (`BLENDINDICES` / `BLENDWEIGHT` at decl offsets +16/+20) — see [`docs/skeleton_status.md`](skeleton_status.md) and [`tools/export_skinned_mesh.py`](../tools/export_skinned_mesh.py). Others (**CHDR**, **STAT**, **CEXE**, **enum**, **flgt**, **flgs**, **INDX**, …) may appear in **`tag_occurrences`** without a dedicated decoder.
 - **CONTAINER_SENTINEL** `0xFFFFFFFF` on chunk row `u0` marks nested-container boundaries in some walks.
 - **Stringdb chunks** (**SYEK**, **SRTS**): localized string database. Body data is **natively big-endian** on all platforms (PC and Xbox). Descriptor fields (offset, size) follow normal UCFX LE convention. See §4.1.
 
@@ -261,7 +261,9 @@ Remainder of file is **not** structurally decoded in tooling; use `--json` / `--
 
 ---
 
-## 7. PWS / embedded audio banks
+## 7. Audio (PWS streams + embedded wavebanks)
+
+### 7.1 PWS / RIFF / Ogg in stream roots
 
 **Tool:** [`tools/pws_extractor.py`](../tools/pws_extractor.py)
 
@@ -269,6 +271,16 @@ Remainder of file is **not** structurally decoded in tooling; use `--json` / `--
 - **OggS**: heuristic slice (up to 512 KiB); **no** full stream parse or duration.
 
 Outputs `pws_manifest.json` per source directory and optional `pws_summary.json` for multi-input runs.
+
+### 7.2 Embedded wavebank / soundbank (UCFX in WAD blocks)
+
+| type_hash | Tool | Output |
+|-----------|------|--------|
+| `0xF753F6D0` wavebank | [`wavebank_extractor.py`](../tools/wavebank_extractor.py) + [`ima_adpcm.py`](../tools/ima_adpcm.py) | `output/extracted/audio/wavebanks/{bank_hash}/clip_{clip_hash}.wav` |
+| `0x9F8BCA10` soundbank | (structural probe in manifest) | Event → clip hashes in [`audio_ue5_manifest.py`](../tools/audio_ue5_manifest.py) |
+| `0xE5273C14` sounddb | — | Block-level package manifest; load order **not** decoded |
+
+UE5 index: [`audio_ue5_manifest.py`](../tools/audio_ue5_manifest.py) → `ue5_import/metadata/audio_ue5_manifest.json` (`scan_decoded_wavebanks()` when WAV tree exists). Design: [`docs/pandemic_audio_system_design.md`](pandemic_audio_system_design.md), plan: [`docs/audio_ue5_path.md`](audio_ue5_path.md).
 
 ---
 
@@ -310,6 +322,9 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 ## 10. Related docs
 
 - [`tools/README.md`](../tools/README.md) — commands, pipeline, artifact index, env vars.
+- [`docs/gameplay_data_ue5_mapping.md`](gameplay_data_ue5_mapping.md) — non-mesh data → UE5 systems inventory.
+- [`docs/skeleton_status.md`](skeleton_status.md), [`docs/watermap_format.md`](watermap_format.md), [`docs/fxdict_format.md`](fxdict_format.md), [`docs/audio_ue5_path.md`](audio_ue5_path.md), [`docs/glue_gap_closeout.md`](glue_gap_closeout.md) — recent decode tracks + integration gaps.
+- [`tools/wad_simulator/README.md`](../tools/wad_simulator/README.md) — Rust consumption / byte-swap validation.
 - [`docs/game_extractor_notes.md`](game_extractor_notes.md), [`docs/quickbms_notes.md`](quickbms_notes.md) — external tooling workflows.
 - [`docs/modding_deep_dive.md`](modding_deep_dive.md) — DRM analysis, hash system identification, Lua bytecode format, `vz.bin` decode, and modding feasibility roadmap.
 - [`UnrealEngineGame/README.md`](../UnrealEngineGame/README.md) — Maracaibo demo list (`maracaibo_asset_list.json`).
@@ -554,3 +569,17 @@ build then sets `texture_metallic_roughness` to the converted PNG name.
 This conversion is **not** performed for lrterrain because no specular
 source exists in this block; the implementation lives in the exporter
 ready to consume it once a source is identified for other materials.
+
+---
+
+## 14. Resident singletons (`watermap`, `lineregion`)
+
+Always-loaded `resident_P000_Q3` block. Type hashes: see `docs/type_hash_registry.md`.
+
+| type_hash | Tag / chunk | Doc |
+|-----------|-------------|-----|
+| `0x4D7D30C4` | UCFX → `watr` | [`docs/watermap_format.md`](watermap_format.md) — 257² grid, 5 logical layers, sea level ≈ **-36 m** |
+| `0x6310807F` | UCFX → `data` | Polygon vertices (game XZ); `tools/lineregion_probe.py` |
+| `0xFA46D8A8` | UCFX → INFO+DICT | [`docs/fxdict_format.md`](fxdict_format.md) — global FX params (`pandemic_hash_m2("fx")`); **resident** only |
+
+Extraction: `tools/extract_single_block.py --path "blocks\\VZ\\resident_P000_Q3.block"`.

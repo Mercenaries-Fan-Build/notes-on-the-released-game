@@ -335,6 +335,49 @@ def extract_ecs_vz_state(data: bytes, source_file: str) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def _key_hex_u32(value: int) -> str:
+    return f"0x{value:08x}"
+
+
+def decode_road_payload(payload: bytes) -> dict[str, Any]:
+    """Decode a 40-byte Road COMP payload (schm: 4×u32 + 2×Vec3)."""
+    if len(payload) < 40:
+        raise ValueError(f"Road payload too short: {len(payload)}")
+    k0, k1, h0, h1 = struct.unpack_from("<4I", payload, 0)
+    ax, ay, az = struct.unpack_from("<3f", payload, 16)
+    bx, by, bz = struct.unpack_from("<3f", payload, 28)
+    return {
+        "road_ref_key_0": _key_hex_u32(k0),
+        "road_ref_key_0_int": k0,
+        "road_ref_key_1": _key_hex_u32(k1),
+        "road_ref_key_1_int": k1,
+        "road_lane_hash_0": _key_hex_u32(h0),
+        "road_lane_hash_1": _key_hex_u32(h1),
+        "road_endpoint_a": {"x": round(ax, 4), "y": round(ay, 4), "z": round(az, 4)},
+        "road_endpoint_b": {"x": round(bx, 4), "y": round(by, 4), "z": round(bz, 4)},
+    }
+
+
+def decode_road_intersection_payload(payload: bytes) -> dict[str, Any]:
+    """Decode a 124-byte RoadIntersection COMP payload (7×u32 + 6×Vec3 + 6×u32)."""
+    if len(payload) < 124:
+        raise ValueError(f"RoadIntersection payload too short: {len(payload)}")
+    refs = struct.unpack_from("<7I", payload, 0)
+    vec3s: list[dict[str, float]] = []
+    for i in range(6):
+        off = 28 + i * 12
+        x, y, z = struct.unpack_from("<3f", payload, off)
+        vec3s.append({"x": round(x, 4), "y": round(y, 4), "z": round(z, 4)})
+    tail = struct.unpack_from("<6I", payload, 100)
+    return {
+        "intersection_ref_keys": [_key_hex_u32(v) for v in refs],
+        "intersection_ref_keys_int": list(refs),
+        "intersection_vec3s": vec3s,
+        "intersection_tail_u32": [_key_hex_u32(v) for v in tail],
+        "intersection_tail_u32_int": list(tail),
+    }
+
+
 def _decode_payload(rec: dict[str, Any], info_name: str, payload: bytes) -> None:
     """Add decoded fields to *rec* for COMP types with known layouts."""
     if info_name == "ModelName" and len(payload) >= 4:
@@ -352,8 +395,11 @@ def _decode_payload(rec: dict[str, Any], info_name: str, payload: bytes) -> None
             rec["script_u32_1"] = struct.unpack_from("<I", payload, 4)[0]
 
     elif info_name == "DestructionLink" and len(payload) >= 16:
+        # schm layout: type6@0, type9@4, type7@8, type6@12 (see docs/schm_type_codes.md)
         rec["destruction_ref_key"] = f"0x{struct.unpack_from('<I', payload, 0)[0]:08x}"
         rec["destruction_u32_1"] = struct.unpack_from("<I", payload, 4)[0]
+        rec["destruction_link_key"] = f"0x{struct.unpack_from('<I', payload, 8)[0]:08x}"
+        rec["destruction_u32_3"] = struct.unpack_from("<I", payload, 12)[0]
 
     elif info_name == "LightObject" and len(payload) >= 52:
         rec["light_u32_0"] = struct.unpack_from("<I", payload, 0)[0]
@@ -362,6 +408,12 @@ def _decode_payload(rec: dict[str, Any], info_name: str, payload: bytes) -> None
         rec["light_color_b"] = round(struct.unpack_from("<f", payload, 12)[0], 4)
         rec["light_intensity"] = round(struct.unpack_from("<f", payload, 16)[0], 4)
         rec["light_radius"] = round(struct.unpack_from("<f", payload, 20)[0], 4)
+
+    elif info_name == "Road" and len(payload) >= 40:
+        rec.update(decode_road_payload(payload))
+
+    elif info_name == "RoadIntersection" and len(payload) >= 124:
+        rec.update(decode_road_intersection_payload(payload))
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +489,17 @@ def merge_ecs_into_placements(
                 "payload_size": r.get("payload_size"),
             }
             for k, v in r.items():
-                if k.startswith(("model_", "hibernation_", "script_", "destruction_", "light_")):
+                if k.startswith(
+                    (
+                        "model_",
+                        "hibernation_",
+                        "script_",
+                        "destruction_",
+                        "light_",
+                        "road_",
+                        "intersection_",
+                    )
+                ):
                     entry[k] = v
             entry["payload_hex"] = r.get("payload_hex")
             ecs_payload[name] = entry

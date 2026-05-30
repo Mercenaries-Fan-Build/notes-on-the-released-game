@@ -59,6 +59,8 @@ SCHEMA_MANIFEST_PATH = REPO_ROOT / "docs" / "data" / "mercs2_data_schema.json"
 ENUMS: dict[str, list[str]] = {
     "EWeaponStance": ["Unarmed", "Pistol", "Rifle", "Heavy"],
     "EFaction": ["PMC", "VZ", "AN", "UP", "Pirates"],
+    "ESpawnCategory": ["NPC", "Vehicle", "Pickup", "Fortification", "SpawnerLogic", "Particle", "Trigger"],
+    "ESpawnTrigger": ["OnLayerActivate", "OnLayerDeactivate", "OnMissionActivated", "OnScriptEvent", "Manual"],
 }
 
 
@@ -81,6 +83,30 @@ STRUCTS: dict[str, list[dict[str, str]]] = {
         {"name": "Description", "type": "text"},
         {"name": "bCompleted", "type": "bool"},
         {"name": "Order", "type": "int32"},
+    ],
+    "FMissionData": [
+        {"name": "MissionId", "type": "name"},
+        {"name": "ModuleName", "type": "text", "comment": "Lua sModuleName, e.g. pmccon001"},
+        {"name": "Faction", "type": "byte:EFaction"},
+        {"name": "StarterId", "type": "text", "comment": "wifstarterdata key, e.g. PmcBoss"},
+        {"name": "bContract", "type": "bool"},
+        {"name": "bCriticalPath", "type": "bool"},
+        {"name": "TitleKey", "type": "text", "comment": "Localization key [PmcCon001.Title]"},
+        {"name": "ScriptHash", "type": "int32", "comment": "pandemic_hash_m2(ModuleName)"},
+        {"name": "OverlayLayers", "type": "text", "comment": "Comma-separated vz_state layer stems"},
+        {"name": "PrerequisiteKey", "type": "text", "comment": "Flow HasKey gate"},
+    ],
+    "FSpawnTableRow": [
+        {"name": "EntityNamePattern", "type": "text"},
+        {"name": "EntityNameHash", "type": "int32"},
+        {"name": "SpawnCategory", "type": "byte:ESpawnCategory"},
+        {"name": "BlueprintClass", "type": "softclass:Actor"},
+        {"name": "DefaultFaction", "type": "byte:EFaction"},
+        {"name": "OverlayLayer", "type": "name"},
+        {"name": "MissionId", "type": "name"},
+        {"name": "SpawnTrigger", "type": "byte:ESpawnTrigger"},
+        {"name": "bSpawnOnAccept", "type": "bool"},
+        {"name": "bDespawnOnComplete", "type": "bool"},
     ],
 }
 
@@ -360,6 +386,17 @@ def create_data_tables() -> None:
         "the schema manifest (4 tutorial objectives)."
     )
 
+    _create_data_table("DT_MissionRegistry", f"{STRUCTS_DIR}/FMissionData")
+    _warn(
+        "  MANUAL: bind FMissionData and import docs/data/examples/pmccon001_mission.json "
+        "as the first vertical-slice row (PmcCon001)."
+    )
+
+    _create_data_table("DT_SpawnRegistry", f"{STRUCTS_DIR}/FSpawnTableRow")
+    _warn(
+        "  MANUAL: bind FSpawnTableRow and import docs/data/examples/pmccon001_spawn_table.json."
+    )
+
 
 # ---------------------------------------------------------------------------
 # Repo-side manifest — canonical schema reference for humans and tooling
@@ -395,6 +432,23 @@ def write_schema_manifest() -> None:
                 "row_struct": f"{STRUCTS_DIR}/FMissionObjective",
                 "rows": TUTORIAL_MISSION_ROWS,
             },
+            "DT_MissionRegistry": {
+                "path": f"{TABLES_DIR}/DT_MissionRegistry",
+                "row_struct": f"{STRUCTS_DIR}/FMissionData",
+                "schema_doc": "docs/data/mission_data_schema.json",
+                "example_rows": "docs/data/examples/pmccon001_mission.json",
+            },
+            "DT_SpawnRegistry": {
+                "path": f"{TABLES_DIR}/DT_SpawnRegistry",
+                "row_struct": f"{STRUCTS_DIR}/FSpawnTableRow",
+                "schema_doc": "docs/data/spawn_table_schema.json",
+                "example_rows": "docs/data/examples/pmccon001_spawn_table.json",
+            },
+        },
+        "external_schemas": {
+            "mission_data": "docs/data/mission_data_schema.json",
+            "spawn_table": "docs/data/spawn_table_schema.json",
+            "script_hash_map_output": "output/placements/script_hash_map.json",
         },
     }
 

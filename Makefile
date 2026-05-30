@@ -313,6 +313,12 @@ extract-placements:
 	  --out-dir "$(OUTPUT)/lua_chunks/scripts_vz" \
 	  --harvest-json "$(OUTPUT)/placements/pmc_lua_string_harvest.json" \
 	  --harvest-csv "$(OUTPUT)/placements/pmc_lua_string_harvest.csv"
+	@echo "Script hash → Lua chunk index map..."
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/script_hash_map.py" \
+	  --scripts-block "$(OUTPUT)/extracted/batch_vz/blocks/03197_blocks__VZ__scripts_vz_P000_Q3.block.bin" \
+	  --resident-block "$(OUTPUT)/extracted/batch_vz/blocks/00464_blocks__VZ__resident_P000_Q3.block.bin" \
+	  --harvest-json "$(OUTPUT)/placements/pmc_lua_string_harvest.json" \
+	  --out "$(OUTPUT)/placements/script_hash_map.json"
 	@echo "Placement extraction complete → $(OUTPUT)/placements/"
 
 build-c3-cell-manifest:

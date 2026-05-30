@@ -1065,6 +1065,300 @@ def _find_hier_chunk(
     return None
 
 
+# ---------------------------------------------------------------------------
+#   SKIN — per-vertex bone indices/weights (in STRM VB; SKIN chunk = marker)
+# ---------------------------------------------------------------------------
+
+D3DDECL_END = 0xFF
+D3DDECLUSAGE_BLENDWEIGHT = 1
+D3DDECLUSAGE_BLENDINDICES = 2
+
+_D3DDECL_TYPE_SIZES: dict[int, int] = {
+    0: 4,   # FLOAT1 (engine uses UBYTE4 indices here)
+    1: 4,
+    2: 8,
+    3: 12,
+    4: 16,
+    5: 4,   # D3DCOLOR
+    6: 4,   # UBYTE4
+    7: 4,
+    8: 8,   # SHORT4
+    9: 4,   # UBYTE4N
+    10: 4,
+    11: 8,
+    12: 4,
+    13: 8,
+    14: 4,
+    15: 4,
+    16: 4,  # FLOAT16_2
+    17: 8,  # FLOAT16_4
+}
+
+# Verified on ``pmc_hum_mattias_v2`` skinned PRMGs when decl parse fails.
+_SKIN_LAYOUT_FALLBACK: dict[int, tuple[int, int]] = {
+    24: (16, 20),
+    28: (16, 20),
+    32: (16, 20),
+    40: (16, 20),
+}
+
+
+def parse_d3d9_vertex_decl(
+    data: bytes, decl_abs: int, decl_len: int
+) -> tuple[list[dict[str, Any]], int]:
+    """Parse a D3D9 ``D3DVERTEXELEMENT9`` array; return (elements, stride_bytes)."""
+    if decl_len < 8 or decl_abs < 0 or decl_abs + decl_len > len(data):
+        return [], 0
+    elems: list[dict[str, Any]] = []
+    stride = 0
+    pos = decl_abs
+    end = decl_abs + decl_len
+    while pos + 8 <= end:
+        stream, offset, typ, _method, usage, usage_index = struct.unpack_from("<HHBBBB", data, pos)
+        if typ == D3DDECL_END:
+            break
+        sz = _D3DDECL_TYPE_SIZES.get(int(typ), 0)
+        stride = max(stride, int(offset) + sz)
+        elems.append({
+            "stream": int(stream),
+            "offset": int(offset),
+            "type": int(typ),
+            "usage": int(usage),
+            "usage_index": int(usage_index),
+            "size": sz,
+        })
+        pos += 8
+    return elems, stride
+
+
+def skin_layout_from_decl(
+    data: bytes, data_base: int, decl_off_rel: int, decl_len: int, stride: int
+) -> tuple[int, int] | None:
+    """Return ``(indices_offset, weights_offset)`` in each vertex, or ``None``."""
+    decl_abs = data_base + int(decl_off_rel)
+    elems, decl_stride = parse_d3d9_vertex_decl(data, decl_abs, decl_len)
+    idx_off = w_off = None
+    for el in elems:
+        if el["usage"] == D3DDECLUSAGE_BLENDINDICES:
+            idx_off = int(el["offset"])
+        elif el["usage"] == D3DDECLUSAGE_BLENDWEIGHT:
+            w_off = int(el["offset"])
+    if idx_off is not None and w_off is not None:
+        return idx_off, w_off
+    if decl_stride in _SKIN_LAYOUT_FALLBACK:
+        return _SKIN_LAYOUT_FALLBACK[decl_stride]
+    return _SKIN_LAYOUT_FALLBACK.get(stride)
+
+
+def normalize_skin_weights_u8(weights: tuple[int, int, int, int]) -> tuple[float, float, float, float]:
+    """Map four UNORM weights to glTF floats (sum = 1)."""
+    s = float(sum(weights))
+    if s <= 0.0:
+        return (1.0, 0.0, 0.0, 0.0)
+    return tuple(float(w) / s for w in weights)
+
+
+def decode_prmg_skin_influences(
+    data: bytes,
+    vb_abs: int,
+    stride: int,
+    n_verts: int,
+    *,
+    indices_offset: int,
+    weights_offset: int,
+    max_bone_index: int | None = None,
+) -> tuple[list[tuple[int, int, int, int]], list[tuple[float, float, float, float]], dict[str, Any]]:
+    """Decode per-vertex ``JOINTS_0`` / ``WEIGHTS_0`` payloads from a STRM vertex buffer.
+
+    Returns ``(joints_u8, weights_f32, stats)`` with one tuple per vertex.
+    """
+    joints: list[tuple[int, int, int, int]] = []
+    weights: list[tuple[float, float, float, float]] = []
+    bad_sum = 0
+    bad_idx = 0
+    multi = 0
+    ceiling = 255 if max_bone_index is None else int(max_bone_index)
+
+    for vi in range(n_verts):
+        base = vb_abs + vi * stride
+        if base + max(indices_offset, weights_offset) + 4 > len(data):
+            joints.append((0, 0, 0, 0))
+            weights.append((1.0, 0.0, 0.0, 0.0))
+            bad_sum += 1
+            continue
+        idx = struct.unpack_from("<4B", data, base + indices_offset)
+        raw_w = struct.unpack_from("<4B", data, base + weights_offset)
+        if max(idx) > ceiling:
+            bad_idx += 1
+        wsum = sum(raw_w)
+        if abs(wsum - 255) > 2:
+            bad_sum += 1
+        w = normalize_skin_weights_u8(raw_w)
+        if raw_w[1] > 0 or raw_w[2] > 0 or raw_w[3] > 0:
+            multi += 1
+        joints.append(idx)
+        weights.append(w)
+
+    stats = {
+        "vertices": n_verts,
+        "indices_offset": indices_offset,
+        "weights_offset": weights_offset,
+        "stride_bytes": stride,
+        "bad_weight_sum_count": bad_sum,
+        "bad_index_count": bad_idx,
+        "multi_influence_vertices": multi,
+    }
+    return joints, weights, stats
+
+
+def parse_hier_inverse_bind_matrices(
+    data: bytes, data_base: int, hier_off_rel: int, hier_len: int
+) -> list[list[float]]:
+    """Return glTF column-major ``float[16]`` inverse bind matrices per HIER node."""
+    abs_base = data_base + int(hier_off_rel)
+    n_records = hier_len // _HIER_NODE_STRIDE
+    out: list[list[float]] = []
+    for rec in range(n_records):
+        off = abs_base + rec * _HIER_NODE_STRIDE
+        m = _read_mat4(data, off + 80)
+        # row-major file → column-major glTF
+        out.append([
+            m[0][0], m[1][0], m[2][0], 0.0,
+            m[0][1], m[1][1], m[2][1], 0.0,
+            m[0][2], m[1][2], m[2][2], 0.0,
+            m[3][0], m[3][1], m[3][2], 1.0,
+        ])
+    return out
+
+
+def iter_skin_chunk_containers(
+    chunks: list[tuple[bytes, tuple[int, int, int, int]]],
+) -> Iterator[dict[str, Any]]:
+    """Yield each ``SKIN`` container row (``u0 == CONTAINER_SENTINEL``) under a UCFX chunk table."""
+    for tag, u in chunks:
+        if tag != b"SKIN" or u[0] != CONTAINER_SENTINEL or int(u[3]) < 1:
+            continue
+        yield {
+            "meta_u32": int(u[2]),
+            "n_children": int(u[3]),
+            "info4": None,
+            "prmg_body": None,
+        }
+
+
+def parse_skin_container_children(
+    rows: list[tuple[bytes, tuple[int, int, int, int]]],
+    data: bytes,
+    data_base: int,
+) -> dict[str, Any]:
+    """Parse one ``SKIN`` container's child rows (INFO hash + nested PRMG body)."""
+    info4: int | None = None
+    prmg_body: list[tuple[bytes, tuple[int, int, int, int]]] | None = None
+    i = 0
+    while i < len(rows):
+        tag, u = rows[i]
+        if tag == b"INFO" and u[0] != CONTAINER_SENTINEL and int(u[1]) == 4:
+            p = data_base + int(u[0])
+            if 0 <= p + 4 <= len(data):
+                info4 = struct.unpack_from("<I", data, p)[0]
+            i += 1
+            continue
+        if tag == b"PRMG" and u[0] == CONTAINER_SENTINEL:
+            pn = int(u[3])
+            if pn > 0 and i + 1 + pn <= len(rows):
+                prmg_body = rows[i + 1 : i + 1 + pn]
+            i += 1 + max(pn, 0)
+            continue
+        i += 1
+    sub = _parse_prmg_body(list(prmg_body)) if prmg_body else None
+    return {"info_hash": info4, "prmg": sub}
+
+
+def find_skin_chunks_in_ucfx(
+    data: bytes, ucfx_off: int, data_base: int, n_chunks: int
+) -> list[dict[str, Any]]:
+    """List ``SKIN`` containers in a UCFX chunk table with nested PRMG buffer keys."""
+    if ucfx_off + 20 + n_chunks * CHUNK_HDR > len(data):
+        return []
+    out: list[dict[str, Any]] = []
+    for ci in range(n_chunks):
+        cpos = ucfx_off + 20 + ci * CHUNK_HDR
+        tag = data[cpos : cpos + 4]
+        cu = struct.unpack_from("<IIII", data, cpos + 4)
+        if tag != b"SKIN" or cu[0] != CONTAINER_SENTINEL:
+            continue
+        n_child = int(cu[3])
+        if n_child < 1 or cpos + CHUNK_HDR + n_child * CHUNK_HDR > len(data):
+            continue
+        rows = []
+        for j in range(n_child):
+            rpos = cpos + CHUNK_HDR + j * CHUNK_HDR
+            rt = data[rpos : rpos + 4]
+            ru = struct.unpack_from("<IIII", data, rpos + 4)
+            rows.append((rt, ru))
+        parsed = parse_skin_container_children(rows, data, data_base)
+        if parsed.get("prmg"):
+            parsed["chunk_index"] = ci
+            out.append(parsed)
+    return out
+
+
+def decode_skin_chunk(
+    data: bytes,
+    data_base: int,
+    skin_meta: dict[str, Any],
+    *,
+    max_bone_index: int | None = None,
+) -> dict[str, Any] | None:
+    """Decode skin influences for one ``SKIN`` container's nested PRMG (shared STRM VB)."""
+    sub = skin_meta.get("prmg")
+    if not sub:
+        return None
+    vb_abs = data_base + int(sub["vb_off"])
+    vb_len = int(sub["vb_len"])
+    decl_off = int(sub.get("decl_off", 0))
+    decl_len = int(sub.get("decl_len", 0))
+    if vb_len <= 0 or vb_abs < 0 or vb_abs + vb_len > len(data):
+        return None
+
+    # Infer vertex count from index buffer (same as ``decode_submesh``).
+    ib_abs = data_base + int(sub["ib_off"])
+    ib_len = int(sub["ib_len"])
+    if ib_abs < 0 or ib_abs + ib_len > len(data) or ib_len < 6:
+        return None
+    indices = list(struct.unpack_from("<%dH" % (ib_len // 2), data, ib_abs))
+    if not indices:
+        return None
+    max_idx = max(x for x in indices if x != 65535)
+    n_verts = max_idx + 1
+    if vb_len % n_verts != 0:
+        return None
+    stride = vb_len // n_verts
+
+    layout = skin_layout_from_decl(data, data_base, decl_off, decl_len, stride)
+    if layout is None:
+        return None
+    idx_off, w_off = layout
+    joints, weights, stats = decode_prmg_skin_influences(
+        data,
+        vb_abs,
+        stride,
+        n_verts,
+        indices_offset=idx_off,
+        weights_offset=w_off,
+        max_bone_index=max_bone_index,
+    )
+    return {
+        "info_hash": skin_meta.get("info_hash"),
+        "vb_file_offset": vb_abs,
+        "ib_file_offset": ib_abs,
+        "joints": joints,
+        "weights": weights,
+        "stats": stats,
+        "prmg": sub,
+    }
+
+
 def parse_indx_chunk(
     data: bytes,
     data_base: int,

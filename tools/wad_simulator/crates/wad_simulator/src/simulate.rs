@@ -15,7 +15,9 @@ use crate::audio::{
 };
 use crate::audio::{TYPE_HASH_SOUNDBANK, TYPE_HASH_WAVEBANK, TYPE_ID_SOUNDBANK, TYPE_ID_WAVEBANK};
 use crate::consume::{consume_structural, ConsumeResult};
+use crate::material::consume_material;
 use crate::model::consume_model;
+use crate::resident::{consume_fxdict, consume_watermap};
 use crate::overlay::{overlay_stats, ResolvedAset, VirtualDisk};
 use crate::placement::consume_layer;
 use crate::progress::{log, log_every};
@@ -24,8 +26,10 @@ use crate::script::consume_script;
 use crate::texture::consume_texture;
 use mercs2_formats::safe_slice::SafeSlice;
 use mercs2_formats::types::{
-    type_hash_for_type_id, type_name, TYPE_ID_ANIMATION, TYPE_ID_LAYER, TYPE_ID_LOWRES_TERRAIN,
-    TYPE_ID_MODEL, TYPE_ID_SCRIPT, TYPE_ID_TERRAIN_MESH, TYPE_ID_TEXTURE,
+    type_hash_for_type_id, type_name, TYPE_HASH_FX_DICTIONARY, TYPE_HASH_WATERMAP,
+    TYPE_ID_ANIMATION, TYPE_ID_FX_DICTIONARY, TYPE_ID_LAYER, TYPE_ID_LOWRES_TERRAIN,
+    TYPE_ID_MATERIAL_PARAMS, TYPE_ID_MODEL, TYPE_ID_SCRIPT, TYPE_ID_TERRAIN_MESH,
+    TYPE_ID_TEXTURE, TYPE_ID_WORLD_ENTITY_DATA,
 };
 use mercs2_formats::ucfx::{
     extract_data_chunk, get_container_by_type_hash, ParsedBlock,
@@ -196,7 +200,13 @@ pub fn run_simulate_with_options(
         };
 
         let data_body = extract_data_chunk(&container);
-        let result = dispatch_consume(entry.type_id, &container, data_body.as_deref(), &label);
+        let result = dispatch_consume(
+            entry.type_id,
+            type_hash,
+            &container,
+            data_body.as_deref(),
+            &label,
+        );
         record_type_stats(&mut report, entry.type_id, &result);
         report.placements_checked += result.placements_validated;
         report.flgs_placements_checked += result.flgs_placements_validated;
@@ -453,10 +463,16 @@ fn resolve_type_hash(parsed: &ParsedBlock, entry: &ResolvedAset) -> u32 {
 
 fn dispatch_consume(
     type_id: u32,
+    type_hash: u32,
     container: &[u8],
     data_body: Option<&[u8]>,
     label: &str,
 ) -> ConsumeResult {
+    match type_hash {
+        TYPE_HASH_WATERMAP => return consume_watermap(container, data_body, label),
+        TYPE_HASH_FX_DICTIONARY => return consume_fxdict(container, data_body, label),
+        _ => {}
+    }
     match type_id {
         TYPE_ID_MODEL | TYPE_ID_LOWRES_TERRAIN | TYPE_ID_TERRAIN_MESH => {
             consume_model(container, data_body, label)
@@ -465,6 +481,9 @@ fn dispatch_consume(
         TYPE_ID_LAYER => consume_layer(container, data_body, label),
         TYPE_ID_SCRIPT => consume_script(container, data_body, label),
         TYPE_ID_ANIMATION => consume_animation(container, data_body, label),
+        TYPE_ID_MATERIAL_PARAMS => consume_material(container, data_body, label),
+        TYPE_ID_FX_DICTIONARY => consume_fxdict(container, data_body, label),
+        TYPE_ID_WORLD_ENTITY_DATA => consume_structural(container, data_body, label),
         _ => consume_structural(container, data_body, label),
     }
 }

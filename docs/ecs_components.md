@@ -46,6 +46,35 @@ verified payload is 38 (stride 42).  All other COMPs match schm exactly
 | LightObject | 52 (stride 56) | u32 + RGB floats + intensity + radius + more | 22 sub-blocks |
 | Road | 40 (stride 44) | lane/intersection data | 29 sub-blocks |
 | RoadIntersection | 124 (stride 128) | intersection geometry | 38 sub-blocks |
+
+### Road payload (40 bytes, stride 44)
+
+Schm-validated layout (`docs/schm_type_codes.md`, DLC `dlc01_dlccon004_roads`):
+
+| Offset | Size | Type | Field (tool name) |
+|--------|------|------|-------------------|
+| +0x00 | 4 | u32 | `road_ref_key_0` — likely intersection entity key at segment start |
+| +0x04 | 4 | u32 | `road_ref_key_1` — likely intersection entity key at segment end |
+| +0x08 | 4 | u32 | `road_lane_hash_0` |
+| +0x0C | 4 | u32 | `road_lane_hash_1` |
+| +0x10 | 12 | Vec3 | `road_endpoint_a` (world-space lane endpoint) |
+| +0x1C | 12 | Vec3 | `road_endpoint_b` |
+
+Decoded by `tools/ucfx_ecs_codec.decode_road_payload` and graphed by `tools/road_graph_extractor.py`.
+
+### RoadIntersection payload (124 bytes, stride 128)
+
+| Offset | Size | Type | Field (tool name) |
+|--------|------|------|-------------------|
+| +0x00 | 28 | 7×u32 | `intersection_ref_keys` — connectivity / lane refs (semantics TBD) |
+| +0x1C | 72 | 6×Vec3 | `intersection_vec3s` — approach or lane anchor points |
+| +0x64 | 24 | 6×u32 | `intersection_tail_u32` — trailing hashes/flags (semantics TBD) |
+
+Decoded by `decode_road_intersection_payload`. Graph **nodes** use placement Transform position;
+Vec3 fields are exported as `lane_hints` only.
+
+Related COMP types not yet harvested from `layers_static`: `IntersectionToIntersection` (stride 8),
+`LaneData`, `LaneZeroDirection` — see `docs/gameplay_data_ue5_mapping.md` §6.
 | ModifierKey | 8 (stride 12) | modifier reference | 23 sub-blocks |
 | ScrubObject | 4 (stride 8) | scrub hash | 12 sub-blocks |
 | LineRegion | 4 (stride 8) | region ref | 16 sub-blocks |

@@ -1,6 +1,7 @@
 //! Model / mesh UCFX consumption (GEOM, STRM, IBUF, BNDS, HIER, PRMG).
 
 use crate::consume::ConsumeResult;
+use mercs2_formats::chunk_validate::validate_skin_containers;
 use mercs2_formats::ffcs::{read_f32_le, read_u32_le};
 use mercs2_formats::ucfx::extract_chunk_body;
 
@@ -225,6 +226,18 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
             if tex_hash > 0x1000 && tex_hash != 0xFFFF_FFFF {
                 xref_hashes.push(tex_hash);
             }
+        }
+    }
+
+    for skin_msg in validate_skin_containers(container) {
+        issues.push(format!("{label}: {skin_msg}"));
+        structural_violations += 1;
+    }
+
+    if let Some(deps) = extract_chunk_body(container, b"DEPS") {
+        if let Some(msg) = mercs2_formats::chunk_validate::validate_deps_body(&deps) {
+            issues.push(format!("{label}: {msg}"));
+            structural_violations += 1;
         }
     }
 

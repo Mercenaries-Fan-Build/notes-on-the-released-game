@@ -3,6 +3,9 @@
 //! Checks entry table integrity, CSUM, descriptor bounds, float sanity
 //! (NaN/Inf in STRM/BNDS), world envelope on BNDS, and IBUF index bounds.
 
+use mercs2_formats::chunk_validate::{
+    self, validate_deps_body, validate_fxdict_chunks, validate_watr_payload,
+};
 use mercs2_formats::crc32::crc32_mercs2;
 use mercs2_formats::ffcs::{read_f32_le, read_u16_le, read_u32_le};
 use mercs2_formats::tags::ChunkTag;
@@ -44,6 +47,11 @@ pub enum ValidationError {
         desc_idx: usize,
         tag_bytes: [u8; 4],
     },
+    ChunkFormat {
+        entry_idx: usize,
+        tag: String,
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for ValidationError {
@@ -70,8 +78,18 @@ impl std::fmt::Display for ValidationError {
             Self::InvalidTag { entry_idx, desc_idx, tag_bytes } => {
                 write!(f, "entry[{entry_idx}] desc[{desc_idx}]: invalid tag bytes {:?}", tag_bytes)
             }
+            Self::ChunkFormat { entry_idx, tag, detail } => {
+                write!(f, "entry[{entry_idx}] {tag}: {detail}")
+            }
         }
     }
+}
+
+struct DescInfo {
+    tag: ChunkTag,
+    tag_bytes: [u8; 4],
+    body_start: usize,
+    body_size: usize,
 }
 
 /// Container types that don't have a standard descriptor table.
@@ -182,13 +200,6 @@ fn validate_container(container: &[u8], entry_idx: usize, errors: &mut Vec<Valid
     }
 
     // First pass: collect descriptor info and validate bounds
-    struct DescInfo {
-        tag: ChunkTag,
-        tag_bytes: [u8; 4],
-        body_start: usize,
-        body_size: usize,
-    }
-
     let mut descs = Vec::with_capacity(n_desc);
     let mut vertex_count: Option<u16> = None;
 
@@ -275,9 +286,65 @@ fn validate_container(container: &[u8], entry_idx: usize, errors: &mut Vec<Valid
                     check_ibuf_bounds(body, entry_idx, vc, errors);
                 }
             }
+            ChunkTag::Deps => {
+                if let Some(msg) = validate_deps_body(body) {
+                    errors.push(ValidationError::ChunkFormat {
+                        entry_idx,
+                        tag: "DEPS".into(),
+                        detail: msg,
+                    });
+                }
+            }
+            ChunkTag::Watr => {
+                if let Some(msg) = validate_watr_payload(body) {
+                    errors.push(ValidationError::ChunkFormat {
+                        entry_idx,
+                        tag: "watr".into(),
+                        detail: msg,
+                    });
+                }
+            }
+            ChunkTag::Skin => {
+                for msg in chunk_validate::validate_skin_containers(container) {
+                    errors.push(ValidationError::ChunkFormat {
+                        entry_idx,
+                        tag: "SKIN".into(),
+                        detail: msg,
+                    });
+                }
+            }
             _ => {}
         }
     }
+
+    // fxdict INFO+DICT (resident singleton)
+    if let (Some(info), Some(dict)) = (
+        find_chunk_body(container, &descs, ChunkTag::InfoUpper)
+            .or_else(|| find_chunk_body(container, &descs, ChunkTag::Info)),
+        find_chunk_body(container, &descs, ChunkTag::Dict),
+    ) {
+        if let Some(msg) = validate_fxdict_chunks(info, dict) {
+            errors.push(ValidationError::ChunkFormat {
+                entry_idx,
+                tag: "fxdict".into(),
+                detail: msg,
+            });
+        }
+    }
+}
+
+fn find_chunk_body<'a>(
+    container: &'a [u8],
+    descs: &[Option<DescInfo>],
+    want: ChunkTag,
+) -> Option<&'a [u8]> {
+    for desc in descs {
+        let d = desc.as_ref()?;
+        if d.tag == want {
+            return Some(&container[d.body_start..d.body_start + d.body_size]);
+        }
+    }
+    None
 }
 
 /// Check if a tag's bytes are plausible (all printable ASCII).
