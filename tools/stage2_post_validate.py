@@ -68,6 +68,14 @@ def _sample(items: list[Path], limit: int, seed: int) -> list[Path]:
 
 def _validate_one_blob(path: Path, strict: bool) -> BlockResult:
     rel = str(path)
+    if path.stat().st_size == 0:
+        # Orphan WAD slots can decompress to empty when sges scan hits a false
+        # positive (retail vz: blocks 5134/5135). Nothing to structurally validate.
+        return BlockResult(
+            blob=rel,
+            ok=True,
+            warnings=["skipped: empty decompressed blob (0 bytes)"],
+        )
     try:
         warnings = validate_block_file_rust(path, strict=strict)
         return BlockResult(blob=rel, ok=len(warnings) == 0, warnings=warnings)
@@ -158,13 +166,18 @@ def main() -> int:
         }
         print(f"Rust validate: {len(bins)} / {len(all_bins)} blobs (jobs={args.jobs})")
         block_results = run_rust_validate(bins, jobs=args.jobs, strict=args.strict)
+        skipped_empty = [r for r in block_results if r.warnings == ["skipped: empty decompressed blob (0 bytes)"]]
         bad = [r for r in block_results if not r.ok]
         report["rust"]["ok"] = len(block_results) - len(bad)
         report["rust"]["fail"] = len(bad)
+        report["rust"]["skipped_empty"] = len(skipped_empty)
+        report["rust"]["skipped_empty_blobs"] = [r.blob for r in skipped_empty[:200]]
         report["rust"]["failures"] = [
             {"blob": r.blob, "warnings": r.warnings, "error": r.error}
             for r in bad[:200]
         ]
+        if skipped_empty:
+            print(f"  SKIP: {len(skipped_empty)} empty blob(s) (orphan WAD slots)")
         if bad:
             exit_code = 1
             print(f"  FAIL: {len(bad)} blob(s) with validation issues (see report)")

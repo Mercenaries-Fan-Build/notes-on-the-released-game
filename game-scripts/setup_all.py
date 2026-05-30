@@ -38,8 +38,8 @@ Environment variables (optional):
   MERCS2_SETUP_SKIP_WORLD=1         Skip import + populate (steps 8–9)
   MERCS2_SETUP_STOP_ON_ERROR=1      Abort remaining steps after first failure
   MERCS2_IMPORT_LIMIT=N             Pass limit to import_world.run_import(N)
-  MERCS2_IMPORT_WORLD_CELLS=1       Import ~1.3k c3 cell glTFs (off by default — Nanite risk)
-  MERCS2_POPULATE_WORLD_CELLS=1     Place world-cell actors (off by default)
+  MERCS2_IMPORT_WORLD_CELLS=0       Opt out of c3 world-cell GLB import (~2.2k meshes; default ON)
+  MERCS2_POPULATE_WORLD_CELLS=0     Opt out of placing c3 cell actors at grid origins (default ON)
   MERCS2_WORLD_CELLS_MAX=N          Cap cell actors when populating (0 = unlimited)
   MERCS2_VZ_PRESET=...              Preset for step 10 (default act1_default)
   MERCS2_VZ_PREFIX=VZ|PMC           Data layer prefix for step 10 (default VZ)
@@ -122,10 +122,30 @@ class SetupStep:
     skip_env: str | None = None
 
 
+def _apply_full_world_defaults() -> None:
+    """Default to full Venezuela import (c3 city cells + standalone meshes).
+
+    ``import_world`` / ``populate_world`` do not use ``maracaibo_asset_list.json``;
+    that file is only for the Maracaibo demo subset (``regen-maracaibo-glbs``).
+    Set ``MERCS2_IMPORT_WORLD_CELLS=0`` and/or ``MERCS2_POPULATE_WORLD_CELLS=0``
+    before running to skip ~2.2k c3 cell meshes (lighter editor session).
+    """
+    if os.environ.get("MERCS2_IMPORT_WORLD_CELLS", "").strip() == "":
+        os.environ["MERCS2_IMPORT_WORLD_CELLS"] = "1"
+    if os.environ.get("MERCS2_POPULATE_WORLD_CELLS", "").strip() == "":
+        os.environ["MERCS2_POPULATE_WORLD_CELLS"] = "1"
+
+
 def _run_import() -> None:
+    _apply_full_world_defaults()
     limit_raw = os.environ.get("MERCS2_IMPORT_LIMIT", "").strip()
     limit = int(limit_raw) if limit_raw.isdigit() else None
     import_world.run_import(limit=limit)
+
+
+def _run_populate_world() -> None:
+    _apply_full_world_defaults()
+    populate_world.run()
 
 
 def _mission_id() -> str:
@@ -187,7 +207,7 @@ def _build_steps() -> list[SetupStep]:
         SetupStep(
             "populate_world",
             "Populate world placements",
-            populate_world.run,
+            _run_populate_world,
             skip_env="MERCS2_SETUP_SKIP_POPULATE" if not skip_world else "MERCS2_SETUP_SKIP_WORLD",
         ),
         SetupStep(
@@ -261,6 +281,12 @@ def run() -> dict[str, str]:
     _log("=" * 70)
     _log("Mercenaries 2 — Full setup (all child scripts)")
     _log("=" * 70)
+    _apply_full_world_defaults()
+    if _env_flag("MERCS2_IMPORT_WORLD_CELLS"):
+        _log(
+            "Full world: c3 city-cell import enabled (~2.2k meshes). "
+            "Set MERCS2_IMPORT_WORLD_CELLS=0 to skip."
+        )
 
     stop_on_error = _env_flag("MERCS2_SETUP_STOP_ON_ERROR")
     results: dict[str, str] = {}

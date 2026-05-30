@@ -20,6 +20,28 @@
         "UP",
         "Pirates"
       ]
+    },
+    "ESpawnCategory": {
+      "path": "/Game/Mercs2/Data/Enums/ESpawnCategory",
+      "entries": [
+        "NPC",
+        "Vehicle",
+        "Pickup",
+        "Fortification",
+        "SpawnerLogic",
+        "Particle",
+        "Trigger"
+      ]
+    },
+    "ESpawnTrigger": {
+      "path": "/Game/Mercs2/Data/Enums/ESpawnTrigger",
+      "entries": [
+        "OnLayerActivate",
+        "OnLayerDeactivate",
+        "OnMissionActivated",
+        "OnScriptEvent",
+        "Manual"
+      ]
     }
   },
   "structs": {
@@ -89,6 +111,102 @@
         {
           "name": "Order",
           "type": "int32"
+        }
+      ]
+    },
+    "FMissionData": {
+      "path": "/Game/Mercs2/Data/Structs/FMissionData",
+      "fields": [
+        {
+          "name": "MissionId",
+          "type": "name"
+        },
+        {
+          "name": "ModuleName",
+          "type": "text",
+          "comment": "Lua sModuleName, e.g. pmccon001"
+        },
+        {
+          "name": "Faction",
+          "type": "byte:EFaction"
+        },
+        {
+          "name": "StarterId",
+          "type": "text",
+          "comment": "wifstarterdata key, e.g. PmcBoss"
+        },
+        {
+          "name": "bContract",
+          "type": "bool"
+        },
+        {
+          "name": "bCriticalPath",
+          "type": "bool"
+        },
+        {
+          "name": "TitleKey",
+          "type": "text",
+          "comment": "Localization key [PmcCon001.Title]"
+        },
+        {
+          "name": "ScriptHash",
+          "type": "int32",
+          "comment": "pandemic_hash_m2(ModuleName)"
+        },
+        {
+          "name": "OverlayLayers",
+          "type": "text",
+          "comment": "Comma-separated vz_state layer stems"
+        },
+        {
+          "name": "PrerequisiteKey",
+          "type": "text",
+          "comment": "Flow HasKey gate"
+        }
+      ]
+    },
+    "FSpawnTableRow": {
+      "path": "/Game/Mercs2/Data/Structs/FSpawnTableRow",
+      "fields": [
+        {
+          "name": "EntityNamePattern",
+          "type": "text"
+        },
+        {
+          "name": "EntityNameHash",
+          "type": "int32"
+        },
+        {
+          "name": "SpawnCategory",
+          "type": "byte:ESpawnCategory"
+        },
+        {
+          "name": "BlueprintClass",
+          "type": "softclass:Actor"
+        },
+        {
+          "name": "DefaultFaction",
+          "type": "byte:EFaction"
+        },
+        {
+          "name": "OverlayLayer",
+          "type": "name"
+        },
+        {
+          "name": "MissionId",
+          "type": "name"
+        },
+        {
+          "name": "SpawnTrigger",
+          "type": "byte:ESpawnTrigger"
+        },
+        {
+          "name": "bSpawnOnAccept",
+          "type": "bool"
+        },
+        {
+          "name": "bDespawnOnComplete",
+          "type": "bool"
         }
       ]
     }
@@ -174,6 +292,23 @@
           "Order": 3
         }
       ]
+    },
+    "DT_MissionRegistry": {
+      "path": "/Game/Mercs2/Data/Tables/DT_MissionRegistry",
+      "row_struct": "/Game/Mercs2/Data/Structs/FMissionData",
+      "schema_doc": "docs/data/mission_data_schema.json",
+      "example_rows": "docs/data/examples/pmccon001_mission.json"
+    },
+    "DT_SpawnRegistry": {
+      "path": "/Game/Mercs2/Data/Tables/DT_SpawnRegistry",
+      "row_struct": "/Game/Mercs2/Data/Structs/FSpawnTableRow",
+      "schema_doc": "docs/data/spawn_table_schema.json",
+      "example_rows": "docs/data/examples/pmccon001_spawn_table.json"
     }
+  },
+  "external_schemas": {
+    "mission_data": "docs/data/mission_data_schema.json",
+    "spawn_table": "docs/data/spawn_table_schema.json",
+    "script_hash_map_output": "output/placements/script_hash_map.json"
   }
 }
