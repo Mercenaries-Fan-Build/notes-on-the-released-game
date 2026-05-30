@@ -32,6 +32,7 @@ These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 | [`build_pmc_base_block_set.py`](build_pmc_base_block_set.py) | `output/pmc_base_block_set.json` — PMC stems + HQ bbox |
 | [`ucfx_ecs_codec.py`](ucfx_ecs_codec.py) | ECS `COMP` blob harvest helpers |
 | [`ecs_metadata_extract.py`](ecs_metadata_extract.py) | `ecs_components.json` + merge into placements |
+| [`condense_placements.py`](condense_placements.py) | After extract-placements: `world_bundle.json.gz` + `manifest.json` for transfer; `expand` restores standard JSON |
 | [`road_graph_extractor.py`](road_graph_extractor.py) | Road / RoadIntersection ECS → `road_graph.json` (nodes, edges, topology validation); optional GeoJSON/SVG |
 | [`destruction_link_resolver.py`](destruction_link_resolver.py) | `destruction_graph.json` — DestructionLink pairs + optional vz_state overlay cross-ref |
 | [`aset_decoder.py`](aset_decoder.py) | `block_dependency_graph.json` from `aset.bin` |

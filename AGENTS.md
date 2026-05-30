@@ -76,6 +76,7 @@ Run via `make` targets. Each stage depends on the previous:
 1. extract-all     ZIP → FFCS slice → batch sges decompress → stage 2 review
 2. review-all      Build texture_index.json → re-run stage 2 (parallel)
 3. extract-placements   layers_static + vz_state → output/placements/
+3b. condense-placements (optional)   world_bundle.json.gz + manifest.json for transfer to another machine
 4. filter-maracaibo-placements   bbox + strict vz_state → maracaibo_placements.json
 5. filter-maracaibo   Filter manifest → maracaibo_asset_list.json
 6. regen-maracaibo-glbs   Regenerate GLB files with embedded textures
@@ -97,6 +98,7 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 | `make ue5-bundle OUTPUT=./output` | variants + animations + export-ue5 |
 | `make filter-maracaibo OUTPUT=./output` | Maracaibo asset filter |
 | `make extract-placements OUTPUT=./output` | Placements + **ECS merge**, **ASET decode**, `pmc_base_block_set.json`, Lua chunk harvest → `output/placements/` |
+| `make condense-placements OUTPUT=./output` | After extract-placements: `world_bundle.json.gz` + `manifest.json` (slim records, deduped ECS, spatial index); optional `maracaibo_bundle.json.gz` / `pmc_bundle.json.gz` when subset JSON exists. Expand on target: `python tools/condense_placements.py expand --bundle …/world_bundle.json.gz` |
 | `make filter-pmc-base OUTPUT=./output` | PMC subset → `pmc_base_asset_list.json` + `placements/pmc_base.json` (needs `ue5-bundle`) |
 | `make regen-pmc-glbs OUTPUT=./output` | Regenerate GLBs for PMC base list |
 | `make build-pmc-base-set OUTPUT=./output` | Regenerate `pmc_base_block_set.json` only |
