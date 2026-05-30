@@ -440,10 +440,12 @@ This further supports the patch WAD system: the engine has built-in support for 
 Create a minimal empty patch WAD and verify the game doesn't crash:
 
 ```bash
-# Generate a minimal FFCS file with 0 blocks
-.venv/bin/python3 tools/patch_wad_builder.py \
-  --output "data/vz-patch.wad" \
-  --blocks 0
+# Build a patch WAD with a single modified block
+.venv/bin/python3 tools/build_patch_wad.py \
+  --source-wad "path/to/vz.wad" \
+  --block-index 1257 \
+  --modified-block /tmp/scripts_vz_modified.sges \
+  --output "data/vz-patch.wad"
 
 # Launch game and verify normal operation
 ```

@@ -46,16 +46,16 @@ See also: [`docs/type_hash_registry.md`](type_hash_registry.md) for the complete
 | 22 | `0x1602815c` | **lowresterrain** | 400 | Low-res terrain tiles (20×20 grid) |
 | 29 | `0x5608bd5a` | **effect** | 314 | Particle/VFX definitions (all in effects block) |
 | 6 | `0xf753f6d0` | **wavebank** | 95 | Audio wave bank data |
-| 5 | `0x665ef13e` | *(unknown)* | 86 | Large UCFX in contract/briefing blocks |
-| 13 | `0xe5273c14` | *(unknown)* | 77 | Small metadata in vehicle/weapon blocks |
+| 5 | `0x665ef13e` | **facefxanimationset** | 86 | FaceFX facial animation sets (contract/briefing blocks) |
+| 13 | `0xe5273c14` | **sounddb** | 77 | Sound database metadata (vehicle/weapon blocks) |
 | 21 | `0x9f8bca10` | **soundbank** | 76 | Sound bank data |
-| 23 | `0xfe0e8320` | *(unknown)* | 60 | Compressed CFX payload |
-| 34 | `0x1cf649bb` | *(unknown)* | 31 | In starter/misc blocks |
-| 18 | `0xfa0b8dbc` | *(unknown)* | 22 | Resident-only (22 entries) |
-| 11 | `0x207359c7` | *(unknown)* | 15 | Resident-only (15 entries) |
+| 23 | `0xfe0e8320` | **scaleformgfx** | 60 | Scaleform GFX UI assets (compressed CFX payload) |
+| 34 | `0x1cf649bb` | **facefxactor** | 31 | FaceFX actor definitions (starter/misc blocks) |
+| 18 | `0xfa0b8dbc` | **chatter** | 22 | NPC chatter/ambient dialogue config (resident) |
+| 11 | `0x207359c7` | **animationtable** | 15 | Animation lookup/mapping tables (resident) |
 | 3 | `0x8f0a54e2` | **binary** | 14 | Raw binary data (ps3saveassets) |
 | 15 | `0x99e77ace` | **font** | 9 | Font data |
-| 14 | `0xde982d61` | *(unknown)* | 6 | Resident-only (6 entries) |
+| 14 | `0xde982d61` | **materialparam** | 6 | Material/shader parameter tables (resident) |
 | 7 | `0x39e5e978` | **stringdb** | 3 | Localized string database |
 | 20 | `0xea4829d5` | **level** | 1 | Singleton in resident |
 | + 12 more singleton types | — | — | 1 each | See [type_hash_registry.md](type_hash_registry.md) |
