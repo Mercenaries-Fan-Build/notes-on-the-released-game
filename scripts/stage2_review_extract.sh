@@ -32,6 +32,11 @@
 #   STAGE2_EMBEDDED_AUDIO 0 (default) run pws_extractor on each blob for RIFF/Ogg slices (slow)
 #   STAGE2_GLTF         1 (default) emit mesh_scene.gltf (+ .bin) after mesh/textures; 0 to skip (needs pygltflib)
 #   STAGE2_ANIM         0 (default) set to 1 to run mercs2_anim_pipeline.py after all blobs → <pipeline-root>/animations
+#   STAGE2_VALIDATE_RUST  0 (default) post-pass: ucfx_byteswap --validate-only on blobs (needs make build-ucfx-byteswap)
+#   STAGE2_VALIDATE_GLTF  0 (default) post-pass: gltf_validate.py vs submeshes/*.obj
+#   STAGE2_VALIDATE_SAMPLE  0 (default) cap blob count for post-validate (0 = all)
+#   STAGE2_VALIDATE_JOBS    8 parallel workers for Rust validate
+#   STAGE2_VALIDATE_STRICT  0 fail post-validate on any Rust issue
 #
 
 set -uo pipefail
@@ -42,6 +47,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
     PYTHON="$REPO_ROOT/.venv/bin/python"
+  elif [[ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]]; then
+    PYTHON="$REPO_ROOT/.venv/Scripts/python.exe"
   else
     PYTHON="python3"
   fi
@@ -196,4 +203,18 @@ echo "Stage 2 done. OK=$ok FAIL=$fail (see $LOG)"
 if [[ -s "$FAIL" ]]; then
   echo "Some steps failed — see $FAIL" >&2
   exit 1
+fi
+
+if [[ "${STAGE2_VALIDATE_RUST:-0}" == "1" || "${STAGE2_VALIDATE_GLTF:-0}" == "1" ]]; then
+  echo "Post-validate (STAGE2_VALIDATE_RUST=${STAGE2_VALIDATE_RUST:-0} STAGE2_VALIDATE_GLTF=${STAGE2_VALIDATE_GLTF:-0})" | tee -a "$LOG"
+  STAGE2_VALIDATE_RUST="${STAGE2_VALIDATE_RUST:-0}" \
+  STAGE2_VALIDATE_GLTF="${STAGE2_VALIDATE_GLTF:-0}" \
+  STAGE2_VALIDATE_SAMPLE="${STAGE2_VALIDATE_SAMPLE:-0}" \
+  STAGE2_VALIDATE_JOBS="${STAGE2_VALIDATE_JOBS:-8}" \
+  STAGE2_VALIDATE_STRICT="${STAGE2_VALIDATE_STRICT:-0}" \
+  PYTHON="$PYTHON" \
+  "$REPO_ROOT/scripts/stage2_post_validate.sh" "$PIPELINE_ROOT" >>"$LOG" 2>&1 || {
+    echo "Post-validate reported issues (see $LOG)" >&2
+    exit 1
+  }
 fi

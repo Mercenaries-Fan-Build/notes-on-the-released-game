@@ -73,18 +73,21 @@ mercenaries-game/
 Run via `make` targets. Each stage depends on the previous:
 
 ```
-1. extract-all     ZIP → FFCS slice → batch sges decompress → stage 2 review
-2. review-all      Build texture_index.json → re-run stage 2 (parallel)
+1. extract-all     ZIP → FFCS slice → batch sges decompress → review-all (stage 2)
+2. review-all      Build texture_index.json → re-run stage 2 (Rust validate on by default)
 3. extract-placements   layers_static + vz_state → output/placements/
-3b. condense-placements (optional)   world_bundle.json.gz + manifest.json for transfer to another machine
-4. filter-maracaibo-placements   bbox + strict vz_state → maracaibo_placements.json
-5. filter-maracaibo   Filter manifest → maracaibo_asset_list.json
-6. regen-maracaibo-glbs   Regenerate GLB files with embedded textures
-7. export-ue5 / ue5-bundle   Bundle review assets → ue5_import/ + manifest
-8. [UE5 Editor]    import_mercs2.py → populate_maracaibo.py
+4. condense-placements   world_bundle.json.gz + manifest.json (slim transfer bundle)
+5. extract-terrain   Merge low_res_terrain tiles → review/.../mesh_scene.glb
+6. filter-maracaibo-placements   bbox + strict vz_state → maracaibo_placements.json (subset)
+7. filter-maracaibo   Filter manifest → maracaibo_asset_list.json
+8. regen-maracaibo-glbs   Regenerate GLB files with embedded textures
+9. export-ue5 / ue5-bundle   Bundle review assets → ue5_import/ + manifest
+10. [UE5 Editor]   import_mercs2.py → populate_maracaibo.py
 ```
 
-After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_res_terrain` UCFX tiles into one `mesh_scene.glb`; `game-scripts/import_world.py` discovers it like other GLBs, and `populate_world.py` places it once at the origin and skips `lrterrain_r*_c*` tile placements.
+**`make full-pipeline ZIP=... OUTPUT=./output`** runs **`clean` first** (wipes `OUTPUT`), then: `extract-all` → `extract-saves` / `extract-audio` / `extract-video` → `extract-placements` → `condense-placements` → `extract-terrain` → `ue5-bundle` → `regen-maracaibo-glbs`. Stage 2 inside `extract-all` uses **`STAGE2_VALIDATE_RUST=1`** by default (same as standalone `review-all`). Disable with `STAGE2_VALIDATE_RUST=0` on the command line. Subset filters (Maracaibo placements/assets) are **not** part of full-pipeline — run those targets after if needed.
+
+Merged **`low_res_terrain`** (`extract-terrain`) becomes one `mesh_scene.glb`; `game-scripts/import_world.py` discovers it like other GLBs, and `populate_world.py` places it once at the origin and skips `lrterrain_r*_c*` tile placements.
 
 ### Key make targets
 
@@ -92,14 +95,15 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 |--------|---------|
 | `make venv` | Create `.venv`, install requirements.txt |
 | `make extract-all ZIP=... OUTPUT=./output` | Full extraction from retail zip |
-| `make review-all OUTPUT=./output` | Rebuild texture index + stage 2 (optional `STAGE2_VALIDATE_RUST=1`; see `docs/stage2_review_improvements.md`) |
+| `make review-all OUTPUT=./output` | Rebuild texture index + stage 2 (`STAGE2_VALIDATE_RUST=1` default; `STAGE2_VALIDATE_GLTF=0`; see `docs/stage2_review_improvements.md`) |
+| `make full-pipeline ZIP=... OUTPUT=./output` | **clean** + full extract/review + saves/audio/video + placements + condense + terrain + ue5-bundle + regen-maracaibo-glbs (do not use to resume) |
 | `make stage2-post-validate OUTPUT=./output` | Rust UCFX + optional glTF checks on existing review (no re-extract; needs `build-ucfx-byteswap`) |
-| `make extract-terrain OUTPUT=./output` | Merge `low_res_terrain` tiles → `review/batch_vz/.../mesh_scene.glb` (needs `batch_vz/blocks/`) |
+| `make extract-terrain OUTPUT=./output` | Merge `low_res_terrain` tiles → `review/batch_vz/.../mesh_scene.glb` (in **full-pipeline** after condense-placements; needs `batch_vz/blocks/`) |
 | `make regen-maracaibo-glbs OUTPUT=./output` | Regenerate GLBs for Maracaibo subset |
 | `make ue5-bundle OUTPUT=./output` | variants + animations + export-ue5 |
 | `make filter-maracaibo OUTPUT=./output` | Maracaibo asset filter |
 | `make extract-placements OUTPUT=./output` | Placements + **ECS merge**, **ASET decode**, `pmc_base_block_set.json`, Lua chunk harvest → `output/placements/` |
-| `make condense-placements OUTPUT=./output` | After extract-placements: `world_bundle.json.gz` + `manifest.json` (slim records, deduped ECS, spatial index); optional `maracaibo_bundle.json.gz` / `pmc_bundle.json.gz` when subset JSON exists. Expand on target: `python tools/condense_placements.py expand --bundle …/world_bundle.json.gz` |
+| `make condense-placements OUTPUT=./output` | After extract-placements: `world_bundle.json.gz` + `manifest.json` (included in **full-pipeline**; optional `maracaibo_bundle.json.gz` / `pmc_bundle.json.gz` when subset JSON exists). Expand on target: `python tools/condense_placements.py expand --bundle …/world_bundle.json.gz` |
 | `make filter-pmc-base OUTPUT=./output` | PMC subset → `pmc_base_asset_list.json` + `placements/pmc_base.json` (needs `ue5-bundle`) |
 | `make regen-pmc-glbs OUTPUT=./output` | Regenerate GLBs for PMC base list |
 | `make build-pmc-base-set OUTPUT=./output` | Regenerate `pmc_base_block_set.json` only |
@@ -123,11 +127,14 @@ Do not use `full-pipeline` to resume — it runs `clean`. Instead:
 make review-all OUTPUT=./output                    # re-run stage 2
 make ue5-bundle OUTPUT=./output                    # rebuild UE5 bundle
 STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 make review-all OUTPUT=./output  # skip already-done steps
-# Structural QA after stage 2 (retail LE blobs; requires Rust build):
+# Structural QA after stage 2 (retail LE blobs; Rust validate is on by default — needs build-ucfx-byteswap):
 make build-ucfx-byteswap
+make stage2-post-validate OUTPUT=./output
+# Optional glTF pass on review or post-validate:
+make review-all OUTPUT=./output STAGE2_VALIDATE_GLTF=1 STAGE2_JOBS=32
 make stage2-post-validate OUTPUT=./output STAGE2_VALIDATE_GLTF=1
-# Or inline on a full review pass:
-make review-all OUTPUT=./output STAGE2_VALIDATE_RUST=1 STAGE2_VALIDATE_GLTF=1 STAGE2_JOBS=32
+# Skip Rust validate for a faster review pass:
+make review-all OUTPUT=./output STAGE2_VALIDATE_RUST=0
 ```
 
 ---
@@ -339,7 +346,7 @@ All big-endian → little-endian conversion for DLC porting uses **`tools/ucfx_b
 
 7. **Stage 2 env vars** control what gets rebuilt — set `STAGE2_SKIP_*=1` to skip already-completed steps when resuming.
 
-8. **`full-pipeline` runs `clean` first** — use `make review-all` or individual targets to resume without deleting progress.
+8. **`full-pipeline` runs `clean` first** — wipes `OUTPUT` then runs extract → placements → condense → terrain → UE5 bundle. Use `make review-all` or individual targets to resume without deleting progress.
 
 9. **`unreal.Rotator()` positional arg order is `(roll, pitch, yaw)`** — not `(pitch, yaw, roll)` as the C++ `FRotator` constructor uses. Always use keyword args: `unreal.Rotator(roll=r, pitch=p, yaw=y)`.
 

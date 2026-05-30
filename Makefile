@@ -48,7 +48,7 @@ STAGE2_ANIM ?= 0
 STAGE2_LEVEL ?= 0
 STAGE2_EMBEDDED_AUDIO ?= 0
 # Post-pass after stage 2 (needs build-ucfx-byteswap when STAGE2_VALIDATE_RUST=1)
-STAGE2_VALIDATE_RUST ?= 0
+STAGE2_VALIDATE_RUST ?= 1
 STAGE2_VALIDATE_GLTF ?= 0
 STAGE2_VALIDATE_SAMPLE ?= 0
 STAGE2_VALIDATE_JOBS ?= 8
@@ -79,7 +79,7 @@ help:
 	@echo "  make build-texture-index OUTPUT=./output"
 	@echo "                      Scan extracted/**/blocks → OUTPUT/extracted/texture_index.json (cross-block mips)"
 	@echo "  make review-all OUTPUT=./output"
-	@echo "                      build-texture-index then re-run stage 2 (TEXTURE_INDEX set; STAGE2_JOBS=N optional)"
+	@echo "                      build-texture-index then re-run stage 2 (STAGE2_VALIDATE_RUST=1 default; STAGE2_JOBS=N optional)"
 	@echo "  make stage2-post-validate OUTPUT=./output"
 	@echo "                      Rust UCFX + optional glTF checks on existing review (no re-extract)"
 	@echo "  make review-textures-only OUTPUT=./output"
@@ -133,7 +133,8 @@ help:
 	@echo "  make sample-bundle OUTPUT=./output [TOP=N]"
 	@echo "                      category-samples + reduced UE5 bundle → OUTPUT/ue5_import_samples/ (smoke-test subset)"
 	@echo "  make full-pipeline ZIP=... OUTPUT=./output"
-	@echo "                      clean + extract-all + saves/audio/video + ue5-bundle + regen-maracaibo-glbs"
+	@echo "                      clean + extract-all (Rust validate on) + saves/audio/video + placements"
+	@echo "                      + condense-placements + extract-terrain + ue5-bundle + regen-maracaibo-glbs"
 	@echo ""
 	@echo "  Resume (after a failed run — do not use full-pipeline; it runs clean):"
 	@echo "          make review-all OUTPUT=./output   # re-run stage 2 (builds texture index first)"
@@ -186,7 +187,10 @@ extract-all:
 	@test -f "$(ZIP)" || (echo "error: ZIP file not found: $(ZIP)" >&2; exit 1)
 	bash -c 'unset MAX START VZ_MAX SKIP_EXISTING WITH_UCFX ALLOW_PARTIAL 2>/dev/null; \
 	  exec "$(REPO_ROOT)/scripts/extract_from_zip.sh" --everything --no-stage2 --out-dir "$(OUTPUT)" $(FORCE_UNZIP_FLAG) "$(ZIP)"'
-	@$(MAKE) review-all OUTPUT="$(OUTPUT)"
+	@$(MAKE) review-all OUTPUT="$(OUTPUT)" \
+	  STAGE2_VALIDATE_RUST="$(STAGE2_VALIDATE_RUST)" STAGE2_VALIDATE_GLTF="$(STAGE2_VALIDATE_GLTF)" \
+	  STAGE2_VALIDATE_SAMPLE="$(STAGE2_VALIDATE_SAMPLE)" STAGE2_VALIDATE_JOBS="$(STAGE2_VALIDATE_JOBS)" \
+	  STAGE2_VALIDATE_STRICT="$(STAGE2_VALIDATE_STRICT)"
 
 # Scan all decompressed block blobs and build hash→chunk map for texture_streaming / full mip chains.
 build-texture-index:
@@ -470,11 +474,16 @@ sample-bundle:
 full-pipeline:
 	@test -n "$(ZIP)" || (echo "error: set ZIP for full-pipeline" >&2; exit 1)
 	$(MAKE) clean OUTPUT="$(OUTPUT)"
-	$(MAKE) extract-all ZIP="$(ZIP)" OUTPUT="$(OUTPUT)"
+	$(MAKE) extract-all ZIP="$(ZIP)" OUTPUT="$(OUTPUT)" \
+	  STAGE2_VALIDATE_RUST="$(STAGE2_VALIDATE_RUST)" STAGE2_VALIDATE_GLTF="$(STAGE2_VALIDATE_GLTF)" \
+	  STAGE2_VALIDATE_SAMPLE="$(STAGE2_VALIDATE_SAMPLE)" STAGE2_VALIDATE_JOBS="$(STAGE2_VALIDATE_JOBS)" \
+	  STAGE2_VALIDATE_STRICT="$(STAGE2_VALIDATE_STRICT)"
 	$(MAKE) extract-saves OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-audio OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-video OUTPUT="$(OUTPUT)"
 	$(MAKE) extract-placements OUTPUT="$(OUTPUT)"
+	$(MAKE) condense-placements OUTPUT="$(OUTPUT)"
+	$(MAKE) extract-terrain OUTPUT="$(OUTPUT)"
 	$(MAKE) ue5-bundle OUTPUT="$(OUTPUT)"
 	$(MAKE) regen-maracaibo-glbs OUTPUT="$(OUTPUT)"
 

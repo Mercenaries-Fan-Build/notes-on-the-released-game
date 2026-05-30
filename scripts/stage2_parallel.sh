@@ -12,6 +12,7 @@
 #   PYTHON, MESH_FORMAT, TEXTURE_PNG, TEXTURE_INDEX (Makefile review-all sets this automatically), HAVOK_CONVEX_OBJ,
 #   STAGE2_SKIP_UCFX, STAGE2_SKIP_MESH, STAGE2_SKIP_TEX, STAGE2_SKIP_HAVOK,
 #   STAGE2_DIALOG, STAGE2_LEVEL, STAGE2_EMBEDDED_AUDIO, STAGE2_GLTF, STAGE2_ANIM
+#   STAGE2_VALIDATE_RUST, STAGE2_VALIDATE_GLTF, STAGE2_VALIDATE_SAMPLE, STAGE2_VALIDATE_JOBS, STAGE2_VALIDATE_STRICT
 #
 
 set -uo pipefail
@@ -33,6 +34,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
     PYTHON="$REPO_ROOT/.venv/bin/python"
+  elif [[ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]]; then
+    PYTHON="$REPO_ROOT/.venv/Scripts/python.exe"
   else
     PYTHON="python3"
   fi
@@ -192,4 +195,18 @@ echo "Stage 2 parallel done (see $LOG)"
 if [[ -s "$FAIL" ]]; then
   echo "Some steps failed — see $FAIL" >&2
   exit 1
+fi
+
+if [[ "${STAGE2_VALIDATE_RUST:-0}" == "1" || "${STAGE2_VALIDATE_GLTF:-0}" == "1" ]]; then
+  echo "Post-validate (STAGE2_VALIDATE_RUST=${STAGE2_VALIDATE_RUST:-0} STAGE2_VALIDATE_GLTF=${STAGE2_VALIDATE_GLTF:-0})" | tee -a "$LOG"
+  STAGE2_VALIDATE_RUST="${STAGE2_VALIDATE_RUST:-0}" \
+  STAGE2_VALIDATE_GLTF="${STAGE2_VALIDATE_GLTF:-0}" \
+  STAGE2_VALIDATE_SAMPLE="${STAGE2_VALIDATE_SAMPLE:-0}" \
+  STAGE2_VALIDATE_JOBS="${STAGE2_VALIDATE_JOBS:-8}" \
+  STAGE2_VALIDATE_STRICT="${STAGE2_VALIDATE_STRICT:-0}" \
+  PYTHON="$PYTHON" \
+  "$REPO_ROOT/scripts/stage2_post_validate.sh" "$PIPELINE_ROOT" >>"$LOG" 2>&1 || {
+    echo "Post-validate reported issues (see $LOG)" >&2
+    exit 1
+  }
 fi
