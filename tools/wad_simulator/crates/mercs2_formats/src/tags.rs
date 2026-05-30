@@ -49,6 +49,9 @@ pub enum ChunkTag {
     Trns,      // "TRNS"
     Ainf,      // "AINF"
 
+    // Dependency list
+    Deps,      // "DEPS"
+
     // Unknown tag (carries raw bytes for diagnostics)
     Unknown([u8; 4]),
 }
@@ -92,6 +95,7 @@ impl ChunkTag {
             b"STRS" => Self::Strs,
             b"TRNS" => Self::Trns,
             b"AINF" => Self::Ainf,
+            b"DEPS" => Self::Deps,
             _ => Self::Unknown(b),
         }
     }
@@ -140,6 +144,7 @@ impl ChunkTag {
             Self::Strs => *b"STRS",
             Self::Trns => *b"TRNS",
             Self::Ainf => *b"AINF",
+            Self::Deps => *b"DEPS",
             Self::Unknown(b) => *b,
         }
     }

@@ -424,6 +424,11 @@ fn convert_ecs_bodies(
                     if body_local_end <= data_area.len() {
                         if desc.tag == ChunkTag::Enum {
                             convert_enum_body_inplace(&mut data_area[body_local_start..body_local_end]);
+                        } else if desc.tag == ChunkTag::Deps {
+                            let body_len = body_local_end - body_local_start;
+                            if body_len > 1 {
+                                swap_u32_array(&mut data_area[body_local_start + 1..body_local_end]);
+                            }
                         } else if desc.tag.is_native_be() {
                             // No swap
                         } else {
@@ -744,6 +749,14 @@ fn convert_generic_bodies(
                     }
                     ChunkTag::Decl | ChunkTag::Schm | ChunkTag::Flgs => {
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Deps => {
+                        // DEPS format: [u8 count][u32 hash × count]
+                        // Preserve the count byte, only swap the hash array
+                        let body_len = body_local_end - body_local_start;
+                        if body_len > 1 {
+                            swap_u32_array(&mut data_area[body_local_start + 1..body_local_end]);
+                        }
                     }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
