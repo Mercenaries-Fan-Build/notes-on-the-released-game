@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -534,13 +534,26 @@ dlc-port: build-luac build-ucfx-byteswap
 	  --x360-rar "$(DLC_RAR)" \
 	  --source-wad "$(SOURCE_WAD)" \
 	  --no-hook \
+	  $(if $(DESCRIPTOR_LIMIT),--descriptor-limit $(DESCRIPTOR_LIMIT),) \
 	  $(if $(JOBS),--jobs $(JOBS),) \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
 	@echo ""
-	@echo "Built DLC nohook vz-patch.wad (~2197 blocks, dlc01 as entry 115)."
+	@echo "Built DLC nohook vz-patch.wad."
 	@echo "Deploy with: make dlc-asi-native OUTPUT=$(OUTPUT)"
 	@echo "Mac gates: make dlc-phase0 verify-dlc-import-chain OUTPUT=$(OUTPUT) SOURCE_WAD=$(SOURCE_WAD)"
+
+# Post-hoc trim: rebuild existing patch WAD with fewer blocks (no re-conversion needed).
+trim-patch-wad:
+	@test -f "$(OUTPUT)/data/vz-patch.wad" || (echo "error: vz-patch.wad missing — run make dlc-port" >&2; exit 1)
+	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/trim_patch_wad.py" \
+	  --auto \
+	  --base-wad "$(SOURCE_WAD)" \
+	  --target-reduction 200 \
+	  --input "$(OUTPUT)/data/vz-patch.wad" \
+	  --output "$(OUTPUT)/data/vz-patch.wad" \
+	  --verbose
 
 # 2196 DLC asset blocks only — no scripts_vz bootstrap (boot baseline, not Row 13 success).
 dlc-port-assets-only:
