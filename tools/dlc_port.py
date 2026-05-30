@@ -76,6 +76,7 @@ from build_patch_wad import (  # noqa: E402
     DLC_CONTRACT_NAMES,
 )
 from pandemic_hash import pandemic_hash_m2  # noqa: E402
+from hash_resolver import get_resolver as _get_hash_resolver  # noqa: E402
 from sges_decompress import decompress_sges_block  # noqa: E402
 from wad_patcher import (  # noqa: E402
     find_dlc_bootstrap_hook_script,
@@ -1126,9 +1127,11 @@ def port_x360_dlc(
     total_swap_stats: dict = {"tags_seen": tags_seen}
 
     # Resolve global ASET entries (block_index=0xFFFF) to actual blocks
+    _resolver = _get_hash_resolver()
     if global_aset:
         resolved = 0
         unresolved = 0
+        unresolved_hashes: list[int] = []
         for gae in global_aset:
             local_blk = hash_to_local_block.get(gae["asset_hash"])
             if local_blk is not None and local_blk < len(converted):
@@ -1152,7 +1155,13 @@ def port_x360_dlc(
                 resolved += 1
             else:
                 unresolved += 1
+                unresolved_hashes.append(gae["asset_hash"])
         print(f"\n  Global ASET resolved: {resolved}, unresolved: {unresolved}")
+        if unresolved_hashes and verbose:
+            for uh in unresolved_hashes[:20]:
+                print(f"    unresolved: {_resolver.annotate(uh)}")
+            if len(unresolved_hashes) > 20:
+                print(f"    ... and {len(unresolved_hashes) - 20} more")
 
     print(f"\n  Converted: {len(converted)}, Skipped: {skipped}")
     if total_swap_stats["tags_seen"]:
@@ -1197,7 +1206,7 @@ def port_x360_dlc(
                 script_synth_added += 1
                 if verbose:
                     print(f"  [ASET fix] block {blk_idx}: added script "
-                          f"entry 0x{h:08X} (type_id={SCRIPT_ASET_TYPE_ID})")
+                          f"entry {_resolver.annotate(h)} (type_id={SCRIPT_ASET_TYPE_ID})")
             elif synth_stringdb_aset and th == STRINGDB_TYPE_HASH:
                 blk.aset_entries.append({
                     "asset_hash": h,
@@ -1209,7 +1218,7 @@ def port_x360_dlc(
                 stringdb_synth_added += 1
                 if verbose:
                     print(f"  [ASET fix] block {blk_idx}: added stringdb "
-                          f"entry 0x{h:08X} (type_id={STRINGDB_ASET_TYPE_ID})")
+                          f"entry {_resolver.annotate(h)} (type_id={STRINGDB_ASET_TYPE_ID})")
     if script_synth_added:
         print(f"\n  ASET fix: added {script_synth_added} missing script "
               f"ASET entries (import/dynamic_import lookup)")

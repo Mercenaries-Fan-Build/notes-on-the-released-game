@@ -7,6 +7,7 @@ use mercs2_formats::types;
 use crate::report::SchemaCoverageReport;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
+const TYPE_HASH_WORLD_ENTITY: u32 = types::TYPE_HASH_WORLD_ENTITY_DATA; // 0x5647C35D
 
 /// Strip a trailing CSUM/MUSC 8-byte trailer from a raw chunk if present.
 /// Both Xbox and PC WADs include the CSUM in the entry table's `chunk_size`.
@@ -119,7 +120,8 @@ pub fn convert_block(
         eprintln!("  Converting entry {}: type=0x{:08x} ({}) size={} (UCFX={})",
             ei, entry.type_hash, type_name, entry.chunk_size, container.len());
 
-        let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE;
+        let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE
+            || entry.type_hash == TYPE_HASH_WORLD_ENTITY;
         let converted = convert_container(container, is_ecs, ei, entry.type_hash, report.as_deref_mut())?;
         converted_containers.push(converted);
 

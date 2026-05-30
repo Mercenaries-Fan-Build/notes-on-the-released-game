@@ -30,7 +30,7 @@ Each row is four `uint32`:
 
 See also: [`docs/type_hash_registry.md`](type_hash_registry.md) for the complete 35-type registry with block distribution analysis.
 
-**35 unique `type_hash` values** exist across vz.wad (55,425 UCFX entries), 18 resolved to names:
+**35 unique `type_hash` values** exist across vz.wad (55,425 UCFX entries), all 35 resolved to names (see [`type_hash_registry.md`](type_hash_registry.md) for the complete registry):
 
 | `type_id` | `type_hash` | Resolved Name | Count | Description |
 |-----------|-------------|---------------|-------|-------------|
@@ -38,10 +38,10 @@ See also: [`docs/type_hash_registry.md`](type_hash_registry.md) for the complete
 | 28 | `0xbcfe6314` | **path** | 5,194 | Registry / configuration data (small 52–116 byte entries) |
 | 16 | `0x18166555` | **animation** | 4,261 | `pandemic_hash_m2("animation") == 0x18166555` — Havok 5.5 animation / skeleton data. This hash is the magic constant in animgroup record headers. |
 | 19 | `0x5b724250` | **model** | 3,007 | **Mesh / geometry** — same as `FORMAT_HASH_C3_MESH` |
-| 12 | `0x600b904e` | *(unknown)* | 1,026 | UCFX with SCRB+MTRL+STRM (shader/material resources) |
+| 12 | `0x600b904e` | **scrub** | 1,026 | Shader resource binary (SCRB+MTRL+STRM+INFO chunks) |
 | 9 | `0xe6b81a54` | **layer** | 923 | Placement/entity layer data (vz_state + layers_static) |
 | 35 | `0x42498680` | **script** | 645 | Lua bytecode (BINN/LuaQ) |
-| 30 | `0x6310807f` | *(unknown)* | 625 | Global object registry (all in resident block) |
+| 30 | `0x6310807f` | **lineregion** | 625 | Spatial line/region definitions (all in resident block) |
 | 32 | `0x7c569307` | **terrainmesh** | 400 | Terrain mesh geometry (one per c3 cell) |
 | 22 | `0x1602815c` | **lowresterrain** | 400 | Low-res terrain tiles (20×20 grid) |
 | 29 | `0x5608bd5a` | **effect** | 314 | Particle/VFX definitions (all in effects block) |

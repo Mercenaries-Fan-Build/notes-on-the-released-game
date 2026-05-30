@@ -818,57 +818,53 @@ def _build_ucfx_script_chunk(
 ) -> bytes:
     """Build a complete UCFX container wrapping Lua bytecode.
 
-    Replicates the UCFX structure observed in the scripts_vz block:
-      UCFX header (20 bytes)
-      INFO chunk (20 bytes header + data)
-      DEPS chunk (20 bytes header + data)
-      BINN chunk (20 bytes header + data area with metadata + LuaQ bytecode)
+    Replicates the retail UCFX structure in the scripts_vz block:
+      UCFX header (20 bytes): magic + u0(data_offset) + u1(body_size) + u2(0) + u3(n_desc)
+      INFO descriptor (20 bytes) + body: script metadata
+      DEPS descriptor (20 bytes) + body: [u8 count][u32 hash × count]
+      BINN descriptor (20 bytes) + body: raw Lua 5.1 bytecode
       CSUM trailer (8 bytes)
 
-    The structure is reconstructed from the observed binary layout where:
-      - The UCFX header has 4 u32 fields after the tag
-      - INFO, DEPS, BINN are 20-byte chunk headers (tag + 4 u32s)
-      - The data area begins after all chunk headers
-      - BINN data includes: bytecode_size(4) + zeros(8) + type_code(1) +
-        name_length(2) + name + null + padding + LuaQ bytecode
+    Retail layout verified via tools/diagnose_ucfx_headers.py and
+    tools/compare_ucfx_retail_vs_injected.py.
     """
     name_bytes = script_name.encode("ascii") + b"\x00"
 
-    binn_metadata = struct.pack("<I", len(bytecode))
-    binn_metadata += b"\x00" * 8
-    binn_metadata += struct.pack("<B", 0x05)
-    binn_metadata += struct.pack("<H", len(script_name))
-    binn_metadata += name_bytes
+    # INFO body: script metadata
+    info_data = struct.pack("<I", len(bytecode))
+    info_data += b"\x00" * 8
+    info_data += struct.pack("<B", 0x05)
+    info_data += struct.pack("<H", len(script_name))
+    info_data += name_bytes
 
-    dep_count = 0
-    binn_metadata += struct.pack("<B", dep_count)
-    binn_metadata += b"\x00" * 3
+    # DEPS body: u8 dep count followed by u32 hashes (none for injected scripts)
+    deps_data = struct.pack("<B", 0)
 
-    binn_data = binn_metadata + bytecode
-    binn_size = len(binn_data)
-
-    info_data = b"\x00" * 8
-    deps_data = b"\x00" * 4
+    # BINN body: raw Lua 5.1 bytecode
+    binn_data = bytecode
 
     data_area = info_data + deps_data + binn_data
     data_area_size = len(data_area)
+
+    n_desc = 3
+    data_offset = 20 + n_desc * 20
 
     info_offset = 0
     deps_offset = len(info_data)
     binn_offset = deps_offset + len(deps_data)
 
     ucfx_header = UCFX_MAGIC
-    ucfx_header += struct.pack("<I", 20 * 3)
+    ucfx_header += struct.pack("<I", data_offset)
     ucfx_header += struct.pack("<I", data_area_size)
-    ucfx_header += struct.pack("<I", 3)
     ucfx_header += struct.pack("<I", 0)
+    ucfx_header += struct.pack("<I", n_desc)
 
     info_hdr = b"INFO" + struct.pack("<IIII",
                                       info_offset, len(info_data), 0, 0)
     deps_hdr = b"DEPS" + struct.pack("<IIII",
                                       deps_offset, len(deps_data), 0, 0)
     binn_hdr = BINN_TAG + struct.pack("<IIII",
-                                       binn_offset, binn_size, 0, 0)
+                                       binn_offset, len(binn_data), 0, 0)
 
     ucfx_body = ucfx_header + info_hdr + deps_hdr + binn_hdr + data_area
 

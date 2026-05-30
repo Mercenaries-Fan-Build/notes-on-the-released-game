@@ -484,7 +484,7 @@ fn record_type_stats(report: &mut SimulateReport, type_id: u32, result: &Consume
     stats.issues += result.issues.len();
 }
 
-pub fn print_simulate_report(report: &SimulateReport) {
+pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::names::RainbowTable>) {
     println!(
         "{}",
         "╔══════════════════════════════════════════════════════════════╗".bright_cyan()
@@ -646,8 +646,26 @@ pub fn print_simulate_report(report: &SimulateReport) {
                 report.unresolved_hashes.len()
             );
         }
-        for h in report.unresolved_hashes.iter().take(15) {
-            println!("    {}", h.yellow());
+        for h_str in report.unresolved_hashes.iter().take(15) {
+            let annotated = if let Some(rt) = rainbow {
+                if let Some(hex_part) = h_str.split_whitespace().next() {
+                    let hex_clean = hex_part.trim_start_matches("0x");
+                    if let Ok(val) = u32::from_str_radix(hex_clean, 16) {
+                        if let Some(name) = rt.resolve(val) {
+                            format!("{h_str} → {name}")
+                        } else {
+                            h_str.clone()
+                        }
+                    } else {
+                        h_str.clone()
+                    }
+                } else {
+                    h_str.clone()
+                }
+            } else {
+                h_str.clone()
+            };
+            println!("    {}", annotated.yellow());
         }
         if report.unresolved_hashes.len() > 15 {
             println!("    ... and {} more", report.unresolved_hashes.len() - 15);

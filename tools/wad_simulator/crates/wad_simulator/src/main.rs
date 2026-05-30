@@ -6,6 +6,7 @@ mod audio;
 mod blocks;
 mod consume;
 mod model;
+pub mod names;
 mod overlay;
 mod placement;
 mod progress;
@@ -76,6 +77,10 @@ struct Cli {
     /// Path to dlc_audio_manifest.json for streaming clip → .pws mapping
     #[arg(long)]
     audio_manifest: Option<PathBuf>,
+
+    /// Path to rainbow_table.json for annotating unresolved hashes with asset names
+    #[arg(long)]
+    rainbow_table: Option<PathBuf>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -102,6 +107,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Audios: {}", audios.display().to_string().yellow());
     }
     println!();
+
+    let rainbow = cli.rainbow_table.as_ref().and_then(|p| {
+        match names::RainbowTable::load(p) {
+            Ok(rt) => {
+                println!("Rainbow table: {} entries from {}", rt.len(), p.display());
+                Some(rt)
+            }
+            Err(e) => {
+                eprintln!("WARNING: failed to load rainbow table: {e}");
+                None
+            }
+        }
+    });
 
     let mut exit_code = 0i32;
 
@@ -146,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         match simulate::run_simulate_with_options(base, patch, opts) {
             Ok(report) => {
-                simulate::print_simulate_report(&report);
+                simulate::print_simulate_report(&report, rainbow.as_ref());
                 let sim_code = simulate::simulate_exit_code(&report);
                 if sim_code != 0 {
                     exit_code = sim_code;

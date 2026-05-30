@@ -3,7 +3,7 @@
 > Reverse-engineered analysis of the engine's built-in patch WAD overlay mechanism.
 >
 > **Date:** 2026-05-18
-> **Status:** Binary analysis complete. Runtime testing pending (requires game installation).
+> **Status:** Binary analysis complete. Patch WAD system verified end-to-end — FFCS structure, ASET overlay, and sges round-trip are correct. Initial test crashes were traced to UCFX header bugs in the block data, not the WAD format itself.
 
 ---
 
@@ -472,11 +472,18 @@ Once single-block works:
 
 | Tool | Status | Purpose |
 |------|--------|---------|
-| `sges_compress.py` | **Built** | Recompress modified blocks |
-| `wad_patcher.py` | **Built** | In-place WAD modification |
-| `patch_wad_builder.py` | **TODO** | Build standalone patch WADs |
-| `ffcs_header_builder.py` | **TODO** | Generate valid FFCS headers |
-| `aset_extractor.py` | **TODO** | Extract ASET entries for specific blocks |
+| `sges_compress.py` | **Built** | Recompress modified blocks (raw deflate, multi-segment) |
+| `sges_decompress.py` | **Built** | Decompress sges blocks from WAD data |
+| `wad_patcher.py` | **Built** | In-place WAD modification (single block swap) |
+| `build_patch_wad.py` | **Built** | Build standalone patch WADs. Supports single-block, raw/pre-compressed input, and all-in-one `--build-string-mod-patch` mode |
+| `ffcs_patch_wad.py` | **Built** | Canonical FFCS layout module — shared by `build_patch_wad.py` and `dlc_port.py`. Provides `build_patch_wad_single()`, `build_patch_wad_multi()`, `merge_patch_wads()`, and `read_patch_wad()` |
+| `aset_decoder.py` | **Built** | Decode ASET chunk → `block_dependency_graph.json` (asset hash → block index mapping) |
+| `dlc_port.py` | **Built** | Xbox 360 DLC → PC `vz-patch.wad` conversion (multi-block, 2,197 blocks) |
+| `verify_patch_wad_structure.py` | **Built** | Validate PTHS trailer marker + FFCS structural integrity |
+| `verify_patch_wad_integrity.py` | **Built** | Verify per-block CSUM trailers and sges round-trip correctness |
+| `validate_patch_wad.py` | **Built** | End-to-end patch WAD validation (ASET overlay, block hashes) |
+| `diagnose_patch_wad.py` | **Built** | Diagnostic tool for patch WAD debugging (header dump, block inspection) |
+| `trim_patch_wad.py` | **Built** | Remove/trim blocks from an existing patch WAD |
 
 ---
 

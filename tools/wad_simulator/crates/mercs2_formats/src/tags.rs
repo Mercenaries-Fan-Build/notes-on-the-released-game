@@ -48,6 +48,14 @@ pub enum ChunkTag {
     Strs,      // "STRS"
     Trns,      // "TRNS"
     Ainf,      // "AINF"
+    Uniq,      // "UNIQ"
+
+    // Anim state machine
+    Stns,      // "stns"
+    Actn,      // "actn"
+
+    // FX dictionary
+    Dict,      // "DICT"
 
     // Dependency list
     Deps,      // "DEPS"
@@ -95,6 +103,10 @@ impl ChunkTag {
             b"STRS" => Self::Strs,
             b"TRNS" => Self::Trns,
             b"AINF" => Self::Ainf,
+            b"UNIQ" => Self::Uniq,
+            b"stns" => Self::Stns,
+            b"actn" => Self::Actn,
+            b"DICT" => Self::Dict,
             b"DEPS" => Self::Deps,
             _ => Self::Unknown(b),
         }
@@ -144,6 +156,10 @@ impl ChunkTag {
             Self::Strs => *b"STRS",
             Self::Trns => *b"TRNS",
             Self::Ainf => *b"AINF",
+            Self::Uniq => *b"UNIQ",
+            Self::Stns => *b"stns",
+            Self::Actn => *b"actn",
+            Self::Dict => *b"DICT",
             Self::Deps => *b"DEPS",
             Self::Unknown(b) => *b,
         }
