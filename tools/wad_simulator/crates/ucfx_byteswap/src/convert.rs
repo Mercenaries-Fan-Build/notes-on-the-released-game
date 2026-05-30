@@ -6,6 +6,18 @@ use mercs2_formats::types;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
 
+/// Strip a trailing CSUM/MUSC 8-byte trailer from a raw chunk if present.
+/// Both Xbox and PC WADs include the CSUM in the entry table's `chunk_size`.
+fn strip_csum_trailer(raw: &[u8]) -> &[u8] {
+    if raw.len() >= 8 {
+        let tail_tag = &raw[raw.len() - 8..raw.len() - 4];
+        if tail_tag == b"CSUM" || tail_tag == b"MUSC" {
+            return &raw[..raw.len() - 8];
+        }
+    }
+    raw
+}
+
 /// Descriptor row parsed from a UCFX container's descriptor table.
 struct Descriptor {
     tag: ChunkTag,
@@ -63,7 +75,7 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
                     ei, offset, entry.chunk_size));
             }
 
-            let container = &be_data[offset..container_end];
+            let container = strip_csum_trailer(&be_data[offset..container_end]);
             let type_name = types::type_name_from_hash(entry.type_hash);
             eprintln!("  Entry {}: name=0x{:08x} type_hash=0x{:08x} ({}) size={}",
                 ei, entry.name_hash, entry.type_hash, type_name, entry.chunk_size);
@@ -74,9 +86,6 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
             }
 
             offset = container_end;
-            if offset + 8 <= be_data.len() {
-                offset += 8;
-            }
         }
         return Ok(Vec::new());
     }
@@ -86,7 +95,9 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
     // then write the entry table with correct chunk_size (including CSUM)
     // and offset (cumulative position in the data area).
 
-    // Pass 1: Convert all containers and collect results
+    // Pass 1: Convert all containers and collect results.
+    // chunk_size INCLUDES the 8-byte CSUM trailer on both Xbox and PC,
+    // so strip it before converting and re-add a fresh one afterwards.
     let mut converted_containers: Vec<Vec<u8>> = Vec::with_capacity(entry_count);
     let mut offset = header_size;
     for (ei, entry) in entries.iter().enumerate() {
@@ -96,23 +107,16 @@ pub fn convert_block(be_data: &[u8], dry_run: bool) -> Result<Vec<u8>, String> {
                 ei, offset, entry.chunk_size));
         }
 
-        let container = &be_data[offset..container_end];
+        let container = strip_csum_trailer(&be_data[offset..container_end]);
         let type_name = types::type_name_from_hash(entry.type_hash);
-        eprintln!("  Converting entry {}: type=0x{:08x} ({}) size={}",
-            ei, entry.type_hash, type_name, entry.chunk_size);
+        eprintln!("  Converting entry {}: type=0x{:08x} ({}) size={} (UCFX={})",
+            ei, entry.type_hash, type_name, entry.chunk_size, container.len());
 
         let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE;
         let converted = convert_container(container, is_ecs, ei, entry.type_hash)?;
         converted_containers.push(converted);
 
         offset = container_end;
-        // Skip original CSUM trailer
-        if offset + 8 <= be_data.len() {
-            let maybe_csum = &be_data[offset..offset + 4];
-            if maybe_csum == b"CSUM" || maybe_csum == b"MUSC" {
-                offset += 8;
-            }
-        }
     }
 
     // Pass 2: Compute correct chunk_sizes (UCFX + 8 for CSUM trailer).
@@ -165,7 +169,7 @@ fn convert_container(container: &[u8], is_ecs: bool, entry_idx: usize, type_hash
     let _unk_0c = read_u32(container, 12);
     let n_desc = read_u32(container, 16) as usize;
 
-    if n_desc > 5000 {
+    if n_desc > 10000 {
         return Err(format!("Entry {}: implausible descriptor count {}", entry_idx, n_desc));
     }
 
@@ -335,9 +339,35 @@ fn convert_ecs_bodies(
                 }
             }
 
-            // Swap the info body (it's just ASCII name — no swap needed, but swap
-            // any leading u32 fields if the info has a hash prefix)
-            // Actually info bodies for ECS are just null-terminated ASCII — leave them.
+            // Swap the info body:
+            //   ASCII format: [name\0][u32 hash][u32 a][u32 b][u32 c] — swap trailing u32s
+            //   Compact binary (16B): [u32 hash][u32][u32][u32] — swap all u32s
+            if let Some(ii) = info_idx {
+                let d = &descriptors[ii];
+                if let Some((start, end)) = body_range(container, d.row_u0, d.body_size, data_area_off) {
+                    let body_local_start = start - data_start;
+                    let body_local_end = end - data_start;
+                    if body_local_end <= data_area.len() {
+                        let info_body = &mut data_area[body_local_start..body_local_end];
+                        let nul_pos = info_body.iter().position(|&b| b == 0);
+                        match nul_pos {
+                            Some(np) if np > 0 && String::from_utf8(info_body[..np].to_vec()).is_ok() => {
+                                // ASCII format: swap u32 fields after the null-terminated name
+                                let u32_start = np + 1;
+                                let remaining = info_body.len() - u32_start;
+                                let n_u32 = remaining / 4;
+                                for fi in 0..n_u32 {
+                                    swap_u32(info_body, u32_start + fi * 4);
+                                }
+                            }
+                            _ => {
+                                // Compact binary format: swap all as u32 array
+                                swap_u32_array(info_body);
+                            }
+                        }
+                    }
+                }
+            }
 
             // Swap the schm body (all u32 fields)
             if let Some(si) = schm_idx {
@@ -379,21 +409,75 @@ fn convert_ecs_bodies(
     Ok(())
 }
 
-/// Extract component name string from an `info` descriptor body.
+/// Component-name hash → name lookup for compact-format info bodies (16-byte
+/// binary, no ASCII string). Values are pandemic_hash_m2(component_name).
+const COMP_HASH_TO_NAME: &[(u32, &str)] = &[
+    (0x753EB623, "Transform"),
+    (0x1DE5C824, "Name"),
+    (0x5CF81991, "ModelName"),
+    (0x97E8EE92, "LightObject"),
+    (0xEA0F3AA3, "Road"),
+    (0x6FD048F4, "RoadIntersection"),
+    (0xBCE6FAD7, "DestructionLink"),
+    (0x7FBCE14E, "PhysicalLink"),
+    (0xD81512A1, "ObjectScript"),
+    (0x99C2B81F, "ModifierKey"),
+    (0xAB92C697, "ScrubObject"),
+    (0x6310807F, "LineRegion"),
+    (0x49F0D0EC, "MaterialMapping"),
+    (0x2A20B640, "LandingZone"),
+    (0x06DA8775, "Label"),
+    (0xFA55F6BA, "Anchor"),
+    (0x2D8D2435, "LowResTerrainObject"),
+    (0xE18AFD65, "HibernationControl"),
+    (0xB8D2B506, "AtmosphereBase"),
+    (0xEB6DE962, "IntersectionToIntersection"),
+    (0x514CAD3A, "SoundAmbience"),
+    (0xDECD8889, "AiBehavior"),
+    (0xBCFE6314, "Path"),
+    (0x6FA2F9D4, "LaneData"),
+];
+
+/// Extract component name from an `info` descriptor body.
+///
+/// Two formats exist:
+///   1. ASCII format: `[null-terminated name][u32 hash][u32 a][u32 b][u32 c]`
+///   2. Compact binary format (16 bytes): `[u32 comp_hash][u32][u32][u32]`
+///      Used in blocks without `schm`/`enum` descriptors.
 fn extract_comp_name(
     container: &[u8],
     desc: &Descriptor,
     data_area_off: usize,
-    _is_be: bool,
+    is_be: bool,
 ) -> Option<String> {
     let (start, end) = body_range(container, desc.row_u0, desc.body_size, data_area_off)?;
     let body = &container[start..end];
-    // Info body is null-terminated ASCII
+
+    // Try ASCII format first
     let nul_pos = body.iter().position(|&b| b == 0).unwrap_or(body.len());
-    if nul_pos == 0 {
-        return None;
+    if nul_pos > 0 {
+        if let Ok(name) = String::from_utf8(body[..nul_pos].to_vec()) {
+            return Some(name);
+        }
     }
-    String::from_utf8(body[..nul_pos].to_vec()).ok()
+
+    // Compact binary format: first u32 is the component name hash (in BE)
+    if body.len() >= 4 {
+        let hash = if is_be {
+            read_u32_be(body, 0)
+        } else {
+            mercs2_formats::ffcs::read_u32_le(body, 0)
+        };
+        for &(h, name) in COMP_HASH_TO_NAME {
+            if h == hash {
+                return Some(name.to_string());
+            }
+        }
+        // Unknown hash — return a diagnostic placeholder
+        return Some(format!("__hash_0x{:08X}", hash));
+    }
+
+    None
 }
 
 /// Convert a COMP data body in-place using schema-driven field swaps.
@@ -476,17 +560,26 @@ fn convert_comp_data_inplace(data: &mut [u8], schema: Option<&ComponentSchema>, 
 }
 
 /// Convert Name component data in-place (variable-length records).
+///
+/// Layout: `[u32 entity_key][null-terminated ASCII name]` repeated.
+/// Only the u32 keys need byte-swapping; string bytes are order-independent.
+///
+/// IMPORTANT: Skip exactly ONE null byte (the terminator) after each string.
+/// Do NOT skip additional nulls — the next entity key may start with 0x00
+/// (high byte of a small BE u32 like 0x0014E333 → bytes [00 14 E3 33]).
+/// Skipping that leading 0x00 shifts the swap by one byte, corrupting all
+/// subsequent records.
 fn convert_name_data_inplace(data: &mut [u8]) {
     let mut pos = 0;
     while pos + 4 <= data.len() {
         swap_u32(data, pos);
         pos += 4;
-        // Skip string until null terminator
+        // Skip string bytes until null terminator
         while pos < data.len() && data[pos] != 0 {
             pos += 1;
         }
-        // Skip null terminator(s) / padding
-        while pos < data.len() && data[pos] == 0 {
+        // Skip exactly one null terminator
+        if pos < data.len() {
             pos += 1;
         }
     }
@@ -713,7 +806,7 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
     let data_area_off = read_u32(container, 4) as usize;
     let n_desc = read_u32(container, 16) as usize;
 
-    if n_desc > 5000 {
+    if n_desc > 10000 {
         return Err(format!("Entry {}: implausible descriptor count {}", entry_idx, n_desc));
     }
 

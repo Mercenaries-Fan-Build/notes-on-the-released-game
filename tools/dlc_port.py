@@ -692,30 +692,195 @@ def _collect_block_results(
 
 # ── ASET sub-entry sanitization ───────────────────────────────────────
 
-def _fix_xbox_aset_sub_entry(u2: int) -> int:
-    """Sanitize Xbox ASET packed_block_ref low16 field.
+def _strip_xbox_sub_entry(u2: int) -> int:
+    """Strip the Xbox low16 from packed_block_ref — set to 0xFFFF (primary).
 
-    In the base game, packed_block_ref (u2) = (block_index << 16) | sub_entry,
-    where sub_entry = 0xFFFF means "primary" (the asset IS the block's main
-    entry).  Xbox 360 DLC duplicates the block index into the low16 field,
-    causing heap corruption when the PC engine uses the bogus sub-entry offset
-    to index into a block's entry table.
-
-    Returns u2 with a corrected low16: 0xFFFF (primary) unless the low16 is
-    already a plausible sub-entry offset distinct from the block index.
+    The Xbox DLC's low16 is bogus (duplicates the block index).  We clear it
+    to 0xFFFF here; the correct sub-entry index is recomputed later by
+    ``_recompute_aset_sub_entries()`` after all blocks are decompressed.
     """
-    high16 = (u2 >> 16) & 0xFFFF
-    low16 = u2 & 0xFFFF
-    if low16 == 0xFFFF:
-        return u2
-    if low16 == high16:
-        return (high16 << 16) | 0xFFFF
-    # Unknown low16 — could be a genuine sub-entry offset, but Xbox DLC has
-    # no known valid sub-entry refs.  Default to primary to be safe.
-    return (high16 << 16) | 0xFFFF
+    return (u2 & 0xFFFF0000) | 0xFFFF
+
+
+def _recompute_aset_sub_entries(converted: list[PatchBlock], *, verbose: bool = False) -> tuple[int, int]:
+    """Recompute ASET sub-entry indices from each block's entry table.
+
+    For each ASET entry whose ``asset_hash`` appears in its block's entry
+    table, set ``u32_2`` low16 to the matching entry index.  Single-entry
+    blocks or entries where the asset IS the only/first entry keep 0xFFFF.
+
+    Returns (resolved_count, unresolved_count).
+    """
+    resolved = 0
+    unresolved = 0
+
+    for blk_idx, blk in enumerate(converted):
+        if not blk.aset_entries:
+            continue
+
+        try:
+            decomp = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data))
+        except Exception:
+            continue
+
+        if len(decomp) < 4:
+            continue
+        entry_count = struct.unpack_from("<I", decomp, 0)[0]
+        if entry_count < 1 or entry_count > 50000:
+            continue
+
+        hash_to_index: dict[int, int] = {}
+        for i in range(entry_count):
+            off = 4 + i * 16
+            if off + 16 > len(decomp):
+                break
+            name_hash = struct.unpack_from("<I", decomp, off)[0]
+            if name_hash not in hash_to_index:
+                hash_to_index[name_hash] = i
+
+        if entry_count <= 1:
+            continue
+
+        for entry in blk.aset_entries:
+            ah = entry["asset_hash"]
+            idx = hash_to_index.get(ah)
+            if idx is not None:
+                entry["u32_2"] = idx
+                resolved += 1
+            else:
+                entry["u32_2"] = 0xFFFF
+                unresolved += 1
+
+    if verbose or resolved:
+        print(f"\n  ASET sub-entry recompute: {resolved} resolved, "
+              f"{unresolved} unresolved (kept 0xFFFF)")
+
+    return resolved, unresolved
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────
+
+
+def _count_block_entries(blk: PatchBlock) -> int:
+    """Decompress and return entry_count for a single PatchBlock."""
+    compressed = blk.compressed_data
+    try:
+        if compressed[:4] == b"sges":
+            decompressed = decompress_sges_block(compressed, 0, len(compressed))
+        else:
+            decompressed = compressed
+        if len(decompressed) >= 4:
+            count = struct.unpack_from("<I", decompressed, 0)[0]
+            return count if count < 50000 else 0
+    except Exception:
+        return 0
+    return 0
+
+
+def _get_block_name_hashes(blk: PatchBlock) -> list[int]:
+    """Decompress and return name_hashes from a block's entry table."""
+    compressed = blk.compressed_data
+    try:
+        if compressed[:4] == b"sges":
+            decompressed = decompress_sges_block(compressed, 0, len(compressed))
+        else:
+            decompressed = compressed
+        if len(decompressed) < 4:
+            return []
+        count = struct.unpack_from("<I", decompressed, 0)[0]
+        if count > 50000:
+            return []
+        hashes = []
+        for i in range(count):
+            off = 4 + i * 16
+            if off + 16 > len(decompressed):
+                break
+            h = struct.unpack_from("<I", decompressed, off)[0]
+            hashes.append(h)
+        return hashes
+    except Exception:
+        return []
+
+
+def _trim_to_descriptor_limit(
+    converted: list[PatchBlock],
+    limit: int,
+    source_wad: Path | None,
+    verbose: bool,
+) -> None:
+    """Remove redundant blocks until combined descriptor count is under *limit*.
+
+    Descriptors = len(blocks) + sum(aset_entries) + sum(block_entry_counts).
+    Only removes blocks whose entries all exist in the base game ASET table
+    (i.e., the base game already has these assets — patch override is redundant).
+    Removes largest-entry-count blocks first to minimize blocks removed.
+    Modifies *converted* in place.
+    """
+    # Compute current totals
+    total_aset = sum(len(blk.aset_entries) for blk in converted)
+    block_entries = []
+    for blk in converted:
+        block_entries.append(_count_block_entries(blk))
+    total_block_entries = sum(block_entries)
+    total_descriptors = len(converted) + total_aset + total_block_entries
+
+    print(f"\n  Descriptor check: {total_descriptors:,} "
+          f"(limit={limit:,}, INDX={len(converted)}, "
+          f"ASET={total_aset}, entries={total_block_entries})")
+
+    if total_descriptors <= limit:
+        print(f"  Already under limit ({total_descriptors} <= {limit}). No trimming needed.")
+        return
+
+    excess = total_descriptors - limit
+    print(f"  Over limit by {excess}. Auto-trimming redundant blocks...")
+
+    # Build base game hash set for redundancy detection
+    if source_wad is None:
+        print("  WARNING: --source-wad required for auto-trim. Cannot determine redundancy.")
+        return
+
+    from trim_patch_wad import build_base_aset_set  # noqa: E402 — avoid circular at top
+    base_hashes = build_base_aset_set(source_wad)
+
+    # Find redundant blocks (all entry hashes exist in base game)
+    redundant: list[tuple[int, int]] = []  # (combined_cost, index)
+    for i, blk in enumerate(converted):
+        entry_hashes = _get_block_name_hashes(blk)
+        if not entry_hashes:
+            continue
+        if all(h in base_hashes for h in entry_hashes):
+            # Cost of keeping this block: 1 (INDX) + aset_entries + block_entries
+            cost = 1 + len(blk.aset_entries) + len(entry_hashes)
+            redundant.append((cost, i))
+
+    # Sort by cost descending (remove highest-cost first = fewest removals)
+    redundant.sort(reverse=True)
+
+    removed_indices: set[int] = set()
+    removed_descriptors = 0
+    for cost, idx in redundant:
+        if removed_descriptors >= excess:
+            break
+        removed_indices.add(idx)
+        removed_descriptors += cost
+        if verbose:
+            print(f"    Trim: [{idx}] cost={cost} path={converted[idx].path_string}")
+
+    # Remove in reverse order to preserve indices
+    for idx in sorted(removed_indices, reverse=True):
+        del converted[idx]
+
+    # Recount
+    new_aset = sum(len(blk.aset_entries) for blk in converted)
+    new_entries = sum(_count_block_entries(blk) for blk in converted)
+    new_total = len(converted) + new_aset + new_entries
+    print(f"  Trimmed {len(removed_indices)} redundant blocks "
+          f"(removed {removed_descriptors} descriptors)")
+    print(f"  New total: {new_total:,} descriptors "
+          f"(INDX={len(converted)}, ASET={new_aset}, entries={new_entries})")
+
 
 def port_x360_dlc(
     doh: bytes,
@@ -735,6 +900,8 @@ def port_x360_dlc(
     jobs: int | None = None,
     permissive: bool = False,
     strip_audio: bool = False,
+    descriptor_limit: int | None = None,
+    exclude_blocks: str | None = None,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -801,7 +968,7 @@ def port_x360_dlc(
             global_aset.append({
                 "asset_hash": ae.asset_hash,
                 "u32_1": ae.u1,
-                "u32_2": _fix_xbox_aset_sub_entry(ae.u2),
+                "u32_2": _strip_xbox_sub_entry(ae.u2),
                 "u32_3": ae.u3,
             })
         else:
@@ -820,7 +987,7 @@ def port_x360_dlc(
         entry_dict = {
             "asset_hash": ae.asset_hash,
             "u32_1": ae.u1,
-            "u32_2": _fix_xbox_aset_sub_entry(ae.u2),
+            "u32_2": _strip_xbox_sub_entry(ae.u2),
             "u32_3": ae.u3,
         }
         aset_by_block.setdefault(local_idx, []).append(entry_dict)
@@ -1170,6 +1337,28 @@ def port_x360_dlc(
         print(f"  WARNING: still missing contract blocks after dedupe:")
         for name in contracts_missing:
             print(f"    - {name}")
+
+    # ── Descriptor limit trimming ─────────────────────────────────────
+    # If --descriptor-limit is set, auto-remove redundant blocks to stay
+    # under the engine's descriptor table size limit (~15,500 on PC).
+    # "Descriptors" = INDX entries + ASET entries + sum of per-block entry counts.
+    if descriptor_limit is not None:
+        _trim_to_descriptor_limit(converted, descriptor_limit, source_wad, verbose)
+
+    # ── Explicit block exclusion ──────────────────────────────────────
+    if exclude_blocks:
+        patterns = [p.strip().lower() for p in exclude_blocks.split(",")]
+        before_count = len(converted)
+        converted = [
+            blk for blk in converted
+            if not any(pat in blk.path_string.lower() for pat in patterns)
+        ]
+        excluded_count = before_count - len(converted)
+        if excluded_count:
+            print(f"\n  Excluded {excluded_count} blocks matching --exclude-blocks patterns")
+
+    # ── Recompute ASET sub-entry indices from block entry tables ─────
+    _recompute_aset_sub_entries(converted, verbose=verbose)
 
     # Build or merge patch WAD
     if merge_into and merge_into.is_file():
@@ -1817,6 +2006,12 @@ def main() -> int:
                     help="Extract .pws audio files to this directory")
     ap.add_argument("--work-dir", type=Path, default=None,
                     help="Working directory for temp files")
+    ap.add_argument("--descriptor-limit", type=int, default=None,
+                    help="Max combined descriptors (ASET + INDX + block entries). "
+                         "If exceeded, auto-trim redundant blocks. Requires --source-wad. "
+                         "PC engine limit is ~15,500.")
+    ap.add_argument("--exclude-blocks", type=str, default=None,
+                    help="Comma-separated block paths (substrings) to exclude from output")
 
     args = ap.parse_args()
 
@@ -1880,6 +2075,8 @@ def main() -> int:
         jobs=args.jobs,
         permissive=args.permissive,
         strip_audio=args.strip_audio,
+        descriptor_limit=args.descriptor_limit,
+        exclude_blocks=args.exclude_blocks,
     )
 
 
