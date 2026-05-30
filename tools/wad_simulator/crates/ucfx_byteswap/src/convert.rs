@@ -431,6 +431,10 @@ fn convert_ecs_bodies(
                             if body_len > 1 {
                                 swap_u32_array(&mut data_area[body_local_start + 1..body_local_end]);
                             }
+                        } else if desc.tag == ChunkTag::Flgs {
+                            convert_vz_state_flgs_inplace(
+                                &mut data_area[body_local_start..body_local_end],
+                            );
                         } else if desc.tag.is_native_be() {
                             // No swap
                         } else {
@@ -889,6 +893,53 @@ fn convert_enum_body_inplace(data: &mut [u8]) {
             swap_u32(data, pos);     // ordinal
             pos += 4;
         }
+    }
+}
+
+/// vz_state `flgs` body: variable header (ASCII names, endian-neutral) + 42-byte records.
+///
+/// Record layout (BE input, matches `tools/ucfx_be_to_le._convert_vz_state_flgs`):
+///   [0:12]  3×u32, [12:14] u16, [14:42] 7×u32 (entity_id, pos xyz, rot fields).
+const FLGS_RECORD_STRIDE: usize = 42;
+const BE_ONE_F: [u8; 4] = [0x3F, 0x80, 0x00, 0x00];
+
+fn convert_vz_state_flgs_inplace(data: &mut [u8]) {
+    if data.is_empty() {
+        return;
+    }
+
+    let marker_pos = data
+        .windows(BE_ONE_F.len())
+        .position(|w| w == BE_ONE_F);
+    let rec_start = match marker_pos {
+        Some(p) if p >= 4 => p - 4,
+        Some(_) => 0,
+        None => {
+            if data.len().is_multiple_of(4) {
+                swap_u32_array(data);
+            }
+            return;
+        }
+    };
+
+    let rec_data = &mut data[rec_start..];
+    let n_full = rec_data.len() / FLGS_RECORD_STRIDE;
+    let mut pos = 0usize;
+    for _ in 0..n_full {
+        if pos + FLGS_RECORD_STRIDE > rec_data.len() {
+            break;
+        }
+        for off in (0..12).step_by(4) {
+            swap_u32(rec_data, pos + off);
+        }
+        swap_u16(rec_data, pos + 12);
+        for off in (14..42).step_by(4) {
+            swap_u32(rec_data, pos + off);
+        }
+        pos += FLGS_RECORD_STRIDE;
+    }
+    if pos < rec_data.len() && rec_data.len().is_multiple_of(4) {
+        swap_u32_array(&mut rec_data[pos..]);
     }
 }
 

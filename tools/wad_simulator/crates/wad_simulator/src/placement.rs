@@ -19,6 +19,9 @@ const TRANSFORM_MIN_READABLE: usize = 0x24;
 
 const FLGS_RECORD_STRIDE: usize = 42;
 
+/// Compact-format `info` bodies use this hash instead of an ASCII name.
+const TRANSFORM_COMP_HASH: u32 = 0x753E_B623;
+
 /// 1.0f in little-endian bytes (boot_float sentinel).
 const ONE_F_LE: [u8; 4] = [0x00, 0x00, 0x80, 0x3F];
 
@@ -151,10 +154,10 @@ fn try_validate_comp_group(
     let info = info_body?;
     let data = data_body?;
 
-    let comp_name = extract_null_terminated_str(info);
-    if !is_transform_component(&comp_name) {
+    if !is_transform_info(info) {
         return None;
     }
+    let comp_name = extract_component_name(info);
 
     let stride = TRANSFORM_RECORD_STRIDE;
     if data.len() < stride {
@@ -286,6 +289,27 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 fn extract_null_terminated_str(data: &[u8]) -> String {
     let end = data.iter().position(|&b| b == 0).unwrap_or(data.len());
     String::from_utf8_lossy(&data[..end]).to_string()
+}
+
+fn extract_component_name(info: &[u8]) -> String {
+    let nul = info.iter().position(|&b| b == 0).unwrap_or(info.len());
+    let candidate = &info[..nul];
+    if !candidate.is_empty() && candidate.iter().all(|&b| (32..=126).contains(&b)) {
+        return String::from_utf8_lossy(candidate).to_string();
+    }
+    if info.len() >= 4 {
+        let hash = read_u32_le(info, 0);
+        if hash == TRANSFORM_COMP_HASH {
+            return "Transform".to_string();
+        }
+        return format!("__hash_0x{hash:08X}");
+    }
+    extract_null_terminated_str(info)
+}
+
+fn is_transform_info(info: &[u8]) -> bool {
+    let name = extract_component_name(info);
+    is_transform_component(&name)
 }
 
 fn is_transform_component(name: &str) -> bool {

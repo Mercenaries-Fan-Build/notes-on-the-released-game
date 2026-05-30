@@ -1,9 +1,29 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
-**Date**: 2026-05-28  
+**Date**: 2026-05-28 (updated 2026-05-30)  
 **Crash address**: `0x248BBE2`  
 **Crash instruction**: `mov dword ptr ds:[esi+ecx*4], eax` — write to read-only NVIDIA driver memory  
-**Status**: OPEN — requires fresh reboot with conditional breakpoint to identify source bytes
+**Status**: OPEN — toolchain gaps narrowed; rebuild `vz-patch.wad` after `flgs`/Transform fixes
+
+## Log correlation (`dlc_enable_crash.log`, 2026-05-30)
+
+Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`, `GUARD=1`):
+
+| Field | Value |
+|-------|-------|
+| Last Lua line | `[lua] Loading vz level with vz masterscript` |
+| FATAL | `exception 0xC0000005 at 0x0248BBE2 fault=0x03CEA014` |
+| Timing | ~5.6 s after VZ masterscript line (watchdog still alive) |
+
+This matches the documented spatial-hash insert at `0x248BBE2` during **main-thread WAD registration**
+(call stack in §Call Stack), not the audio mixer crash (`0x83664E`, separate thread — see
+`docs/audio_crash_analysis.md`). The fault address `0x03CEA014` is the bad **write target** from
+`[bucket_base + cell_index×4]`; prior x32dbg sessions showed `ESI` landing in `nvgpucomp32.dll`
+when `cell_index` is garbage (e.g. `0x2E70` read from beyond the hash table).
+
+**Production byte-swap:** `make dlc-port` uses **Rust** `ucfx_byteswap`, not Python `ucfx_be_to_le.py`.
+Until 2026-05-30, Rust treated ECS `flgs` as a flat `u32` sweep (corrupting 42-byte vz_state placement
+records); Python had a typed `_convert_vz_state_flgs` but was not on the port path. Rebuild required.
 
 ## Register State at Crash
 

@@ -986,7 +986,8 @@ _ECS_COMP_HASH_TO_NAME: dict[int, str] = {
 # Known strides for compact-format COMP groups (no schm descriptor).
 # Values from full-format blocks' schm second u32.
 _ECS_COMP_DEFAULT_STRIDE: dict[str, int] = {
-    "Transform": 52,
+    # Runtime Transform records are 42 bytes; schm may report 52.
+    "Transform": 42,
     "Name": 5,
     "HibernationControl": 6,
     "Label": 4,
@@ -1122,15 +1123,12 @@ def _convert_ecs_comp_data(
     stride = comp_info.schema_stride
 
     if name == "Transform":
-        if stride == 42:
-            return _convert_transform_records(body_be)
-        if stride > 0 and stride != 42:
-            if stride % 4 == 0:
-                return _convert_u32_array(body_be)
-            return _convert_numeric_records(body_be, stride)
-        if len(body_be) % 42 == 0:
-            return _convert_transform_records(body_be)
-        return _convert_u32_array(body_be)
+        if len(body_be) % 42 != 0:
+            raise UnhandledByteSwapError(
+                f"Transform data body size {len(body_be)} is not a multiple of 42 "
+                f"(schm/compact stride={stride})"
+            )
+        return _convert_transform_records(body_be)
 
     if name in _ECS_STRING_COMPONENTS:
         return body_be
