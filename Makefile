@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -44,6 +44,15 @@ STAGE2_SKIP_TEX ?= 0
 STAGE2_SKIP_HAVOK ?= 0
 STAGE2_DIALOG ?= 1
 STAGE2_GLTF ?= 1
+STAGE2_ANIM ?= 0
+STAGE2_LEVEL ?= 0
+STAGE2_EMBEDDED_AUDIO ?= 0
+# Post-pass after stage 2 (needs build-ucfx-byteswap when STAGE2_VALIDATE_RUST=1)
+STAGE2_VALIDATE_RUST ?= 0
+STAGE2_VALIDATE_GLTF ?= 0
+STAGE2_VALIDATE_SAMPLE ?= 0
+STAGE2_VALIDATE_JOBS ?= 8
+STAGE2_VALIDATE_STRICT ?= 0
 TEXTURE_PNG ?= 1
 
 FORCE_UNZIP ?=
@@ -71,6 +80,8 @@ help:
 	@echo "                      Scan extracted/**/blocks → OUTPUT/extracted/texture_index.json (cross-block mips)"
 	@echo "  make review-all OUTPUT=./output"
 	@echo "                      build-texture-index then re-run stage 2 (TEXTURE_INDEX set; STAGE2_JOBS=N optional)"
+	@echo "  make stage2-post-validate OUTPUT=./output"
+	@echo "                      Rust UCFX + optional glTF checks on existing review (no re-extract)"
 	@echo "  make review-textures-only OUTPUT=./output"
 	@echo "                      Rebuild index + textures only (skip ucfx/mesh/havok/dialog/gltf)"
 	@echo "  make extract-saves OUTPUT=./output"
@@ -145,7 +156,7 @@ help:
 	@echo ""
 	@echo "Variables: ZIP OUTPUT FORCE_UNZIP=1 VARIANT_PATH EXTRACT_JOBS (1=per-block sges; else bulk)"
 	@echo "            PYTHON (default: \`./.venv/bin/python\` if present, else \`python3\` — run \`make venv\` for pygltflib)"
-	@echo "            STAGE2_SEQUENTIAL=1 STAGE2_JOBS=N STAGE2_SKIP_* (stage 2; default uses all CPUs up to 48)"
+	@echo "            STAGE2_SEQUENTIAL=1 STAGE2_JOBS=N STAGE2_SKIP_* STAGE2_VALIDATE_* (stage 2; see docs/stage2_review_improvements.md)"
 	@echo "            TOP=N VIEWER_BASE=http://… (category-samples / sample-bundle)"
 	@echo "            GLB_ROOT_SCALE (regen-maracaibo-glbs; default 1)"
 	@echo "Current OUTPUT=$(OUTPUT)"
@@ -203,7 +214,11 @@ review-all: build-texture-index
 	@env TEXTURE_INDEX="$(OUTPUT)/extracted/texture_index.json" \
 	  STAGE2_SEQUENTIAL="$(STAGE2_SEQUENTIAL)" STAGE2_JOBS="$(STAGE2_JOBS)" \
 	  STAGE2_SKIP_UCFX="$(STAGE2_SKIP_UCFX)" STAGE2_SKIP_MESH="$(STAGE2_SKIP_MESH)" STAGE2_SKIP_TEX="$(STAGE2_SKIP_TEX)" STAGE2_SKIP_HAVOK="$(STAGE2_SKIP_HAVOK)" \
-	  STAGE2_DIALOG="$(STAGE2_DIALOG)" STAGE2_GLTF="$(STAGE2_GLTF)" TEXTURE_PNG="$(TEXTURE_PNG)" \
+	  STAGE2_DIALOG="$(STAGE2_DIALOG)" STAGE2_GLTF="$(STAGE2_GLTF)" STAGE2_ANIM="$(STAGE2_ANIM)" STAGE2_LEVEL="$(STAGE2_LEVEL)" \
+	  STAGE2_EMBEDDED_AUDIO="$(STAGE2_EMBEDDED_AUDIO)" \
+	  STAGE2_VALIDATE_RUST="$(STAGE2_VALIDATE_RUST)" STAGE2_VALIDATE_GLTF="$(STAGE2_VALIDATE_GLTF)" \
+	  STAGE2_VALIDATE_SAMPLE="$(STAGE2_VALIDATE_SAMPLE)" STAGE2_VALIDATE_JOBS="$(STAGE2_VALIDATE_JOBS)" \
+	  STAGE2_VALIDATE_STRICT="$(STAGE2_VALIDATE_STRICT)" TEXTURE_PNG="$(TEXTURE_PNG)" \
 	  bash -c 'unset MAX START VZ_MAX SKIP_EXISTING WITH_UCFX ALLOW_PARTIAL 2>/dev/null; \
 	  OUT="$$1"; \
 	  if [ "$$STAGE2_SEQUENTIAL" = "1" ]; then \
@@ -217,6 +232,14 @@ review-all: build-texture-index
 # Re-extract textures only (reuses existing ucfx/mesh/havok); rebuilds texture_index.json first.
 review-textures-only: build-texture-index
 	@$(MAKE) review-all OUTPUT="$(OUTPUT)" STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 STAGE2_SKIP_HAVOK=1 STAGE2_DIALOG=0 STAGE2_GLTF=0
+
+# Post-validate existing stage-2 output (Rust structural + optional glTF). Build byteswap first if needed.
+stage2-post-validate: build-ucfx-byteswap
+	@test -d "$(OUTPUT)" || (echo "error: OUTPUT missing: $(OUTPUT)" >&2; exit 1)
+	@STAGE2_VALIDATE_RUST=1 STAGE2_VALIDATE_GLTF="$(STAGE2_VALIDATE_GLTF)" \
+	  STAGE2_VALIDATE_SAMPLE="$(STAGE2_VALIDATE_SAMPLE)" STAGE2_VALIDATE_JOBS="$(STAGE2_VALIDATE_JOBS)" \
+	  STAGE2_VALIDATE_STRICT="$(STAGE2_VALIDATE_STRICT)" \
+	  bash "$(REPO_ROOT)/scripts/stage2_post_validate.sh" "$(OUTPUT)"
 
 VARIANT_PATH ?=
 

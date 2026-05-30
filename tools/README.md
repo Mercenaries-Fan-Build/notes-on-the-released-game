@@ -338,7 +338,15 @@ See script headers for the full list. Common variables:
 | `STAGE2_SKIP_MESH` | `0` | Skip mesh extraction. |
 | `STAGE2_SKIP_TEX` | `0` | Skip texture extraction. |
 | `STAGE2_SKIP_HAVOK` | `0` | Skip Havok extraction. |
+| `STAGE2_ANIM` | `0` | After all blobs, run **`mercs2_anim_pipeline.py`** → `animations/`. |
+| `STAGE2_VALIDATE_RUST` | `0` | Post-pass: **`ucfx_byteswap --validate-only`** on decompressed blobs (needs **`make build-ucfx-byteswap`**). |
+| `STAGE2_VALIDATE_GLTF` | `0` | Post-pass: **`gltf_validate.py`** vs `submeshes/*.obj`. |
+| `STAGE2_VALIDATE_SAMPLE` | `0` | Cap blob count for post-validate (`0` = all). |
+| `STAGE2_VALIDATE_JOBS` | `8` | Parallel workers for Rust post-validate. |
+| `STAGE2_VALIDATE_STRICT` | `0` | Fail post-validate on any Rust issue. |
 | `MESH_FORMAT` | `obj` | Mesh output format (`obj` or `gltf`). |
+
+See **`docs/stage2_review_improvements.md`** for the full flow, gaps, and recommended env combinations.
 
 Batch path extraction (`scripts/extract_all_from_paths.sh`): default **bulk** sges (`sges_decompress.py --bulk-out-dir`, one mmap + one scan). **`EXTRACT_JOBS=1`** forces per-block subprocesses. **`WITH_UCFX=1`** writes **`extracted/batch_*/ucfx_manifests/*.json`** (bulk runs `ucfx_parser` per block in-process); **`ALLOW_PARTIAL=1`** continues after per-block failures. See script headers for **`EXTRACT_OUT_ROOT`**, **`START`**, **`MAX`**, **`SKIP_EXISTING`**, **`PYTHON`**.
 

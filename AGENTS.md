@@ -92,7 +92,8 @@ After stage 2, optional **`make extract-terrain OUTPUT=./output`** merges `low_r
 |--------|---------|
 | `make venv` | Create `.venv`, install requirements.txt |
 | `make extract-all ZIP=... OUTPUT=./output` | Full extraction from retail zip |
-| `make review-all OUTPUT=./output` | Rebuild texture index + stage 2 |
+| `make review-all OUTPUT=./output` | Rebuild texture index + stage 2 (optional `STAGE2_VALIDATE_RUST=1`; see `docs/stage2_review_improvements.md`) |
+| `make stage2-post-validate OUTPUT=./output` | Rust UCFX + optional glTF checks on existing review (no re-extract; needs `build-ucfx-byteswap`) |
 | `make extract-terrain OUTPUT=./output` | Merge `low_res_terrain` tiles → `review/batch_vz/.../mesh_scene.glb` (needs `batch_vz/blocks/`) |
 | `make regen-maracaibo-glbs OUTPUT=./output` | Regenerate GLBs for Maracaibo subset |
 | `make ue5-bundle OUTPUT=./output` | variants + animations + export-ue5 |
@@ -122,6 +123,11 @@ Do not use `full-pipeline` to resume — it runs `clean`. Instead:
 make review-all OUTPUT=./output                    # re-run stage 2
 make ue5-bundle OUTPUT=./output                    # rebuild UE5 bundle
 STAGE2_SKIP_UCFX=1 STAGE2_SKIP_MESH=1 make review-all OUTPUT=./output  # skip already-done steps
+# Structural QA after stage 2 (retail LE blobs; requires Rust build):
+make build-ucfx-byteswap
+make stage2-post-validate OUTPUT=./output STAGE2_VALIDATE_GLTF=1
+# Or inline on a full review pass:
+make review-all OUTPUT=./output STAGE2_VALIDATE_RUST=1 STAGE2_VALIDATE_GLTF=1 STAGE2_JOBS=32
 ```
 
 ---

@@ -35,6 +35,56 @@ def rust_binary_available() -> bool:
     return _find_binary() is not None
 
 
+def validate_block_rust(
+    block_data: bytes,
+    *,
+    strict: bool = False,
+) -> list[str]:
+    """Validate a PC LE block (CSUM, DEPS, SKIN, watr, fxdict, IBUF bounds).
+
+    Returns a list of warning strings (empty if OK). Raises on binary missing or
+    subprocess failure; exits non-zero in strict mode when issues are found.
+    """
+    binary = _find_binary()
+    if binary is None:
+        raise FileNotFoundError(
+            f"ucfx_byteswap binary not found. Build with: "
+            f"cargo build --release -p ucfx_byteswap  (or: make build-ucfx-byteswap)"
+        )
+
+    cmd = [str(binary), "--stdin", "--validate-only"]
+    if strict:
+        cmd.append("--strict")
+
+    result = subprocess.run(
+        cmd,
+        input=block_data,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        return []
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    if result.returncode == 2:
+        raise RuntimeError(f"ucfx_byteswap strict validation failed:\n{stderr}")
+    warnings: list[str] = []
+    for line in stderr.splitlines():
+        line = line.strip()
+        if line.startswith("WARN:"):
+            warnings.append(line[5:].strip())
+        elif "issue(s) found" in line or line.startswith("Validation:"):
+            continue
+        elif line and not line.startswith("ucfx_byteswap:"):
+            warnings.append(line)
+    if not warnings and stderr.strip():
+        warnings.append(stderr.strip())
+    return warnings
+
+
+def validate_block_file_rust(path: Path, *, strict: bool = False) -> list[str]:
+    """Validate a decompressed .block.bin on disk."""
+    return validate_block_rust(path.read_bytes(), strict=strict)
+
+
 def byteswap_block_rust(
     block_data: bytes,
     *,

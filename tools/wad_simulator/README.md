@@ -53,7 +53,23 @@ wad_simulator --wad game-files\pc-game-vz.wad --audio-only --audios-dir "path\to
 
 REM Convert one decompressed BE block to LE
 ucfx_byteswap input.block.bin -o output.block.bin --strict
+
+REM Validate retail PC LE block (stage 2 post-pass; no conversion)
+ucfx_byteswap --validate-only path\to\block.bin
 ```
+
+### Stage 2 integration
+
+After `make review-all`, optional structural checks:
+
+```bash
+make build-ucfx-byteswap
+make stage2-post-validate OUTPUT=./output
+# or inline:
+make review-all OUTPUT=./output STAGE2_VALIDATE_RUST=1 STAGE2_VALIDATE_GLTF=1
+```
+
+See `docs/stage2_review_improvements.md`.
 
 ## Related docs
 

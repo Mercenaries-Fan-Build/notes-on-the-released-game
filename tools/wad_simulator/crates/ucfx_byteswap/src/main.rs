@@ -41,6 +41,29 @@ struct Cli {
     /// Print a schema field coverage report after conversion
     #[arg(long)]
     report_schema_coverage: bool,
+
+    /// Validate an existing PC LE block (no BE→LE conversion). For stage-2 / retail blobs.
+    #[arg(long)]
+    validate_only: bool,
+}
+
+fn run_validation(data: &[u8], strict: bool, quiet: bool) -> bool {
+    let issues = validate::validate_converted_block(data);
+    if issues.is_empty() {
+        if !quiet {
+            println!("  Validation: OK (all checks passed)");
+        }
+        return false;
+    }
+    eprintln!("  Validation: {} issue(s) found:", issues.len());
+    for issue in &issues {
+        eprintln!("    WARN: {}", issue);
+    }
+    if strict {
+        eprintln!("Strict mode: aborting due to validation errors");
+        std::process::exit(2);
+    }
+    true
 }
 
 fn main() {
@@ -71,6 +94,18 @@ fn main() {
         }
     };
 
+    if cli.validate_only {
+        if cli.dry_run || cli.report_schema_coverage || cli.stdout {
+            eprintln!("Error: --validate-only cannot be combined with --dry-run, --report-schema-coverage, or --stdout");
+            std::process::exit(1);
+        }
+        if !pipe_mode {
+            println!("ucfx_byteswap: validate-only ({} bytes)", input_data.len());
+        }
+        let failed = run_validation(&input_data, cli.strict, pipe_mode);
+        std::process::exit(if failed { 1 } else { 0 });
+    }
+
     if !pipe_mode {
         println!("ucfx_byteswap: processing ({} bytes)", input_data.len());
     }
@@ -94,29 +129,12 @@ fn main() {
                 return;
             }
 
-            let validate = !cli.no_validate;
-            let validation_failed = if validate {
-                let issues = validate::validate_converted_block(&output);
-                if issues.is_empty() {
-                    if !pipe_mode {
-                        println!("  Validation: OK (all checks passed)");
-                    }
-                    false
-                } else {
-                    let error_count = issues.len();
-                    eprintln!("  Validation: {} issue(s) found:", error_count);
-                    for issue in &issues {
-                        eprintln!("    WARN: {}", issue);
-                    }
-                    true
+            if !cli.no_validate {
+                let failed = run_validation(&output, false, pipe_mode);
+                if cli.strict && failed {
+                    eprintln!("Strict mode: aborting due to validation errors");
+                    std::process::exit(2);
                 }
-            } else {
-                false
-            };
-
-            if cli.strict && validation_failed {
-                eprintln!("Strict mode: aborting due to validation errors");
-                std::process::exit(2);
             }
 
             if cli.stdout {
