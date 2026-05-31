@@ -1,8 +1,8 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
-**Date**: 2026-05-28 (updated 2026-05-30c)  
+**Date**: 2026-05-28 (updated 2026-05-30d)  
 **Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
-**Status**: OPEN — step 3 re-port (stride/flgs/Transform/guidmap) **still crashes** (`fault≈0x03CE9FD8`). Terrain + five `dlc01_state_*` ruled out. Next: **offline scan** + step **4a/4e** + optional Python-byteswap path blocks.
+**Status**: OPEN — offline scan **0** violations on SHA `8700856a…`. Runtime bisect **narrows culprit to arena layer blocks** (`dlc01_base` / `speedcity` / `dlccon`); `no_arena` trim passes the spatial-hash window. Next: per-path trims on `dlccon` vs `base` vs `speedcity`.
 
 ## 2026-05-30c — Break-the-deadlock toolkit
 
@@ -31,7 +31,38 @@ make bisect-patch-wad OUTPUT=./output
 | `wad_simulator` + `pc-game-vz.wad` | **0** `position_violations` (109226 placements checked); 8 XMA codec warnings only |
 | Prior `1E6CA26C…` sim | 22 terrain lattice hits in block 0 — **gone** on this build |
 
-**Verdict:** Placement float / endian corruption **not** implicated on this WAD. If retail still faults @ `0x248BBE2`, prioritize **runtime bisect** (4a scripts @ 2195, 4e arena, ASET/ASI), not re-port for Transform/flgs.
+**Verdict:** Placement float / endian corruption **not** implicated on this WAD. Runtime bisect (2026-05-30d, below) implicates **arena placement layers**, not bootstrap @ 2195 or `dlc01_base`+`commonlocations` alone.
+
+### 2026-05-30d — Runtime bisect logs (SHA `8700856a…`, user retail)
+
+Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`, `GUARD=1`, `WATCHDOG=1`). Logs under game `scripts\dlc_enable_crash_*.log`. All patch trims **carry forward** step 1–2 exclusions `0,4,12,15,16,17` unless noted.
+
+| Log / trim | Crash? | FATAL (EIP / fault) | Last Lua before fault | Timing (post–Shell-exited) |
+|------------|--------|---------------------|------------------------|----------------------------|
+| **`clean_no_patch`** (no `vz-patch.wad`) | **N** | *(none)* | `[lua] Loading vz level with vz masterscript` then full boot (`Shop`, `creating player`, `New operation (170 layers)`, … `GlobalExit - Complete`) | VZ line ~**4.7 s**; session runs **60+ s** |
+| **`no_bootstrap`** (`--exclude-indices …,2195`) | **Y** | `0x0248BB7C` / `0x03CEA074` (read) | `[lua] Loading vz level with vz masterscript` | VZ ~**4.4 s** → FATAL ~**5.8 s** |
+| **`no_base`** (`--exclude-indices …,3,5`) | **Y** | `0x0248BBE2` / `0x03CEA014` (write) | same | VZ ~**4.3 s** → FATAL ~**5.7 s** |
+| **`no_speed_city`** (exclude `speedcity` path) | **Y** | `0x0248BBE2` / `0x03CEA014` | same | VZ ~**4.2 s** → FATAL ~**4.3 s** (fastest repro) |
+| **`no_arena`** (`dlc01_base,speedcity,dlccon` paths) | **N** @ spatial hash | *(none @ `0x248BB*` in 30 s window)*; late `0x00874E7D` / `0xF011157A` after watchdog timeout | `[lua] Loading vz level with vz masterscript` only (no Shop/players) | VZ ~**4.2 s**; watchdog **30 s** “no crash detected” then unrelated FATAL |
+
+**Interpretation (IN vs OUT):**
+
+| Ruled **OUT** as sole trigger | Evidence |
+|-------------------------------|----------|
+| Patch absent | `clean_no_patch` — full Venezuela boot |
+| Terrain (0), all five `dlc01_state_*` (4,12,15,16,17) | Prior steps + carried on all trims |
+| **`scripts_vz` @ index 2195** | `no_bootstrap` still spatial-hash crashes |
+| **`dlc01_base` + `dlc01_commonlocations` only** (indices 3, 5) | `no_base` still crashes |
+| **`dlc01_speedcity*` only** | `no_speed_city` still crashes |
+
+| Ruled **IN** (culprit pool) | Evidence |
+|-----------------------------|----------|
+| **At least one arena layer block** among `dlc01_base`, `dlc01_speedcity*`, `dlc01_dlccon*` | `no_arena` passes spatial-hash window; all narrower trims still fail |
+| **Not a single-block cut** | Removing only base+commonlocations **or** only speedcity is insufficient — likely **`dlccon*`** and/or **combination** of arena layers |
+
+**Narrowed set:** High-Transform **`dlccon*`** blocks (e.g. indices **2**, **6**, **7**, **8**, **13**, **14**, **18** on prior inventory) plus **`dlc01_base`** / **`speedcity`** when other arena blocks remain loaded. Bootstrap and offline placement scan are **deprioritized**.
+
+**`no_arena` late FATAL:** Different EIP/fault — treat as **secondary** (hang/incomplete VZ without arena geometry, or post-timeout exit); not the documented `0x248BB60` spatial-hash insert.
 
 ### TOP 5 suspect blocks (evidence-ranked, pre-scan on SHA `97242b0a…`)
 
@@ -47,23 +78,24 @@ make bisect-patch-wad OUTPUT=./output
 
 **Ruled out (user bisect):** 0 terrain, 4/12/15/16/17 all `dlc01_state_*`. **Not ruled out:** bootstrap **2196** (`scripts_vz`), ~2100 `c3` cells (low direct Transform count), **resident** SKIPPED at port.
 
-### Next 15 minutes (copy/paste)
+### Next trims (after 2026-05-30d bisect — copy/paste)
 
 ```powershell
 cd C:\Users\Shadow\Desktop\notes-on-the-released-game
-certutil -hashfile output\data\vz-patch.wad SHA256
-make scan-patch-placements OUTPUT=./output
-make bisect-patch-wad OUTPUT=./output
+$RULED = "0,4,12,15,16,17"
 
-# 4a — bootstrap (30 s deploy test)
-.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-bootstrap.wad --exclude-indices "0,4,12,15,16,17,2196" -v
+# A — dlccon only (keep base + speedcity): PASS => culprit in dlccon*
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon.wad --exclude-indices $RULED --exclude-path-substr dlccon -v
 
-# 4e — base + commonlocations
-.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-base.wad --exclude-indices "0,4,12,15,16,17,3,5" -v
+# B — base only (keep speedcity + dlccon): PASS => dlc01_base layer
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-base-only.wad --exclude-indices $RULED --exclude-path-substr dlc01_base -v
 
-# Top placement layers (if scan agrees)
-.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-arena.wad --exclude-path-substr dlc01_base,speedcity,dlccon --exclude-indices "0,4,12,15,16,17" -v
+# C — largest dlccon layer alone (index 2 on 8700856a inventory; re-list after port)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-only-full.wad --keep-only-indices "2" --exclude-indices $RULED -v
+# Deploy each as data\vz-patch.wad — expect FAIL on C if block 2 is toxic
 ```
+
+Prior **4a / 4e / no_arena** results are in the table above; do not re-run unless WAD SHA changes.
 
 ### Alternative theories (still live)
 
@@ -120,16 +152,17 @@ Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`,
 - Includes **`scripts_vz` bootstrap** at index **2196** on full `make dlc-port` builds — **not** removed in step 2.
 - High-priority **layer/placement** blocks **not** in `dlc01_state_*`: `dlc01_base`, `dlc01_commonlocations`, contract `dlc01_dlccon*`, arena geometry, **~2100+** `c3*` cell blocks, `resident`, stringdb, audio, meshes.
 
-## Log correlation (`dlc_enable_crash.log`, 2026-05-30)
+## Log correlation (`dlc_enable_crash*.log`)
 
-Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`, `GUARD=1`):
+Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`, `GUARD=1`). See **2026-05-30d** table for per-trim logs.
 
 | Field | Value |
 |-------|-------|
-| Last Lua line | `[lua] Loading vz level with vz masterscript` |
-| FATAL (earlier) | `exception 0xC0000005 at 0x0248BBE2 fault=0x03CEA014` |
-| FATAL (2026-05-30 rebuild) | `exception 0xC0000005 at 0x0248BB7C fault=0x03CEA074` |
-| Timing | ~4.3 s after VZ masterscript line (watchdog still alive) |
+| Last Lua line (spatial-hash trims) | `[lua] Loading vz level with vz masterscript` |
+| FATAL (write) | `0x0248BBE2` / `fault=0x03CEA014` (`no_base`, `no_speed_city`) |
+| FATAL (read) | `0x0248BB7C` / `fault=0x03CEA074` (`no_bootstrap`) |
+| Timing | ~**4.2–5.8 s** post–Shell-exited to FATAL (varies by trim) |
+| Control (`clean_no_patch`) | No FATAL; boot continues through layers / `GlobalExit` |
 
 This matches the spatial-hash insert at `0x248BB60` during **main-thread WAD registration**
 (call stack in §Call Stack), not the audio mixer crash (`0x83664E`, separate thread — see
@@ -381,12 +414,15 @@ Set conditional **`bp 0x248BB6D`** with **`ecx > 0x4000`**. On hit, note **ECX**
 
 | Step | Action | User result |
 |------|--------|-------------|
-| 0 | No patch WAD | **Pass** (no crash) |
+| 0 | No patch WAD | **Pass** (`clean_no_patch.log`) |
 | 1 | `--exclude-indices 0` | **Fail** (still crash) |
 | 2 | `--exclude-indices 4,12,15,16,17` | **Fail** (still crash) |
-| 3 | Full re-port (stride fix); SHA `97242b0a…` | **Fail** (still `0x0248BBE2` / `0x03CE9FD8`) |
-| 4a | `--exclude-indices 2196` or `dlc-port-assets-only` | — |
-| 4b–4c | Half-split `1-1099` vs `1100-2195` (+ carry exclusions) | — |
+| 3 | Full re-port; SHA `8700856a…`, scan **0** violations | **Fail** (still `0x248BB*`) |
+| 4a | `--exclude-indices 2195` (`no_bootstrap`) | **Fail** — bootstrap ruled out |
+| 4e | `--exclude-indices 3,5` (`no_base`) | **Fail** — base+commonlocations alone ruled out |
+| 4e′ | exclude `speedcity` (`no_speed_city`) | **Fail** — speedcity alone ruled out |
+| 4 arena | exclude `dlc01_base,speedcity,dlccon` (`no_arena`) | **Pass** spatial-hash window — **arena bucket IN** |
+| 4b–4c | Half-split `1-1099` vs `1100-2195` | Deferred — split `dlccon` first |
 
 `dlc01_state` indices on the **current** doc build: **4** spawns, **12** dlccon003, **15** pathfinding, **16** missionhub, **17** atmofx. Re-list after re-port.
 
