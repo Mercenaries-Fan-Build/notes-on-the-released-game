@@ -211,10 +211,11 @@ def _check_flgs(
     end = min(ba + body_len, len(data))
     pos = ba
     while pos + 42 <= end:
+        # vz_state flgs 42-byte record (see docs/placement_data_format.md §3.3)
         for field_name, foff, lo, hi in (
-            ("x", 4, COORD_MIN, COORD_MAX),
-            ("y", 18, ELEV_MIN, ELEV_MAX),
-            ("z", 22, COORD_MIN, COORD_MAX),
+            ("x", 0x12, COORD_MIN, COORD_MAX),
+            ("y", 0x16, ELEV_MIN, ELEV_MAX),
+            ("z", 0x1A, COORD_MIN, COORD_MAX),
             ("qx", 26, -1.5, 1.5),
             ("qy", 30, -1.5, 1.5),
             ("qz", 34, -1.5, 1.5),

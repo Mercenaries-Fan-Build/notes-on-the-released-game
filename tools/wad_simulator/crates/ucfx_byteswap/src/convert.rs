@@ -593,24 +593,36 @@ fn convert_comp_data_inplace(
         _ => {}
     }
 
-    let total_stride = if let Some(s) = schema {
+    // Compact-format COMP groups have info (hash) but no schm; mirror Python
+    // `_ECS_COMP_DEFAULT_STRIDE` — do not blind-sweep whole bodies.
+    let stride = if comp_name == "Transform" {
+        42
+    } else if let Some(s) = schema {
         4 + s.payload_stride as usize
+    } else if let Some(s) = compact_default_stride(comp_name) {
+        s
     } else {
         if let Some(ref mut rpt) = report {
-            rpt.record_no_schema(comp_name, data_size, "u32_array sweep");
+            rpt.record_no_schema(comp_name, data_size, "u32_array sweep (unknown stride)");
         }
         swap_u32_array(data);
         return;
     };
-
-    // Transform override: actual stride is 42, not schm's 56
-    let stride = if comp_name == "Transform" { 42 } else { total_stride };
 
     if stride == 0 {
         if let Some(ref mut rpt) = report {
             rpt.record_no_schema(comp_name, data_size, "u32_array sweep (stride=0)");
         }
         swap_u32_array(data);
+        return;
+    }
+
+    // Non-Transform ECS components: record-aligned u32 (and u16 tail) swap.
+    if comp_name != "Transform" && (schema.is_none() || is_ecs_numeric_component(comp_name)) {
+        if let Some(ref mut rpt) = report {
+            rpt.record_no_schema(comp_name, data_size, "numeric records (compact stride)");
+        }
+        swap_numeric_records_inplace(data, stride);
         return;
     }
 
@@ -940,6 +952,86 @@ fn convert_vz_state_flgs_inplace(data: &mut [u8]) {
     }
     if pos < rec_data.len() && rec_data.len().is_multiple_of(4) {
         swap_u32_array(&mut rec_data[pos..]);
+    }
+}
+
+/// Compact `info` bodies without `schm` — strides from Python `_ECS_COMP_DEFAULT_STRIDE`.
+fn compact_default_stride(comp_name: &str) -> Option<usize> {
+    match comp_name {
+        "Transform" => Some(42),
+        "Name" => Some(5),
+        "HibernationControl" => Some(6),
+        "Label" => Some(4),
+        "ScrubObject" => Some(4),
+        "LineRegion" => Some(4),
+        "Road" => Some(40),
+        "RoadIntersection" => Some(124),
+        "ObjectScript" => Some(8),
+        "Anchor" => Some(16),
+        "AiBehavior" => Some(48),
+        "SoundAmbience" => Some(20),
+        "AtmosphereBase" => Some(740),
+        "IntersectionToIntersection" => Some(8),
+        "ModelName" => Some(4),
+        "LightObject" => Some(4),
+        "DestructionLink" => Some(4),
+        "PhysicalLink" => Some(4),
+        "ModifierKey" => Some(4),
+        "MaterialMapping" => Some(4),
+        "LandingZone" => Some(4),
+        "LowResTerrainObject" => Some(4),
+        "Path" => Some(4),
+        "LaneData" => Some(4),
+        _ => None,
+    }
+}
+
+fn is_ecs_numeric_component(comp_name: &str) -> bool {
+    matches!(
+        comp_name,
+        "LightObject"
+            | "Road"
+            | "RoadIntersection"
+            | "DestructionLink"
+            | "PhysicalLink"
+            | "ObjectScript"
+            | "ModifierKey"
+            | "ScrubObject"
+            | "LineRegion"
+            | "MaterialMapping"
+            | "LandingZone"
+            | "Label"
+            | "Anchor"
+            | "LowResTerrainObject"
+            | "HibernationControl"
+            | "AtmosphereBase"
+            | "IntersectionToIntersection"
+            | "SoundAmbience"
+            | "AiBehavior"
+            | "Path"
+            | "LaneData"
+    )
+}
+
+/// Fixed-stride numeric ECS records (Python `_convert_numeric_records`).
+fn swap_numeric_records_inplace(data: &mut [u8], stride: usize) {
+    if stride == 0 {
+        return;
+    }
+    let mut pos = 0usize;
+    while pos + stride <= data.len() {
+        let n_u32 = stride / 4;
+        for i in 0..n_u32 {
+            swap_u32(data, pos + i * 4);
+        }
+        let tail = stride % 4;
+        if tail >= 2 {
+            swap_u16(data, pos + n_u32 * 4);
+        }
+        pos += stride;
+    }
+    if pos < data.len() && data[pos..].len().is_multiple_of(4) {
+        swap_u32_array(&mut data[pos..]);
     }
 }
 

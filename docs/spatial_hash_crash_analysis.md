@@ -1,9 +1,8 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
 **Date**: 2026-05-28 (updated 2026-05-30)  
-**Crash address**: `0x248BBE2`  
-**Crash instruction**: `mov dword ptr ds:[esi+ecx*4], eax` — write to read-only NVIDIA driver memory  
-**Status**: OPEN — toolchain gaps narrowed; rebuild `vz-patch.wad` after `flgs`/Transform fixes
+**Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
+**Status**: OPEN — rebuild after **flgs** + **compact Transform** + **compact numeric ECS strides** (Rust 2026-05-30); re-run `dlc-port` + deploy
 
 ## Log correlation (`dlc_enable_crash.log`, 2026-05-30)
 
@@ -12,18 +11,169 @@ Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`,
 | Field | Value |
 |-------|-------|
 | Last Lua line | `[lua] Loading vz level with vz masterscript` |
-| FATAL | `exception 0xC0000005 at 0x0248BBE2 fault=0x03CEA014` |
-| Timing | ~5.6 s after VZ masterscript line (watchdog still alive) |
+| FATAL (earlier) | `exception 0xC0000005 at 0x0248BBE2 fault=0x03CEA014` |
+| FATAL (2026-05-30 rebuild) | `exception 0xC0000005 at 0x0248BB7C fault=0x03CEA074` |
+| Timing | ~4.3 s after VZ masterscript line (watchdog still alive) |
 
-This matches the documented spatial-hash insert at `0x248BBE2` during **main-thread WAD registration**
+This matches the spatial-hash insert at `0x248BB60` during **main-thread WAD registration**
 (call stack in §Call Stack), not the audio mixer crash (`0x83664E`, separate thread — see
-`docs/audio_crash_analysis.md`). The fault address `0x03CEA014` is the bad **write target** from
-`[bucket_base + cell_index×4]`; prior x32dbg sessions showed `ESI` landing in `nvgpucomp32.dll`
-when `cell_index` is garbage (e.g. `0x2E70` read from beyond the hash table).
+`docs/audio_crash_analysis.md`).
+
+### Instruction map (verified in x32dbg, 2026-05-30)
+
+| EIP | Instruction | Access | Notes |
+|-----|-------------|--------|-------|
+| `0x248BB6D` | `mov esi, ecx` | — | **ECX = cell index** (bucket selector) |
+| `0x248BB6F` | `imul esi, esi, 0x1F0` | — | `esi = cell_index × 0x1F0` |
+| `0x248BB75` | `add esi, ebp` | — | `ebp = [0x01175DD8]` table base |
+| `0x248BB7C` | `cmp word ptr [esi+0x1E4], dx` | **READ** | `dx = 0x20` (bucket capacity); **new crash here** |
+| `0x248BBE2` | `mov dword ptr [esi+ecx*4], eax` | **WRITE** | **Prior crash**; `ecx` = slot index within bucket |
+
+**Fault address identity:** `fault = esi + 0x1E4` on the `0x248BB7C` read. Example from log:
+`fault=0x03CEA074` ⇒ `esi = 0x03CE9E90`. That `esi` is **not** `table_base + cell×0x1F0` in the
+heap block; it is produced when **ECX (cell index) is garbage**, e.g. `ECX = 0x038E2840`:
+
+```
+esi = (0x2060A290 + (0x038E2840 * 0x1F0)) & 0xFFFFFFFF = 0x03CE9E90
+fault = esi + 0x1E4 = 0x03CEA074
+```
+
+Same root as the older `0x248BBE2` / `nvgpucomp32.dll` write: **overflowing cell index** from corrupt
+entity XYZ fed to `0x516B10`, not a different bug class.
 
 **Production byte-swap:** `make dlc-port` uses **Rust** `ucfx_byteswap`, not Python `ucfx_be_to_le.py`.
 Until 2026-05-30, Rust treated ECS `flgs` as a flat `u32` sweep (corrupting 42-byte vz_state placement
 records); Python had a typed `_convert_vz_state_flgs` but was not on the port path. Rebuild required.
+
+## Post–flgs-fix crash still reproduces (2026-05-30)
+
+If retail PC + `dlc_enable.asi` still dies at `0x248BBE2` after a claimed rebuild, work through
+**deployment verification** first, then the remaining corruption sources below.
+
+### Did the fix ship? (checklist)
+
+| Check | How |
+|-------|-----|
+| Rust binary rebuilt | `make build-ucfx-byteswap` — timestamp on `tools/wad_simulator/target/release/ucfx_byteswap.exe` **newer** than `convert.rs` |
+| Patch re-ported | `make dlc-port DLC_RAR=... SOURCE_WAD=... OUTPUT=./output` — **not** redeploying an old `vz-patch.wad` |
+| Deployed WAD is the new build | Compare SHA-256 of `output/data/vz-patch.wad` on build host vs game `data/vz-patch.wad` |
+| No stale trim | If you use `make trim-patch-wad`, re-run **after** `dlc-port` |
+| Port log clean | `dlc_port` must report **0 skipped** blocks; any `byte-swap failed` = block missing from patch |
+| `--permissive` unused | Flag is wired in CLI but **not** passed to `byteswap_block_rust` (harmless if set) |
+| Simulator gate | `wad_simulator --wad output/data/vz-patch.wad --base-wad game-files/pc-game-vz.wad` → `position_violations: 0` |
+
+`dlc_port.py` always calls `byteswap_block_rust(decompressed)` (no Python `ucfx_be_to_le` fallback).
+`base_block_cache` only caches **decompressed Xbox slices** for base-game overrides, not LE output.
+
+### Confirmed on port path (Rust `ucfx_byteswap`)
+
+- **ECS** containers (`type_hash` `0xE6B81A54` layer, `0x5647C35D` world_entity_data): `ChunkTag::Flgs` → `convert_vz_state_flgs_inplace` (42-byte records, mixed u32/u16).
+- **ECS** `Transform` COMP `data`: typed f32 swap when component name resolves (ASCII or compact hash `0x753EB623`).
+- **Non-ECS** containers: `Flgs` still uses blind `swap_u32_array` — only matters if a non-layer entry carries `flgs` placement records (unusual).
+
+### Second bug fixed 2026-05-30: compact Transform without `schm`
+
+Many DLC / vz_state COMP groups use **16-byte compact `info`** (hash only, no ASCII name, **no `schm`**).
+Python (`ucfx_be_to_le._ECS_COMP_DEFAULT_STRIDE`) still runs `_convert_transform_records`.
+Rust `convert_comp_data_inplace` previously hit `schema == None` → **full-body `swap_u32_array`**, corrupting
+XYZ at +4/+8/+12 — same crash signature as bad `flgs`.
+
+**Fix:** treat `comp_name == "Transform"` with stride 42 even when `schm` is absent (`convert.rs`).
+
+### Third bug fixed 2026-05-30: compact non-Transform ECS components
+
+Python `_ECS_COMP_DEFAULT_STRIDE` + `_convert_numeric_records` apply to **Road** (40), **RoadIntersection** (124),
+**AiBehavior** (48), etc. Rust still used **whole-body `swap_u32_array`** for any compact component that was not
+`Transform`, misaligning record boundaries and corrupting embedded floats.
+
+**Fix:** `compact_default_stride()` + `swap_numeric_records_inplace()` in `convert.rs` (mirror Python).
+
+Non-ECS `Flgs` in `convert_generic_bodies` remains a blind `swap_u32_array` — only affects non-layer UCFX
+containers; DLC `dlc01_state_*` uses the ECS path (`convert_vz_state_flgs_inplace`).
+
+### `wad_simulator` on current patch (SHA `1E6CA26C…`, 2197 blocks)
+
+| Metric | Value |
+|--------|-------|
+| `position_violations` | **22** (all in **block 0** only) |
+| Block 0 path | `blocks\dlc01\dlc01_terrain_P000_Q3.block` |
+| Pattern | Transform grid Y = ±800/±1200/±1600, X ≈ 0 — **arena terrain lattice**, not LE swap corruption |
+| `flgs` placement violations | **0** |
+| Transform NaN/Inf | **0** |
+
+The 22 terrain hits are **simulator false positives** (`WORLD_Y_MIN = -500`; arena grid uses Y below that).
+They are unlikely to be the `ECX = 0x038E2840` path unless the engine registers those lattice points as
+world entities at load time (needs confirmation).
+
+### Remaining placement float sources (ranked)
+
+| Priority | Source | Risk | Notes |
+|----------|--------|------|-------|
+| P0 | Compact **Transform** COMP `data` (no `schm`) | Was **High** | Fixed in Rust 2026-05-30 |
+| P0 | Compact **Road / numeric ECS** (no `schm`) | **High** | Fixed in Rust 2026-05-30 (`swap_numeric_records_inplace`) |
+| P0 | **flgs** in ECS layer blocks (`dlc01_state_*`) | Was **High** | Fixed in ECS path; simulator shows 0 flgs violations |
+| P1 | **BNDS** AABB floats on meshes | Medium | Bad bounds → wrong spatial queries; `wad_simulator` checks envelope |
+| P1 | **STRM** positions (if ever registered) | Lower for hash @ `0x516B10` | Engine path reads **entity** XYZ (+4/+8/+12), not mesh verts |
+| P2 | **world_entity_data** (`0x5647C35D`) | Medium | Uses ECS convert path; simulator uses `consume_structural` only (no placement scan) |
+| P2 | Base-game **override** entries | Low | Whole UCFX replaced from retail PC LE — correct by definition |
+| P3 | **CHDR-internal** absolute offsets | Low for port | Byteswap walks **UCFX descriptor** table (`data_area_off + row_u0`), same as Python; CHDR child table in docs is a separate view |
+
+DLC blocks often have **both** `flgs` placements and **Transform** COMP data in the same `dlc01_state_*` layer block.
+
+### Validation gaps
+
+| Tool | Coverage | Misses |
+|------|----------|--------|
+| `wad_simulator` | All **resolved ASET** assets (base+patch overlay), `consume_layer` on type_id 9 | `world_entity_data` (type_id 8) not placement-scanned; won't flag compact Transform until consumed as layer |
+| `verify_ucfx_endian.py` | Patch WAD scan | **`flgs` probe uses wrong offsets** (4/18/22 = Transform layout, not flgs +0x12/+0x16/+0x1A) — false negatives |
+| `audit_dlc_conversion.py` | Entries with **same (hash, type_hash) in base vz.wad** | All DLC-unique ecs_node / state blocks |
+| `validate_ecs_dlc.py` | DLC-unique ecs_node list | Alignment only; no world-bounds on floats |
+| `ucfx_byteswap --validate-only` | CSUM, descriptors, BNDS/STRM/IBUF | Not placement-specific |
+
+### Bisect strategy (minimal patch)
+
+1. **Simulator on full patch:**  
+   `wad_simulator --wad output/data/vz-patch.wad --base-wad <retail-vz.wad> --strict`  
+   Note first `position NaN/Inf` / `out of world bounds` label (includes block path via ASET).
+
+2. **Half WAD:** `make dlc-port-assets-only` (2196 blocks, no bootstrap) or `trim_patch_wad.py --exclude-indices` / `--auto` to drop half of `dlc01_state_*` paths; redeploy; binary-search.
+
+3. **Single block:**  
+   `extract_single_block.py --wad <x360-doh-or-patch> --path "dlc01_state_dlccon003"`  
+   `--decode ".venv/Scripts/python.exe tools/placement_extractor.py …"`  
+   Compare BE Xbox vs LE patch floats at Transform +0x04 and flgs +0x12.
+
+4. **High-risk path patterns:** `dlc01_state_*`, `dlc01_state_*_spawns`, `dlc01_base`, `dlc01_commonlocations`, any `*layers_static*` in DLC (rare).
+
+5. **x32dbg** (MCP `user-x32dbg` when attached):  
+   - Conditional: `bp 0x248BB6D` with condition `ecx > 0x4000` (fires before bad bucket address).  
+   - On hit: **ECX** = garbage cell index; **EBP** = `[0x01175DD8]`; after `add esi, ebp`, check `esi+0x1E4` vs fault.  
+   - Caller **`0x516EF6`**: read entity pointer from stack / **EBX**; floats at **`[entity+4]` `[entity+8]` `[entity+0xC]`** (Transform layout).  
+   - Frame 2 return **`0x0063DA1F`** = WAD block loader.  
+   - Healthy stop (index `0x26A`): entity floats ≈ `(-0.21, 831.35, 0)` — valid Maracaibo-range XYZ.  
+   - Crash stop (`ECX = 0x038E2840`): `esi = 0x03CE9E90`, fault `0x03CEA074` on **read** at `0x248BB7C`.
+
+### Recommended bisect blocks (patch WAD)
+
+| Step | Action |
+|------|--------|
+| 1 | `trim_patch_wad.py --exclude-indices 0` — drop **`dlc01_terrain_P000_Q3`** only; redeploy |
+| 2 | If still crashes: `--exclude-indices 4,12,15,16,17` (all **`dlc01_state_*`**) |
+| 3 | Half-split remaining DLC blocks with `--auto` or manual index ranges |
+| 4 | `make dlc-port-assets-only` (2196 blocks, no bootstrap) to separate loader hook issues |
+
+`dlc01_state` indices in current patch: **4** `…_spawns`, **12** `…_dlccon003`, **15** pathfinding, **16** missionhub, **17** atmofx.
+
+### Action plan (other machine)
+
+1. `make build-ucfx-byteswap && make dlc-port …`  
+2. `wad_simulator --wad output/data/vz-patch.wad --base-wad …` — must show **0** position violations  
+3. `make verify-dlc-endian` (know flgs offsets in script are wrong; trust simulator for placements)  
+4. Copy `vz-patch.wad` + rebuilt `dlc_enable.asi`; confirm SHA-256  
+5. Fresh x32dbg session: conditional bp at hash insert; capture EDX entity floats + return addresses  
+6. If clean simulator but still crashes → suspect **runtime** (wrong entity pointer, not swap) or **non-placement** cell index input  
+7. Bisect with `dlc-port-assets-only` or trimmed WAD if simulator is clean but game still fails  
+8. File-level proof: `extract_single_block` on flagged `dlc01_state_*` block  
 
 ## Register State at Crash
 
@@ -148,33 +298,36 @@ during block loading.
 
 ## Hypothesis: Corrupt Position Floats from Byte-Swap
 
-The most likely cause is an entity whose XYZ position floats are corrupt after byte-swapping.
+The most likely cause is an entity whose XYZ position floats are corrupt after byte-swapping
+(entity structure **+0x04/+0x08/+0x0C** in the crash register dump — matches **Transform** layout,
+not vz_state **flgs** +0x12/+0x16/+0x1A, but both swap bugs produce garbage at engine read sites).
 When `cvttss2si` converts NaN/Inf/out-of-range floats to integers, x86 returns `0x80000000`
 (integer indefinite). The spatial cell computation in `0x516B10` then produces a garbage
 cell index that overflows the hash table.
 
-Potential sources of corrupt position data:
-1. **COMP placement records** — 42-byte records with XYZ floats at known offsets.
-   The `ucfx_be_to_le.py` status shows "UCFX deep swap (COMP placements)" as **Gap**.
-2. **STRM vertex data** — position floats in vertex buffers (also listed as **Gap**).
-3. **Other float-bearing chunks** — BNDS bounding boxes, HIER transform matrices.
+Potential sources (see **Post–flgs-fix** section for current status):
+1. **Transform COMP `data`** — 42-byte records; compact format without `schm` was blind-swept in Rust until 2026-05-30.
+2. **flgs** vz_state records — blind sweep in Rust ECS path until 2026-05-30.
+3. **BNDS** / mesh bounds — unlikely to match entity +4/+8/+12 unless wrong pointer.
+4. **STRM** vertex data — separate code path from entity registration at `0x516B10`.
 
 ## Next Steps: Fresh Reboot with Conditional Breakpoint
 
-The crash state doesn't preserve the entity's original position data. On fresh reboot:
+The crash log does not preserve registers. On a fresh run with x32dbg:
 
 ```
-bp 0x248BB6D, ecx > 0x4000
+bp 0x248BB6D
 ```
 
-This breakpoints the `mov esi, ecx` instruction (saves bucket index) with a condition
-that the index exceeds the valid range (max clamped value from caller is 0x3FFF).
+Set **condition** `ecx > 0x4000` on that breakpoint (break at `mov esi, ecx` before `imul`).
 
-When triggered:
-1. **ECX** = the overflowing cell index
-2. **Stack** will have the caller's context with the entity float pointer
-3. Trace back to identify which UCFX block/chunk contains the corrupt position floats
-4. Map those bytes to the patch WAD and fix the byte-swap for that data type
+When triggered on the **bad** entity:
+1. **ECX** ≈ `0x038E2840` (or similar huge index) — not the clamped `≤ 0x3FFF` path.
+2. After `add esi, ebp`, **`cmp [esi+0x1E4]`** will AV at `esi+0x1E4` (`0x248BB7C`) if index is wild.
+3. At **`0x516EF6`**, dump **`[entity+4..+0xC]`** as floats — expect NaN/Inf or byte-swapped garbage.
+4. Map to patch block via loader stack / last-loaded path; use `extract_single_block.py` on that block.
+
+When triggered on a **healthy** entity (e.g. `ECX = 0x26A`), floats look like normal world coords — continue.
 
 ## Relationship to Previous Crashes
 
