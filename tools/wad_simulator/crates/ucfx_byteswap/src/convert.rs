@@ -598,6 +598,7 @@ fn convert_comp_data_inplace(
     let stride = if comp_name == "Transform" {
         42
     } else if let Some(s) = schema {
+        // schm[4:8] is payload_stride; record = 4-byte entity key + payload (docs/ecs_components.md)
         4 + s.payload_stride as usize
     } else if let Some(s) = compact_default_stride(comp_name) {
         s
@@ -955,33 +956,36 @@ fn convert_vz_state_flgs_inplace(data: &mut [u8]) {
     }
 }
 
-/// Compact `info` bodies without `schm` — strides from Python `_ECS_COMP_DEFAULT_STRIDE`.
+/// Compact `info` bodies without `schm` — full record strides (4 + payload_stride).
+/// Values match `docs/ecs_components.md` (not raw schm payload_stride alone).
 fn compact_default_stride(comp_name: &str) -> Option<usize> {
     match comp_name {
         "Transform" => Some(42),
-        "Name" => Some(5),
-        "HibernationControl" => Some(6),
-        "Label" => Some(4),
-        "ScrubObject" => Some(4),
-        "LineRegion" => Some(4),
-        "Road" => Some(40),
-        "RoadIntersection" => Some(124),
-        "ObjectScript" => Some(8),
-        "Anchor" => Some(16),
-        "AiBehavior" => Some(48),
-        "SoundAmbience" => Some(20),
-        "AtmosphereBase" => Some(740),
-        "IntersectionToIntersection" => Some(8),
-        "ModelName" => Some(4),
-        "LightObject" => Some(4),
-        "DestructionLink" => Some(4),
-        "PhysicalLink" => Some(4),
-        "ModifierKey" => Some(4),
-        "MaterialMapping" => Some(4),
-        "LandingZone" => Some(4),
-        "LowResTerrainObject" => Some(4),
-        "Path" => Some(4),
-        "LaneData" => Some(4),
+        // Name is variable-length; handled by convert_name_data_inplace
+        "Name" => None,
+        "HibernationControl" => Some(10),
+        "Label" => Some(8),
+        "ScrubObject" => Some(8),
+        "LineRegion" => Some(8),
+        "Road" => Some(44),
+        "RoadIntersection" => Some(128),
+        "ObjectScript" => Some(12),
+        "Anchor" => Some(20),
+        "AiBehavior" => Some(52),
+        "SoundAmbience" => Some(24),
+        "AtmosphereBase" => Some(744),
+        "IntersectionToIntersection" => Some(12),
+        // ModelName handled by convert_modelname_data_inplace (stride 8)
+        "ModelName" => None,
+        "LightObject" => Some(56),
+        "DestructionLink" => Some(20),
+        "PhysicalLink" => Some(20),
+        "ModifierKey" => Some(12),
+        "MaterialMapping" => Some(8),
+        "LandingZone" => Some(8),
+        "LowResTerrainObject" => Some(12),
+        "Path" => Some(8),
+        "LaneData" => Some(8),
         _ => None,
     }
 }

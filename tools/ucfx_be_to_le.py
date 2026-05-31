@@ -942,7 +942,7 @@ class _CompInfo:
 
 
 _ECS_STRING_COMPONENTS = frozenset({
-    "Name", "ModelName",
+    "Name",
 })
 
 _ECS_NUMERIC_COMPONENTS = frozenset({
@@ -981,35 +981,34 @@ _ECS_COMP_HASH_TO_NAME: dict[int, str] = {
     0x514CAD3A: "SoundAmbience",
     0xDECD8889: "AiBehavior",
     0xBCFE6314: "Path",
+    0x6FA2F9D4: "LaneData",
 }
 
-# Known strides for compact-format COMP groups (no schm descriptor).
-# Values from full-format blocks' schm second u32.
+# Full record strides for compact-format COMP groups (no schm): 4 + payload_stride.
+# See docs/ecs_components.md (schm[4:8] is payload-only; Transform is always 42).
 _ECS_COMP_DEFAULT_STRIDE: dict[str, int] = {
-    # Runtime Transform records are 42 bytes; schm may report 52.
     "Transform": 42,
-    "Name": 5,
-    "HibernationControl": 6,
-    "Label": 4,
-    "ScrubObject": 4,
-    "LineRegion": 4,
-    "Road": 40,
-    "RoadIntersection": 124,
-    "ObjectScript": 8,
-    "Anchor": 16,
-    "AiBehavior": 48,
-    "SoundAmbience": 20,
-    "AtmosphereBase": 740,
-    "IntersectionToIntersection": 8,
-    "ModelName": 4,
-    "LightObject": 4,
-    "DestructionLink": 4,
-    "PhysicalLink": 4,
-    "ModifierKey": 4,
-    "MaterialMapping": 4,
-    "LandingZone": 4,
-    "LowResTerrainObject": 4,
-    "Path": 4,
+    "HibernationControl": 10,
+    "Label": 8,
+    "ScrubObject": 8,
+    "LineRegion": 8,
+    "Road": 44,
+    "RoadIntersection": 128,
+    "ObjectScript": 12,
+    "Anchor": 20,
+    "AiBehavior": 52,
+    "SoundAmbience": 24,
+    "AtmosphereBase": 744,
+    "IntersectionToIntersection": 12,
+    "LightObject": 56,
+    "DestructionLink": 20,
+    "PhysicalLink": 20,
+    "ModifierKey": 12,
+    "MaterialMapping": 8,
+    "LandingZone": 8,
+    "LowResTerrainObject": 12,
+    "Path": 8,
+    "LaneData": 8,
 }
 
 
@@ -1092,7 +1091,11 @@ def _build_ecs_comp_map(
                     current_stride = _ECS_COMP_DEFAULT_STRIDE[current_name]
 
         elif tag == "schm" and len(body) >= 8:
-            current_stride = struct.unpack_from(">I", body, 4)[0]
+            payload_stride = struct.unpack_from(">I", body, 4)[0]
+            if current_name == "Transform":
+                current_stride = 42
+            else:
+                current_stride = 4 + payload_stride
 
         elif tag == "data" and current_name is not None:
             comp_map[idx] = _CompInfo(
@@ -1129,6 +1132,17 @@ def _convert_ecs_comp_data(
                 f"(schm/compact stride={stride})"
             )
         return _convert_transform_records(body_be)
+
+    if name == "ModelName":
+        if len(body_be) % 8 != 0:
+            raise UnhandledByteSwapError(
+                f"ModelName data body size {len(body_be)} is not a multiple of 8"
+            )
+        out = bytearray()
+        for pos in range(0, len(body_be), 8):
+            u32s = struct.unpack_from(">2I", body_be, pos)
+            out += struct.pack("<2I", *u32s)
+        return bytes(out)
 
     if name in _ECS_STRING_COMPONENTS:
         return body_be

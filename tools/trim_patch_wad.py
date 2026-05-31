@@ -24,6 +24,17 @@ Usage:
   python tools/trim_patch_wad.py --exclude-indices 748,404 \\
       --input output/data/vz-patch.wad \\
       --output output/data/vz-patch-trimmed.wad
+
+  # List all block indices/paths (bisect planning):
+  python tools/trim_patch_wad.py -i output/data/vz-patch.wad -o NUL --list
+
+  # Exclude by path substring (comma-separated, case-insensitive):
+  python tools/trim_patch_wad.py --exclude-path-substr c30061,dlc01_base \\
+      -i output/data/vz-patch.wad -o output/data/vz-patch-trim.wad
+
+  # Half-WAD bisect: keep only indices 1–1099 (original numbering):
+  python tools/trim_patch_wad.py --keep-only-indices 1-1099 \\
+      -i output/data/vz-patch.wad -o output/data/vz-patch-lo.wad
 """
 from __future__ import annotations
 
@@ -83,6 +94,38 @@ def get_block_entry_hashes(blk: PatchBlock) -> list[int]:
         return hashes
     except Exception:
         return []
+
+
+def parse_index_spec(spec: str) -> set[int]:
+    """Parse comma-separated indices and inclusive ranges (e.g. ``1-1099,2196``)."""
+    out: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            lo, hi = int(a.strip()), int(b.strip())
+            if lo > hi:
+                lo, hi = hi, lo
+            out.update(range(lo, hi + 1))
+        else:
+            out.add(int(part))
+    return out
+
+
+def path_matches_substr(path: str, substrings: list[str]) -> bool:
+    p = path.replace("\\", "/").lower()
+    return any(s.lower() in p for s in substrings)
+
+
+def list_blocks(blocks: list[PatchBlock], *, prefix: str | None = None) -> None:
+    """Print ``[index] entries  path`` for every block."""
+    for i, blk in enumerate(blocks):
+        if prefix and not path_matches_substr(blk.path_string, [prefix]):
+            continue
+        ec = get_block_entry_count(blk)
+        print(f"  [{i:4d}] {ec:3d} entries  {blk.path_string}")
 
 
 def build_base_aset_set(base_wad_path: Path) -> set[int]:
@@ -155,22 +198,80 @@ def main():
     parser.add_argument("--target-reduction", type=int, default=157,
                        help="Target descriptor reduction for --auto mode (default: 157)")
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Print all block indices/paths (optional --list-prefix filter) and exit",
+    )
+    parser.add_argument(
+        "--list-prefix",
+        help="With --list: only paths containing this substring",
+    )
+    parser.add_argument(
+        "--list-state-blocks",
+        action="store_true",
+        help="Print indices/paths for dlc01_state* blocks and exit",
+    )
+    parser.add_argument(
+        "--exclude-path-substr",
+        help="Comma-separated path substrings; matching blocks are removed",
+    )
+    parser.add_argument(
+        "--keep-only-indices",
+        help="Keep only these indices/ranges (original numbering); comma or 1-1099",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
+
+    if args.list or args.list_state_blocks:
+        contents = read_patch_wad(input_path)
+        if args.list_state_blocks:
+            print(f"dlc01_state* blocks in {input_path} ({len(contents.blocks)} total):\n")
+            list_blocks(contents.blocks, prefix="dlc01_state")
+        else:
+            label = f"blocks in {input_path}"
+            if args.list_prefix:
+                label += f" (prefix filter: {args.list_prefix!r})"
+            print(f"{len(contents.blocks)} {label}:\n")
+            list_blocks(contents.blocks, prefix=args.list_prefix)
+        return
+
     output_path = Path(args.output)
 
     # Determine exclusion set
     exclude_indices: set[int] = set()
+    keep_only: set[int] | None = None
+    trim_mode = False
 
     if args.exclusions:
         data = json.loads(Path(args.exclusions).read_text())
         exclude_indices = set(data["excluded_block_indices"])
         print(f"Loaded {len(exclude_indices)} exclusions from {args.exclusions}")
-    elif args.exclude_indices:
-        exclude_indices = set(int(x.strip()) for x in args.exclude_indices.split(","))
-        print(f"Excluding {len(exclude_indices)} blocks by index")
-    elif args.auto:
+        trim_mode = True
+    if args.exclude_indices:
+        exclude_indices |= parse_index_spec(args.exclude_indices)
+        print(f"Excluding {len(exclude_indices)} blocks by index (cumulative)")
+        trim_mode = True
+    if args.exclude_path_substr:
+        substrs = [s.strip() for s in args.exclude_path_substr.split(",") if s.strip()]
+        contents = read_patch_wad(input_path)
+        path_excluded = {
+            i
+            for i, blk in enumerate(contents.blocks)
+            if path_matches_substr(blk.path_string, substrs)
+        }
+        exclude_indices |= path_excluded
+        print(
+            f"Excluding {len(path_excluded)} blocks by path substring "
+            f"({', '.join(substrs)!r})"
+        )
+        trim_mode = True
+    if args.keep_only_indices:
+        keep_only = parse_index_spec(args.keep_only_indices)
+        print(f"Keep-only filter: {len(keep_only)} indices")
+        trim_mode = True
+    if args.auto:
         if not args.base_wad:
             parser.error("--base-wad is required with --auto")
         print("Auto-detecting redundant blocks...")
@@ -185,10 +286,15 @@ def main():
         auto_excluded = auto_select_exclusions(
             contents.blocks, base_hashes, args.target_reduction
         )
-        exclude_indices = set(auto_excluded)
-        print(f"  Auto-selected {len(exclude_indices)} blocks to remove")
-    else:
-        parser.error("Must specify --exclusions, --exclude-indices, or --auto")
+        exclude_indices |= set(auto_excluded)
+        print(f"  Auto-selected {len(auto_excluded)} blocks to remove")
+        trim_mode = True
+
+    if not trim_mode:
+        parser.error(
+            "Must specify --exclusions, --exclude-indices, --exclude-path-substr, "
+            "--keep-only-indices, or --auto"
+        )
 
     # Read and rebuild
     print(f"\nReading {input_path}...")
@@ -206,7 +312,13 @@ def main():
     removed_paths: list[str] = []
 
     for i, blk in enumerate(original_blocks):
-        if i in exclude_indices:
+        if keep_only is not None and i not in keep_only:
+            entry_count = get_block_entry_count(blk)
+            removed_descriptors += entry_count
+            removed_paths.append(blk.path_string)
+            if args.verbose:
+                print(f"  REMOVING [{i:4d}] {entry_count:3d} entries (keep-only): {blk.path_string}")
+        elif i in exclude_indices:
             entry_count = get_block_entry_count(blk)
             removed_descriptors += entry_count
             removed_paths.append(blk.path_string)

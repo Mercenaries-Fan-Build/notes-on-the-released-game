@@ -54,7 +54,11 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
-from ucfx_byteswap_wrapper import byteswap_block_rust  # noqa: E402
+from ucfx_byteswap_wrapper import (  # noqa: E402
+    byteswap_block_ecs_python_fallback,
+    byteswap_block_python,
+    byteswap_block_rust,
+)
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -403,6 +407,31 @@ def _apply_overrides_and_strips(
     return out, stripped_count
 
 
+_TYPE_ECS_LAYER = 0xE6B81A54
+_TYPE_WORLD_ENTITY = 0x5647C35D
+
+
+def _block_has_ecs_layer(decompressed: bytes) -> bool:
+    """True if the BE block entry table includes layer / world-entity UCFX."""
+    if len(decompressed) < 20:
+        return False
+    try:
+        entry_count = struct.unpack_from(">I", decompressed, 0)[0]
+    except struct.error:
+        return False
+    if entry_count > 50_000:
+        return False
+    header_end = 4 + entry_count * 16
+    if header_end > len(decompressed):
+        return False
+    for i in range(entry_count):
+        off = 4 + i * 16
+        type_hash = struct.unpack_from(">I", decompressed, off + 4)[0]
+        if type_hash in (_TYPE_ECS_LAYER, _TYPE_WORLD_ENTITY):
+            return True
+    return False
+
+
 # ── Parallel block processing ─────────────────────────────────────────
 
 @dataclass
@@ -423,6 +452,8 @@ class _BlockWorkerArgs:
     collect_hashes: bool
     permissive: bool = False
     strip_audio: bool = False
+    byteswap_python_ecs: bool = False
+    byteswap_python_ecs_fallback: bool = False
 
 
 @dataclass
@@ -586,7 +617,14 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
 
     try:
-        swapped = byteswap_block_rust(decompressed)
+        if args.byteswap_python_ecs and _block_has_ecs_layer(decompressed):
+            swapped = byteswap_block_python(decompressed, permissive=args.permissive)
+        elif args.byteswap_python_ecs_fallback and _block_has_ecs_layer(decompressed):
+            swapped = byteswap_block_ecs_python_fallback(
+                decompressed, permissive=args.permissive,
+            )
+        else:
+            swapped = byteswap_block_rust(decompressed)
         stats: dict = {
             "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
             "tags_seen": {}, "errors": [],
@@ -901,6 +939,8 @@ def port_x360_dlc(
     jobs: int | None = None,
     permissive: bool = False,
     strip_audio: bool = False,
+    byteswap_python_ecs: bool = False,
+    byteswap_python_ecs_fallback: bool = False,
     descriptor_limit: int | None = None,
     exclude_blocks: str | None = None,
 ) -> int:
@@ -1052,6 +1092,8 @@ def port_x360_dlc(
             collect_hashes=collect_hashes,
             permissive=permissive,
             strip_audio=strip_audio,
+            byteswap_python_ecs=byteswap_python_ecs,
+            byteswap_python_ecs_fallback=byteswap_python_ecs_fallback,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1985,6 +2027,16 @@ def main() -> int:
     ap.add_argument("--no-hook", action="store_true",
                     help="Add dlc01 as entry 115 only — do NOT modify "
                          "wifmissionflow (use ASI to trigger import at runtime)")
+    ap.add_argument(
+        "--byteswap-python-ecs",
+        action="store_true",
+        help="Use Python ucfx_be_to_le for blocks with layer/world-entity UCFX (debug parity)",
+    )
+    ap.add_argument(
+        "--byteswap-python-ecs-fallback",
+        action="store_true",
+        help="Try Rust byteswap first; on failure use Python for ECS blocks only",
+    )
     ap.add_argument("--permissive", action="store_true",
                     help="Allow blind u32 fallbacks on unknown chunks (testing only; "
                          "default is strict — unhandled tags raise)")
@@ -2084,6 +2136,8 @@ def main() -> int:
         jobs=args.jobs,
         permissive=args.permissive,
         strip_audio=args.strip_audio,
+        byteswap_python_ecs=args.byteswap_python_ecs,
+        byteswap_python_ecs_fallback=args.byteswap_python_ecs_fallback,
         descriptor_limit=args.descriptor_limit,
         exclude_blocks=args.exclude_blocks,
     )
