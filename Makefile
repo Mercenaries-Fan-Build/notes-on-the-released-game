@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -33,11 +33,14 @@ endif
 GLB_ROOT_SCALE ?= 1
 # Parallel workers for ``make regen-all-glbs`` (default 1; set higher for multi-core).
 REGEN_JOBS ?= 1
+REGEN_C3_JOBS ?= 16
+REGEN_C3_LOD ?= highest-poly-per-xz-footprint
 
 STAGE2_SEQUENTIAL ?= 0
 STAGE2_JOBS ?=
 
 # Passed through to stage2_review_extract.sh / stage2_parallel.sh (override per invocation).
+STAGE2_MESH_LOD ?= keep-all
 STAGE2_SKIP_UCFX ?= 0
 STAGE2_SKIP_MESH ?= 0
 STAGE2_SKIP_TEX ?= 0
@@ -99,6 +102,8 @@ help:
 	@echo "  make regen-maracaibo-glbs OUTPUT=./output [GLB_ROOT_SCALE=1]"
 	@echo "                      Regenerate mesh_scene.glb (embedded textures) for Maracaibo subset"
 	@echo "  make regen-all-glbs OUTPUT=./output [REGEN_JOBS=4]"
+	@echo "  make regen-c3-cells OUTPUT=./output [REGEN_C3_JOBS=16] [REGEN_C3_LOD=highest-poly-per-xz-footprint]"
+	@echo "                      Re-extract ~2234 c3 world-cell GLBs (mesh + LOD dedup; no full stage 2)"
 	@echo "                      Regenerate mesh_scene.glb for ALL assets in manifest (skips existing; --force to redo)"
 	@echo "  make extract-terrain OUTPUT=./output"
 	@echo "                      Merge low_res_terrain UCFX tiles → OUTPUT/extracted/review/batch_vz/.../mesh_scene.glb"
@@ -109,6 +114,9 @@ help:
 	@echo "  make extract-placements OUTPUT=./output"
 	@echo "                      Extract placement data from layers_static + vz_state → output/placements/"
 	@echo "                      (+ ECS merge, ASET decode, pmc_base_block_set.json)"
+	@echo "  make ue-bind-manifest OUTPUT=./output [WAD_VZ=game-files/pc-game-vz.wad]"
+	@echo "                      Water: WAD_VZ or decompressed resident block under output/extracted/"
+	@echo "                      Merge placements/graphs/water/c3 → ue5_import/ue_game_binding.json (Editor apply)"
 	@echo "  make condense-placements OUTPUT=./output"
 	@echo "                      Slim gzip bundle + manifest for transfer (after extract-placements)"
 	@echo "  make build-pmc-base-set OUTPUT=./output"
@@ -144,6 +152,7 @@ help:
 	@echo "  make preview-placements OUTPUT=./output   # viewer dev server + placement map (MERCS2_PLACEMENTS_ROOT)"
 	@echo "  make preview-placement-bbox OUTPUT=./output  # bbox regions + rotation override QA page"
 	@echo "  make viewer       npm install + dev server (asset viewer)"
+	@echo "  make preview-world-cells  Open Three.js c3 grid preview (/world-cells)"
 	@echo "  make extract-iso  Prints ISO/locale extraction hints (mount ISO yourself)"
 	@echo "  make clean OUTPUT=./output"
 	@echo "  make all           extract-all + saves/audio/video + ue5-bundle + regen-maracaibo-glbs (needs ZIP)"
@@ -217,6 +226,7 @@ review-all: build-texture-index
 	@test -f "$(OUTPUT)/extracted/texture_index.json" || (echo "error: missing $(OUTPUT)/extracted/texture_index.json (build-texture-index failed?)" >&2; exit 1)
 	@env TEXTURE_INDEX="$(OUTPUT)/extracted/texture_index.json" \
 	  STAGE2_SEQUENTIAL="$(STAGE2_SEQUENTIAL)" STAGE2_JOBS="$(STAGE2_JOBS)" \
+	  STAGE2_MESH_LOD="$(STAGE2_MESH_LOD)" \
 	  STAGE2_SKIP_UCFX="$(STAGE2_SKIP_UCFX)" STAGE2_SKIP_MESH="$(STAGE2_SKIP_MESH)" STAGE2_SKIP_TEX="$(STAGE2_SKIP_TEX)" STAGE2_SKIP_HAVOK="$(STAGE2_SKIP_HAVOK)" \
 	  STAGE2_DIALOG="$(STAGE2_DIALOG)" STAGE2_GLTF="$(STAGE2_GLTF)" STAGE2_ANIM="$(STAGE2_ANIM)" STAGE2_LEVEL="$(STAGE2_LEVEL)" \
 	  STAGE2_EMBEDDED_AUDIO="$(STAGE2_EMBEDDED_AUDIO)" \
@@ -306,6 +316,51 @@ ue5-bundle: export-ue5
 build-vz-act-manifest:
 	@test -f "$(OUTPUT)/placements/vz_state/all_vz_state.json" || (echo "error: run make extract-placements first" >&2; exit 1)
 	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_vz_act_manifest.py" --output "$(OUTPUT)/placements/vz_act_layer_manifest.json"
+
+# Game→UE binding manifest (merge placements, graphs, water, c3 cells — no Editor required).
+WAD_VZ ?= $(REPO_ROOT)/game-files/pc-game-vz.wad
+# Fallback when WAD_VZ is absent but extract-all produced decompressed resident:
+RESIDENT_BLOCK ?= $(OUTPUT)/extracted/batch_vz/blocks/03185_blocks__VZ__resident_P000_Q3.block.bin
+
+road-graph:
+	@test -f "$(OUTPUT)/placements/layers_static.json" || (echo "error: run make extract-placements first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/road_graph_extractor.py" \
+	  --placements "$(OUTPUT)/placements/layers_static.json" \
+	  --out "$(OUTPUT)/placements/road_graph.json"
+
+destruction-graph:
+	@test -f "$(OUTPUT)/placements/layers_static.json" || (echo "error: run make extract-placements first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/destruction_link_resolver.py" \
+	  --layers-static "$(OUTPUT)/placements/layers_static.json" \
+	  --vz-state-glob "$(OUTPUT)/placements/vz_state/*.json" \
+	  --out "$(OUTPUT)/placements/destruction_graph.json"
+
+watermap-decode:
+	@if [ -f "$(WAD_VZ)" ]; then \
+	  "$(PYTHON)" "$(REPO_ROOT)/tools/watermap_decode.py" \
+	    --wad "$(WAD_VZ)" \
+	    --out "$(OUTPUT)/watermap_decode.json"; \
+	elif [ -f "$(RESIDENT_BLOCK)" ]; then \
+	  echo "watermap-decode: using extracted resident block ($(RESIDENT_BLOCK))"; \
+	  "$(PYTHON)" "$(REPO_ROOT)/tools/watermap_decode.py" \
+	    --block-bin "$(RESIDENT_BLOCK)" \
+	    --out "$(OUTPUT)/watermap_decode.json"; \
+	else \
+	  echo "error: no WAD_VZ ($(WAD_VZ)) and no RESIDENT_BLOCK ($(RESIDENT_BLOCK))" >&2; \
+	  echo "  run extract-all first or set WAD_VZ=/path/to/vz.wad" >&2; \
+	  exit 1; \
+	fi
+
+ue-bind-manifest: extract-placements
+	@$(MAKE) build-vz-act-manifest OUTPUT="$(OUTPUT)" --no-print-directory
+	@if [ -d "$(OUTPUT)/extracted/review/batch_vz" ]; then \
+	  $(MAKE) build-c3-cell-manifest OUTPUT="$(OUTPUT)" --no-print-directory; \
+	else \
+	  echo "Note: skipping build-c3-cell-manifest (no review/batch_vz — run review-all)"; \
+	fi
+	@$(MAKE) watermap-decode OUTPUT="$(OUTPUT)" WAD_VZ="$(WAD_VZ)" RESIDENT_BLOCK="$(RESIDENT_BLOCK)" --no-print-directory
+	@$(MAKE) road-graph destruction-graph OUTPUT="$(OUTPUT)" --no-print-directory
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/build_ue_game_binding.py" --output "$(OUTPUT)"
 
 extract-placements:
 	@test -d "$(OUTPUT)/extracted/batch_vz/blocks" || (echo "error: $(OUTPUT)/extracted/batch_vz/blocks missing — run extract-all first" >&2; exit 1)
@@ -437,6 +492,15 @@ regen-maracaibo-glbs: filter-maracaibo filter-maracaibo-placements
 	@cd "$(REPO_ROOT)/tools" && "$(PYTHON)" "$(REPO_ROOT)/tools/regen_maracaibo_glbs.py" --pipeline-root "$(abspath $(OUTPUT))" --glb-root-scale "$(GLB_ROOT_SCALE)"
 
 REGEN_FORCE ?=
+regen-c3-cells: build-texture-index
+	@test -d "$(OUTPUT)/extracted/review/batch_vz" || (echo "error: run make review-all first" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/regen_c3_world_cells.py" \
+	  --pipeline-root "$(abspath $(OUTPUT))" \
+	  --lod "$(REGEN_C3_LOD)" \
+	  --jobs $(REGEN_C3_JOBS) \
+	  --texture-index "$(OUTPUT)/extracted/texture_index.json" \
+	  --glb-root-scale "$(GLB_ROOT_SCALE)"
+
 regen-all-glbs:
 	@"$(PYTHON)" -c "import pygltflib" 2>/dev/null || (echo "error: pygltflib not available — run make venv" >&2; exit 1)
 	@test -f "$(OUTPUT)/ue5_import/metadata/manifest.json" || (echo "error: missing manifest — run make ue5-bundle first" >&2; exit 1)
@@ -669,6 +733,10 @@ all:
 viewer:
 	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
 	cd "$(REPO_ROOT)/viewer" && npm install && npm run dev
+
+preview-world-cells:
+	@test -d "$(REPO_ROOT)/viewer" && test -f "$(REPO_ROOT)/viewer/package.json" || (echo "No viewer/ app" >&2; exit 1)
+	cd "$(REPO_ROOT)/viewer" && npm install && npm run dev -- --open /world-cells
 
 # Placement / region preview (serves output/placements/*.json via MERCS2_PLACEMENTS_ROOT).
 preview-placements:

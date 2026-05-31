@@ -1,0 +1,31 @@
+--- a/lundump.c
++++ b/lundump.c
+@@ -5,6 +5,7 @@
+ */
+ 
+ #include <string.h>
++#include <stdint.h>
+ 
+ #define lundump_c
+ #define LUA_CORE
+@@ -75,8 +76,10 @@
+ 
+ static TString* LoadString(LoadState* S)
+ {
++ uint32_t size32;
+  size_t size;
+- LoadVar(S,size);
++ LoadMem(S,&size32,1,4);
++ size=(size_t)size32;
+  if (size==0)
+   return NULL;
+  else
+@@ -220,7 +223,7 @@
+  *h++=(char)LUAC_FORMAT;
+  *h++=(char)*(char*)&x;				/* endianness */
+  *h++=(char)sizeof(int);
+- *h++=(char)sizeof(size_t);
++ *h++=(char)4;						/* force 32-bit size_t in bytecode */
+  *h++=(char)sizeof(Instruction);
+  *h++=(char)sizeof(lua_Number);
+  *h++=(char)(((lua_Number)0.5)==0);		/* is lua_Number integral? */

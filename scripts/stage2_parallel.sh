@@ -10,6 +10,7 @@
 #
 # Env (same as stage2_review_extract.sh; PYTHON defaults to .venv if present):
 #   PYTHON, MESH_FORMAT, TEXTURE_PNG, TEXTURE_INDEX (Makefile review-all sets this automatically), HAVOK_CONVEX_OBJ,
+#   STAGE2_MESH_LOD (keep-all | dedupe-bbox | highest-poly-per-bbox; default keep-all),
 #   STAGE2_SKIP_UCFX, STAGE2_SKIP_MESH, STAGE2_SKIP_TEX, STAGE2_SKIP_HAVOK,
 #   STAGE2_DIALOG, STAGE2_LEVEL, STAGE2_EMBEDDED_AUDIO, STAGE2_GLTF, STAGE2_ANIM
 #   STAGE2_VALIDATE_RUST, STAGE2_VALIDATE_GLTF, STAGE2_VALIDATE_SAMPLE, STAGE2_VALIDATE_JOBS, STAGE2_VALIDATE_STRICT
@@ -111,6 +112,8 @@ process_one() {
       MESHARGS=()
       TEX_IDX="${TEXTURE_INDEX:-}"
       [[ -n "$TEX_IDX" && -f "$TEX_IDX" ]] && MESHARGS+=(--texture-index "$TEX_IDX")
+      MESH_LOD="${STAGE2_MESH_LOD:-keep-all}"
+      MESHARGS+=(--lod "$MESH_LOD")
       if "$PYTHON" "$MESH" "$binf" --out "$mesh_out" --format "$MESH_FORMAT" --indices --stem "$stem" --per-submesh-obj "${MESHARGS[@]}"; then
         :; else echo "FAILED mesh $binf" >>"$FAIL"; ec=1; fi
     fi
@@ -160,6 +163,7 @@ process_one() {
 export -f process_one
 export PYTHON MESH_FORMAT UCFX MESH TEX HAV GLTF DIALOG LEVEL PWS
 export REVIEW FAIL LOG
+export STAGE2_MESH_LOD="${STAGE2_MESH_LOD:-keep-all}"
 export STAGE2_SKIP_UCFX="${STAGE2_SKIP_UCFX:-0}"
 export STAGE2_SKIP_MESH="${STAGE2_SKIP_MESH:-0}"
 export STAGE2_SKIP_TEX="${STAGE2_SKIP_TEX:-0}"

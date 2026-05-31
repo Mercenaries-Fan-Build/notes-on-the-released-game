@@ -371,6 +371,41 @@ def _log_ocean_footprint(ocean: unreal.Actor | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Binding manifest integration
+# ---------------------------------------------------------------------------
+
+def apply_water_binding(water: dict[str, Any]) -> None:
+    """Apply sea level / extent from ``ue_game_binding.json`` water section."""
+    global SEA_LEVEL_UE, OCEAN_HALF_M
+    if water.get("sea_level_ue_cm") is not None:
+        SEA_LEVEL_UE = float(water["sea_level_ue_cm"])
+    if water.get("ocean_half_m") is not None:
+        OCEAN_HALF_M = float(water["ocean_half_m"])
+    _log(
+        f"  manifest water: sea_level_ue_cm={SEA_LEVEL_UE}, "
+        f"ocean_half_m={OCEAN_HALF_M}, game_y_m={water.get('sea_level_m')}"
+    )
+
+
+def log_ocean_footprint(ocean: unreal.Actor | None) -> None:
+    _log_ocean_footprint(ocean)
+
+
+def _try_manifest_water() -> bool:
+    try:
+        import mercs2_binding_manifest_io as mio
+
+        manifest = mio.load_manifest()
+        water = manifest.get("water") if manifest else None
+        if isinstance(water, dict):
+            apply_water_binding(water)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -378,6 +413,11 @@ def run() -> None:
     _log("=" * 70)
     _log("Mercenaries 2 — Water (ocean) setup")
     _log("=" * 70)
+
+    if _try_manifest_water():
+        _log("  using water params from ue_game_binding.json")
+    else:
+        _log("  using built-in SEA_LEVEL_UE (run make ue-bind-manifest for -36 m raster)")
 
     _log("--- Plugin ---")
     _changed, restart_required = enable_water_plugin()

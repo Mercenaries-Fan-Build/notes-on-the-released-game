@@ -139,6 +139,8 @@ for binf in "${bins[@]}"; do
     MESHARGS=()
     TEX_IDX="${TEXTURE_INDEX:-}"
     [[ -n "$TEX_IDX" && -f "$TEX_IDX" ]] && MESHARGS+=(--texture-index "$TEX_IDX")
+    MESH_LOD="${STAGE2_MESH_LOD:-keep-all}"
+    MESHARGS+=(--lod "$MESH_LOD")
     run_step mesh "$PYTHON" "$MESH" "$binf" --out "$mesh_out" --format "$MESH_FORMAT" --indices --stem "$stem" --per-submesh-obj "${MESHARGS[@]}" >>"$LOG" 2>&1 || ec=1
   fi
 

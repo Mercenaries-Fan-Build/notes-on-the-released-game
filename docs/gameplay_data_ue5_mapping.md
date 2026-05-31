@@ -3,6 +3,8 @@
 **Date:** 2026-05-15  
 **Purpose:** Document all non-mesh data extracted from the original game and how each category maps to UE5 systems for eventual implementation.
 
+**Automation:** For Editor setup, the machine-readable manifest built by `make ue-bind-manifest` supersedes the tables below when present. See [`ue_game_bindings.md`](ue_game_bindings.md), schema [`data/ue_game_binding_schema.json`](data/ue_game_binding_schema.json), applicator `game-scripts/apply_world_bindings.py`.
+
 ---
 
 ## Data Inventory Summary

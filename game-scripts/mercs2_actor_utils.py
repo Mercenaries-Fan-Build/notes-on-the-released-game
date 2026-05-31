@@ -146,6 +146,24 @@ def _apply_actor_folder_and_visibility(
         pass
 
 
+def _apply_actor_world_transform(
+    actor: unreal.Actor,
+    loc: unreal.Vector,
+    rot: unreal.Rotator,
+    scale: unreal.Vector,
+) -> None:
+    """Force world transform (teleport) — required on UE 5.7 + World Partition."""
+    try:
+        xform = unreal.Transform(loc, rot, scale)
+        actor.set_actor_transform(xform, False, True)
+        return
+    except Exception:
+        pass
+    actor.set_actor_location(loc, False, True)
+    actor.set_actor_rotation(rot, False)
+    actor.set_actor_scale3d(scale)
+
+
 def configure_static_mesh_actor(
     actor: unreal.StaticMeshActor,
     mesh_path: str,
@@ -165,9 +183,7 @@ def configure_static_mesh_actor(
             actor.static_mesh_component,
         )
 
-    actor.set_actor_location(loc, False, False)
-    actor.set_actor_rotation(rot, False)
-    actor.set_actor_scale3d(scale)
+    _apply_actor_world_transform(actor, loc, rot, scale)
     _apply_actor_folder_and_visibility(actor, label, folder, editor_hidden)
     m2dl.add_actor_to_data_layer_if_any(actor, data_layer)
     return actor
@@ -237,7 +253,9 @@ def configure_point_light_actor(
     data_layer: unreal.DataLayerInstance | None,
     editor_hidden: bool = False,
 ) -> unreal.PointLight:
-    actor.set_actor_location(loc, False, False)
+    _apply_actor_world_transform(
+        actor, loc, unreal.Rotator(), unreal.Vector(1.0, 1.0, 1.0),
+    )
     comp = actor.point_light_component
     comp.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
     comp.set_editor_property("light_color", light_color)

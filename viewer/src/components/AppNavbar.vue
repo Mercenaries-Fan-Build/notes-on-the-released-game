@@ -27,6 +27,7 @@ const links = [
   { to: '/blocks', label: 'Block Browser' },
   { to: '/review', label: 'Review Queue' },
   { to: '/workbench', label: 'Workbench' },
+  { to: '/world-cells', label: 'World Cells 3D' },
   { to: '/placements', label: 'Placement Map' },
   { to: '/zones', label: 'Zone Editor' },
   { to: '/search', label: 'Search' },

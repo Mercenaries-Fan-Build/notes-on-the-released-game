@@ -148,6 +148,8 @@ def _canonical_from_path(mesh_path: str) -> str:
     for part in reversed(parts):
         if _GENERIC_SEGMENT_RE.match(part):
             continue
+        if part.lower().startswith("sm_"):
+            continue
         m = _BLOCK_FOLDER_RE.match(part)
         if m:
             return m.group(1).lower()
