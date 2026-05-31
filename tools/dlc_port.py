@@ -16,7 +16,8 @@ Usage:
   # Full pipeline (DLC port + bootstrap injection in one command):
   python3 tools/dlc_port.py --x360-rar Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar \\
       --source-wad path/to/vz.wad \\
-      --output vz-patch.wad
+      --output output
+  # (directory → output/data/vz-patch.wad; or pass output/data/vz-patch.wad explicitly)
 
   # From Xbox 360 DLC RAR (without bootstrap):
   python3 tools/dlc_port.py --x360-rar Mercenaries.2.World.In.Flames.DLC.RF.X360-ZTM.rar \\
@@ -413,6 +414,33 @@ _TYPE_WORLD_ENTITY = 0x5647C35D
 _TYPE_GUIDMAP = 0x140E8728
 
 
+_PYTHON_ECS_PATH_MARKERS = ("dlc01_base", "speedcity", "dlccon")
+
+
+def _path_force_python_ecs(path: str) -> bool:
+    """Path substrings that always use Python byteswap (arena / contract layers)."""
+    lower = path.replace("/", "\\").lower()
+    return any(m in lower for m in _PYTHON_ECS_PATH_MARKERS)
+
+
+def _should_use_python_ecs_byteswap(
+    decompressed: bytes,
+    path: str,
+    *,
+    byteswap_python_ecs: bool,
+    byteswap_python_ecs_paths: bool,
+) -> bool:
+    """Rust vs Python ECS byteswap selector for one BE block."""
+    if byteswap_python_ecs:
+        return _block_has_ecs_layer(decompressed)
+    if byteswap_python_ecs_paths:
+        if _path_force_python_ecs(path):
+            return True
+        if _block_has_ecs_layer(decompressed):
+            return True
+    return False
+
+
 def _block_has_ecs_layer(decompressed: bytes) -> bool:
     """True if the BE block needs Python ECS-aware byteswap (layer / worldentity / guidmap)."""
     if len(decompressed) < 20:
@@ -456,6 +484,7 @@ class _BlockWorkerArgs:
     strip_audio: bool = False
     byteswap_python_ecs: bool = False
     byteswap_python_ecs_fallback: bool = False
+    byteswap_python_ecs_paths: bool = True
 
 
 @dataclass
@@ -619,7 +648,12 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
 
     try:
-        if args.byteswap_python_ecs and _block_has_ecs_layer(decompressed):
+        if _should_use_python_ecs_byteswap(
+            decompressed,
+            args.path,
+            byteswap_python_ecs=args.byteswap_python_ecs,
+            byteswap_python_ecs_paths=args.byteswap_python_ecs_paths,
+        ):
             swapped = byteswap_block_python(decompressed, permissive=args.permissive)
         elif args.byteswap_python_ecs_fallback and _block_has_ecs_layer(decompressed):
             swapped = byteswap_block_ecs_python_fallback(
@@ -943,6 +977,8 @@ def port_x360_dlc(
     strip_audio: bool = False,
     byteswap_python_ecs: bool = False,
     byteswap_python_ecs_fallback: bool = False,
+    byteswap_python_ecs_paths: bool = True,
+    fail_on_placement_violations: bool = False,
     descriptor_limit: int | None = None,
     exclude_blocks: str | None = None,
 ) -> int:
@@ -960,7 +996,12 @@ def port_x360_dlc(
     """
     print("Xbox 360 DLC -> PC Patch WAD Porter (unified)")
     print("=" * 60)
-    print("  Byte-swap backend: Rust (ucfx_byteswap)")
+    if byteswap_python_ecs:
+        print("  Byte-swap backend: Python (all ECS-layer blocks)")
+    elif byteswap_python_ecs_paths:
+        print("  Byte-swap backend: Rust + Python (layer/path: dlc01_base, speedcity, dlccon)")
+    else:
+        print("  Byte-swap backend: Rust (ucfx_byteswap)")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -1096,6 +1137,7 @@ def port_x360_dlc(
             strip_audio=strip_audio,
             byteswap_python_ecs=byteswap_python_ecs,
             byteswap_python_ecs_fallback=byteswap_python_ecs_fallback,
+            byteswap_python_ecs_paths=byteswap_python_ecs_paths,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1451,6 +1493,33 @@ def port_x360_dlc(
     print("    - Deploy VO: copy vo_stream_dlctest.english.pws to <game>/Data/Audios/")
     print("      (use --extract-audio or fresh-rebuilt/data/Audios/)")
     print("    - Briefing Spiel gfx still missing → placeholder slides (slow, not deadlock)")
+
+    if fail_on_placement_violations:
+        from placement_scan_lib import format_ranked_report, scan_decompressed_block  # noqa: E402
+
+        print("\n  Placement scan (post-port gate)...")
+        scan_results = []
+        for idx, blk in enumerate(converted):
+            try:
+                raw = decompress_sges_block(
+                    blk.compressed_data, 0, len(blk.compressed_data),
+                )
+            except Exception:
+                continue
+            scan_results.append(
+                scan_decompressed_block(raw, idx, blk.path_string),
+            )
+        total_viol = sum(r.violation_count for r in scan_results)
+        print(format_ranked_report(scan_results, top_n=10))
+        if total_viol > 0:
+            print(
+                f"\nERROR: {total_viol} placement violation(s) in port output "
+                f"(run tools/scan_patch_placements.py). Use --no-fail-on-placement-violations "
+                f"to skip this gate.",
+                file=sys.stderr,
+            )
+            return 1
+        print("  Placement scan: OK (0 violations)")
 
     return 0
 
@@ -2001,6 +2070,22 @@ def extract_dlc_audio(stfs_data: bytes, audio_dir: Path) -> int:
 
 # ── CLI ───────────────────────────────────────────────────────────────
 
+def resolve_patch_wad_output(output: Path) -> Path:
+    """Map ``--output`` to the patch WAD file path.
+
+    Matches ``make dlc-port OUTPUT=./output`` (writes ``$(OUTPUT)/data/vz-patch.wad``).
+    A path ending in ``.wad`` is treated as the output file. A directory, or a
+    non-existent path without a ``.wad`` suffix, is treated as an OUTPUT root.
+    """
+    if output.is_dir():
+        return output / "data" / "vz-patch.wad"
+    if output.suffix.lower() == ".wad":
+        return output
+    if not output.exists():
+        return output / "data" / "vz-patch.wad"
+    return output
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Port Xbox 360 DLC to PC vz-patch.wad (unified tool)",
@@ -2016,7 +2101,8 @@ def main() -> int:
                         help="STFS LIVE container or raw DLC01.doh file")
 
     ap.add_argument("--output", "-o", type=Path,
-                    help="Output vz-patch.wad path")
+                    help="Output vz-patch.wad file, or OUTPUT directory "
+                         "(writes data/vz-patch.wad under it; same as make dlc-port)")
     ap.add_argument("--merge-into", type=Path,
                     help="Merge DLC blocks into an existing patch WAD")
     ap.add_argument("--source-wad", type=Path, default=None,
@@ -2038,6 +2124,17 @@ def main() -> int:
         "--byteswap-python-ecs-fallback",
         action="store_true",
         help="Try Rust byteswap first; on failure use Python for ECS blocks only",
+    )
+    ap.add_argument(
+        "--no-byteswap-python-ecs-paths",
+        action="store_true",
+        help="Disable default Python byteswap for layer blocks and paths "
+             "dlc01_base/speedcity/dlccon (Rust-only for those)",
+    )
+    ap.add_argument(
+        "--fail-on-placement-violations",
+        action="store_true",
+        help="After build, scan patch for Transform/flgs float violations and exit 1",
     )
     ap.add_argument("--permissive", action="store_true",
                     help="Allow blind u32 fallbacks on unknown chunks (testing only; "
@@ -2117,13 +2214,17 @@ def main() -> int:
             return 0
         ap.error("--output is required (unless using --list-blocks or --extract-audio only)")
 
+    output_path = resolve_patch_wad_output(args.output)
+    if output_path != args.output:
+        print(f"  --output directory → {output_path}")
+
     dlc_contracts = None
     if args.dlc_contracts:
         dlc_contracts = [c.strip() for c in args.dlc_contracts.split(",")]
 
     return port_x360_dlc(
         doh,
-        output_path=args.output,
+        output_path=output_path,
         merge_into=args.merge_into,
         source_wad=args.source_wad,
         max_blocks=args.max_blocks,
@@ -2140,6 +2241,8 @@ def main() -> int:
         strip_audio=args.strip_audio,
         byteswap_python_ecs=args.byteswap_python_ecs,
         byteswap_python_ecs_fallback=args.byteswap_python_ecs_fallback,
+        byteswap_python_ecs_paths=not args.no_byteswap_python_ecs_paths,
+        fail_on_placement_violations=args.fail_on_placement_violations,
         descriptor_limit=args.descriptor_limit,
         exclude_blocks=args.exclude_blocks,
     )

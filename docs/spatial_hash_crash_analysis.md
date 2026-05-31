@@ -1,8 +1,94 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
-**Date**: 2026-05-28 (updated 2026-05-30)  
+**Date**: 2026-05-28 (updated 2026-05-30c)  
 **Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
-**Status**: OPEN — step 3 re-port (stride fix) **still crashes** same EIP/fault class; terrain + five `dlc01_state_*` ruled out on prior bisect. Suspect pool **~2191 blocks** or bootstrap / `dlc01_base` / contract layers. **Re-run step 2 trim on SHA `97242b0a…` before step 4.**
+**Status**: OPEN — step 3 re-port (stride/flgs/Transform/guidmap) **still crashes** (`fault≈0x03CE9FD8`). Terrain + five `dlc01_state_*` ruled out. Next: **offline scan** + step **4a/4e** + optional Python-byteswap path blocks.
+
+## 2026-05-30c — Break-the-deadlock toolkit
+
+| Tool | Purpose |
+|------|---------|
+| `tools/scan_patch_placements.py` | Rank every patch block: Transform/flgs NaN/Inf, \|coord\|>5000, BE-looking floats |
+| `tools/bisect_patch_wad.py` | Print test matrix + `trim_patch_wad.py` commands (4a, 4e, half-split, top-5 exclude) |
+| `make scan-patch-placements` | Run scan; `--fail-on-violations` exits 1 |
+| `make bisect-patch-wad` | Bisect command sheet |
+| `dlc_port` default | **Python** byteswap for **ASET type_id 9 (layer)** blocks **or** paths matching `dlc01_base` / `speedcity` / `dlccon` (`--no-byteswap-python-ecs-paths` to disable) |
+| `dlc_port --fail-on-placement-violations` | Post-port gate (optional; off by default) |
+
+```powershell
+make scan-patch-placements OUTPUT=./output
+make bisect-patch-wad OUTPUT=./output
+.venv\Scripts\python.exe tools\audit_ecs_byteswap_parity.py --be-block path\to\xbox.block.bin
+```
+
+### 2026-05-30 — Offline gate on current deploy (`8700856a…`)
+
+**SHA256:** `8700856a4eb77bb1ca1a7f18ae3586b4519e0d01a95bb8b8a12d05197a141ff0` (**new** — not `97242b0a…`, `1E6CA26C…`, or `46e84924…`). **2196** blocks; last index **2195** = `scripts_vz` (no separate bootstrap block at 2196).
+
+| Gate | Result |
+|------|--------|
+| `scan_patch_placements` | **0** violations across 2196 blocks (7927 Transform records in 15 layer blocks; **0** flgs records) |
+| `wad_simulator` + `pc-game-vz.wad` | **0** `position_violations` (109226 placements checked); 8 XMA codec warnings only |
+| Prior `1E6CA26C…` sim | 22 terrain lattice hits in block 0 — **gone** on this build |
+
+**Verdict:** Placement float / endian corruption **not** implicated on this WAD. If retail still faults @ `0x248BBE2`, prioritize **runtime bisect** (4a scripts @ 2195, 4e arena, ASET/ASI), not re-port for Transform/flgs.
+
+### TOP 5 suspect blocks (evidence-ranked, pre-scan on SHA `97242b0a…`)
+
+**Run `make scan-patch-placements` on your machine** — ranks may reorder. Until then, use Transform load + bisect priority (step 2 already ruled out state overlays):
+
+| Rank | Index | Path (typical) | Evidence |
+|------|-------|----------------|----------|
+| **1** | **3** | `dlc01_base_P000_Q3` | **422** Transform records; arena **layers_static** analogue; **not** in step-2 exclusions; simulator 0 flgs hits on prior build but highest “world entity” risk |
+| **2** | **8** | `dlc01_speedcity_P000_Q3` | **1736** Transforms — largest layer block; path now on **Python byteswap** default |
+| **3** | **2** | `dlc01_dlccon004_P000_Q3` | **1482** Transforms; user port note **dlccon004a missing** — contract arena; path `dlccon` → Python default |
+| **4** | **5** | `dlc01_commonlocations_P000_Q3` | **10** Transforms but sparse **placement-critical** refs; step **4e** target with index 3 |
+| **5** | **13** | `dlc01_dlccon002_race_P000_Q3` | **836** Transforms; high registration load if 4e passes |
+
+**Ruled out (user bisect):** 0 terrain, 4/12/15/16/17 all `dlc01_state_*`. **Not ruled out:** bootstrap **2196** (`scripts_vz`), ~2100 `c3` cells (low direct Transform count), **resident** SKIPPED at port.
+
+### Next 15 minutes (copy/paste)
+
+```powershell
+cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+certutil -hashfile output\data\vz-patch.wad SHA256
+make scan-patch-placements OUTPUT=./output
+make bisect-patch-wad OUTPUT=./output
+
+# 4a — bootstrap (30 s deploy test)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-bootstrap.wad --exclude-indices "0,4,12,15,16,17,2196" -v
+
+# 4e — base + commonlocations
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-base.wad --exclude-indices "0,4,12,15,16,17,3,5" -v
+
+# Top placement layers (if scan agrees)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-arena.wad --exclude-path-substr dlc01_base,speedcity,dlccon --exclude-indices "0,4,12,15,16,17" -v
+```
+
+### Alternative theories (still live)
+
+| Theory | Test | Notes |
+|--------|------|-------|
+| **Bootstrap / registration order** | Step **4a** or `make dlc-port-assets-only` | `scripts_vz` injects `import("dlc01")` + ASET row; can change resolve order without corrupting floats |
+| **ASI CRASH_PATCH / REG_PATCH / GUARD** | Rebuild ASI with all three **0** | Rules out hook writing game memory during VZ load |
+| **Retail + patch overlay** | Confirmed: no patch → no crash | Engine uses **patch INDX/ASET** over retail `vz.wad`; bad **ASET → block** still loads corrupt LE from patch |
+| **929 unresolved ASET sub-entries** | `verify_dlc_import_chain` | Wrong block for hash → unrelated bytes interpreted as Transform |
+| **resident SKIPPED** | Re-port after guidmap/CHDR fix; check port log | Missing contracts / wrong script DEPS — usually **different** EIP, but can disturb load order |
+| **Runtime non-placement** | Simulator 0 violations + still crash | Stale deploy, or **ECX** from non-XYZ path (bad entity ptr) — x32dbg @ `0x516EF6` |
+
+### x32dbg — capture block hash at `0x516EF6`
+
+Break on return from spatial cell compute: **`bp 0x00516EF6`** (or conditional **`bp 0x248BB6D`** when **`ecx > 0x4000`**). On hit, read **entity pointer** from stack (**EDX** or `[esp+0x30]` per session) and dump **`[ptr+4]` `[ptr+8]` `[ptr+0xC]`** as floats — NaN/huge values are the smoking gun. Walk one frame up (**`0x0063DA1F`** block loader): note last asset hash / path if logged. To tie to a **block hash**: at `0x516EF6`, also note **EAX** (asset index being inserted) and correlate with ASET resolve in the same frame chain; MCP `GetCallStack` + memory read at the entity pointer is enough for one session without guessing indices.
+
+### Python vs Rust parity on suspects
+
+For each suspect, decompress the **Xbox BE** slice from DOH (or `--dump-dir` from port), then:
+
+```powershell
+.venv\Scripts\python.exe tools\audit_ecs_byteswap_parity.py --be-block output\_dumps\block_0003_be.bin
+```
+
+Mismatch → re-port with `--byteswap-python-ecs` for full ECS or rely on new default path-based Python swap.
 
 ## User bisect results (2026-05-30)
 
