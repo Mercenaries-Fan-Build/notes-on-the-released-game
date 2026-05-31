@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-28 (updated 2026-05-30)  
 **Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
-**Status**: OPEN — user bisect ruled out terrain + all five `dlc01_state_*` blocks; suspect pool is **~2191 remaining DLC blocks** (or stale trim / pre–stride-fix WAD). Re-run step 3 (full re-port) then step 4 binary search.
+**Status**: OPEN — step 3 re-port (stride fix) **still crashes** same EIP/fault class; terrain + five `dlc01_state_*` ruled out on prior bisect. Suspect pool **~2191 blocks** or bootstrap / `dlc01_base` / contract layers. **Re-run step 2 trim on SHA `97242b0a…` before step 4.**
 
 ## User bisect results (2026-05-30)
 
@@ -13,7 +13,7 @@ Retail PC + `dlc_enable.asi` (bootstrap **OFF**, `CRASH_PATCH=1`, `REG_PATCH=1`,
 | **0** | No `vz-patch.wad` (rename away) | **No crash** | Fault is **patch-only**, not retail VZ |
 | **1** | `--exclude-indices 0` (drop `dlc01_terrain_P000_Q3`) | **Still crash** @ `0x0248BB7C` | **Not** block **0** terrain lattice / terrain-only corruption |
 | **2** | `--exclude-indices 4,12,15,16,17` (all `dlc01_state_*`) | **Still crash** @ `0x0248BBE2`, fault `0x03CE9FD8` | **Not** the five state-overlay blocks; same crash class (garbage cell index) |
-| **3** | Full re-port with **stride fix** (2026-05-30b) | **Pending** | Must refresh WAD before further trim bisect |
+| **3** | Full re-port with **stride fix** (2026-05-30b); SHA `97242b0a2e0c9f2e3a093dbb4ee24f9d368dc9a0bc4a4f55d300b11ae04f8755` | **Still crash** @ `0x0248BBE2`, fault `0x03CE9FD8` | Stride/flgs/Transform fixes **not sufficient**; proceed step 4 bisect |
 
 ### Ruled out (this build’s indices)
 
@@ -70,6 +70,11 @@ fault = esi + 0x1E4 = 0x03CEA074
 
 Same root as the older `0x248BBE2` / `nvgpucomp32.dll` write: **overflowing cell index** from corrupt
 entity XYZ fed to `0x516B10`, not a different bug class.
+
+**Step 3 write fault (2026-05-30, x32dbg MCP):** `EIP=0x0248BBE2`, `ESI=0x03CE9E90`, `ECX=0x52`,
+`EBP=0x2060A290` (table base). Fault address `0x03CE9FD8` = `ESI + ECX×4` (slot write), not the
+`0x248BB7C` read at `ESI+0x1E4` (`0x03CEA074`). Same garbage bucket pointer (`ESI` off-heap) from wild
+cell index before insert.
 
 **Production byte-swap:** `make dlc-port` uses **Rust** `ucfx_byteswap`, not Python `ucfx_be_to_le.py`.
 Until 2026-05-30, Rust treated ECS `flgs` as a flat `u32` sweep (corrupting 42-byte vz_state placement
@@ -132,7 +137,11 @@ now swaps 8-byte records like Rust.
 Non-ECS `Flgs` in `convert_generic_bodies` remains a blind `swap_u32_array` — only affects non-layer UCFX
 containers; DLC `dlc01_state_*` uses the ECS path (`convert_vz_state_flgs_inplace`).
 
-### `wad_simulator` on current patch (SHA `1E6CA26C…`, 2197 blocks)
+### `wad_simulator` on prior patch (SHA `1E6CA26C…`, 2197 blocks)
+
+Current step-3 WAD SHA: `97242b0a2e0c9f2e3a093dbb4ee24f9d368dc9a0bc4a4f55d300b11ae04f8755` (re-run simulator after bisect).
+
+### Prior simulator snapshot (`1E6CA26C…`)
 
 | Metric | Value |
 |--------|-------|
@@ -158,6 +167,17 @@ world entities at load time (needs confirmation).
 | P2 | **world_entity_data** (`0x5647C35D`) | Medium | Uses ECS convert path; simulator uses `consume_structural` only (no placement scan) |
 | P2 | Base-game **override** entries | Low | Whole UCFX replaced from retail PC LE — correct by definition |
 | P3 | **CHDR-internal** absolute offsets | Low for port | Byteswap walks **UCFX descriptor** table (`data_area_off + row_u0`), same as Python; CHDR child table in docs is a separate view |
+
+### DLC port: large CHDR + `guidmap` (2026-05-30)
+
+Python `--byteswap-python-ecs` failed mid-port with:
+
+`UnhandledByteSwapError: CHDR body has unexpected size 59051 bytes (not a multiple of 4); type_hash=0x140E8728`
+
+- **Type:** `0x140E8728` = `pandemic_hash_m2("guidmap")` (ASET type_id 10, resident singleton).
+- **Cause:** ECS-family containers can advertise a **large** CHDR `body_size` (here 59051 B, odd length). That region is also covered by sibling `enum` / `COMP` / `flgs` descriptors. Only the first **8 bytes** are CHDR scalars (`zero`, `num_chunks`); blind u32 sweep of the whole slice is wrong and the old Python check rejected odd sizes.
+- **Fix:** `tools/ucfx_be_to_le.py` `_convert_chdr_body()` swaps ≤16 B wholesale, else header-only for `_ECS_STRUCTURE_TYPES` / `META`. Rust `convert_chdr_body_inplace()` mirrored in `ucfx_byteswap`. `guidmap` routed through the ECS container path.
+- **Resume:** Re-run `dlc_port` from the start (or `--start-block` at the failed index). There is no `--skip-failed`; failed blocks are logged as `SKIP` when byteswap raises. After pulling the fix, a full re-port is safest so CSUMs match converted LE.
 
 DLC blocks often have **both** `flgs` placements and **Transform** COMP data in the same `dlc01_state_*` layer block.
 
@@ -209,7 +229,36 @@ From Xbox DLC inventory (`docs/xbox360_dlc_analysis.md`), `tools/inventory_dlc_p
 | `scripts_vz` (bootstrap) | **1** @ index **2196** | script (`0x42498680`) | Indirect — corrupt script registry, not typical spatial hash |
 | `dlc01_state_*` | 5 | layer + flgs + Transform | **Ruled out** by user step 2 |
 
-Use `inventory_dlc_patch.py` on **your** WAD for exact bucket counts.
+Use `inventory_dlc_patch.py` on **your** WAD for exact bucket counts (path buckets only — does not rank Transform counts; use scan below).
+
+### Layer blocks ranked by Transform COMP count (SHA `97242b0a…`, 2026-05-30)
+
+Only **20** patch blocks contain ECS **layer** (`0xE6B81A54`) with **Transform** COMP `data` (42-byte records). Top 20 (all layer+Transform blocks):
+
+| Index | Transforms | Path |
+|-------|------------|------|
+| 8 | 1736 | `dlc01_speedcity_P000_Q3` |
+| 2 | 1482 | `dlc01_dlccon004_P000_Q3` |
+| 13 | 836 | `dlc01_dlccon002_race_P000_Q3` |
+| 14 | 810 | `dlc01_caicara_P000_Q3` |
+| 18 | 734 | `dlc01_dlccon004_roads_P000_Q3` |
+| 6 | 596 | `dlc01_dlccon002_roads_P000_Q3` |
+| 7 | 493 | `dlc01_speedcity_roads_P000_Q3` |
+| **3** | **422** | **`dlc01_base_P000_Q3`** ← step **4e** |
+| 19 | 236 | `dlc01_caicara_roads_P000_Q3` |
+| 9 | 228 | `dlc01_caicara_scrub_P000_Q3` |
+| 15 | 186 | `dlc01_state_dlccon003_pathfinding` (ruled out step 2) |
+| 1 | 101 | `dlc01_caicara_foliage_P000_Q3` |
+| 10 | 99 | `dlc01_dlccon001_P000_Q3` |
+| 11 | 81 | `dlc01_lowresterrain_P000_Q3` |
+| 0 | 81 | `dlc01_terrain_P000_Q3` (ruled out step 1) |
+| 12 | 63 | `dlc01_state_dlccon003` (ruled out step 2) |
+| 4 | 49 | `dlc01_state_dlccon003_spawns` (ruled out step 2) |
+| 17 | 37 | `dlc01_state_dlccon003_atmofx` (ruled out step 2) |
+| 16 | 32 | `dlc01_state_missionhub` (ruled out step 2) |
+| **5** | **10** | **`dlc01_commonlocations_P000_Q3`** ← step **4e** |
+
+**Bisect priority tonight:** **4a** (no bootstrap @ **2196**) → **4e** (exclude **3**, **5**) → **4b/4c** half-split. Contract/arena blocks **2,6,7,8,13,14,18** are high Transform load if 4e passes.
 
 ### Hypothesis ranking (remaining pool)
 
@@ -249,7 +298,7 @@ Set conditional **`bp 0x248BB6D`** with **`ecx > 0x4000`**. On hit, note **ECX**
 | 0 | No patch WAD | **Pass** (no crash) |
 | 1 | `--exclude-indices 0` | **Fail** (still crash) |
 | 2 | `--exclude-indices 4,12,15,16,17` | **Fail** (still crash) |
-| 3 | Full re-port (stride fix) | **Pending** |
+| 3 | Full re-port (stride fix); SHA `97242b0a…` | **Fail** (still `0x0248BBE2` / `0x03CE9FD8`) |
 | 4a | `--exclude-indices 2196` or `dlc-port-assets-only` | — |
 | 4b–4c | Half-split `1-1099` vs `1100-2195` (+ carry exclusions) | — |
 
@@ -454,22 +503,50 @@ block (mesh/bootstrap). Use bisect 7–9 to name the block; `extract_single_bloc
 | Mesh `BNDS` / `STRM` | u32 / u32 sweep | Generic tag fallback u32 | Engine entity path uses Transform, not BNDS |
 | Port path | N/A (not default) | `dlc_port` default | Optional `--byteswap-python-ecs` |
 
+### Nuclear bisect: `--byteswap-python-ecs` (one-off full port)
+
+When step **4** narrows to ECS-heavy blocks but Rust parity is suspect, rebuild the **entire** patch with Python byteswap for any block containing ECS **layer** / world_entity (`_block_has_ecs_layer`):
+
+```powershell
+cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+make build-ucfx-byteswap   # still used for non-ECS blocks via Rust default path
+.venv\Scripts\python.exe tools\dlc_port.py `
+  --dlc-rar "<path-to-DLC.rar>" `
+  --source-wad game-files/pc-game-vz.wad `
+  --output output `
+  --byteswap-python-ecs -v
+# Deploy output\data\vz-patch.wad — compare SHA; game test once
+```
+
+- **`--byteswap-python-ecs`**: Python `ucfx_be_to_le.byteswap_block` for ECS-layer blocks only; Rust for everything else.
+- **`--byteswap-python-ecs-fallback`**: Rust first, Python on failure (slower; use if Rust throws on one block).
+- **When to try:** After **4a + 4e** still crash **and** simulator/parity clean on Rust — **or** if **4e** implicates `dlc01_base` / contract layers and you need a same-night A/B without re-bisecting.
+- **Give up on Rust-only** for tonight if: step 3 SHA deployed, step **2 re-run** on new WAD still crashes, **4e** excludes base+commonlocations and still crashes → run **one** `--byteswap-python-ecs` full port before deep half-split.
+
 `tools/audit_ecs_byteswap_parity.py` diffs Python vs Rust on a **BE** `.block.bin`.
 
 ### Bisect commands (step 4 — tonight)
 
-**Prerequisite:** finish **step 3** (re-port + SHA match) or accept results may reflect **pre–stride-fix** bytes.
+**Prerequisite:** step 3 done (SHA `97242b0a…` on build host **and** game `data\`). **Mandatory:** re-run **step 2** on this SHA before 4b/4c (old bisect on `1E6CA26C…` is invalid).
 
 ```powershell
 cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+certutil -hashfile output\data\vz-patch.wad SHA256   # expect 97242b0a2e0c9f2e3a093dbb4ee24f9d368dc9a0bc4a4f55d300b11ae04f8755
 
 # Index map for this WAD (save output)
 .venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o NUL --list > patch-block-index.txt
 .venv\Scripts\python.exe tools\inventory_dlc_patch.py --wad output/data/vz-patch.wad
 
-$RULED = "0,4,12,15,16,17"   # steps 1–2; re-verify indices after re-port
+$RULED = "0,4,12,15,16,17"   # steps 1–2; re-verify with --list-state-blocks
 
-# Step 4a — bootstrap only (full port index 2196 = scripts_vz)
+# Step 2 REPEAT on new WAD (confirm state blocks still not the fix)
+.venv\Scripts\python.exe tools\trim_patch_wad.py `
+  -i output/data/vz-patch.wad `
+  -o output/data/vz-patch-step2-retest.wad `
+  --exclude-indices $RULED -v
+# Deploy as vz-patch.wad → game test (~5 min). Still crash → continue 4a.
+
+# Step 4a — bootstrap only (index 2196 = scripts_vz) — DO FIRST tonight
 .venv\Scripts\python.exe tools\trim_patch_wad.py `
   -i output/data/vz-patch.wad `
   -o output/data/vz-patch-no-bootstrap.wad `
@@ -498,11 +575,13 @@ $RULED = "0,4,12,15,16,17"   # steps 1–2; re-verify indices after re-port
   --exclude-indices $RULED `
   --exclude-path-substr blocks\dlc01\c3 -v
 
-# Step 4e — placement layers NOT ruled out in step 2
+# Step 4e — placement layers NOT ruled out in step 2 (indices 3 and 5 on current WAD)
 .venv\Scripts\python.exe tools\trim_patch_wad.py `
   -i output/data/vz-patch.wad `
   -o output/data/vz-patch-no-base.wad `
-  --exclude-path-substr dlc01_base,dlc01_commonlocations -v
+  --exclude-indices 3,5 -v
+# Or path form:
+#   --exclude-path-substr dlc01_base,dlc01_commonlocations
 
 certutil -hashfile output\data\vz-patch.wad SHA256
 ```
@@ -521,15 +600,18 @@ certutil -hashfile output\data\vz-patch.wad SHA256
 
 After step 3: `make build-ucfx-byteswap` → `make dlc-port` → repeat step 2 trim before step 4.
 
-### x32dbg capture (2026-05-30 session)
+### x32dbg capture (2026-05-30 sessions)
 
-| Field | Value |
-|-------|-------|
-| EIP | `0x0248BB7C` (read AV on `[esi+0x1E4]`) |
-| ECX | `0xFFC2F4EA` (garbage cell index) |
-| EBP | `0x2060A290` (table base) |
-| Return | `0x00516EF6` ← `0x516C00` spatial registration |
-| Entity ptr | `[esp+0x30]` at `0x516EE4` → `0x6091DF00` (freed by crash time — re-break earlier) |
+| Field | Read AV (`0x248BB7C`) | Write AV (`0x248BBE2`, step 3) |
+|-------|----------------------|--------------------------------|
+| EIP | `0x0248BB7C` | `0x0248BBE2` |
+| ECX | `0xFFC2F4EA` (garbage **cell** index) | `0x52` (slot index within bucket) |
+| ESI | `0x03CE9E90` (implied: fault−0x1E4) | `0x03CE9E90` (garbage bucket) |
+| Fault | `0x03CEA074` (= ESI+0x1E4) | `0x03CE9FD8` (= ESI+ECX×4) |
+| EBP | `0x2060A290` (table base) | `0x2060A290` |
+| Return | `0x00516EF6` ← `0x516C00` | same (MCP call stack) |
+
+Earlier session: entity ptr `[esp+0x30]` at `0x516EE4` → `0x6091DF00` (freed by crash time — re-break at `0x248BB6D` with `ecx > 0x4000`).
 
 At **`0x516EF6`**: dump **`[ptr+4]` `[ptr+8]` `[ptr+0xC]`** as floats. Healthy: Maracaibo-range metres; bad: NaN / huge / byte-pattern garbage.
 

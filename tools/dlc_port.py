@@ -54,6 +54,7 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
+from ucfx_be_to_le import UnhandledByteSwapError  # noqa: E402
 from ucfx_byteswap_wrapper import (  # noqa: E402
     byteswap_block_ecs_python_fallback,
     byteswap_block_python,
@@ -409,10 +410,11 @@ def _apply_overrides_and_strips(
 
 _TYPE_ECS_LAYER = 0xE6B81A54
 _TYPE_WORLD_ENTITY = 0x5647C35D
+_TYPE_GUIDMAP = 0x140E8728
 
 
 def _block_has_ecs_layer(decompressed: bytes) -> bool:
-    """True if the BE block entry table includes layer / world-entity UCFX."""
+    """True if the BE block needs Python ECS-aware byteswap (layer / worldentity / guidmap)."""
     if len(decompressed) < 20:
         return False
     try:
@@ -427,7 +429,7 @@ def _block_has_ecs_layer(decompressed: bytes) -> bool:
     for i in range(entry_count):
         off = 4 + i * 16
         type_hash = struct.unpack_from(">I", decompressed, off + 4)[0]
-        if type_hash in (_TYPE_ECS_LAYER, _TYPE_WORLD_ENTITY):
+        if type_hash in (_TYPE_ECS_LAYER, _TYPE_WORLD_ENTITY, _TYPE_GUIDMAP):
             return True
     return False
 
@@ -630,7 +632,7 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
             "tags_seen": {}, "errors": [],
             "fallback_u32_count": 0, "fallback_u32_tags": {},
         }
-    except (RuntimeError, FileNotFoundError) as e:
+    except (RuntimeError, FileNotFoundError, UnhandledByteSwapError) as e:
         return _BlockWorkerResult(
             blk_idx=blk_idx,
             skipped=True,

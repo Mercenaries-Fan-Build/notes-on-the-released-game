@@ -8,6 +8,7 @@ use crate::report::SchemaCoverageReport;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
 const TYPE_HASH_WORLD_ENTITY: u32 = types::TYPE_HASH_WORLD_ENTITY_DATA; // 0x5647C35D
+const TYPE_HASH_GUIDMAP: u32 = types::TYPE_HASH_GUIDMAP; // 0x140E8728
 
 /// Strip a trailing CSUM/MUSC 8-byte trailer from a raw chunk if present.
 /// Both Xbox and PC WADs include the CSUM in the entry table's `chunk_size`.
@@ -121,7 +122,8 @@ pub fn convert_block(
             ei, entry.type_hash, type_name, entry.chunk_size, container.len());
 
         let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE
-            || entry.type_hash == TYPE_HASH_WORLD_ENTITY;
+            || entry.type_hash == TYPE_HASH_WORLD_ENTITY
+            || entry.type_hash == TYPE_HASH_GUIDMAP;
         let converted = convert_container(container, is_ecs, ei, entry.type_hash, report.as_deref_mut())?;
         converted_containers.push(converted);
 
@@ -433,6 +435,10 @@ fn convert_ecs_bodies(
                             }
                         } else if desc.tag == ChunkTag::Flgs {
                             convert_vz_state_flgs_inplace(
+                                &mut data_area[body_local_start..body_local_end],
+                            );
+                        } else if desc.tag == ChunkTag::Chdr {
+                            convert_chdr_body_inplace(
                                 &mut data_area[body_local_start..body_local_end],
                             );
                         } else if desc.tag.is_native_be() {
@@ -769,6 +775,11 @@ fn convert_generic_bodies(
                     ChunkTag::Decl | ChunkTag::Schm | ChunkTag::Flgs => {
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
                     }
+                    ChunkTag::Chdr => {
+                        convert_chdr_body_inplace(
+                            &mut data_area[body_local_start..body_local_end],
+                        );
+                    }
                     ChunkTag::Deps => {
                         // DEPS format: [u8 count][u32 hash × count]
                         // Preserve the count byte, only swap the hash array
@@ -1045,6 +1056,18 @@ fn swap_u32_array(data: &mut [u8]) {
     for i in 0..n {
         let off = i * 4;
         data[off..off + 4].reverse();
+    }
+}
+
+/// CHDR bodies: 8-byte header scalars only when the descriptor spans a large region.
+fn convert_chdr_body_inplace(data: &mut [u8]) {
+    if data.len() <= 16 {
+        swap_u32_array(data);
+    } else if data.len() >= 8 {
+        swap_u32(data, 0);
+        swap_u32(data, 4);
+    } else if data.len() >= 4 {
+        swap_u32(data, 0);
     }
 }
 

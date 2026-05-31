@@ -1361,8 +1361,16 @@ _TYPE_EFFECT = 0x5608BD5A
 _TYPE_OBJECT_REGISTRY = 0x6310807F  # resident entity-class registry (ASET type_id 30)
 _TYPE_CFX_PACK = 0xFE0E8320  # CFX header + zlib (fonts, effects, resident sub-assets)
 _TYPE_LEVEL = 0xEA4829D5
-_TYPE_LAYER = 0x5647C35D  # world layer / terrainfade META (type_id 8)
+_TYPE_LAYER = 0x5647C35D  # worldentity / terrainfade META (type_id 8)
+_TYPE_GUIDMAP = 0x140E8728  # pandemic_hash_m2("guidmap") — resident singleton (type_id 10)
 _TYPE_RESIDENT_MISC = 0xFA0B8DBC  # resident-only blobs (ASET type_id 18, 22 entries)
+
+# UCFX layouts using CHDR / enum / COMP / flgs (same family as layers_static / worldentity).
+_ECS_STRUCTURE_TYPES = frozenset({
+    _TYPE_ECS_NODE,
+    _TYPE_LAYER,
+    _TYPE_GUIDMAP,
+})
 _TYPE_MATERIALTABLE = 0x59B9DF6A  # materialtable singleton (resident)
 _TYPE_UNKNOWN_DE = 0xDE982D61  # resident INFO (ASET type_id 14)
 
@@ -1390,6 +1398,45 @@ _RESIDENT_ONLY_TYPES = {
 
 # Combined set for INFO tag dispatch (all are u32-safe for INFO bodies).
 _U32_INFO_TYPES = _U32_DATA_TYPES | _RESIDENT_ONLY_TYPES | _AUDIO_TYPES
+
+
+def _convert_chdr_body(
+    body_be: bytes,
+    *,
+    type_hash: int,
+    context: str | None,
+) -> bytes:
+    """Convert CHDR chunk body.
+
+    Verified ECS containers use an 8-byte CHDR payload (zero + num_chunks;
+    see docs/vz_state_analysis.md §2.3).  The UCFX descriptor row can still
+    advertise a very large ``body_size`` (e.g. guidmap ~59 KiB) because the
+    chunk-table region is also reached via sibling enum/COMP/flgs descriptors.
+    Only the first 8 bytes are CHDR-specific scalars; the remainder must not
+    be blind u32-swept.
+    """
+    if len(body_be) <= 16:
+        if len(body_be) not in (0, 8, 12, 16) and len(body_be) % 4 != 0:
+            raise UnhandledByteSwapError(
+                f"CHDR body has unexpected size {len(body_be)} bytes "
+                f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
+            )
+        if len(body_be) == 0:
+            return body_be
+        return _convert_u32_array(body_be)
+    if type_hash in _ECS_STRUCTURE_TYPES or context == "META":
+        out = bytearray(body_be)
+        if len(out) >= 8:
+            out[:8] = _convert_u32_array(bytes(out[:8]))
+        elif len(out) >= 4:
+            out[:4] = _convert_u32_array(bytes(out[:4]))
+        return bytes(out)
+    if len(body_be) % 4 != 0:
+        raise UnhandledByteSwapError(
+            f"CHDR body has unexpected size {len(body_be)} bytes "
+            f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
+        )
+    return _convert_u32_array(body_be)
 
 
 def _convert_ecs_info(be: bytes) -> bytes:
@@ -1940,7 +1987,7 @@ def _convert_body(
 
     # ── flgs: format depends on type ──
     if tag == "flgs":
-        if type_hash == _TYPE_ECS_NODE:
+        if type_hash in _ECS_STRUCTURE_TYPES:
             return _convert_vz_state_flgs(body_be)
         if len(body_be) % 4 == 0:
             return _convert_u32_array(body_be)
@@ -1967,14 +2014,14 @@ def _convert_body(
             return _convert_u16_array(body_be)
         if type_hash == _TYPE_ANIMATION:
             return _convert_havok_be_to_le(body_be, permissive=permissive, stats=stats)
-        if type_hash == _TYPE_ECS_NODE:
+        if type_hash in _ECS_STRUCTURE_TYPES:
             if comp_info is not None:
                 return _convert_ecs_comp_data(
                     body_be, comp_info, stats, permissive=permissive,
                 )
             return _fallback_u32_or_raise(
                 body_be,
-                reason="ECS_NODE data outside COMP triplet (no component identity)",
+                reason="ECS structure data outside COMP triplet (no component identity)",
                 tag=tag,
                 type_hash=type_hash,
                 context=context,
@@ -2016,7 +2063,7 @@ def _convert_body(
     if tag == "info":
         if type_hash == _TYPE_ANIMATION:
             return _convert_u16_array(body_be)
-        if type_hash == _TYPE_ECS_NODE or context == "META":
+        if type_hash in _ECS_STRUCTURE_TYPES or context == "META":
             return _convert_ecs_info(body_be)
         if type_hash == _TYPE_LOW_RES_TERRAIN:
             return _convert_u32_array(body_be)
@@ -2034,7 +2081,7 @@ def _convert_body(
 
     # ── enum: dispatch by type_hash ──
     if tag == "enum":
-        if type_hash == _TYPE_ECS_NODE or context == "META":
+        if type_hash in _ECS_STRUCTURE_TYPES or context == "META":
             return _convert_enum_body(body_be)
         return _fallback_u32_or_raise(
             body_be,
@@ -2060,7 +2107,7 @@ def _convert_body(
             return _convert_texture_info(body_be)
         if type_hash == _TYPE_SCRIPT:
             return _convert_script_info(body_be)
-        if type_hash == _TYPE_ECS_NODE:
+        if type_hash in _ECS_STRUCTURE_TYPES:
             return _convert_ecs_info(body_be)
         if type_hash == _TYPE_KEYFRAME:
             return body_be  # Stringdb INFO is natively BE on all platforms
@@ -2116,14 +2163,9 @@ def _convert_body(
     if tag in ("EFCT", "EMTR"):
         return _convert_u16_array(body_be)
 
-    # ── CHDR: u32/hash scalars (verified 8 bytes = 2 x u32 for ECS_NODE blocks) ──
+    # ── CHDR: 8-byte header scalars; large ECS bodies use sibling descriptors ──
     if tag == "CHDR":
-        if len(body_be) not in (8, 12, 16) and len(body_be) % 4 != 0:
-            raise UnhandledByteSwapError(
-                f"CHDR body has unexpected size {len(body_be)} bytes "
-                f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
-            )
-        return _convert_u32_array(body_be)
+        return _convert_chdr_body(body_be, type_hash=type_hash, context=context)
 
     # ── BNDS: axis-aligned bounds / sphere (10 × f32 in terrain tiles) ──
     if tag == "BNDS":
@@ -2232,7 +2274,7 @@ def _convert_container(
     # Build COMP component map for ECS_NODE containers so that each 'data'
     # descriptor is dispatched by component name instead of size heuristics.
     comp_map: dict[int, _CompInfo] = {}
-    if type_hash == _TYPE_ECS_NODE:
+    if type_hash in _ECS_STRUCTURE_TYPES:
         comp_map = _build_ecs_comp_map(descriptors, container_be, data_area_off)
 
     # Extract and convert each body

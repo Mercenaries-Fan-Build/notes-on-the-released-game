@@ -42,6 +42,7 @@ pub const TYPE_HASH_MUSIC_STATE_MAP: u32 = 0xC122545A;
 pub const TYPE_HASH_MUSIC_CUE_TABLE: u32 = 0xE8DF4D87;
 pub const TYPE_HASH_ANIM_STATE_MACHINE: u32 = 0xECE70371;
 pub const TYPE_HASH_WORLD_ENTITY_DATA: u32 = 0x5647C35D;
+pub const TYPE_HASH_GUIDMAP: u32 = 0x140E8728;
 pub const TYPE_HASH_FX_DICTIONARY: u32 = 0xFA46D8A8;
 pub const TYPE_HASH_WATERMAP: u32 = 0x4D7D30C4;
 
@@ -120,7 +121,7 @@ pub fn type_name(type_id: u32) -> &'static str {
         7 => "stringdb",
         8 => "world_entity_data",
         9 => "layer",
-        10 => "unknown_10",
+        10 => "guidmap",
         11 => "stance",
         12 => "shader_scrb",
         13 => "audio_group",
