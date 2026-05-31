@@ -11,6 +11,12 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import {
+  cellIdToWorldXYZ,
+  isC3BlockStem,
+  primaryCellIdFromStem,
+  REGION_PRESETS,
+} from './src/lib/mercs2-c3-grid.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -441,6 +447,50 @@ function collectAnimations(animRoots) {
   return out
 }
 
+function collectWorldCells(assets) {
+  const cells = []
+  for (const a of assets) {
+    if (!isC3BlockStem(a.stem)) continue
+    const cellId = primaryCellIdFromStem(a.stem)
+    if (cellId == null) continue
+    const meshUrl = a.glb || a.meshSceneGltf
+    if (!meshUrl) continue
+    const position = cellIdToWorldXYZ(cellId)
+    let vertices = 0
+    let lodMode = null
+    const metaPath = a.sidecars?.meshMetaJson
+    if (metaPath) {
+      try {
+        const rel = decodeURIComponent(metaPath.replace(/^\/__review__\//, ''))
+        const parts = rel.split('/')
+        for (const root of discoverReviewRoots()) {
+          const fp = path.join(root, ...parts.map(decodeURIComponent))
+          if (fs.existsSync(fp)) {
+            const meta = JSON.parse(fs.readFileSync(fp, 'utf8'))
+            vertices = Number(meta.vertices) || 0
+            lodMode = meta.lod_mode || null
+            break
+          }
+        }
+      } catch {
+        /* optional meta */
+      }
+    }
+    cells.push({
+      key: a.key,
+      pack: a.pack,
+      stem: a.stem,
+      cell_id: cellId,
+      position,
+      meshUrl,
+      vertices,
+      lod_mode: lodMode,
+      has_glb: Boolean(a.glb),
+    })
+  }
+  return cells.sort((x, y) => x.cell_id - y.cell_id)
+}
+
 function attachReviewMiddleware(server) {
   server.middlewares.use((req, res, next) => {
     const url = req.url.split('?')[0]
@@ -459,6 +509,53 @@ function attachReviewMiddleware(server) {
           pipelineHints: hints,
           assets,
         })
+      )
+      return
+    }
+
+    if (url === '/api/world-cells.json') {
+      const q = new URL(req.url, 'http://localhost').searchParams
+      const limit = Math.min(500, Math.max(1, parseInt(q.get('limit') || '120', 10) || 120))
+      const minX = q.has('min_x') ? parseFloat(q.get('min_x')) : null
+      const maxX = q.has('max_x') ? parseFloat(q.get('max_x')) : null
+      const minZ = q.has('min_z') ? parseFloat(q.get('min_z')) : null
+      const maxZ = q.has('max_z') ? parseFloat(q.get('max_z')) : null
+      const cellIdFilter = q.has('cell_id') ? parseInt(q.get('cell_id'), 10) : null
+
+      const roots = discoverReviewRoots()
+      const assets = mergeAssets(roots)
+      let cells = collectWorldCells(assets)
+
+      if (Number.isFinite(cellIdFilter)) {
+        cells = cells.filter((c) => c.cell_id === cellIdFilter)
+      } else {
+        if (minX != null && Number.isFinite(minX)) {
+          cells = cells.filter((c) => c.position.x >= minX)
+        }
+        if (maxX != null && Number.isFinite(maxX)) {
+          cells = cells.filter((c) => c.position.x <= maxX)
+        }
+        if (minZ != null && Number.isFinite(minZ)) {
+          cells = cells.filter((c) => c.position.z >= minZ)
+        }
+        if (maxZ != null && Number.isFinite(maxZ)) {
+          cells = cells.filter((c) => c.position.z <= maxZ)
+        }
+      }
+
+      const total = cells.length
+      cells = cells.slice(0, limit)
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.end(
+        JSON.stringify({
+          roots,
+          regionPresets: REGION_PRESETS,
+          total_matching: total,
+          limit,
+          count: cells.length,
+          cells,
+        }),
       )
       return
     }

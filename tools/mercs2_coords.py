@@ -58,6 +58,9 @@ from __future__ import annotations
 import math
 from typing import Sequence
 
+# Metres → centimetres for UE Editor placement (matches populate_world / game-scripts).
+GAME_TO_UE_CM = 100.0
+
 
 def lh_yup_position(x: float, y: float, z: float) -> tuple[float, float, float]:
     """DEPRECATED: Z-negate is no longer applied in the export pipeline.
@@ -150,6 +153,34 @@ def convert_tangents_meta_lh_to_gltf(
 ) -> list[tuple[float, float, float, float]]:
     """DEPRECATED: no longer used — meshes written directly in game LH coords."""
     return [lh_yup_tangent_xyzw(*t) for t in tangents]
+
+
+# ---------------------------------------------------------------------------
+# Position: game LH Y-up → UE LH Z-up
+# ---------------------------------------------------------------------------
+
+
+def game_to_ue(x: float, y: float, z: float) -> tuple[float, float, float]:
+    """Game (X, Y height, Z) metres → UE (X, Y, Z) centimetres.
+
+    Swaps Y↔Z only — no extra axis flips. Same convention as ``populate_world``.
+
+    UE Details panel for a placed actor:
+      Location.X = game X (east–west)
+      Location.Y = game Z (north–south) — **not** game height
+      Location.Z = game Y (elevation) — **not** game north–south
+
+    c3 cell actors use ``cell_id_to_world_xyz`` with ``y=0`` (ground anchor), so
+    Details ``Z=0`` is expected until terrain-height snapping is added.
+    """
+    s = GAME_TO_UE_CM
+    return (float(x) * s, float(z) * s, float(y) * s)
+
+
+def ue_to_game(ux: float, uy: float, uz: float) -> tuple[float, float, float]:
+    """Inverse of :func:`game_to_ue` (UE centimetres → game metres)."""
+    s = GAME_TO_UE_CM
+    return (float(ux) / s, float(uz) / s, float(uy) / s)
 
 
 # ---------------------------------------------------------------------------

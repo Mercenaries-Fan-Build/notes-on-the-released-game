@@ -750,6 +750,10 @@ def _extract_structured_parts(data: bytes, blob_path: Path | None = None) -> tup
     return parts, submeta, touched, mtrl_records
 
 
+# Horizontal footprint (metres) above which c3 terrain shells dedupe on XZ only.
+_XZ_FOOTPRINT_EXTENT_M = 20.0
+
+
 def _dedupe_lod(
     parts: list[tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]],
     submeta: list[dict[str, object]],
@@ -761,16 +765,17 @@ def _dedupe_lod(
     """Filter submeshes by LOD dedup strategy.
 
     Modes:
-      keep-all          — no filtering
-      dedupe-bbox       — group by decoded_bbox center, keep first per group
-      highest-poly-per-bbox — group by decoded_bbox center, keep highest face count
+      keep-all                    — no filtering
+      dedupe-bbox                 — group by full 3D bbox key, keep first per group
+      highest-poly-per-bbox       — full 3D bbox key, keep highest face count
+      highest-poly-per-xz-footprint — like highest-poly-per-bbox, but large horizontal
+        shells (max X/Z extent >= 20 m) group on (cx, cz, ex, ez) ignoring Y so
+        stacked terrain LOD slices in c3 cells collapse to one draw call per footprint
     """
     if mode == "keep-all" or not parts:
         return parts, submeta
 
-    import math
-
-    def _bbox_key(sm: dict[str, object]) -> tuple[float, ...]:
+    def _bbox_key(sm: dict[str, object], *, lod_mode: str) -> tuple[float, ...]:
         bb = sm.get("decoded_bbox")
         if not bb or len(bb) < 6:
             return (999999.0, 999999.0, 999999.0)
@@ -780,18 +785,25 @@ def _dedupe_lod(
         ex = round(bb[3] - bb[0], 2)
         ey = round(bb[4] - bb[1], 2)
         ez = round(bb[5] - bb[2], 2)
+        if (
+            lod_mode == "highest-poly-per-xz-footprint"
+            and max(ex, ez) >= _XZ_FOOTPRINT_EXTENT_M
+        ):
+            return (cx, cz, ex, ez)
         return (cx, cy, cz, ex, ey, ez)
+
+    pick_highest = mode in ("highest-poly-per-bbox", "highest-poly-per-xz-footprint")
 
     groups: dict[tuple[float, ...], list[int]] = {}
     for i, sm in enumerate(submeta):
-        k = _bbox_key(sm)
+        k = _bbox_key(sm, lod_mode=mode)
         groups.setdefault(k, []).append(i)
 
     keep: list[int] = []
-    for k, indices in groups.items():
-        if len(indices) == 1 or mode == "dedupe-bbox":
+    for indices in groups.values():
+        if len(indices) == 1 or not pick_highest:
             keep.append(indices[0])
-        elif mode == "highest-poly-per-bbox":
+        else:
             best_i = max(indices, key=lambda j: submeta[j].get("faces", 0))
             keep.append(best_i)
 
@@ -1090,9 +1102,14 @@ def main() -> int:
     )
     ap.add_argument(
         "--lod",
-        choices=("keep-all", "dedupe-bbox", "highest-poly-per-bbox"),
+        choices=(
+            "keep-all",
+            "dedupe-bbox",
+            "highest-poly-per-bbox",
+            "highest-poly-per-xz-footprint",
+        ),
         default="keep-all",
-        help="LOD/damage-variant culling strategy (default: keep-all)",
+        help="LOD/damage-variant culling (default: keep-all; c3 cells: highest-poly-per-xz-footprint)",
     )
     ap.add_argument(
         "--texture-index",

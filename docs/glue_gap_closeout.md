@@ -109,6 +109,19 @@ This document lists remaining glue work with digging type, effort, dependencies,
 
 ---
 
+## 9. UE binding manifest pipeline
+
+| Field | Detail |
+|-------|--------|
+| **Digging type** | Python manifest builder + UE Editor applicator (no RE) |
+| **Effort** | 1–2 days (initial); roads/destruction visual pass included |
+| **Dependencies** | `make extract-placements`; optional `road-graph`, `destruction-graph`, `watermap-decode`, `build-c3-cell-manifest` |
+| **Acceptance criteria** | `make ue-bind-manifest` writes `ue_game_binding.json` + report; `apply_world_bindings.py` applies visibility preset, water sea level, lights, hibernation; `setup_all` step 9b runs unless `MERCS2_SETUP_SKIP_BINDINGS=1`; populate falls back to legacy rules when manifest absent |
+
+**Docs:** [`docs/ue_game_bindings.md`](ue_game_bindings.md)
+
+---
+
 ## Recently closed (this session)
 
 - **DEPS** byte-swap + post-swap size validation (`ucfx_byteswap`, `mercs2_formats::chunk_validate`)

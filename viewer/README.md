@@ -23,6 +23,7 @@ npm run preview
 | `/` | Dashboard | Stats cards, pack breakdown, category distribution, quick links |
 | `/blocks` | Block Browser | Filterable table/grid of all extracted blocks with category badges, content flags, pagination |
 | `/viewer` | Asset Viewer | Three.js 3D viewer for OBJ/glTF/GLB meshes (ported from original `main.js`) |
+| `/world-cells` | World Cells 3D | Load c3#### GLBs at grid origins (game Y-up, same as UE layout) |
 | `/placements` | Placement Map | 2D X/Z world map with bbox overlay (ported from `placement-preview.js`) |
 | `/placement-qa` | Placement QA | Named regions, filtered table, rotation/position overrides (ported from `placement-bbox.js`) |
 

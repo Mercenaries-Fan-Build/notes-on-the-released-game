@@ -81,6 +81,10 @@
             <div class="text-lg font-bold text-green-400">3D Viewer</div>
             <div class="mt-1 text-[10px] text-gray-500">Inspect meshes</div>
           </router-link>
+          <router-link to="/world-cells" class="rounded-lg border border-gray-800 bg-gray-900 p-4 text-center transition-colors hover:border-indigo-700 hover:bg-gray-800">
+            <div class="text-lg font-bold text-indigo-400">World Cells</div>
+            <div class="mt-1 text-[10px] text-gray-500">3D c3 grid preview</div>
+          </router-link>
           <router-link to="/placements" class="rounded-lg border border-gray-800 bg-gray-900 p-4 text-center transition-colors hover:border-purple-700 hover:bg-gray-800">
             <div class="text-lg font-bold text-purple-400">Map</div>
             <div class="mt-1 text-[10px] text-gray-500">Placement preview</div>

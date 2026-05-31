@@ -242,21 +242,51 @@ def _trace_terrain_z(
             return None
 
 
-def _dump_collision_diagnostics(terrain: unreal.StaticMeshActor) -> None:
-    """Log detailed collision info to help diagnose why the line trace missed."""
-    _err("--- COLLISION DIAGNOSTICS ---")
-
+def _terrain_bounds(
+    terrain: unreal.StaticMeshActor,
+) -> tuple[unreal.Vector, unreal.Vector] | None:
+    """Return (origin, extent) for *terrain* across UE 5.7 Python API variants."""
+    try:
+        result = terrain.get_actor_bounds(False, False)
+        if isinstance(result, tuple) and len(result) >= 2:
+            return result[0], result[1]
+    except TypeError:
+        pass
+    except Exception:
+        pass
     try:
         origin = unreal.Vector()
         extent = unreal.Vector()
         terrain.get_actor_bounds(False, origin, extent)
+        return origin, extent
+    except TypeError:
+        pass
+    except Exception:
+        pass
+    try:
+        comp = terrain.static_mesh_component
+        if comp is not None:
+            origin, extent, _sphere = unreal.SystemLibrary.get_component_bounds(comp)
+            return origin, extent
+    except Exception:
+        pass
+    return None
+
+
+def _dump_collision_diagnostics(terrain: unreal.StaticMeshActor) -> None:
+    """Log detailed collision info to help diagnose why the line trace missed."""
+    _err("--- COLLISION DIAGNOSTICS ---")
+
+    bounds = _terrain_bounds(terrain)
+    if bounds is not None:
+        origin, extent = bounds
         _err(
             f"  terrain bbox: origin=({origin.x:.1f}, {origin.y:.1f}, {origin.z:.1f}), "
             f"extent=({extent.x:.1f}, {extent.y:.1f}, {extent.z:.1f})"
         )
         _err(f"  terrain Z range: {origin.z - extent.z:.1f} to {origin.z + extent.z:.1f}")
-    except Exception as exc:
-        _err(f"  could not read terrain bounds: {exc}")
+    else:
+        _err("  could not read terrain bounds")
 
     try:
         comp = terrain.static_mesh_component

@@ -326,7 +326,8 @@ def _populate_c3_cells(
         return 0
 
     try:
-        import c3_cell_grid as c3grid
+        import mercs2_c3_grid as c3grid
+        _importlib.reload(c3grid)
     except ImportError:
         _warn("c3_cell_grid not found — skip cells")
         return 0

@@ -103,6 +103,7 @@ Merged **`low_res_terrain`** (`extract-terrain`) becomes one `mesh_scene.glb`; `
 | `make ue5-bundle OUTPUT=./output` | variants + animations + export-ue5 |
 | `make filter-maracaibo OUTPUT=./output` | Maracaibo asset filter |
 | `make extract-placements OUTPUT=./output` | Placements + **ECS merge**, **ASET decode**, `pmc_base_block_set.json`, Lua chunk harvest → `output/placements/` |
+| `make ue-bind-manifest OUTPUT=./output` | Merge placements/graphs/water/c3 → `ue5_import/ue_game_binding.json` (see `docs/ue_game_bindings.md`; Editor: `apply_world_bindings.py` / `setup_all` step 9b) |
 | `make condense-placements OUTPUT=./output` | After extract-placements: `world_bundle.json.gz` + `manifest.json` (included in **full-pipeline**; optional `maracaibo_bundle.json.gz` / `pmc_bundle.json.gz` when subset JSON exists). Expand on target: `python tools/condense_placements.py expand --bundle …/world_bundle.json.gz` |
 | `make filter-pmc-base OUTPUT=./output` | PMC subset → `pmc_base_asset_list.json` + `placements/pmc_base.json` (needs `ue5-bundle`) |
 | `make regen-pmc-glbs OUTPUT=./output` | Regenerate GLBs for PMC base list |

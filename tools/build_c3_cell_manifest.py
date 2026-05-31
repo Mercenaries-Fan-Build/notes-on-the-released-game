@@ -54,7 +54,9 @@ def main() -> int:
             verts = int(meta.get("vertices", 0))
         if verts < args.min_vertices:
             continue
-        cell_id = int(m.group(1))
+        cell_id = grid.primary_cell_id_from_stem(block_dir.name)
+        if cell_id is None:
+            continue
         xyz = grid.cell_id_to_world_xyz(cell_id)
         has_glb = (block_dir / "mesh_scene.glb").is_file()
         has_gltf = (block_dir / "mesh_scene.gltf").is_file()

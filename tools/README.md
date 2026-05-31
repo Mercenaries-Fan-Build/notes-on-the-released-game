@@ -93,6 +93,9 @@ Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, 
 | [`fxdict_parser.py`](fxdict_parser.py) / [`fxdict_codec.py`](fxdict_codec.py) | Resident **fxdict** INFO+DICT → JSON ([`docs/fxdict_format.md`](../docs/fxdict_format.md)) |
 | [`effect_block_probe.py`](effect_block_probe.py) | `effects` block UCFX chunk survey |
 | [`watermap_decode.py`](watermap_decode.py) / [`watermap_probe.py`](watermap_probe.py) | `watr` grid decode + PNG ([`docs/watermap_format.md`](../docs/watermap_format.md)) |
+| [`build_ue_game_binding.py`](build_ue_game_binding.py) | Merge placements/graphs → `ue5_import/ue_game_binding.json` (`make ue-bind-manifest`; [`docs/ue_game_bindings.md`](../docs/ue_game_bindings.md)) |
+| [`road_graph_extractor.py`](road_graph_extractor.py) | Road/RoadIntersection ECS → `placements/road_graph.json` (`make road-graph`) |
+| [`destruction_link_resolver.py`](destruction_link_resolver.py) | DestructionLink pairs → `placements/destruction_graph.json` (`make destruction-graph`) |
 | [`lineregion_probe.py`](lineregion_probe.py) | Resident **lineregion** polygons (game XZ) |
 | [`material_probe.py`](material_probe.py) | SCRB/MTRL texture-hash survey in scrub/resident blocks |
 | [`export_skinned_mesh.py`](export_skinned_mesh.py) | One mesh block → skinned `.glb` (HIER + STRM weights) |

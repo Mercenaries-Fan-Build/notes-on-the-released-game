@@ -14,6 +14,7 @@ Default order:
   7. setup_weather_system   — weather enums / BP scaffold
   8. import_world           — GLB mesh import (slow; skippable)
   9. populate_world         — place meshes + terrain (skippable)
+ 9b. apply_world_bindings   — manifest-driven water/lights/hibernation/roads (skippable)
  10. toggle_vz_visibility   — vz_state Data Layer preset (skippable; needs step 9)
  10b. import_mission_data    — DT_MissionRegistry + DT_SpawnRegistry (optional)
  10c. mission_layer_activator — mission vz_state layers (optional; needs 9–10)
@@ -25,6 +26,7 @@ Default order:
 
 Not in this pipeline (run manually when needed):
   - setup_rotation_test_grid.py — yaw diagnostic grid near PMC HQ
+  - apply_world_bindings.py — same as step 9b (run alone after make ue-bind-manifest)
   - mercs2_visibility_runtime.py — library imported by toggle_vz_visibility
   - import_mission_data.py / mission_layer_activator.py — mission DT import + layer toggle
   - populate_pmc_base.py / import_pmc_base.py — PMC base testbed workflow
@@ -33,9 +35,13 @@ Not in this pipeline (run manually when needed):
 Environment variables (optional):
   MERCS2_SETUP_SKIP_IMPORT=1        Skip import_world (step 8)
   MERCS2_SETUP_SKIP_POPULATE=1      Skip populate_world (step 9)
+  MERCS2_SETUP_SKIP_BINDINGS=1      Skip apply_world_bindings (step 9b)
   MERCS2_SETUP_SKIP_VZ_VISIBILITY=1 Skip toggle_vz_visibility (step 10)
+  MERCS2_BINDING_MANIFEST=...       Override ue_game_binding.json path
   MERCS2_SETUP_SKIP_VERIFY=1        Skip verify_player_setup (step 15)
   MERCS2_SETUP_SKIP_WORLD=1         Skip import + populate (steps 8–9)
+  MERCS2_FORCE_IMPORT=1             Re-import all GLBs (not skipped when folders exist)
+  MERCS2_AUTO_FORCE_IMPORT=0        Disable auto force when /Meshes/WorldCells is empty
   MERCS2_SETUP_STOP_ON_ERROR=1      Abort remaining steps after first failure
   MERCS2_IMPORT_LIMIT=N             Pass limit to import_world.run_import(N)
   MERCS2_IMPORT_WORLD_CELLS=0       Opt out of c3 world-cell GLB import (~2.2k meshes; default ON)
@@ -72,6 +78,7 @@ if _SCRIPT_DIR not in sys.path:
 
 import importlib
 
+import mercs2_c3_grid
 import mercs2_data_layers as m2dl
 import import_world
 import populate_world
@@ -88,6 +95,10 @@ import setup_water
 import setup_weather_system
 import toggle_vz_visibility
 import verify_player_setup
+import apply_world_bindings
+import mercs2_actor_utils
+import mercs2_binding_apply
+import mercs2_binding_manifest_io
 
 import import_mission_data
 import mission_layer_activator
@@ -211,6 +222,12 @@ def _build_steps() -> list[SetupStep]:
             skip_env="MERCS2_SETUP_SKIP_POPULATE" if not skip_world else "MERCS2_SETUP_SKIP_WORLD",
         ),
         SetupStep(
+            "apply_bindings",
+            "Apply Game→UE binding manifest",
+            apply_world_bindings.run,
+            skip_env="MERCS2_SETUP_SKIP_BINDINGS",
+        ),
+        SetupStep(
             "vz_visibility",
             "vz_state Data Layer visibility preset",
             toggle_vz_visibility.run,
@@ -252,6 +269,7 @@ def _should_skip(step: SetupStep) -> bool:
 def _reload_child_modules() -> None:
     """Pick up on-disk script edits without restarting the editor."""
     modules = (
+        mercs2_c3_grid,
         m2dl,
         import_world,
         populate_world,
@@ -268,6 +286,10 @@ def _reload_child_modules() -> None:
         setup_weather_system,
         toggle_vz_visibility,
         verify_player_setup,
+        apply_world_bindings,
+        mercs2_actor_utils,
+        mercs2_binding_apply,
+        mercs2_binding_manifest_io,
         import_mission_data,
         mission_layer_activator,
     )
@@ -282,6 +304,16 @@ def run() -> dict[str, str]:
     _log("Mercenaries 2 — Full setup (all child scripts)")
     _log("=" * 70)
     _apply_full_world_defaults()
+    try:
+        import mercs2_binding_manifest_io as _bm
+
+        if _bm.load_manifest() is None and not _env_flag("MERCS2_SETUP_SKIP_BINDINGS"):
+            _warn(
+                "ue_game_binding.json not found — run: make ue-bind-manifest OUTPUT=./output "
+                "(bindings step will no-op partially; populate uses legacy visibility)"
+            )
+    except Exception:
+        pass
     if _env_flag("MERCS2_IMPORT_WORLD_CELLS"):
         _log(
             "Full world: c3 city-cell import enabled (~2.2k meshes). "

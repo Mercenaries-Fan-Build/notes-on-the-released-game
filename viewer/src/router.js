@@ -16,6 +16,11 @@ const routes = [
     component: () => import('./views/AssetWorkbenchView.vue'),
   },
   {
+    path: '/world-cells',
+    name: 'world-cells',
+    component: () => import('./views/WorldCellsPreviewView.vue'),
+  },
+  {
     path: '/placements',
     name: 'placements',
     component: () => import('./views/PlacementPreviewView.vue'),

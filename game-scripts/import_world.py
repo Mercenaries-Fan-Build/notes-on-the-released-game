@@ -357,6 +357,47 @@ def _dest_has_static_mesh(dest_path: str) -> bool:
     return False
 
 
+def count_static_meshes_under(content_path: str) -> int:
+    """Count imported StaticMesh assets under a Content Browser folder."""
+    if not unreal.EditorAssetLibrary.does_directory_exist(content_path):
+        return 0
+    count = 0
+    for asset_path in unreal.EditorAssetLibrary.list_assets(content_path, recursive=True):
+        obj = unreal.EditorAssetLibrary.load_asset(str(asset_path))
+        if obj is not None and isinstance(obj, unreal.StaticMesh):
+            count += 1
+    return count
+
+
+def maybe_enable_force_import() -> bool:
+    """Set MERCS2_FORCE_IMPORT when WorldCells content is missing (unless opted out).
+
+    Returns True when force-import was enabled for this process.
+    """
+    if os.environ.get("MERCS2_FORCE_IMPORT", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return False
+    if os.environ.get("MERCS2_AUTO_FORCE_IMPORT", "").strip().lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        return False
+    cells_dir = f"{CONTENT_BASE}/Meshes/WorldCells"
+    n = count_static_meshes_under(cells_dir)
+    if n > 0:
+        return False
+    os.environ["MERCS2_FORCE_IMPORT"] = "1"
+    _log(
+        f"No StaticMeshes under {cells_dir} — enabled MERCS2_FORCE_IMPORT for this run. "
+        "Set MERCS2_AUTO_FORCE_IMPORT=0 to disable auto force."
+    )
+    return True
+
+
 def _import_stamp_path(glb_path: str) -> str:
     return glb_path + ".ue_imported"
 
@@ -410,6 +451,7 @@ def deduplicate_lods(entries: list[dict]) -> list[dict]:
 
 def run_import(limit: int | None = None) -> None:
     """Discover, deduplicate, and import all GLBs into the UE project."""
+    maybe_enable_force_import()
     flags = _import_flags()
     _log("=" * 60)
     _log("Starting full world mesh import")
@@ -482,6 +524,12 @@ def run_import(limit: int | None = None) -> None:
 
     _log("=" * 60)
     _log(f"Import complete — {imported} imported, {skipped} skipped, {failed} failed (of {total})")
+    if imported == 0 and skipped > 0 and not flags["force_all"]:
+        _warn(
+            "All meshes were skipped (Content folders already populated). "
+            "After pipeline GLB updates or a bad partial import, set MERCS2_FORCE_IMPORT=1 "
+            "and restart the editor before re-running setup_all.py."
+        )
     _log("=" * 60)
 
 

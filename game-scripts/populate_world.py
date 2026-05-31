@@ -35,22 +35,39 @@ if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 import importlib as _importlib
 import mercs2_actor_utils as actor_utils; _importlib.reload(actor_utils)
+import mercs2_c3_grid as _c3grid; _importlib.reload(_c3grid)
 import mercs2_data_layers as m2dl; _importlib.reload(m2dl)
 import mercs2_mesh_utils as mesh_utils; _importlib.reload(mesh_utils)
 import mercs2_vz_taxonomy as vz_tax; _importlib.reload(vz_tax)
+import mercs2_binding_manifest_io as binding_manifest; _importlib.reload(binding_manifest)
 
 _TOOLS_DIR_EARLY = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "tools")
 if _TOOLS_DIR_EARLY not in sys.path:
     sys.path.insert(0, _TOOLS_DIR_EARLY)
 import mercs2_coords as _mercs2_coords_mod
 _importlib.reload(_mercs2_coords_mod)
-from mercs2_coords import game_yaw_to_ue_yaw_deg, game_quat_to_ue_rotator_deg
+from mercs2_coords import (
+    GAME_TO_UE_CM,
+    game_quat_to_ue_rotator_deg,
+    game_to_ue as _game_to_ue_tuple,
+    game_yaw_to_ue_yaw_deg,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-REPO_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+def _find_repo_root() -> str:
+    """Locate repo root whether the script runs from ``game-scripts/`` or elsewhere."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for base in (script_dir, os.path.dirname(script_dir)):
+        root = os.path.abspath(base)
+        if os.path.isfile(os.path.join(root, "output", "placements", "layers_static.json")):
+            return root
+    return os.path.abspath(os.path.join(script_dir, ".."))
+
+
+REPO_ROOT: str = _find_repo_root()
 CONTENT_BASE = "/Game/Mercs2"
 DL_ASSET_PACKAGE_DIR = f"{CONTENT_BASE}/DataLayers/World"
 
@@ -65,7 +82,7 @@ CATEGORY_FOLDERS: dict[str, str] = {
     "other": "Other",
 }
 
-GAME_TO_UE = 100.0
+GAME_TO_UE = GAME_TO_UE_CM
 
 DEDUP_CELL_SIZE_UE = 50.0
 
@@ -104,7 +121,7 @@ def _is_lrterrain_tile_entity(entity_name: str) -> bool:
 _GENERIC_PATH_SEGMENTS: frozenset[str] = frozenset({
     "staticmeshes", "skeletalmeshes", "materials", "textures",
     "mesh_scene", "meshes", "buildings", "vehicles", "roads",
-    "environment", "maracaibo", "other", "worldlayers", "pmcbase",
+    "environment", "maracaibo", "other", "worldlayers", "worldcells", "pmcbase",
     "game", "mercs2", "content",
 })
 
@@ -191,6 +208,11 @@ def sanitize_name(name: str) -> str:
     return out[:120]
 
 
+def _sanitize_actor_label(name: str) -> str:
+    """Alias for binding applicators and legacy call sites."""
+    return sanitize_name(name)
+
+
 # ---------------------------------------------------------------------------
 # Visibility classification
 # ---------------------------------------------------------------------------
@@ -204,11 +226,27 @@ def _is_layers_static_placement(p: dict) -> bool:
     return not source or "layers_static" in source
 
 
+_binding_manifest_cache: dict | None = None
+
+
+def _get_binding_manifest() -> dict | None:
+    global _binding_manifest_cache
+    if _binding_manifest_cache is None:
+        _binding_manifest_cache = binding_manifest.load_manifest()
+    return _binding_manifest_cache
+
+
 def classify_visibility(p: dict) -> Literal["visible", "hidden", "skip"]:
     """Determine whether a placement should be visible, hidden, or skipped."""
     entity = p.get("entity_name") or ""
     if _SKIP_PATTERNS.search(entity):
         return "skip"
+
+    manifest_vis = binding_manifest.placement_visibility_from_manifest(
+        p, _get_binding_manifest()
+    )
+    if manifest_vis is not None:
+        return manifest_vis
 
     if _is_layers_static_placement(p):
         return "visible"
@@ -247,6 +285,13 @@ def _canonical_from_path(mesh_path: str) -> str:
         if seg_lower in _GENERIC_PATH_SEGMENTS:
             continue
         if _GENERIC_SEGMENT_RE.match(seg):
+            continue
+        # Interchange leaf StaticMesh assets (SM_*) — use parent block folder instead.
+        if seg_lower.startswith("sm_"):
+            inner = seg[3:]
+            m = _BLOCK_FOLDER_RE.match(inner)
+            if m:
+                return m.group(1).lower()
             continue
         m = _BLOCK_FOLDER_RE.match(seg)
         if m:
@@ -428,8 +473,13 @@ def _log_import_vs_placement_gap(
 
 
 def game_to_ue(x: float, y: float, z: float) -> unreal.Vector:
-    """Game Y-up → UE Z-up, metres → centimetres."""
-    return unreal.Vector(x * GAME_TO_UE, z * GAME_TO_UE, y * GAME_TO_UE)
+    """Game Y-up → UE Z-up, metres → centimetres.
+
+    UE Location: (X, Y, Z) = (game X, game Z, game Y) × 100.
+    Top-down viewport uses the X–Y plane; north–south is UE Y, not UE Z.
+    """
+    ux, uy, uz = _game_to_ue_tuple(x, y, z)
+    return unreal.Vector(ux, uy, uz)
 
 
 def placement_to_ue_location(p: dict) -> unreal.Vector:
@@ -471,8 +521,9 @@ def _spawn_actor_at(
         actor = unreal.EditorLevelLibrary.spawn_actor_from_class(actor_class, loc, rot)
     if actor is None:
         return None
-    actor.set_actor_location(loc, False, False)
-    actor.set_actor_rotation(rot, False)
+    actor_utils._apply_actor_world_transform(  # noqa: SLF001
+        actor, loc, rot, unreal.Vector(1.0, 1.0, 1.0),
+    )
     return actor
 
 
@@ -1007,20 +1058,9 @@ def _data_layer_for_placement(
 # c3 world-cell placement
 # ---------------------------------------------------------------------------
 
-_TOOLS_DIR = os.path.join(REPO_ROOT, "tools")
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
-
-try:
-    import c3_cell_grid as _c3grid
-except ImportError:
-    _c3grid = None  # type: ignore[assignment]
-
 
 def _is_c3_mesh_canonical(canon: str) -> bool:
-    if _c3grid is not None:
-        return _c3grid.is_c3_canonical_name(canon)
-    return bool(_C3_CELL_ID_RE.search(canon))
+    return _c3grid.is_c3_canonical_name(canon)
 
 
 def _is_cell_baked_prop_entity(entity_name: str) -> bool:
@@ -1102,6 +1142,65 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _verify_c3_grid_loaded() -> bool:
+    """Fail fast when UE still has a stale pre-fix ``tools.c3_cell_grid`` in memory."""
+    ok, detail = _c3grid.verify_grid_logic()
+    if ok:
+        _log(f"c3 grid self-test OK ({detail})")
+        return True
+    _err(
+        f"c3 grid self-test FAILED: {detail}. "
+        "Restart the UE Editor (clears Python module cache), then re-run setup_all.py "
+        "from game-scripts/ in this repo."
+    )
+    return False
+
+
+# Full-map cell actors should span ~7.7M UE cm on X and Y; a thin strip is ~1 row.
+_MIN_CELL_SPREAD_UE_CM = 500_000.0
+
+
+def _resolve_cell_id_for_mesh(canon: str, mesh_path: str) -> int | None:
+    """Cell id from canonical stem, falling back to full UE asset path."""
+    cid = _c3grid.primary_cell_id_from_stem(canon)
+    if cid is not None:
+        return cid
+    return _c3grid.cell_id_from_asset_path(mesh_path)
+
+
+def _log_cell_actor_spread(ue_locs: list[unreal.Vector]) -> None:
+    if len(ue_locs) < 2:
+        return
+    xs = [loc.x for loc in ue_locs]
+    ys = [loc.y for loc in ue_locs]
+    zs = [loc.z for loc in ue_locs]
+    span_x = max(xs) - min(xs)
+    span_y = max(ys) - min(ys)
+    span_z = max(zs) - min(zs)
+    _log(
+        f"c3 placement spread ({len(ue_locs)} actors): "
+        f"UE X [{min(xs):.0f} .. {max(xs):.0f}] span={span_x:.0f} cm, "
+        f"UE Y [{min(ys):.0f} .. {max(ys):.0f}] span={span_y:.0f} cm, "
+        f"UE Z [{min(zs):.0f} .. {max(zs):.0f}] span={span_z:.0f} cm"
+    )
+    if span_x < _MIN_CELL_SPREAD_UE_CM and span_y < _MIN_CELL_SPREAD_UE_CM:
+        _err(
+            "c3 cell actors collapsed to a thin strip (both UE X and Y spans are tiny). "
+            "Quit and restart the UE Editor to clear stale Python, then re-run setup_all.py. "
+            "If spread is still wrong, run game-scripts/diagnose_world_cell_spread.py "
+            "and compare actor transforms to the logged c3 diagnostic lines."
+        )
+    elif span_y < _MIN_CELL_SPREAD_UE_CM and span_x >= _MIN_CELL_SPREAD_UE_CM:
+        _warn(
+            "c3 cells span UE X but not UE Y — matches a single north–south grid row "
+            "(stale c3 id decode or incomplete import). Restart UE and re-run populate."
+        )
+    elif span_x < _MIN_CELL_SPREAD_UE_CM and span_y >= _MIN_CELL_SPREAD_UE_CM:
+        _warn(
+            "c3 cells span UE Y but not UE X — matches a single east–west grid column."
+        )
+
+
 def populate_world_cells(
     mesh_lookup: dict[str, str],
     base_world: unreal.DataLayerInstance | None,
@@ -1109,16 +1208,32 @@ def populate_world_cells(
     label_index: actor_utils.ActorLabelIndex | None = None,
 ) -> dict[str, int]:
     """Place imported c3#### world-cell meshes at decoded grid origins."""
-    if not _env_truthy("MERCS2_POPULATE_WORLD_CELLS", default=False):
+    if not _verify_c3_grid_loaded():
+        return {"placed": 0, "skipped": 0}
+
+    if not _env_truthy("MERCS2_POPULATE_WORLD_CELLS", default=True):
         _log(
-            "World-cell placement skipped (default). Set MERCS2_POPULATE_WORLD_CELLS=1 "
-            "after fix_nanite_world_meshes.py and a stable editor session."
+            "World-cell placement skipped (MERCS2_POPULATE_WORLD_CELLS=0). "
+            "setup_all.py enables cells by default."
         )
         return {"placed": 0, "skipped": 0}
 
-    if _c3grid is None:
-        _warn("c3_cell_grid module not found — skip world-cell placement")
-        return {"placed": 0, "skipped": 0}
+    cell_canons = [c for c in mesh_lookup if _is_c3_mesh_canonical(c)]
+    _log(f"World-cell meshes in lookup: {len(cell_canons)}")
+    for canon in cell_canons[:5]:
+        mesh_path = mesh_lookup.get(canon, "")
+        cid = _resolve_cell_id_for_mesh(canon, mesh_path)
+        if cid is None:
+            _warn(f"c3 diagnostic: canon={canon!r} -> no cell_id")
+            continue
+        xyz = _c3grid.cell_id_to_world_xyz(cid)
+        ue = game_to_ue(xyz[0], xyz[1], xyz[2])
+        _log(
+            f"c3 diagnostic: canon={canon!r} cell_id={cid} "
+            f"game_xyz_m=({xyz[0]:.1f},{xyz[1]:.1f},{xyz[2]:.1f}) "
+            f"ue_location_cm=({ue.x:.0f},{ue.y:.0f},{ue.z:.0f}) "
+            f"[Details X=gameX, Y=gameZ, Z=gameY]"
+        )
 
     cell_max = _env_int("MERCS2_WORLD_CELLS_MAX", 0)
     if cell_max > 0:
@@ -1127,12 +1242,13 @@ def populate_world_cells(
     placed = 0
     skipped = 0
     dedup_cells: set[int] = set()
+    placed_ue_locs: list[unreal.Vector] = []
 
     for canon, mesh_path in mesh_lookup.items():
         if not _is_c3_mesh_canonical(canon):
             continue
 
-        cell_id = _c3grid.primary_cell_id_from_stem(canon)
+        cell_id = _resolve_cell_id_for_mesh(canon, mesh_path)
         if cell_id is None:
             skipped += 1
             continue
@@ -1156,6 +1272,16 @@ def populate_world_cells(
         )
         if actor is not None:
             placed += 1
+            placed_ue_locs.append(loc)
+            try:
+                actual = actor.get_actor_location()
+                if abs(actual.x - loc.x) > 500.0 or abs(actual.y - loc.y) > 500.0:
+                    _warn(
+                        f"c3 {label}: actor at ({actual.x:.0f},{actual.y:.0f},{actual.z:.0f}) "
+                        f"but requested ({loc.x:.0f},{loc.y:.0f},{loc.z:.0f})"
+                    )
+            except Exception:
+                pass
             if cell_max > 0 and placed >= cell_max:
                 _warn(
                     f"Reached MERCS2_WORLD_CELLS_MAX={cell_max} — "
@@ -1165,6 +1291,7 @@ def populate_world_cells(
         else:
             skipped += 1
 
+    _log_cell_actor_spread(placed_ue_locs)
     _log(f"World cells placed: {placed} (skipped {skipped}, unique cells {len(dedup_cells)})")
     return {"placed": placed, "skipped": skipped}
 
