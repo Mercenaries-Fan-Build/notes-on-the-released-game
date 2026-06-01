@@ -388,25 +388,47 @@ def main():
             else:
                 print("  Gate 0d: PASS — resident scripts are PC-LE (scripts_vz still required for Row 13)")
 
+            # Contracts in the resident block are full inline-LuaQ entries
+            # (matched by name_hash, exactly as the engine resolves import()),
+            # not lightweight BINN script-reference records.  Recognize both.
+            resident_entry_hashes: set[int] = set()
+            try:
+                for entry in parse_block_entries(resident_data):
+                    resident_entry_hashes.add(entry.get("hash"))
+            except Exception:
+                pass
+
             for name in chain_scripts[2:]:
                 h = pandemic_hash_m2(name)
-                in_aset = h in combined_aset
-                in_binn = False
-                try:
-                    for entry in parse_block_entries(resident_data):
-                        ref = get_binn_script_ref_name(resident_data, entry)
-                        if ref and ref.lower() == name.lower():
-                            in_binn = True
-                            break
-                except Exception:
-                    pass
-                if in_aset and in_binn:
-                    print(f"  {name:25s}  PRESENT (ASET + BINN ref)")
-                elif in_binn:
-                    print(f"  {name:25s}  PARTIAL (BINN ref, not in ASET)")
+                aset_block = combined_aset.get(h)
+                in_aset = aset_block is not None
+
+                in_resident = h in resident_entry_hashes
+                if not in_resident:
+                    try:
+                        for entry in parse_block_entries(resident_data):
+                            ref = get_binn_script_ref_name(resident_data, entry)
+                            if ref and ref.lower() == name.lower():
+                                in_resident = True
+                                break
+                    except Exception:
+                        pass
+
+                if in_resident and aset_block == resident_idx:
+                    print(f"  {name:25s}  PRESENT (ASET→resident {resident_idx} + bytecode)")
+                elif in_resident and in_aset:
+                    # Bytecode lives in resident but ASET routes elsewhere
+                    # (e.g. scripts_vz bootstrap) — the engine would load the
+                    # wrong block and risk a re-entrant masterscript hang.
+                    print(f"  {name:25s}  MISROUTED (bytecode in resident "
+                          f"{resident_idx}, but ASET→block {aset_block})")
+                    all_ok = False
+                elif in_resident:
+                    print(f"  {name:25s}  PARTIAL (bytecode in resident, not in ASET)")
                     all_ok = False
                 elif in_aset:
-                    print(f"  {name:25s}  PARTIAL (ASET only)")
+                    print(f"  {name:25s}  PARTIAL (ASET→block {aset_block}, "
+                          f"no bytecode in resident)")
                     all_ok = False
                 else:
                     print(f"  {name:25s}  MISSING")

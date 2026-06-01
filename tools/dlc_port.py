@@ -1844,7 +1844,17 @@ def _build_bootstrap_block(
     # a mission.  Injecting them into scripts_vz is unnecessary and risks
     # re-entrant block loading during masterscript evaluation.
     contract_bytecodes: dict[str, bytes] = {}
-    if converted_blocks:
+    if no_hook:
+        # Nohook is the canonical path: contracts live in the DLC asset block
+        # (resident_P000_Q3) and are resolved via ASET on-demand when the
+        # player accepts a mission.  Copying their bytecode into scripts_vz is
+        # both unnecessary and harmful — it pulls the contract ASET rows onto
+        # the bootstrap block (dedupe prefers scripts_vz) and risks re-entrant
+        # block loading during masterscript evaluation.  Leave them in place.
+        print("\n  [bootstrap 1/6] Nohook mode — DLC contracts stay in their asset "
+              "block (resident_P000_Q3) and resolve via ASET on-demand; "
+              "skipping scripts_vz injection.")
+    elif converted_blocks:
         print("\n  [bootstrap 1/6] Extracting DLC contract bytecodes from converted blocks...")
         contract_bytecodes = _extract_contract_bytecodes(
             converted_blocks, dlc_contracts, verbose=verbose
@@ -1853,8 +1863,6 @@ def _build_bootstrap_block(
             print(f"    Extracted {len(contract_bytecodes)} contract bytecodes:")
             for name, bc in contract_bytecodes.items():
                 print(f"      {name}: {len(bc):,} bytes")
-        elif no_hook:
-            print("    Nohook: no inline LuaQ found — contracts may use resident BINN refs only.")
         else:
             print("    WARNING: No contract bytecodes found in converted blocks.")
     else:
