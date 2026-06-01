@@ -79,6 +79,27 @@ KNOWN_VAS: list[dict[str, Any]] = [
      "comment": "Start of .rdata section (size 0xF1000)"},
     {"va": 0x00401000, "name": ".text_start", "type": "section",
      "comment": "Start of .text section (size 0x703000)"},
+
+    # --- Spatial-hash crash investigation (docs/spatial_hash_crash_analysis.md) ---
+    # In-.text decomp targets (resolve cell-index formula + entity field extraction).
+    {"va": 0x00516B10, "name": "spatial_cell_index_calc", "type": "decomp_target",
+     "comment": "Spatial-hash cell-index computation (reads entity XYZ). Decompile to "
+                "recover the float->cell-index formula and confirm whether it reads "
+                "position via schm field offsets."},
+    {"va": 0x00516C00, "name": "spatial_hash_insert", "type": "decomp_target",
+     "comment": "Spatial-hash insert/register path (near cell-index calc)."},
+    {"va": 0x0051812F, "name": "spatial_loader_entry", "type": "decomp_target",
+     "comment": "Loader/registration caller feeding the spatial hash."},
+    {"va": 0x00516EF6, "name": "spatial_hash_benign_site", "type": "decomp_target",
+     "comment": "Secondary spatial-hash read site seen in x32dbg captures."},
+    {"va": 0x0063DA1F, "name": "entity_construct_stride", "type": "decomp_target",
+     "comment": "Candidate entity-construction site — recover record stride/offset "
+                "and whether non-Transform components extract position via schm offsets."},
+    # Runtime fault VAs (NOT in static .text; base must be resolved from a live
+    # x32dbg session before mapping to file offsets — see Phase 2 capture recipe).
+    {"va": 0x0248BB60, "name": "RUNTIME_spatial_fn", "type": "runtime_va",
+     "comment": "Crash function (read 0x248BB7C / write 0x248BBE2; cond bp 0x248BB6D). "
+                "Above static .text — resolve module base at runtime."},
 ]
 
 # Section boundaries for luaL_Reg scanning heuristics

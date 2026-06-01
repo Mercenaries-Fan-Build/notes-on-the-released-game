@@ -12,15 +12,26 @@ pub fn consume_animation(_container: &[u8], data_body: Option<&[u8]>, label: &st
     let mut structural_violations = 0u32;
 
     if consumed {
-        if let Some(offset) = find_havok_header(body) {
+        // Walk EVERY Havok packfile magic in the body, not just the first. An
+        // animgroup embeds multiple packfile headers (the canonical top-level
+        // packfile plus nested per-animation headers); checking only the first
+        // both misses real corruption and can report a non-canonical embedded
+        // header. The endianness byte lives at magic+17 (layoutRules[1]).
+        let mut searched = 0usize;
+        while let Some(rel) = find_havok_header(&body[searched..]) {
+            let offset = searched + rel;
             if offset + 18 <= body.len() {
                 let le_flag = body[offset + 17];
                 if le_flag != 1 {
                     issues.push(format!(
-                        "{label}: Havok packfile endianness byte = {le_flag} (expected 1 = LE)"
+                        "{label}: Havok packfile @+{offset} endianness byte = {le_flag} (expected 1 = LE)"
                     ));
                     structural_violations += 1;
                 }
+            }
+            searched = offset + 8;
+            if searched + 18 > body.len() {
+                break;
             }
         }
     }

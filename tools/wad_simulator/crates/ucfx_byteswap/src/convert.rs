@@ -256,7 +256,47 @@ fn convert_container(
         convert_generic_bodies(&mut out, container, &descriptors, data_area_off, is_be, type_hash, entry_idx, report)?;
     }
 
+    // Repair embedded Havok packfile headers whose 4 × u8 `layoutRules` were
+    // wrongly u32-swapped by the generic body sweep (mirrors
+    // `tools/ucfx_be_to_le._fix_embedded_havok_layoutrules`). Offsets in `out`
+    // match `container` 1:1 when the byteswap preserves size (animation bodies).
+    if is_be && out.len() == container.len() {
+        fix_embedded_havok_layoutrules(container, &mut out);
+    }
+
     Ok(out)
+}
+
+/// 8-byte Havok 5.5 packfile magic (`57 E0 E0 57 10 C0 C0 10`). Palindromic per
+/// u32 word, so it survives a u32 byte-swap and is found at the same offset in
+/// the BE input and the LE output.
+const HAVOK_PACKFILE_MAGIC: [u8; 8] = [0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10];
+
+/// Restore embedded Havok packfile `layoutRules` (`{ u8 ptrSize; u8 littleEndian;
+/// u8 reusePadding; u8 emptyBaseClass }` at magic `+16`) that a blanket u32 swap
+/// reversed (BE `04 00 00 01` → `01 00 00 04`). Copies the 4 bytes verbatim from
+/// the BE source and sets `littleEndian = 1`. `be` and `out` must be the same length.
+fn fix_embedded_havok_layoutrules(be: &[u8], out: &mut [u8]) {
+    if be.len() != out.len() || be.len() < HAVOK_PACKFILE_MAGIC.len() {
+        return;
+    }
+    let mut pos = 0usize;
+    while pos + 20 <= be.len() {
+        match be[pos..]
+            .windows(HAVOK_PACKFILE_MAGIC.len())
+            .position(|w| w == HAVOK_PACKFILE_MAGIC)
+        {
+            Some(rel) => {
+                let m = pos + rel;
+                if m + 20 <= be.len() {
+                    out[m + 16..m + 20].copy_from_slice(&be[m + 16..m + 20]);
+                    out[m + 17] = 1; // littleEndian
+                }
+                pos = m + 8;
+            }
+            None => break,
+        }
+    }
 }
 
 /// Resolve a descriptor's body slice within the original container.
@@ -404,14 +444,16 @@ fn convert_ecs_bodies(
                 }
             }
 
-            // Swap the schm body (all u32 fields)
+            // Swap the schm body. NOTE: the per-field offset word is
+            // { u16 byte_offset; u8; u8 }, NOT a u32 — swap only the
+            // byte_offset u16 (see swap_schm_body_inplace).
             if let Some(si) = schm_idx {
                 let d = &descriptors[si];
                 if let Some((start, end)) = body_range(container, d.row_u0, d.body_size, data_area_off) {
                     let body_local_start = start - data_start;
                     let body_local_end = end - data_start;
                     if body_local_end <= data_area.len() {
-                        swap_u32_array(&mut data_area[body_local_start..body_local_end]);
+                        swap_schm_body_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
                 }
             }
@@ -526,6 +568,49 @@ fn extract_comp_name(
     }
 
     None
+}
+
+/// Convert a `schm` (component schema) body in place from BE to LE.
+///
+/// Layout (verified against retail PC `layers_static` / `vz_mar_roads`):
+///   +0  u32 n_fields
+///   +4  u32 payload_stride
+///   +8  n_fields x 16-byte field entries:
+///         +0  u32 type_code
+///         +4  u32 name_hash
+///         +8  u32 unk (always 0)
+///         +12 offset word = { u16 byte_offset; u8 a; u8 b }
+///
+/// The trailing two bytes of the offset word are endian-neutral u8 fields
+/// (bit index / size), so the word is NOT a u32. A full u32 swap moves the
+/// `byte_offset` into the high 16 bits; the engine (and every retail PC
+/// block) stores it in the low 16 bits. Swap only the `byte_offset` u16 and
+/// leave the trailing two bytes in place. (swap-first-u16 reproduces retail
+/// 47/47 on vz_mar_roads and 12/12 on layers_static; full u32 swap matches
+/// only zero-offset fields.) Mirrors `_convert_schm_body` in ucfx_be_to_le.py.
+fn swap_schm_body_inplace(buf: &mut [u8]) {
+    if buf.len() < 8 {
+        swap_u32_array(buf);
+        return;
+    }
+    let n_fields = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
+    if n_fields > 200 || (8 + n_fields as usize * 16) > buf.len() {
+        // Not a recognizable field table — preserve legacy behaviour.
+        swap_u32_array(buf);
+        return;
+    }
+    // Header: n_fields + payload_stride are plain u32.
+    buf[0..4].reverse();
+    buf[4..8].reverse();
+    for i in 0..n_fields as usize {
+        let off = 8 + i * 16;
+        buf[off..off + 4].reverse(); // type_code
+        buf[off + 4..off + 8].reverse(); // name_hash
+        buf[off + 8..off + 12].reverse(); // unk
+        // offset word: BE [b0,b1,b2,b3] -> LE [b1,b0,b2,b3]
+        buf.swap(off + 12, off + 13);
+    }
+    // Any trailing bytes (none expected) are left untouched.
 }
 
 /// Pre-scan a schm body to extract raw type codes for reporting.
@@ -1129,4 +1214,28 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fix_embedded_havok_layoutrules, HAVOK_PACKFILE_MAGIC};
+
+    #[test]
+    fn layoutrules_embedded_repair() {
+        // Embedded packfile header at offset 16; BE layoutRules = 04 00 00 01.
+        let m = 16usize;
+        let mut be = vec![0xAAu8; 64];
+        be[m..m + 8].copy_from_slice(&HAVOK_PACKFILE_MAGIC);
+        be[m + 16..m + 20].copy_from_slice(&[0x04, 0x00, 0x00, 0x01]);
+
+        // Simulate the bug: blanket u32-swap reverses layoutRules → 01 00 00 04.
+        let mut out = be.clone();
+        out[m + 16..m + 20].copy_from_slice(&[0x01, 0x00, 0x00, 0x04]);
+        assert_eq!(out[m + 17], 0, "precondition: littleEndian scrambled to 0");
+
+        fix_embedded_havok_layoutrules(&be, &mut out);
+
+        assert_eq!(&out[m + 16..m + 20], &[0x04, 0x01, 0x00, 0x01]);
+        assert_eq!(out[m + 17], 1, "littleEndian restored to 1");
+    }
 }

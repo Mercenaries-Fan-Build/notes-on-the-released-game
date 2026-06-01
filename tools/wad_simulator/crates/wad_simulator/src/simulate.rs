@@ -66,6 +66,7 @@ pub struct SimulateReport {
     pub vertex_violations: usize,
     pub bounds_violations: usize,
     pub structural_violations: u32,
+    pub ecs_float_violations: usize,
 }
 
 pub struct SimulateOptions<'a> {
@@ -213,6 +214,7 @@ pub fn run_simulate_with_options(
         report.vertex_violations += result.vertex_violations;
         report.bounds_violations += result.bounds_violations;
         report.structural_violations += result.structural_violations;
+        report.ecs_float_violations += result.ecs_float_violations;
         for h in &result.xref_hashes {
             xref_targets.insert(*h);
         }
@@ -594,6 +596,12 @@ pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::na
             report.structural_violations.to_string().red().bold()
         );
     }
+    if report.ecs_float_violations > 0 {
+        println!(
+            "  ECS float (advisory): {}  (schema-driven non-Transform Vec3/Blob32; diff vs retail oracle — not fatal)",
+            report.ecs_float_violations.to_string().yellow()
+        );
+    }
     println!();
 
     if !report.assets_by_type.is_empty() {
@@ -619,6 +627,10 @@ pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::na
         || report.vertex_violations > 0
         || report.bounds_violations > 0
         || report.structural_violations > 0
+        // NOTE: ecs_float_violations is intentionally NOT fatal — without per-field
+        // world-position semantics it false-positives on retail-valid non-Transform
+        // Vec3/Blob32 fields (e.g. Road@0x0 ref data). Use it differentially vs a
+        // retail oracle (tools/diff_ecs_violations.py) to find DLC-specific deltas.
         || xref_fatal;
 
     if !report.access_violations.is_empty() {

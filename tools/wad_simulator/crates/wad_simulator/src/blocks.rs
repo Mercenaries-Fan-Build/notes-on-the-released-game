@@ -117,8 +117,9 @@ pub fn prefetch_blocks_parallel(
                             let actual_pages = entries[idx].decompressed_page_count() as usize;
                             let expected_pages = (decompressed.len() + 32767) / 32768;
                             if expected_pages != actual_pages && actual_pages > 0 {
+                                let src = if matches!(key.source, AsetSource::Patch) { "patch" } else { "base" };
                                 log(format!(
-                                    "  [P2-8] block[{}] page_count mismatch: \
+                                    "  [P2-8] {src} block[{}] page_count mismatch: \
                                      INDX says {actual_pages}, decompressed needs {expected_pages} \
                                      (len={})",
                                     key.block_idx,
@@ -184,7 +185,8 @@ pub fn parse_blocks_parallel(
             .par_iter()
             .map(|key| {
                 let bytes = raw[key].as_ref().expect("ok key");
-                let label = format!("block[{}]", key.block_idx);
+                let src = if matches!(key.source, AsetSource::Patch) { "patch" } else { "base" };
+                let label = format!("{src} block[{}]", key.block_idx);
                 let (parsed, mut issues) = walk_decompressed_block(bytes, &label);
 
                 // P2-9: entry table sum(chunk_sizes) == data region

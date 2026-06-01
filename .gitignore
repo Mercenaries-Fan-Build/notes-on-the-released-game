@@ -68,3 +68,7 @@ tools/wad_simulator/target/
 *.d
 
 tools/unrar/
+tools/ghidra_12.1_PUBLIC/
+tools/jdk21/
+msvc/
+downloads/

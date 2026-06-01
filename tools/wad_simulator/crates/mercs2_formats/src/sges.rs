@@ -59,35 +59,61 @@ pub fn decompress_sges(block_data: &[u8]) -> Result<Vec<u8>, String> {
         });
     }
 
+    // Mirror tools/sges_decompress.py: the per-segment u16 `compressed_size` is
+    // unreliable for incompressible/large segments (it can wrap or be 0), so for
+    // COMPRESSED segments we feed the inflater the byte span from this segment's
+    // offset up to the next segment's offset (capped at 128 KB) and let it consume
+    // exactly the deflate stream. Output is capped at the header's total_uncompressed.
+    let target = total_uncompressed;
+    let end = block_data.len();
     let mut output = Vec::with_capacity(total_uncompressed);
     for (i, seg) in segments.iter().enumerate() {
-        let seg_start = seg.data_offset;
-        let seg_end = seg_start + seg.compressed_size;
-        if seg_end > block_data.len() {
-            return Err(format!(
-                "Segment {i} data [{seg_start:#X}..{seg_end:#X}] beyond block size {:#X}",
-                block_data.len()
-            ));
+        if output.len() >= target {
+            break;
         }
-        let seg_data = &block_data[seg_start..seg_end];
+        let pos = seg.data_offset;
+        if pos >= end {
+            break;
+        }
         if seg.is_compressed {
+            let next_off = if i + 1 < segments.len() {
+                segments[i + 1].data_offset
+            } else {
+                end
+            };
+            let read_end = next_off.min(pos + 131072).min(end);
+            if read_end <= pos {
+                break;
+            }
+            let chunk = &block_data[pos..read_end];
             let mut decompressor = Decompress::new(false);
             let mut buf = vec![0u8; seg.uncompressed_size];
-            match decompressor.decompress(seg_data, &mut buf, flate2::FlushDecompress::Finish) {
-                Ok(flate2::Status::Ok | flate2::Status::StreamEnd) => {
+            match decompressor.decompress(chunk, &mut buf, flate2::FlushDecompress::Finish) {
+                Ok(_) => {
                     let written = decompressor.total_out() as usize;
                     buf.truncate(written);
                     output.extend_from_slice(&buf);
                 }
-                Ok(flate2::Status::BufError) => {
-                    return Err(format!("Segment {i} buffer error"));
-                }
-                Err(e) => return Err(format!("Segment {i} decompression error: {e}")),
+                // Match the Python reference: stop on a corrupt stream rather than
+                // failing the whole block (the page_count check flags truncation).
+                Err(_) => break,
             }
         } else {
-            let copy_len = seg.uncompressed_size.min(seg_data.len());
-            output.extend_from_slice(&seg_data[..copy_len]);
+            let actual_sz = if seg.compressed_size > 0 {
+                seg.compressed_size
+            } else {
+                seg.uncompressed_size
+            };
+            let remaining = target - output.len();
+            let read_sz = actual_sz.min(remaining);
+            let read_end = (pos + read_sz).min(end);
+            if read_end > pos {
+                output.extend_from_slice(&block_data[pos..read_end]);
+            }
         }
+    }
+    if output.len() > target {
+        output.truncate(target);
     }
     Ok(output)
 }

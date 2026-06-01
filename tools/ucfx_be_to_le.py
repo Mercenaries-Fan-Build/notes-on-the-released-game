@@ -532,6 +532,38 @@ def _havok_swap_data_class_aware(
     return True
 
 
+def _fix_embedded_havok_layoutrules(
+    be: bytes, out: bytearray, start: int, end: int
+) -> int:
+    """Repair embedded Havok packfile headers inside a converted ``__data__`` region.
+
+    Havok animgroup ``__data__`` sections embed nested packfile headers (the full
+    8-byte magic ``57 E0 E0 57 10 C0 C0 10``). Their 4-byte ``layoutRules`` field is
+    ``{ u8 ptrSize; u8 littleEndian; u8 reusePadding; u8 emptyBaseClass }`` — NOT a
+    u32. The class-aware / blind ``__data__`` sweep treats unmarked offsets as u32 and
+    byte-reverses the Xbox 360 BE value ``04 00 00 01`` into ``01 00 00 04``, scrambling
+    the fields (ptrSize→1) and zeroing the littleEndian byte at ``+17``. Restore the 4
+    bytes verbatim from BE and set ``littleEndian = 1``, matching the outer-header path
+    (steps 3 above). Alignment-independent: the 8-byte magic is palindromic per u32 word,
+    so it survives the swap and is found at the same offset in ``be``.
+
+    Returns the number of embedded headers repaired.
+    """
+    fixed = 0
+    region_end = min(end, len(be))
+    pos = start
+    while True:
+        m = be.find(_HAVOK_MAGIC, pos, region_end)
+        if m < 0:
+            break
+        if m + 20 <= len(be):
+            out[m + 16 : m + 20] = be[m + 16 : m + 20]  # layoutRules: 4 × u8, no swap
+            out[m + 17] = 1  # is_little_endian
+            fixed += 1
+        pos = m + 8
+    return fixed
+
+
 def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict | None = None) -> bytes:
     """Structurally convert a Havok 5.5 packfile from BE to LE.
 
@@ -666,6 +698,14 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
             tail = da_abs + n * 4
             if tail < da_abs + da_end:
                 out[tail:da_abs + da_end] = be[tail:da_abs + da_end]
+
+        # Repair embedded packfile headers whose layoutRules (4 × u8) were
+        # wrongly u32-swapped by the class-aware default-fill or the blind sweep.
+        n_fixed = _fix_embedded_havok_layoutrules(be, out, da_abs, da_abs + da_end)
+        if stats is not None and n_fixed:
+            stats["havok_embedded_layoutrules_fixed"] = (
+                stats.get("havok_embedded_layoutrules_fixed", 0) + n_fixed
+            )
 
     # Fill any gap between sec_data_start and first section body
     first_body = min(x for x in (cn_abs, ty_abs, da_abs) if x > 0)
@@ -1520,9 +1560,45 @@ def _convert_enum_body(be: bytes) -> bytes:
 def _convert_schm_body(be: bytes) -> bytes:
     """Convert ecs_node 'schm' (schema) body from BE to LE.
 
-    Structure (verified from base game): pure u32 array of hashes and counts.
+    Layout (verified against retail PC ``layers_static`` / ``vz_mar_roads``):
+      +0  u32 n_fields
+      +4  u32 payload_stride
+      +8  n_fields x 16-byte field entries:
+            +0  u32 type_code
+            +4  u32 name_hash
+            +8  u32 unk (always 0)
+            +12 field-offset word = { u16 byte_offset; u8 a; u8 b }
+
+    The trailing 2 bytes of the offset word are endian-neutral u8 fields
+    (bit index / size), NOT part of a u32. A full u32 byteswap moves the
+    ``byte_offset`` into the HIGH 16 bits, whereas the engine (and every
+    retail PC block) stores it in the LOW 16 bits. We therefore swap only
+    the ``byte_offset`` u16 and copy the two trailing bytes verbatim.
+    Confirmed: swap-first-u16 reproduces retail 47/47 (vz_mar_roads) and
+    12/12 (layers_static); full u32 swap matches only zero-offset fields.
     """
-    return _convert_u32_array(be)
+    if len(be) < 8:
+        return _convert_u32_array(be)
+    n_fields = struct.unpack_from(">I", be, 0)[0]
+    if n_fields > 200 or 8 + n_fields * 16 > len(be):
+        # Not a recognizable field table — preserve legacy behaviour.
+        return _convert_u32_array(be)
+    out = bytearray()
+    out += struct.pack("<I", n_fields)
+    out += struct.pack("<I", struct.unpack_from(">I", be, 4)[0])  # payload_stride
+    for fi in range(n_fields):
+        eo = 8 + fi * 16
+        type_code = struct.unpack_from(">I", be, eo)[0]
+        name_hash = struct.unpack_from(">I", be, eo + 4)[0]
+        unk = struct.unpack_from(">I", be, eo + 8)[0]
+        out += struct.pack("<III", type_code, name_hash, unk)
+        # offset word: BE bytes [b0,b1,b2,b3] -> LE [b1,b0,b2,b3]
+        b0, b1, b2, b3 = be[eo + 12], be[eo + 13], be[eo + 14], be[eo + 15]
+        out += bytes((b1, b0, b2, b3))
+    tail = 8 + n_fields * 16
+    if tail < len(be):
+        out += be[tail:]  # no trailing bytes expected; copy verbatim if present
+    return bytes(out)
 
 
 # ── Audio type converters (mixed-endian) ─────────────────────────────

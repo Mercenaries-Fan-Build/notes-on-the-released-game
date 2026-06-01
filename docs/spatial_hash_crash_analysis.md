@@ -1,8 +1,194 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
-**Date**: 2026-05-28 (updated 2026-05-30d)  
+**Date**: 2026-05-28 (updated 2026-05-31)  
 **Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
-**Status**: OPEN — offline scan **0** violations on SHA `8700856a…`. Runtime bisect **narrows culprit to arena layer blocks** (`dlc01_base` / `speedcity` / `dlccon`); `no_arena` trim passes the spatial-hash window. Next: per-path trims on `dlccon` vs `base` vs `speedcity`.
+**Status**: **ROOT-CAUSE CANDIDATE FOUND & FIXED (2026-06-01)** — `schm` field-`offset` words were byteswapped as a `u32`, but the word is `{u16 byte_offset; u8; u8}`; correct conversion swaps **only the byte_offset u16**. Verified against retail PC oracle (**47/47** `vz_mar_roads`, **12/12** `layers_static`). Fixed in `ucfx_be_to_le.py` + `convert.rs` (parity). Test WADs spliced for game A/B: `output/data/vz-patch-block18-fixed.wad`, `vz-patch-block13-fixed.wad`. Awaiting game-test to confirm it clears `0x248BB*`. See **§2026-06-01** below.
+
+> Prior status (2026-05-31): OPEN — offline scan **0** violations on SHA `8700856a…`. **Fix target: index 18** (`dlc01_dlccon004_roads_P000_Q3`) — necessary for full-patch AV; **1-block repro WAD** sufficient. **Index 13** (`dlccon002_race`) also sufficient alone. **Index 6** (`dlccon002_roads`) ruled **OUT**. Confirmed deploy `vz-patch-keep-dlccon004-roads-only.wad` SHA **`6809da8e…`** → Shop/players then FATAL @ **`0x0248BB7C`** / `fault=0x6F319F84` after ~**30 s**. Block **18** on-disk record bytes clean; suspected runtime entity mis-base.
+
+## 2026-06-01 — ROOT CAUSE: `schm` field-`offset` half-swap (converter bug)
+
+**Method:** structural diff of converted DLC blocks against PC-native retail blocks
+that load fine (the ground-truth oracle), then BE-source re-derivation.
+
+### What was ruled out (offline, no game)
+
+| Hypothesis | Test | Result |
+|------------|------|--------|
+| Wrong record stride | COMP inventory of block 18 vs retail `vz_mar_roads` | **Identical** strides: Transform 42, Road 44, RoadIntersection 128, HibernationControl 10, DestructionLink 20 → ruled OUT |
+| Crash-specific component | Presence matrix blocks 2/6 (safe) vs 13/18 (crash) | No component in both crash blocks yet absent from both safe blocks (block 2 even has `DestructionLink`+`AtmosphereBase`) → ruled OUT |
+| Entity-key collision w/ retail | Transform keys of 2/6/13/18 ∩ retail `layers_static`(62k)+`vz_mar_roads` | **0** collisions → ruled OUT |
+
+### The bug
+
+The `schm` (component schema) body is `u32 n_fields`, `u32 payload_stride`, then
+`n_fields × {u32 type_code, u32 name_hash, u32 unk, offset_word}`. Both converters
+swapped the whole body as a flat `u32` array. But the 4-byte **offset_word** is
+`{ u16 byte_offset; u8 a; u8 b }` — the trailing two bytes are endian-neutral u8
+fields (bit index / size). A full `u32` swap moves `byte_offset` into the **high**
+16 bits; retail PC stores it in the **low** 16 bits.
+
+Evidence (raw `offset` words; `byte_offset = value >> 16` only for our buggy output):
+
+```
+RoadIntersection field offsets (byte 4,8,12,...):
+  retail vz_mar_roads : 0x0004, 0x0008, 0x000c, ... 0x0078      (byte_offset in LOW 16)
+  our converted blk18 : 0x40000, 0x80000, 0xc0000, ... 0x780000 (byte_offset in HIGH 16 = N<<16)
+```
+
+### Derivation from BE source (no guessing)
+
+Extracted the **BE** block 18 from the DLC RAR (`dlc_port --x360-rar … --start-block 18
+--dump-dir`). Probed the BE offset words and tested candidate byte permutations
+against retail:
+
+| Candidate (BE bytes `[b0,b1,b2,b3]` →) | vs `vz_mar_roads` | vs `layers_static` |
+|----------------------------------------|-------------------|--------------------|
+| `full_u32_swap` `[b3,b2,b1,b0]` (CURRENT/BUGGY) | 6/47 | 2/12 |
+| **`swap_first_u16` `[b1,b0,b2,b3]`** (FIX) | **47/47** | **12/12** |
+| `swap_both_u16` `[b1,b0,b3,b2]` | 38/47 | 4/12 |
+
+`scan_schm_type_codes`/`ComponentSchema::from_schm_body` read `byte_offset =
+raw_be >> 16`, which is correct for the **BE source** (high bits = first on-disk
+bytes), so the schema-driven **data** swap is unaffected — only the schm-header
+output bytes were wrong.
+
+### The fix (verified, parity)
+
+- `tools/ucfx_be_to_le.py::_convert_schm_body` — structured swap (header u32s,
+  per-field type/name/unk u32s, offset_word swap-first-u16).
+- `tools/wad_simulator/crates/ucfx_byteswap/src/convert.rs::swap_schm_body_inplace`
+  — same logic; replaces `swap_u32_array` at the schm-body call site.
+- Re-converted blocks 18 & 13: schm offsets now **identical** to retail
+  (47/47 / 12/12). Python and Rust outputs agree (48/48).
+
+### Important caveat (is it THE crash?)
+
+The bug is present in **every** converted DLC block, including **safe** block 6
+(boots fully). So the schm half-swap is a **confirmed real conversion defect** but
+is **not, by itself, the crash differentiator**. Leading theory: the engine reads
+schm offsets at runtime to extract positions for **non-Transform** spatial entities
+(Transform is hardcoded to stride 42), so the corrupted offset only turns fatal in
+blocks that register such an entity with out-of-grid coordinates. **Game-test of the
+spliced fixed WADs is required to confirm** whether the fix clears `0x248BB*`. If it
+does not, the remaining differentiator is a record **value** read via these offsets
+— pursue with the live x32dbg capture (§Phase 2 recipe) and the PC-EXE Ghidra decomp
+(§Phase 5).
+
+### Reusable tooling added
+
+- `tools/splice_block_into_patch.py` — re-compress + splice one decompressed LE
+  block into an existing patch WAD (no full rebuild). Used to make the fixed test
+  WADs above; preserves all other blocks/ASET/PTHS and passes `validate_patch_wad`.
+- Analysis helpers (kept for reproducibility): `tools/_p3_schm_halfswap_check.py`,
+  `tools/_p4_derive_swap.py`, `tools/_p3_key_overlap.py`.
+
+### To game-test (manual)
+
+```powershell
+# back up current deploy, then drop in a fixed test WAD
+Copy-Item "C:\Users\Shadow\Desktop\Mercenaries 2 World in Flames\data\vz-patch.wad" `
+          "C:\Users\Shadow\Desktop\Mercenaries 2 World in Flames\data\vz-patch.wad.bak-buggy"
+Copy-Item "output\data\vz-patch-block18-fixed.wad" `
+          "C:\Users\Shadow\Desktop\Mercenaries 2 World in Flames\data\vz-patch.wad" -Force
+# launch; watch scripts\dlc_enable_crash_*.log — expect NO FATAL @ 0x0248BB7C
+```
+
+## 2026-06-01b — Static decomp of the full spatial-register READ path (no debugger)
+
+**Method:** the live x32dbg MCP bridge was down (`127.0.0.1:8888` refused), so the
+read path was reconstructed **statically** from the cracked retail EXE
+(`Mercenaries2.exe`, 53,482,288 B) with `tools/disasm_func.py` (capstone x86-32,
+PE-section VA→offset map). All addresses below are confirmed against the on-disk
+bytes, not runtime guesses.
+
+### Section map surprise — the insert lives in `.securom`
+
+| Section | VA range | Note |
+|---------|----------|------|
+| `.text` | `0x00401000`–`0x00B05000` | real engine code (cell-compute, accessors, register entry) |
+| `.securom` | `0x023E9000`–`0x03700000` | **`0x0248BB60` bucket-insert is here** |
+
+`0x00517DC0` is a thunk `jmp dword [0x0245A0F8]` (= `0x024E8F60`), i.e. the
+"spatial hash insert" is an engine routine **relocated into the SecuROM section**
+and reached via an IAT-style indirect jump. This explains its odd `0x0248B***`
+VA and the off-heap `ESI`/`nvgpucomp32.dll` fault addresses (neighbouring SecuROM
+data). It is **not** itself the corruption source.
+
+### Confirmed call chain (all generic, shared with the 62k base placements)
+
+```
+register site 0x0051637F / 0x00518290
+  → 0x00516C00  SpatialGridRegister(rec*, posbuf*, lod, flags)
+      → 0x00515F60  GetEntityWorldPos(entity -> out vec3)
+          → 0x00434F10 → 0x00434F80  DecomposeEntityTransform
+      → 0x00516B10  WorldPosToCellIndex(vec3* in ECX -> cell)
+      → 0x00517DC0 thunk → 0x0248BB60  bucket insert (.securom)
+```
+
+- **`0x00516B10`** reads the position straight from `[ECX+0]=X`, `[ECX+4]=Y`,
+  `[ECX+8]=Z` and computes
+  `cell = ((int)(Z-originZ) >> shift) * grid_width + ((int)(X-originX) >> shift)`
+  (grid globals `0x0179C7B4/B6/BC/C4`). **No clamp on the final linear index** —
+  a NaN/huge X or Z makes `cvttss2si → 0x80000000` and the cell index goes wild,
+  exactly the documented fault.
+- **`0x0248BB60`** matches the prior pseudocode byte-for-byte:
+  `bucket = [0x01175DD8] + cell*0x1F0` (no bounds check), `cmp [bucket+0x1E4],0x20`
+  (read crash `0x248BB7C`), `mov [bucket+count*4],val` (write crash `0x248BBE2`).
+
+### NEW: runtime entity transform layout (from `0x00434F80`)
+
+`0x00434F80` reads the entity's inline transform and decomposes it:
+
+| Offset in entity | Type | Field |
+|------------------|------|-------|
+| `+0x00` | f32 | position **X** |
+| `+0x04` | f32 | position **Y** |
+| `+0x08` | f32 | position **Z** |
+| `+0x0C` | s16 | quat q0 |
+| `+0x0E` | s16 | quat q1 |
+| `+0x10` | s16 | quat q2 |
+| `+0x12` | s16 | quat q3 |
+
+The four quat shorts are `cvtsi2ss`'d and multiplied by `[0x00BEAD80] =
+0x3803126F ≈ 1/32768` → the **runtime quaternion is fixed-point int16**, not the
+float32 quat stored on disk (`+0x14..+0x20` in the 42-byte Transform COMP). The
+ECS loader therefore **compresses float→int16** while building the entity. (This
+is the first time the in-memory transform record has been documented.)
+
+### What this proves / narrows
+
+- The spatial-hash path is **correct, generic code**; it services all 62k
+  `layers_static` placements without issue. The bug is **not** in the hash, the
+  cell math, the accessor, or the SecuROM relocation.
+- The fault is a **runtime entity whose first 12 bytes (pos) are garbage**, fed
+  into a bounds-check-free cell index. On-disk Transform bytes for blocks 6/13/18
+  are clean (proven earlier), so corruption enters during **entity construction**
+  (the ECS Transform-apply that fills `entity+0..+0x12`), not in the read path.
+- This strengthens **H1** (runtime entity assembly) and effectively rules out the
+  spatial code itself as a suspect.
+
+### Sharper live-capture recipe (supersedes the insert-site breakpoints)
+
+Break at the **source** of the bad position, not at the `.securom` insert:
+
+1. `bp 0x00515F60` — on hit, `EAX` = entity ptr. Dump `[EAX+0..+0x12]`:
+   `[+0/+4/+8]` as f32 (position), `[+0xC/+0xE/+0x10/+0x12]` as s16 (quat).
+   A sane Maracaibo entity reads metres ~(−0.2, 831, 0); the toxic one shows
+   NaN/huge floats **before** any cell math runs.
+2. With the entity ptr, walk back one frame (`GetCallStack`) into the per-entity
+   registration loop to recover the COMP source / entity type — block 18 is
+   Road/RoadIntersection/DestructionLink-heavy, block 13 Anchor/AiBehavior-heavy,
+   so confirm whether the toxic entity is a non-Transform component being
+   registered with an uninitialised inline transform.
+3. Tooling: `tools/disasm_func.py --exe <Mercenaries2.exe> --va <addr> --until-ret`
+   for any further static step; `--xrefs <addr>` to find callers.
+
+**Open next step (root cause):** find the ECS entity-construction loop that writes
+`entity+0..+0x12` from a layer block's COMP set, and check whether
+Road/RoadIntersection/Anchor entities in 13/18 get a Transform applied at all. This
+is the remaining unknown; a single live break at `0x00515F60` would identify the
+toxic entity type immediately.
 
 ## 2026-05-30c — Break-the-deadlock toolkit
 
@@ -96,6 +282,307 @@ $RULED = "0,4,12,15,16,17"
 ```
 
 Prior **4a / 4e / no_arena** results are in the table above; do not re-run unless WAD SHA changes.
+
+### 2026-05-30e — Trim WAD bisect (SHA `8700856a…`, built trims deployed as `data\vz-patch.wad`)
+
+Logs: `Mercenaries 2 World in Flames\scripts\dlc_enable_crash_*.log`. All trims carry step 1–2 exclusions `0,4,12,15,16,17`.
+
+| Log | Deployed WAD | Crash? | FATAL (EIP / fault) | Last Lua before fault / at timeout | vs `clean_no_patch` |
+|-----|--------------|--------|---------------------|-------------------------------------|------------------------|
+| **`no-base-only`** | `vz-patch-no-base-only.wad` | **Y** | `0x0248BB7C` / `0x03CEA074` (read) | `[lua] Loading vz level with vz masterscript` | No Shop / players / GlobalExit |
+| **`no-bootstrap`** | `vz-patch-no-bootstrap.wad` | **Y** | `0x0248BBE2` / `0x03CEA014` (write) | same | same |
+| **`no-dlccon`** | `vz-patch-no-dlccon.wad` | **N** @ `0x248BB*` | *(none in 30 s)* | `Loading vz` only; watchdog **30 s** timeout, **no** post-timeout FATAL | Hangs at VZ (no Shop in window); **no** spatial-hash AV |
+| **`dlccon_only`** | `vz-patch-dlccon004-only.wad` (1 block) | **N** | *(none)* | `Loading vz` → **Shop**, **creating player 0/1**, **`GlobalExit - Complete`** (after 30 s watchdog) | **Passes** spatial-hash window **and** full Lua boot milestones |
+| **`no_arena`** | `vz-patch-no-arena.wad` | **N** @ `0x248BB*` | `0x00874E7D` / `0xF011157A` **after** 30 s timeout | `Loading vz` only; watchdog timeout then secondary FATAL | Same hang as `no-dlccon` in window; **extra** late crash on teardown |
+| **`no-dlccon004`** | `vz-patch-no-dlccon004.wad` (`--exclude-indices $RULED,2`) | **Y** | `0x0248BBE2` / `0x03CEA014` (write) | `Loading vz` only (~**+4.2 s** post-Shell); no Shop / players / GlobalExit | **004 not required** for crash — siblings + base/speedcity still fault |
+| **`no-dlccon-roads`** | `vz-patch-no-dlccon-roads.wad` (exclude `dlccon002`, `dlccon004_roads`, `dlccon002_race`; **keep** `dlccon004`) | **N** @ `0x248BB*` | *(none in 30 s)* | `Loading vz` only; watchdog **30 s** timeout | Same hang as `no-dlccon`; **roads/race/002 paths required** for spatial-hash AV |
+
+**Prior logs (2026-05-30d, same SHA):** `clean_no_patch` **N** (full boot); `no_bootstrap` **Y** `0x248BB7C`; `no_base` **Y** `0x248BBE2`; `no_speed_city` **Y** `0x248BBE2`; `no_arena` **N** @ spatial hash (+ late `0x00874E7D`).
+
+**Timing (post–Shell-exited):** `no-base-only` / `no-bootstrap` / **`no-dlccon004`** FATAL ~**4.2–5.0 s** after Shell-exited (~**4.1–4.2 s** to `Loading vz`, then ~**0.1 s** to FATAL for `no-dlccon004`). `no-dlccon` / `no_arena` / **`no-dlccon-roads`** / `dlccon_only` reach VZ ~**4.3–4.7 s**; spatial-hash-pass trims timeout at **30 s** or (`dlccon_only`) continue to Shop ~**6.4 s**.
+
+### 2026-05-30f — `no-dlccon004` / `no-dlccon-roads` (same SHA `8700856a…`)
+
+Logs: `Mercenaries 2 World in Flames\scripts\dlc_enable_crash-no-dlccon004.log`, `dlc_enable_crash-no-dlccon-roads.log`. ASI flags match 30e (`CRASH_PATCH=1`, `WATCHDOG=1`, `BOOTSTRAP=0`).
+
+#### Verdict (2026-05-30f)
+
+| Question | Answer |
+|----------|--------|
+| Which **`dlccon` sibling causes spatial-hash AV?** | **`dlccon002` / `dlccon002_race` / `dlccon004_roads`** path family (PTHS indices **6**, **13**, **18** on this WAD). **`no-dlccon-roads`** drops them and **passes** the `0x248BB*` window; **`no-dlccon004`** drops only index **2** and **still crashes** (`0x0248BBE2`). |
+| Is **`dlccon004` (index 2) the toxic block?** | **No** — ruled out as sole cause (30e `dlccon_only`) and **not required** for crash (30f `no-dlccon004`). |
+| **`no-dlccon-roads` vs `no-dlccon`?** | **Same** outcome: VZ hang, **no** `0x248BB*`, **no** Shop/players/GlobalExit in 30 s, clean watchdog timeout (**no** late `0x00874E7D`). Keeping **004** without roads/race/002 does not recover full boot. |
+
+**Logic (30e + 30f):**
+
+| Configuration | Spatial-hash AV | Boot past VZ |
+|---------------|-----------------|--------------|
+| `dlccon004` only (index **2**) | **N** | **Y** (Shop, players, GlobalExit) |
+| Full patch − all `dlccon*` | **N** | **N** (hang) |
+| Full patch − **002 / roads / race** paths, keep **004** | **N** | **N** (hang) |
+| Full patch − **004** only, keep **002 / roads / race** | **Y** | **N** |
+
+#### Next trims (2026-05-30f)
+
+```powershell
+cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+$RULED = "0,4,12,15,16,17"
+
+# 1 — Minimal benign control (expect hang or full boot; must NOT 0x248BB*)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-base-dlccon004-only.wad --keep-only-indices "2,3,2195" --exclude-indices $RULED -v
+
+# 2 — Single suspect + base + speedcity (run one index at a time; expect Y if sufficient)
+.venv\Scripts\python.exe tools/trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-keep-dlccon-6.wad --keep-only-indices "6,3,8" --exclude-indices $RULED -v
+# Repeat with --keep-only-indices "13,3,8" and "18,3,8"; confirm index 8 = speedcity via trim_patch_wad.py --list
+
+# 3 — Exclude one roads/race block at a time (narrow which of 6/13/18 is necessary)
+.venv\Scripts\python.exe tools/trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon002-roads.wad --exclude-indices $RULED --exclude-path-substr dlccon002_roads -v
+.venv\Scripts\python.exe tools/trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon002-race.wad --exclude-indices $RULED --exclude-path-substr dlccon002_race -v
+.venv\Scripts\python.exe tools/trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon004-roads-only.wad --exclude-indices $RULED --exclude-path-substr dlccon004_roads -v
+```
+
+Deploy each as `data\vz-patch.wad`. **Fix target** when single-block trim identified: `extract_single_block.py` on that index + `scan_patch_placements.py` / `verify_ucfx_endian.py` on decompressed UCFX.
+
+#### Verdict (2026-05-30e)
+
+| Question | Answer |
+|----------|--------|
+| Is **`dlccon` the sole bucket?** | **No.** `dlccon*` is **necessary** (`no-dlccon` passes spatial-hash window) but **not sufficient**: `dlccon004`-only WAD boots cleanly. **`dlc01_base` / `speedcity` alone** are also insufficient (`no-base-only`, `no_speed_city` still crash). Minimum hypothesis: **`dlccon` (non-004 blocks) + at least one of `dlc01_base` / `speedcity`**. |
+| Does **`dlccon004` alone crash?** | **No** (`dlccon_only`); **not required** for AV (**30f** `no-dlccon004` still **Y**). |
+| **`no-dlccon` vs `no_arena`?** | **Same** in the 30 s window. **Different** after timeout: `no_arena` → **`0x00874E7D`**; `no-dlccon` / **`no-dlccon-roads`** → clean timeout. |
+
+**Ruled OUT:** `dlc01_dlccon004` (index **2**); bootstrap @ **2195**; offline float scan. **30f:** `no-dlccon004` **Y**, `no-dlccon-roads` **N** @ `0x248BB*`.
+
+**Ruled IN:** indices **13** / **18** (`dlccon002_race`, `dlccon004_roads`) — independently sufficient for `0x248BB*` with base+speedcity (**§2026-05-30g**). Index **6** (`dlccon002_roads`) ruled **OUT** as sole cause.
+
+### 2026-05-30g — Per-block keep-only + single-path excludes (SHA `8700856a…`)
+
+Logs: `Mercenaries 2 World in Flames\scripts\dlc_enable_crash-{no-dlccon002-roads,no-dlccon002-race,no-dlccon004-roads,no-dlccon004-block,base-dlccon004-bootstrap,keep-dlccon002-only,keep-dlccon002-race-only,keep-dlccon004-roads-only}.log`. All trims retain step 1–2 exclusions `0,4,12,15,16,17`. ASI: `CRASH_PATCH=1`, `WATCHDOG=1`, `BOOTSTRAP=0`.
+
+#### Result matrix
+
+| WAD / test | Idx | Path | `0x248BB*`? | FATAL (EIP / fault) | Progress (Lua milestones) | Verdict |
+|------------|-----|------|-------------|---------------------|---------------------------|---------|
+| **`no-dlccon002-roads`** | drop **6** | `dlccon002_roads` | **Y** | `0x0248BB7C` / `0xAA1B29D4` (~**5.5 s**) | `Loading vz` only | **Not sufficient** to clear AV — **13+18** still crash |
+| **`no-dlccon002-race`** | drop **13** | `dlccon002_race` | **Y** | `0x0248BBE2` / `0x03CEA014` (~**5.5 s**) | `Loading vz` only | **Not sufficient** — **6+18** still crash |
+| **`no-dlccon004-roads`** | drop **18** | `dlccon004_roads` | **N** | *(none in 30 s)* | `Loading vz` only; watchdog **30 s** timeout | **Sufficient** to clear spatial-hash AV (VZ hang, no Shop) |
+| **`no-dlccon004-block`** | drop **2** | `dlccon004` mesh | **Y** | `0x0248BB7C` / `0x03CEA074` (~**5.5 s**) | `Loading vz` only | Confirms index **2** not fix target |
+| **`keep-dlccon002-only`** | **6** only + base + speedcity | `dlccon002_roads` | **N** | *(none)* | Shop → players → **`GlobalExit - Complete`** (~**30 s+**) | **Ruled OUT** — benign alone |
+| **`keep-dlccon002-race-only`** | **13** only + base + speedcity | `dlccon002_race` | **Y** | `0x0248BB7C` / `0x9F84E174` (~**30 s+**, post-watchdog) | Shop → GlobalExit flow → **`CreatePlayerCharacter`** → layer stream → FATAL | **Sufficient alone** |
+| **`keep-dlccon004-roads-only`** | **18** only in patch WAD (**1** block; retail supplies all `vz_*` layers) | `dlccon004_roads` | **Y** | `0x0248BB7C` / `0x6F319F84` (~**30 s+**, post-watchdog) | Shop → players → **170+238** layer stream → FATAL after `vz_state_pmc` request | **Sufficient alone** — **confirmed log 2026-05-31** |
+| **`base-dlccon004-bootstrap`** | **2** + **3** + **2195** | `dlccon004` + base + bootstrap | **N** @ `0x248BB*` | `0x00874E7D` / `0xF011157A` (**after** 30 s timeout) | `Loading vz` only; watchdog timeout then **secondary** teardown AV | Hang path (same class as `no_arena`); not spatial-hash bucket |
+
+#### Verdict (2026-05-30g)
+
+| Question | Answer |
+|----------|--------|
+| Which **keep-only** (6 / 13 / 18) reproduces crash **alone**? | **13** and **18** — both hit `0x0248BB*` with a **1-block patch WAD** (+ retail `vz.wad` for world layers). **6 alone → full boot** (Shop, players, GlobalExit). **18** confirmed: SHA `6809da8e…`, log `dlc_enable_crash-keep-dlccon004-roads-only.log`. |
+| Which **single path-exclude** clears `0x248BB*` from full patch? | **`no-dlccon004-roads`** only (drop index **18**). Excluding **002_roads** or **002_race** alone is **not** enough. |
+| **Minimal toxic set** for full-patch spatial-hash AV? | **Index 18** (`dlccon004_roads`) is **necessary** — full patch minus **18** passes. Pair **{13, 18}** is the active duo when all three roads/race blocks present; **{6, 13}** without **18** is benign (see `no-dlccon004-roads`). |
+| **Primary fix target?** | **Index 18** — `dlc01_dlccon004_roads_P000_Q3` (734 Transform records). Secondary audit: **index 13** (`dlccon002_race`, 836 records) also independently toxic. |
+| **`base-dlccon004-bootstrap`?** | Control only — no `0x248BB*`; late `0x00874E7D` after hang (missing speedcity / roads content for full VZ). |
+
+#### Byte analysis (2026-05-30g follow-up)
+
+Extracted decompressed blocks **2 / 6 / 13 / 18** from `output/data/vz-patch.wad` and ran `scan_patch_placements.py`, `placement_scan_lib` (world envelope on), Road/RoadIntersection payload decode, and COMP inventory walks. Artifacts: `output/_scratch/byte_analysis/`.
+
+| Idx | Path | Transforms | Violations | COMP mix (notable) | XYZ range (game m) |
+|-----|------|------------|------------|--------------------|--------------------|
+| **2** (safe) | `dlccon004` mesh | 1482 | **0** | LightObject 82, AtmosphereBase 5 — **no Road** | X −1700..100, Y −27..54, Z 487..1426 |
+| **6** (safe alone) | `dlccon002_roads` | 596 | **0** | Road 10, RoadIntersection 12, ScrubObject 19 | X −1479..1500, Y 0..128, Z −1600..651 |
+| **13** (crash alone) | `dlccon002_race` | 836 | **0** | AiBehavior 96, Anchor 115 — **no Road** | X 100..1304, Y −64..156, Z −1500..500 |
+| **18** (crash; necessary) | `dlccon004_roads` | 734 | **0** | Road **75**, RoadIntersection **58**, DestructionLink **32** | X −1700..100, Y −35..24, Z 490..1384 |
+
+**What we can prove from bytes**
+
+- **Transform COMP `data` is clean in all four blocks** — 0 NaN/Inf, 0 `|coord|>5000`, 0 world-envelope violations, 42-byte stride with 0 remainder, no duplicate entity keys.
+- **Safe block 6 and crash block 18 both have Road + RoadIntersection** with `schm` strides 44 / 128 and 0 byte remainder; Road endpoint Vec3s decode to finite in-bounds coords. Road `ref_key` u32s often point outside the block's Transform key set on **both** 6 and 18 (cross-block graph refs — not 18-specific corruption).
+- **False lead ruled out:** scanning u32 fields inside RoadIntersection headers (offset +28 in the 128-byte record) as floats shows huge LE values — those are **entity-ref u32s**, not Vec3 positions. All six intersection Vec3 payloads (offset +28 in the 124-byte payload) are finite and in bounds on 6 and 18.
+- **Block 13 crash path is not Road-related** — toxic bytes, if any, would be in AiBehavior / Anchor / race Transform load, not shared with 18.
+- **No Xbox BE source** in repo for `audit_ecs_byteswap_parity` on these blocks; parity audit deferred until DOH/decompressed BE `.block.bin` is available.
+
+### 2026-05-31 — Repeat hit (`keep-dlccon004-roads-only`)
+
+#### Confirmed deployment + log (user retail, PID 11312)
+
+| Field | Value |
+|-------|--------|
+| **Deployed WAD** | `output\data\vz-patch-keep-dlccon004-roads-only.wad` → game `data\vz-patch.wad` |
+| **SHA256** | `6809da8ed45fdae5b8a18f4ba7aa7ca3d1f2895af9e13301b8bd6fe6b77460a9` (user **confirmed** match) |
+| **Patch contents** | **1** FFCS block — index **18** `blocks\dlc01\dlc01_dlccon004_roads_P000_Q3.block` only (`trim_patch_wad.py --keep-only-indices 18`) |
+| **Log file** | `Mercenaries 2 World in Flames\scripts\dlc_enable_crash-keep-dlccon004-roads-only.log` |
+| **Do not confuse with** | `vz-patch-dlccon004-only.wad` (index **2** mesh) — that WAD **full-boots** |
+
+**Timeline (ms after Shell-exited):**
+
+| Time | Event |
+|------|--------|
+| ~**4406** | `[lua] Loading vz level with vz masterscript` — **no** immediate `0x248BB*` (unlike full patch ~5 s) |
+| ~**5844** | `[lua] Shop - Generating Global ShopList…` |
+| ~**5844–5891** | `[lua] creating player 0` / `1` |
+| ~**8719–16703** | `New operation (170 layers)` + retail `vz_*` layer requests |
+| ~**17219–29969** | Second op: **238** `vz_state_*` layer requests |
+| ~**30016** | `Watchdog: timeout 30000 ms — no crash detected in window` |
+| ~**30016+** | Layer stream **continues** (`vz_state_pmc`, …) |
+| **End** | `FATAL: 0xC0000005 at 0x0248BB7C fault=0x6F319F84` |
+
+**Interpretation:** The **30 s watchdog “no crash” line is not a pass** — the session kept running, finished most layer registration, then hit the same spatial-hash **read** fault. Crash is **delayed** (~30 s after shell) because only **block 18** is in the patch and registration happens during **heavy `vz_state` / layer streaming**, not at the first `Loading vz…` line.
+
+**vs full patch:** Full `8700856a…` WAD still tends to AV ~**5–6 s** at VZ load (arena blocks **6/8/13/18** + base + speedcity together). **Roads-only** repro isolates **index 18** as **necessary and sufficient** for the bug class without shipping the whole DLC.
+
+#### Known pass / fail fixtures (trim WADs)
+
+| WAD file | Blocks | SHA256 (prefix) | Spatial `0x248BB*` | Full boot (Shop + players + no FATAL) |
+|----------|--------|-----------------|---------------------|----------------------------------------|
+| *(none)* | 0 | — | **N** | **Y** (`clean_no_patch`) |
+| `vz-patch-dlccon004-only.wad` | 1 (idx **2**) | `786ae23b…` | **N** | **Y** |
+| `vz-patch-keep-dlccon002-only.wad` | 1 (idx **6**) | `418bf0aa…` | **N** | **Y** |
+| **`vz-patch-keep-dlccon004-roads-only.wad`** | **1 (idx 18)** | **`6809da8e…`** | **Y** (~30 s, this log) | **N** |
+| `vz-patch-no-dlccon004-roads.wad` | 2189 | `3ab33fd6…` | **N** | **N** (VZ hang) |
+| Full `vz-patch.wad` | 2196 | `8700856a…` | **Y** (~5 s) | **N** |
+
+Full table: `output\data\trim_wad_manifest.txt`.
+
+#### Live x32dbg (two sessions, same WAD class)
+
+**Session A — write site (`0x248BBE2`):**
+
+**Session B — read site (`0x248BB7C`, matches confirmed log `fault=0x6F319F84`):**
+
+| Reg | Session A | Session B |
+|-----|-----------|-----------|
+| **EIP** | `0x0248BBE2` | `0x0248BB7C` |
+| **EBX** | `0x20E33074` | `0x20DB6B2C` |
+| **[EBX+4]** | `0x8E290015` class | `0x8E290015` (`15 00 29 8E`) |
+| **[EBX+8]** | `0x4E093685` (~5×10⁸) | `0x4E01BCEC` (~10⁹) |
+| **ECX** | `0xFFFF8BDB` (negative index) | **`0x038E2840`** (doc classic) |
+| **ESI** | `0x6F319DA0` | `0x03CE9E90` |
+| **Fault** | write `[esi+ecx*4]` | read `[esi+0x1E4]` → **`0x6F319F84`** |
+
+**Benign hit (same function):** `ECX=0x20F` (527), EBX `0x20D496C8`, XYZ ~(1312, 0, …) — conditional `ecx>0x4000` should **not** stop here.
+
+**Live registers (toxic hit, session A summary):**
+
+| Reg | Value | Notes |
+|-----|-------|-------|
+| **EBX** | `0x20E33074` | Entity / registration object base |
+| **[EBX+8]** | `0x4E093685` | **Not** a sane world Y (as float ≈ `5.76×10⁸`) |
+| **ECX** | `0xFFFF8BDB` | Slot index **−29765** → bucket write AV |
+| **ESI** | `0x6F319DA0` | Hash bucket base |
+| **EAX** | `0x356B` | Also appears inside block **18** Transform blob (coincidence) |
+
+**Block 18 disk pass** (`output/_scratch/byte_analysis/block_00018/…block.bin`, tool `tools/_scan_block18_road_toxic.py`):
+
+| Check | Result |
+|-------|--------|
+| `0x4E093685` in Road / RoadIntersection **payload** fields | **0** hits |
+| Road / intersection **Vec3** endpoints with \|float\| > 1e6 | **0** |
+| Road `data` stride (schm payload 40 → record **44**) | **75** records, **0** remainder |
+| Transform quats (offsets **+0x14..+0x20**, doc layout) | **734 / 734** unit-length |
+| Prior **733/734 “bad quat”** in `deep_compare.json` | **False lead** — scanner used wrong quat base (treated pad/+0x10 as `qx`); re-scan with `+0x14` is clean |
+
+**Where `0x4E093685` appears on disk (once):** Transform record **209**, byte **+34** inside the 42-byte record (spans tail / adjacent record bytes — **not** `road_lane_hash_0` at Road payload **+0x08**).
+
+**Road payload +8 ≡ runtime `[entity+8]`?**
+
+- If the engine treated a **Road payload** pointer as a Transform entity, `[entity+8]` would be **`road_lane_hash_0`** (u32 at payload **+0x08** per `decode_road_payload` / `docs/ecs_components.md`).
+- **No** Road record in block **18** stores `0x4E093685` at that offset → **not explained by mis-swapped Road hashes on disk**.
+- **Matches instead:** `[entity+8]` with entity base **`Transform_record + 26`** (22 bytes into the 38-byte payload after the u32 key). Example: record **209** key `0x00155E12` has sane **Y** at **`+0x08`** (`−15.5` m) but **`[base+26+8]` → `+0x34`** = `0x4E093685`.
+
+**Byteswap verdict (Road / RoadIntersection):**
+
+- `decode_road_payload` / `decode_road_intersection_payload` layouts match `convert.rs` / `ucfx_be_to_le.py`: stride **44** / **128**, numeric u32 sweep for schm-backed COMPs (`swap_numeric_records_inplace` when `is_ecs_numeric_component`).
+- **No minimal `ucfx_byteswap` change for Road** justified on current LE block — typed per-field swap would be identical to the existing 44-byte record sweep.
+- **Fix hypothesis:** engine-side **entity construction / spatial-hash registration** for layer blocks that load **Road** (block **18** has **75× Road**, **58× RoadIntersection** vs **10× / 12×** on benign block **6**); confirm with one x32dbg session: entity pointer at **`0x00516EF6`**, compare to Transform **`+4`** XYZ vs **`+26`** mis-base. Offline: `tools/correlate_entity_ptr.py` on decompressed block **18** (`output/_scratch/byte_analysis/`).
+
+**Workaround (unchanged):** deploy full patch minus index **18** (`no-dlccon004-roads`) to clear `0x248BB*`.
+
+**Example records (all sane on disk)**
+
+| Block | Record | Entity key | Offset in Transform `data` | XYZ (LE float) | Raw +4..+0F |
+|-------|--------|------------|----------------------------|----------------|-------------|
+| **18** (median) | 367 | `0x00155606` (1400678) | `0x3DE6` | (−718.60, −26.23, 1040.15) | `BC 33 34 C4 72 3A D2 C1 83 68 82 44` |
+| **6** (median) | 298 | `0x0014FE19` (1376473) | `0x1C04` | (478.95, 31.05, −1328.34) | — |
+| **18** (first) | 0 | `0x00150626` (1377830) | `0x0000` | (−1520.89, −0.21, 831.35) | `26 06 15 00 C7 40 1F E3 44 2D 09 08` |
+
+No record in 6 / 13 / 18 matches the x32dbg denormal pattern (`0x8E290015`) at Transform +4/+8/+0xC.
+
+**What requires x32dbg at crash**
+
+The spatial-hash insert reads **`[entity+4]` `[entity+8]` `[entity+0xC]`** from a **runtime entity struct**, not directly from the on-disk Transform COMP blob. With offline Transform bytes clean, the smoking gun must be captured live:
+
+1. `bp 0x248BB6D` condition `ecx > 0x4000` on **`keep-dlccon004-roads-only`** or full patch.
+2. At **`0x00516EF6`**, dump the entity pointer and floats at +4..+0xC.
+3. If floats are garbage but disk Transform for that entity key is sane → **wrong in-memory layout / wrong component merged into entity**, not a bad LE port of Transform `data`.
+4. Walk frame to **`0x0063DA1F`** to tie the entity key to the last-loaded block.
+
+**Hypothesis ranking (post byte pass)**
+
+| Rank | Mechanism | Evidence |
+|------|-----------|----------|
+| **H1** | **Runtime entity assembly** — engine builds searchable entity from Road / RoadIntersection / DestructionLink (18) or AiBehavior / Anchor (13) with a code path that writes or reads Transform at the wrong offset | On-disk Transform clean; crash blocks differ by **COMP mix**, not Transform float quality. 18 has **7.5×** more Road records than safe block 6 in a different arena half. |
+| **H2** | **Multi-block interaction** — 18 is **necessary** in full patch (`no-dlccon004-roads` clears AV) but bytes in 18 alone are as clean as 6; failure may need base + speedcity + 004 roads registration order | Bisect 30g; no single bad Transform record explains necessity. |
+| **H3** | **Stale / wrong entity pointer** in registration loop | Fits clean disk + dirty `[entity+4]` at crash; needs one x32dbg session. |
+| **H4** | Transform COMP LE swap corruption | **Ruled out** for 6/13/18 (and safe **2**) by scan + manual record dumps. |
+| **H5** | Misaligned 42-byte stride / every-Nth record garbage | **Ruled out** — `data_len % 42 == 0` on all four blocks. |
+| **H6** | Road stride 44 vs 40 breaking adjacent Transform on disk | **Ruled out** — Road and Transform are separate COMP `data` blobs; Road payloads decode cleanly. |
+
+**Fix direction**
+
+1. **Ship workaround:** deploy full patch minus index **18** (`no-dlccon004-roads`) — clears `0x248BB*` (hang at VZ remains).
+2. **One x32dbg session** on **`keep-dlccon004-roads-only`** to map entity key → COMP source.
+3. **If entity key is Road/RoadIntersection-only:** re-port block 18 with `dlc_port.py --byteswap-python-ecs` or add typed swap for DestructionLink + Road graph fields in `ucfx_be_to_le.py`.
+4. **If entity key has sane Transform on disk but bad at runtime:** treat as engine layout bug — compare schm vs compact numeric dispatch for 18's COMP set against Ghidra entity-construction for layer blocks.
+
+**Logic update (30f + 30g):**
+
+| Configuration | Spatial-hash AV | Boot past VZ |
+|---------------|-----------------|--------------|
+| Full patch (minus ruled indices) | **Y** | **N** (early `0x248BB*` ~5 s) |
+| Full patch − **`dlccon004_roads`** only | **N** | **N** (hang @ `Loading vz`) |
+| Full patch − **`dlccon002_roads`** or **`dlccon002_race`** only | **Y** | **N** |
+| **`dlccon002_roads`** only + base + speedcity (index **6**) | **N** | **Y** |
+| **`dlccon002_race`** only + base + speedcity (index **13**) | **Y** | partial (deep load, then AV) |
+| **`dlccon004_roads`** only in patch (index **18**, SHA `6809da8e…`) | **Y** | partial (Shop/players, **170+238** layers, AV ~**30 s** — **confirmed log**) |
+
+#### Next steps (post-30g)
+
+```powershell
+cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+
+# 1 — Extract + scan primary suspect (index 18)
+.venv\Scripts\python.exe tools\extract_single_block.py --wad output/data/vz-patch.wad --block-index 18 --keep --scratch-root output/_scratch
+.venv\Scripts\python.exe tools\scan_patch_placements.py output/_scratch/00018_dlc01_dlccon004_roads_P000_Q3.block.bin
+.venv\Scripts\python.exe tools\verify_ucfx_endian.py --block output/_scratch/00018_dlc01_dlccon004_roads_P000_Q3.block.bin
+
+# 2 — Secondary suspect (index 13) if 18 scan clean offline
+.venv\Scripts\python.exe tools\extract_single_block.py --wad output/data/vz-patch.wad --block-index 13 --keep --scratch-root output/_scratch
+.venv\Scripts\python.exe tools\scan_patch_placements.py output/_scratch/00013_dlc01_dlccon002_race_P000_Q3.block.bin
+
+# 3 — Optional: confirm full patch boots when 18 excluded (already log-proven; use for gameplay smoke)
+$RULED = "0,4,12,15,16,17"
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon004-roads.wad --exclude-indices $RULED --exclude-path-substr dlccon004_roads -v
+```
+
+Deploy trimmed WAD as `data\vz-patch.wad`. x32dbg on **`keep-dlccon004-roads-only`**: **Restart** after AV (cannot step from fault); `bp 0x00516EF6` and/or `bp 0x248BB6D` with **`ecx>0x4000 || (ecx & 0x80000000)`**; run **60+ s** until hit (not only at `Loading vz…`). MCP can read registers when paused.
+
+#### Next trims (2026-05-30e) — **completed**; see **§2026-05-30f** / **§2026-05-30g**
+
+```powershell
+cd C:\Users\Shadow\Desktop\notes-on-the-released-game
+$RULED = "0,4,12,15,16,17"
+
+# 1 — Full patch minus dlccon004 only (if still Y => 004 not required for crash)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon004.wad --exclude-indices $RULED,2 -v
+
+# 2 — Drop dlccon roads/race; keep 004 mesh + base + speedcity
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-no-dlccon-roads.wad --exclude-indices $RULED --exclude-path-substr dlccon002,dlccon004_roads -v
+
+# 3 — Minimal repro: base + dlccon004 only (+ bootstrap if needed for ASET)
+.venv\Scripts\python.exe tools\trim_patch_wad.py -i output/data/vz-patch.wad -o output/data/vz-patch-base-dlccon004-only.wad --keep-only-indices "2,3,2195" --exclude-indices $RULED -v
+```
+
+Deploy each as `data\vz-patch.wad`. **Fix target** when narrowed: highest-Transform remaining **`dlccon*`** block from `trim_patch_wad.py --list` (start **6**, **13**, **18**); run `extract_single_block.py` + `scan_patch_placements.py` on that index.
 
 ### Alternative theories (still live)
 
@@ -422,7 +909,10 @@ Set conditional **`bp 0x248BB6D`** with **`ecx > 0x4000`**. On hit, note **ECX**
 | 4e | `--exclude-indices 3,5` (`no_base`) | **Fail** — base+commonlocations alone ruled out |
 | 4e′ | exclude `speedcity` (`no_speed_city`) | **Fail** — speedcity alone ruled out |
 | 4 arena | exclude `dlc01_base,speedcity,dlccon` (`no_arena`) | **Pass** spatial-hash window — **arena bucket IN** |
-| 4b–4c | Half-split `1-1099` vs `1100-2195` | Deferred — split `dlccon` first |
+| **4f** | exclude `dlccon` paths (`no-dlccon`) | **Pass** @ `0x248BB*` — **dlccon required** |
+| **4g** | exclude `dlc01_base` only (`no-base-only`) | **Fail** — base alone not sole trigger |
+| **4h** | `keep-only` block **2** (`dlccon_only`) | **Pass** — **dlccon004 alone benign** |
+| 4b–4c | Half-split `1-1099` vs `1100-2195` | Deferred — split non-004 `dlccon` (6, 13, 18) |
 
 `dlc01_state` indices on the **current** doc build: **4** spawns, **12** dlccon003, **15** pathfinding, **16** missionhub, **17** atmofx. Re-list after re-port.
 
@@ -736,6 +1226,227 @@ After step 3: `make build-ucfx-byteswap` → `make dlc-port` → repeat step 2 t
 Earlier session: entity ptr `[esp+0x30]` at `0x516EE4` → `0x6091DF00` (freed by crash time — re-break at `0x248BB6D` with `ecx > 0x4000`).
 
 At **`0x516EF6`**: dump **`[ptr+4]` `[ptr+8]` `[ptr+0xC]`** as floats. Healthy: Maracaibo-range metres; bad: NaN / huge / byte-pattern garbage.
+
+## Static analysis (Ghidra) — EXE variants
+
+To resolve the runtime crash VAs (`0x0248BB7C`, return `0x00516EF6` ← `0x516C00`)
+against named functions, three EXE variants are available. The crash is observed in
+the **cracked** EXE (the one that runs), so it is the authoritative decomp target; the
+others are for clean cross-reference.
+
+| Variant | Size (bytes) | MD5 | Notes |
+|---------|-------------|-----|-------|
+| v1.0 retail (pre-patch, pre-crack) | 17,122,568 | — | `C:\Users\Shadow\Desktop\Mercenaries2.exe`; SecuROM-packed |
+| v1.1 retail (patched, **uncracked**) | 53,944,080 | `5b9976f162e050f4adcc51bb997ba97f` | `output/mercs2_v1.1_uncracked.exe` (built below) |
+| v1.1 cracked (runs the game) | 53,482,288 | — | `…\Mercenaries 2 World in Flames\Mercenaries2.exe` |
+
+The crack changes size by ~462 KB, so VAs may shift slightly between cracked and
+uncracked; trust the **cracked** EXE for the observed crash addresses.
+
+### Build the patched-but-uncracked v1.1 EXE (no crack)
+
+The repo ships the official deltas in `tools/patches/` as `BSDIFF40` files. Apply only
+the v1.0→v1.1 update (skip `mercs2_v1.1_securom_bypass.bspatch`). The bundled
+`bspatch.exe` and pip `bsdiff4` (needs a C build) were both unavailable, so use the
+pure-Python applier `tools/apply_bsdiff_py.py` (stdlib bz2 + numpy):
+
+```powershell
+.venv\Scripts\python.exe tools\apply_bsdiff_py.py `
+  "C:\Users\Shadow\Desktop\Mercenaries2.exe" `
+  "tools\patches\mercs2_v1.0_to_v1.1_update.bspatch" `
+  "output\mercs2_v1.1_uncracked.exe" `
+  --expect-size 53944080 --expect-md5 5b9976f162e050f4adcc51bb997ba97f
+```
+
+Verified: size + MD5 match the known-good v1.1. This is a clean retail v1.1 with **no
+crack applied** — do not run it; it is a static-analysis reference only.
+
+### Headless Ghidra runs
+
+Ghidra 12.1 lives in `tools/ghidra_12.1_PUBLIC/`; it needs JDK 21+, provided portably
+at `tools/jdk21/jdk-21.0.11+10` (set `JAVA_HOME`). Post-scripts under
+`scripts/ghidra_scripts/`:
+
+- `DecompileCrashFns.py` — decompiles the crash/loader VAs (`0x00516B10`, `0x00516C00`,
+  `0x0051812F`, …) → `output/_ghidra/crash_decomp.txt`.
+- `FindSpatialHash.py` — VA-independent: locates spatial-hash / asset-registration code
+  by string xrefs → `output/_ghidra/<prog>_findings.txt`.
+
+```powershell
+$env:JAVA_HOME="…\tools\jdk21\jdk-21.0.11+10"
+& "tools\ghidra_12.1_PUBLIC\support\analyzeHeadless.bat" "output\_ghidra\proj" mercs2 `
+  -import "<EXE path>" -scriptPath "scripts\ghidra_scripts" -postScript DecompileCrashFns.py
+```
+
+(Run via PowerShell `&` direct call — a `cmd /c '… > log'` wrapper fails with
+`> was unexpected at this time` due to leading-quote redirect parsing.)
+
+### Ghidra decompilation results (cracked v1.1, 2026-06-01)
+
+`output/_ghidra/crash_decomp.txt`. Two `.text` functions decompiled cleanly:
+
+- **`FUN_00516b10`** (`0x00516b10`) — cell-index calc:
+  ```c
+  fVar4 = *param_1   - (float)DAT_0179c7bc;        // x - world_origin_x
+  fVar5 = param_1[2] - (float)DAT_0179c7c4;        // z - world_origin_z
+  iVar1 = (int)fVar4 >> (DAT_0179c7b4 & 0x1f);     // cell_x  (NOT clamped)
+  iVar3 = (int)fVar5 >> (DAT_0179c7b4 & 0x1f);     // cell_z  (NOT clamped)
+  *param_3 = DAT_0179c7b6 * iVar3 + iVar1;         // cell_index = grid_w*cell_z + cell_x
+  ```
+  The *size/radius* param is clamped to `0x3fff`, **but the position-derived cell_x /
+  cell_z are not**. A NaN or out-of-range `x`/`z` therefore yields an absurd cell index.
+- **`FUN_00516c00`** (`0x00516c00`, the captured return `0x00516EF6`) — spatial_hash_insert;
+  calls `FUN_00516b10` then tail-calls `thunk_FUN_024e8f60` (in `.securom`).
+
+The runtime crash VAs (`0x0248BB60`/`0x0248BB7C`) fall inside the **`.securom`**
+block (`0x023e9000–0x037005f7`, executable) — the registration is reached through a
+SecuROM-relocated thunk, so Ghidra left it undefined ("no function here").
+
+**Conclusion — the live `ECX = 0xFFC2F4EA` garbage cell index is a direct consequence
+of a corrupt entity position.** Because cell_x/cell_z are unclamped, a single DLC entity
+with a NaN / out-of-Maracaibo-range `Transform` XYZ produces an OOB bucket index → the
+access violation. The `schm` half-swap fix removed one corruption source (crash deferred
+to a much later 408-asset batch), but at least one entity still carries a bad position.
+
+**Next concrete step (offline, no game needed):** scan every converted DLC `Transform`
+(and any position-bearing component) for non-finite floats or XYZ outside the Maracaibo
+range (X ≈ ±3900, Y ≈ −103..+393, Z ≈ ±3900); whichever block has the outlier is the
+remaining byte-swap/stride defect to fix in `ucfx_be_to_le.py` / `convert.rs`.
+
+### Simulator position scan (2026-06-01) — corrupt-position theory NOT confirmed
+
+`tools/wad_simulator` already implements exactly this check
+(`crates/wad_simulator/src/placement.rs` → `is_valid_position` / `is_valid_quaternion`,
+explicitly "would overflow cvttss2si and corrupt the hash table"). Ran on the full patch:
+
+```powershell
+cmd /c 'call "msvc\setup_x64.bat" && cd /d tools\wad_simulator && cargo build --release --bin wad_simulator'
+tools\wad_simulator\target\release\wad_simulator.exe `
+  --wad output\data\vz-patch.wad --base-wad game-files\pc-game-vz.wad   # → output/_ghidra/sim_vzpatch.log
+```
+
+Result: **Position violations: 0** and **ASET OOB: 0**. So no parseable `Transform`/`flgs`
+record carries a NaN/Inf/out-of-bounds position. This **weakens the stored-bad-position
+theory** — the runtime garbage cell index (`ECX = 0xFFC2F4EA`) is most likely produced
+*downstream* (runtime-derived/parented position, scale, or a position-bearing component
+the simulator's transform heuristic skips), not by a corrupt stored XYZ float.
+
+Caveats: the scanned `vz-patch.wad` predates the `schm` half-swap fix, and
+`validate_transform_components` only matches `transform*`/`position`/`placement`-named
+components at a fixed 42-byte stride. What the scan **did** surface (candidates to chase
+next): `layer` issues ×1285, `model` ×850, and structural defects in
+`block[3192]`/`block[3367]` (sges `page_count` off-by-a-few + "bad magic" entry tables) —
+status (DLC-specific vs base-benign) needs a base-only comparison run.
+
+### Schema-driven scan refactor + retail oracle (2026-06-01) — stored positions cleared
+
+The transform heuristic only checked name-matched `Transform`/42-byte-stride. Refactored
+`placement.rs` to walk **every** COMP `info/schm/data` triplet, parse `ComponentSchema`
+(`stride = 4 + payload_stride`), and validate all float fields (`F32`/`Vec3`/`Blob32`)
+for NaN/Inf, world-bounds, and quaternion-unit (new advisory counter
+`ecs_float_violations`). Now scans **589,335** records (was a small fraction).
+
+First pass looked alarming — Position violations jumped 0 → **372** (Road `Vec3@0`,
+PhysicalLink/PointLocation `Blob32@0`, …). But a base-only oracle run and the new
+`tools/diff_ecs_violations.py` differential showed **PATCH−BASE = 0** and **BASE−PATCH = 0**:
+the patch and retail produce byte-identical violation signatures. **The DLC introduces
+zero stored position/float corruption relative to retail.**
+
+The 372 are **retail-present false positives**: per `docs/ecs_components.md`, `Road`'s
+world Vec3 endpoints are at `+0x10`/`+0x1C` (offset 0 is lane/ref data), and
+`PhysicalLink`'s `Blob32@0` is physics-link data — not world positions, so blanket
+world-bounds/unit checks mislabel them. Accordingly `ecs_float_violations` is **advisory,
+not fatal** in the verdict; the trustworthy signal is the **differential vs a retail
+oracle** (`tools/diff_ecs_violations.py`).
+
+**Implication for the crash:** the garbage runtime cell index (`ECX = 0xFFC2F4EA`) is
+**not** a corrupt stored position in any converted ECS component — those match retail
+exactly. The bad world position is produced **downstream at runtime** (parented/derived
+transform, an anchor/link resolved against a bad reference, or a hierarchy combine), or
+in a block the simulator still can't fully parse (`block[3192]`/`block[3367]`). Next
+investigation should target the runtime derivation (x32dbg at the deferred 408-asset
+batch) rather than stored XYZ floats.
+
+### Holdout-block sges decoder fix + DLC structural deltas (2026-06-01)
+
+The large blocks the simulator couldn't parse (`block[3192]` 86 MB, `3398` 14 MB, `3239`
+7.5 MB, `3367` 3.2 MB) were failing with sges `page_count` mismatch + "bad magic" entry
+tables. Root cause: the Rust `decompress_sges` bounded each compressed segment's input by
+the per-segment **u16 `compressed_size`**, which is unreliable for incompressible/large
+segments (textures/terrain) — it can wrap or be 0, truncating the deflate input → short
+output → misaligned entry walk. Fixed `mercs2_formats/src/sges.rs` to mirror
+`tools/sges_decompress.py`: feed the inflater from each segment offset up to the **next
+segment's offset** (cap 128 KB) and cap total output at the header's `total_uncompressed`.
+Also added base/patch **source** to block labels (`blocks.rs`) for provenance.
+
+Result: `page_count` mismatches 4 → **0**, "bad magic" thousands → **0**; blocks
+`3192`/`3367`/`3239`/`3398` now decompress fully and walk cleanly (0 issues each). These
+were **base** (retail) blocks — the streaming texture mip-size warnings dominate and are a
+known cross-block streaming artifact (base has *more* than patch).
+
+With the noise cleared, the patch−base differential surfaces the real **DLC-specific**
+structural deltas (identical pre/post sges fix → not artifacts; all absent in retail):
+
+| Patch-only delta | Count | Where | Read |
+|------------------|-------|-------|------|
+| `STRM decl stride 1712992 out of range [8,256]` | 334 | `block[367]`(81), 256/315/338/349/517/993… | `decl+4` reads a constant absurd stride → DLC STRM decl layout/byte-swap deviates from retail (mesh geometry, not placement) |
+| `Havok packfile endianness byte = 0 (expected 1 = LE)` | 15 | `block[903]` `dlc01/vehiclenameanimgroup` | **embedded** Havok header `layoutRules` u32-swapped, **not** zero-padding (see below) |
+| ECS `Name`/`ModelName` non-printable | 25 | various | string-field byte-swap corruption |
+
+These are mesh/animation/string conversion defects — **separate from the spatial-hash
+placement crash** (positions matched retail). But they are concrete "what we convert
+wrong" leads: the Havok `+17` endian byte (`tools/ucfx_be_to_le.py` / `convert.rs` Havok
+path) and the STRM `decl+4` stride are the next conversion targets. Differential tooling:
+`tools/diff_ecs_violations.py` (ECS) and the normalized patch−base diff over
+`ucfx_issues` in the JSON report.
+
+#### Havok endian byte=0 root cause: embedded layoutRules u32-swap (NOT zero-padding)
+
+Inspecting decompressed patch `block[903]`
+(`dlc01/vehiclenameanimgroup_mercsbar_P000_Q3`): 18 full 8-byte Havok magics
+(`57 e0 e0 57 10 c0 c0 10`). **3** are correctly converted top-level packfiles —
+`layoutRules = 04 01 00 01` (ptrSize=4, **littleEndian=1**), with the `Havok-5.5.0-r1`
+version string present. **15** are **embedded** header structures (no `__classnames__`/
+`__types__`/version string nearby) with `layoutRules = 01 00 00 04` and `+17 = 0`.
+
+`layoutRules` is **4 individual u8 fields** `[ptrSize, littleEndian, reusePadding,
+emptyBaseClass]`. The Xbox 360 BE value is `04 00 00 01`; the correct LE conversion is
+copy-as-is + set `littleEndian=1` → `04 01 00 01` (`ucfx_be_to_le.py` already does this
+for the *outer* header at line ~586: `out[16:20]=be[16:20]; out[17]=1`). The 15 embedded
+headers instead show `01 00 00 04` — exactly the **u32 byte-reversal** of `04 00 00 01`.
+So the `__data__` swap (`_havok_swap_data_class_aware` / blind fallback) is treating each
+embedded packfile header's `layoutRules` as a numeric u32 and reversing it, scrambling the
+u8 fields (ptrSize→1, littleEndian→0). This is the exact "blind u32 swap corrupts mixed
+u8/u32 layouts" pitfall from `AGENTS.md`.
+
+**This rules out the zero-padding hypothesis:** the `+17` byte sits inside fully-populated,
+structured header bytes (`…05 00 00 00 | 01 00 00 04 | 03 00 00 00 02…`), not appended
+`0x00` padding, and the magic scan cannot match a zero run.
+
+##### Fix implemented + validated (2026-06-01)
+
+- **`tools/ucfx_be_to_le.py`** — new `_fix_embedded_havok_layoutrules(be, out, start, end)`
+  run after the `__data__` swap in `_convert_havok_be_to_le` (both class-aware and blind
+  paths). Scans the converted `__data__` region for the 8-byte packfile magic and restores
+  each embedded header's 4-byte `layoutRules` verbatim from BE + sets `littleEndian=1`.
+  Records a `havok_embedded_layoutrules_fixed` stat. Alignment-independent (magic is
+  palindromic per u32 word). The blind-sweep tail-pad path is unaffected.
+- **`tools/wad_simulator/crates/ucfx_byteswap/src/convert.rs`** — mirror
+  `fix_embedded_havok_layoutrules(be, out)` + `HAVOK_PACKFILE_MAGIC`, called at the end of
+  `convert_container` for BE inputs when `out.len() == container.len()`. Unit test
+  `convert::tests::layoutrules_embedded_repair` (`cargo test -p ucfx_byteswap`).
+- **`tools/wad_simulator/.../animation.rs`** — `consume_animation` now walks **every**
+  Havok magic per body (was first-only) and reports the offset, so animgroup embedded
+  headers are each checked.
+
+Validation (no full WAD rebuild): pulled the real BE block
+`vz/vehiclenameanimgroup_mercsbar_P000_Q3` from `game-files/xbox-vz.wad`
+(`x360_dlc_io.parse_be_indx`/`decompress_be_sges`, offset = `page_index*0x8000`) and ran
+`byteswap_ucfx_block` — all top-level Havok headers convert `04 00 00 01` → `04 01 00 01`
+(LE=1), 0 remaining `!=1`. The embedded-header repair itself is covered by a direct
+post-bug→post-fix test in both Python and Rust (`01 00 00 04` → `04 01 00 01`). The larger
+610 KB `dlc01/` animgroup (source of the 15 embedded headers) lives in the DLC DOH, not
+`xbox-vz.wad`; re-running the patch build will apply the same repair there.
 
 ## Relationship to Previous Crashes
 

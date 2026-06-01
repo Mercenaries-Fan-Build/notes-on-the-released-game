@@ -12,6 +12,11 @@ pub struct ConsumeResult {
     pub vertex_violations: usize,
     pub bounds_violations: usize,
     pub structural_violations: u32,
+    /// Schema-driven ECS float-field corruption: NaN/Inf in any float field, or
+    /// non-finite/out-of-bounds positions in non-Transform position-bearing
+    /// components. Catches byte-swap defects the name-matched Transform heuristic
+    /// misses (the spatial-hash garbage-cell-index source).
+    pub ecs_float_violations: usize,
 }
 
 pub trait AssetConsumer {
