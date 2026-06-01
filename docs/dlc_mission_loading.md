@@ -19,6 +19,7 @@
 9. [Havok Animation Byte-Swap Fix](#9-havok-animation-byte-swap-fix-vz-patchwad)
 10. [DEPS Chunk Byte-Swap Fix](#10-deps-chunk-byte-swap-fix-script-dependencies)
 11. [BINN Script-Reference Byte-Swap Fix](#11-binn-script-reference-byte-swap-fix-registry-crash)
+12. [Nohook Contract Routing Invariant](#12-nohook-contract-routing-invariant)
 
 ---
 
@@ -741,6 +742,91 @@ fails.
 Affects all 126 script BINN entries across `resident` (block 464) and
 `scripts_vz` (block 2196) in the patch WAD. Every script reference entry was
 corrupted by the previous u32 fallback.
+
+---
+
+## 12. Nohook Contract Routing Invariant
+
+> **Date:** 2026-06-01
+> **Status:** Resolved — guarded in `_build_bootstrap_block`, enforced by `verify_dlc_import_chain.py`
+
+### Context
+
+The PC DLC port runs in **nohook** mode (`make dlc-port` passes `--no-hook`).
+The DLC mission contracts `dlccon001`, `dlccon002`, `dlccon003`, `dlccon004a`
+are full inline-LuaQ scripts that live in the DLC asset block
+`blocks\dlc01\resident_P000_Q3.block` (patch block index **464**). They must
+resolve via ASET **on-demand** from that resident block. The import chain is:
+
+```
+wifmissionflow → dlc01 (bootstrap, in the modified scripts_vz block)
+              → dlccon001 / dlccon002 / dlccon003 / dlccon004a (resident 464)
+```
+
+### The invariant
+
+In nohook mode, contract bytecode **MUST NOT** be copied into the `scripts_vz`
+bootstrap block. Contracts stay in `resident_P000_Q3` (464) and are reached by
+ASET. The DLC's own global ASET stores `0xFFFF` (sentinel) for these script
+hashes, so the patch-block routing is decided entirely by **which `PatchBlock`
+the ASET row is attached to** during FFCS assembly (see
+[`tools/ffcs_patch_wad.py`](../tools/ffcs_patch_wad.py) and
+`tools/dlc_aset_normalize.py:ensure_import_chain_script_aset`, which attaches
+the row to the block returned by `find_block_for_script_module` — the resident
+block, matched by inline-LuaQ `name_hash`).
+
+### The bug that was fixed
+
+`tools/dlc_port.py` `_build_bootstrap_block` previously called
+`_extract_contract_bytecodes` **unconditionally** whenever converted blocks were
+available, contradicting its own adjacent comment. While the resident block
+failed to byte-swap, extraction returned empty and this was harmless. Once the
+resident block conversion was fixed (it now converts with **0 errors / 36 LE
+LuaQ**), extraction started succeeding, so the contracts got injected into the
+`scripts_vz` bootstrap block (patch block **2196**). The post-injection ASET
+dedupe in `tools/dlc_port.py`
+(`dedupe_asset_hash_across_blocks(..., prefer_min_block_index=scripts_vz_idx)`)
+then moved the contract ASET rows from resident (464) onto the bootstrap (2196).
+This both **misrouted** the contracts AND re-created the documented re-entrant
+block-loading hang risk (loading contracts during `scripts_vz` masterscript
+evaluation).
+
+**Fix:** `_build_bootstrap_block` now guards contract extraction/injection
+behind `if no_hook: skip`. In nohook mode it logs:
+
+```
+[bootstrap 1/6] Nohook mode — DLC contracts stay in their asset block
+                (resident_P000_Q3) and resolve via ASET on-demand;
+                skipping scripts_vz injection.
+[bootstrap 5/6] No contract bytecodes to add.
+```
+
+### Validator enforcement
+
+`tools/verify_dlc_import_chain.py`'s **"DLC Script Resident Block LuaQ Check"**
+now recognizes contracts as **inline-LuaQ entries matched by `name_hash`**
+(exactly how the engine resolves `import()`), not only as lightweight BINN
+script-reference records. It compares each contract's ASET-resolved block index
+against the resident block index and reports:
+
+| Status label | Meaning |
+|--------------|---------|
+| `PRESENT (ASET→resident 464 + bytecode)` | Correct |
+| `MISROUTED (bytecode in resident 464, but ASET→block N)` | The bug — fails the run |
+| `PARTIAL` / `MISSING` | Other failure modes |
+
+### Run gate
+
+```bash
+make dlc-phase0 verify-dlc-import-chain OUTPUT=output SOURCE_WAD=game-files/vz.wad
+```
+
+Healthy output shows all four contracts `PRESENT (ASET→resident 464 + bytecode)`
+and `RESULT: ALL CHECKS PASSED`.
+
+> The bootstrap import chain itself (`wifmissionflow → dlc01 → contracts`) is
+> described in [`dlc_bootstrap_implementation.md`](dlc_bootstrap_implementation.md);
+> this section is the canonical record for the nohook routing invariant.
 
 ---
 

@@ -27,7 +27,7 @@ from dlc_aset_normalize import (
     find_dlc_script_resident_block_index,
     is_dlc_script_resident_path,
 )
-from wad_patcher import get_binn_script_ref_name, parse_block_entries
+from wad_patcher import get_binn_script_ref_name, get_script_name, parse_block_entries
 from ffcs_patch_wad import read_patch_wad
 from pandemic_hash import pandemic_hash_m2
 from sges_decompress import decompress_sges_block
@@ -162,6 +162,67 @@ def find_luaq_in_block(block_data: bytes) -> list[tuple[int, str]]:
     return results
 
 
+# Known descriptive-name → identity-import-name → identity name_hash mapping
+# for DLC modules whose ASET key is their *real module identity name*, not the
+# descriptive BINN name listed in extended_scripts.  Used only as a cross-check
+# fallback; the live WAD scan in build_descriptive_identity_map() is preferred.
+KNOWN_DESC_IDENTITY_HASH: dict[str, int] = {
+    "dlc01_hero": 0x51728909,         # Hero
+    "dlc01_briefing": 0x51EE8F14,     # MrxBriefing
+    "dlc01_player": 0x8D35CF13,       # MrxPlayer
+    "dlc01_pmcinterior": 0x3787604B,  # WifPmcInterior
+    "dlc01missionflow": 0xCE4166ED,   # WifMissionFlow
+    "dlc01_starterdata": 0xB2C35A66,  # WifStarterData
+    "dlc_mrxtankbuster": 0x0CA1218F,  # MrxTankBuster
+    "dlc01_mrxguipda": 0x97F9C4EE,    # MrxGuiPda
+    "dlc01_pausescreen": 0x344E1959,  # pause UI
+}
+
+
+def build_descriptive_identity_map(pw) -> dict[str, int]:
+    """Map each module's *descriptive* BINN name → its entry *identity* hash.
+
+    The engine (and the WAD ASET) key script modules by their identity
+    name_hash (``entry["hash"]``), but the BINN body inside the block carries
+    only the module's *descriptive* name (e.g. ``dlc01_player``).  Several DLC
+    modules therefore appear "missing" when looked up by
+    ``pandemic_hash_m2(descriptive_name)``.
+
+    Scans the DLC script resident block (and the bootstrap block) of the patch
+    WAD, decompresses each, and pairs every entry's descriptive name
+    (case-insensitive) with its identity hash so callers can resolve the real
+    ASET key.
+    """
+    index: dict[str, int] = {}
+    if pw is None:
+        return index
+
+    candidate_indices: list[int] = []
+    try:
+        ri = find_dlc_script_resident_block_index(pw.blocks)
+        if ri is not None:
+            candidate_indices.append(ri)
+    except Exception:
+        pass
+    if pw.blocks:
+        candidate_indices.append(len(pw.blocks) - 1)  # bootstrap block
+
+    for bi in candidate_indices:
+        try:
+            blk = pw.blocks[bi]
+            data = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data))
+            if not data:
+                continue
+            for entry in parse_block_entries(data):
+                desc = get_script_name(data, entry)
+                if desc and desc != "(unknown)":
+                    index.setdefault(desc.lower(), entry["hash"])
+        except Exception:
+            continue
+    return index
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -274,6 +335,16 @@ def main():
     print("Extended DLC Scripts")
     print(f"{'─' * 60}")
 
+    # Several extended modules are keyed in the ASET by their *identity* name
+    # hash, not pandemic_hash_m2(descriptive_name).  Build a descriptive→identity
+    # map from the patch WAD's script blocks so those don't false-alarm as MISS.
+    # This section is non-gating: it never sets all_ok=False.
+    desc_identity_map: dict[str, int] = {}
+    try:
+        desc_identity_map = build_descriptive_identity_map(pw)
+    except Exception:
+        desc_identity_map = {}
+
     for name in extended_scripts:
         h = pandemic_hash_m2(name)
         in_patch = h in patch_aset
@@ -283,6 +354,22 @@ def main():
             source = "patch" if in_patch else "base"
             block = combined_aset[h]
             print(f"  OK    {name:25s}  0x{h:08X}  block={block:>5d}  ({source})")
+            continue
+
+        # Descriptive-name hash missed — resolve via the module's identity hash.
+        # Prefer the value derived live from the WAD; fall back to the known
+        # descriptive→identity table as a cross-check.
+        id_hash = desc_identity_map.get(name.lower())
+        if id_hash is None or id_hash not in combined_aset:
+            known = KNOWN_DESC_IDENTITY_HASH.get(name.lower())
+            if known is not None and known in combined_aset:
+                id_hash = known
+
+        if id_hash is not None and id_hash in combined_aset:
+            source = "patch" if id_hash in patch_aset else "base"
+            block = combined_aset[id_hash]
+            print(f"  OK    {name:25s}  id=0x{id_hash:08X} (desc-name)  "
+                  f"block={block:>5d}  ({source})")
         else:
             print(f"  MISS  {name:25s}  0x{h:08X}  (not in ASET)")
 
