@@ -526,7 +526,87 @@ const COMP_HASH_TO_NAME: &[(u32, &str)] = &[
     (0xDECD8889, "AiBehavior"),
     (0xBCFE6314, "Path"),
     (0x6FA2F9D4, "LaneData"),
+    (0x60B7ABE0, "PointLocation"),
 ];
+
+/// "Keyed-group" ECS components whose `data` body is a sequence of
+/// `[u32 count][count × record][u8 flag]` groups (mixed u8/u32). Returns the
+/// per-record byte size. Mirrors `_ECS_GROUP_RECORD_COMPONENTS` in
+/// ucfx_be_to_le.py. PointLocation: 36-byte records; 0x2E2659F0: 4-byte
+/// entity-reference keys (component name not yet recovered).
+fn keyed_group_record_size(comp_name: &str) -> Option<usize> {
+    match comp_name {
+        "PointLocation" => Some(36),
+        "__hash_0x2E2659F0" => Some(4),
+        _ => None,
+    }
+}
+
+/// True if `b` looks like a full-format ECS component *name* (C++-style
+/// identifier): starts with a letter/underscore, only `[A-Za-z0-9_]`, len >= 2.
+/// Rejects compact 4-byte BE hashes that happen to be printable but contain
+/// punctuation (e.g. `b"N+lT"`, `b"iV~b"`). Mirrors `_is_ecs_name_identifier`.
+fn is_ecs_name_identifier(b: &[u8]) -> bool {
+    if b.len() < 2 {
+        return false;
+    }
+    let c0 = b[0];
+    if !(c0.is_ascii_alphabetic() || c0 == b'_') {
+        return false;
+    }
+    b.iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_')
+}
+
+/// In-place BE->LE conversion for a keyed-group component body.
+///
+/// Each 4-byte field (count + every record word) is byte-reversed; the
+/// per-group trailing `u8` flag is left untouched. Returns `true` only if the
+/// structure consumes the buffer *exactly* (in which case the swap was
+/// applied); on any layout mismatch it leaves `data` unchanged and returns
+/// `false` so the caller can fall back / report (never silently corrupts).
+fn convert_keyed_group_records_inplace(data: &mut [u8], record_size: usize) -> bool {
+    if record_size == 0 || record_size % 4 != 0 {
+        return false;
+    }
+    let n = data.len();
+    // Validation pass (counts are still big-endian here).
+    let mut pos = 0usize;
+    while pos < n {
+        if pos + 4 > n {
+            return false;
+        }
+        let count =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        pos += 4;
+        let span = match count.checked_mul(record_size) {
+            Some(s) => s,
+            None => return false,
+        };
+        if pos + span + 1 > n {
+            return false;
+        }
+        pos += span + 1;
+    }
+    if pos != n {
+        return false;
+    }
+    // Apply pass.
+    pos = 0;
+    while pos < n {
+        data[pos..pos + 4].reverse();
+        let count =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        pos += 4;
+        let span = count * record_size;
+        let mut off = pos;
+        while off < pos + span {
+            data[off..off + 4].reverse();
+            off += 4;
+        }
+        pos += span + 1; // skip the endian-neutral u8 flag
+    }
+    true
+}
 
 /// Extract component name from an `info` descriptor body.
 ///
@@ -543,27 +623,39 @@ fn extract_comp_name(
     let (start, end) = body_range(container, desc.row_u0, desc.body_size, data_area_off)?;
     let body = &container[start..end];
 
-    // Try ASCII format first
-    let nul_pos = body.iter().position(|&b| b == 0).unwrap_or(body.len());
-    if nul_pos > 0 {
-        if let Ok(name) = String::from_utf8(body[..nul_pos].to_vec()) {
-            return Some(name);
-        }
-    }
-
-    // Compact binary format: first u32 is the component name hash (in BE)
-    if body.len() >= 4 {
-        let hash = if is_be {
+    // Resolve in priority order (mirrors _build_ecs_comp_map in ucfx_be_to_le.py):
+    //   (a) recognized component hash  -> named (even if first 4 bytes printable)
+    //   (b) valid C++-style identifier -> full-format name string
+    //   (c) otherwise                  -> compact unrecognized hash
+    // A compact 4-byte BE hash can be coincidentally printable (e.g.
+    // 0x4E2B6C54 = "N+lT", 0x69567E62 = "iV~b" in the DLC resident block), so
+    // "first bytes printable => name" is NOT a valid discriminator.
+    let hash = if body.len() >= 4 {
+        if is_be {
             read_u32_be(body, 0)
         } else {
             mercs2_formats::ffcs::read_u32_le(body, 0)
-        };
+        }
+    } else {
+        0
+    };
+
+    if body.len() >= 4 {
         for &(h, name) in COMP_HASH_TO_NAME {
             if h == hash {
                 return Some(name.to_string());
             }
         }
-        // Unknown hash — return a diagnostic placeholder
+    }
+
+    let nul_pos = body.iter().position(|&b| b == 0).unwrap_or(body.len());
+    if is_ecs_name_identifier(&body[..nul_pos]) {
+        if let Ok(name) = String::from_utf8(body[..nul_pos].to_vec()) {
+            return Some(name);
+        }
+    }
+
+    if body.len() >= 4 {
         return Some(format!("__hash_0x{:08X}", hash));
     }
 
@@ -684,6 +776,23 @@ fn convert_comp_data_inplace(
         _ => {}
     }
 
+    // Keyed-group components ([u32 count][count×record][u8 flag]*) — mixed
+    // u8/u32 layout that a blanket u32 sweep would corrupt. Only the compact /
+    // no-schm form (resident / worldentity META) uses this layout; a schm'd
+    // instance (layers_static) is a plain keyed-record array. Self-validating:
+    // only applies when the structure consumes the body exactly.
+    if schema.is_none() {
+        if let Some(rec) = keyed_group_record_size(comp_name) {
+            if convert_keyed_group_records_inplace(data, rec) {
+                if let Some(ref mut rpt) = report {
+                    rpt.record_no_schema(comp_name, data_size, "keyed-group records");
+                }
+                return;
+            }
+            // Structure mismatch — fall through to generic handling (and report).
+        }
+    }
+
     // Compact-format COMP groups have info (hash) but no schm; mirror Python
     // `_ECS_COMP_DEFAULT_STRIDE` — do not blind-sweep whole bodies.
     let stride = if comp_name == "Transform" {
@@ -788,17 +897,15 @@ fn convert_name_data_inplace(data: &mut [u8]) {
     }
 }
 
-/// Convert ModelName component data in-place (fixed stride 8: u32 key + u32 hash).
+/// Convert ModelName component data in-place.
+///
+/// ModelName is a pure-u32 stream — besides the fixed (key, hash) pair shape it
+/// also appears as variable records `[u32 count][count×u32 keys][u32 hash]`
+/// (u32- but not 8-aligned) in resident/worldentity META blocks. Every field
+/// is a u32 either way, so swap the whole body as a u32 array. Mirrors the
+/// relaxed (`% 4`) handler in ucfx_be_to_le.py.
 fn convert_modelname_data_inplace(data: &mut [u8]) {
-    let stride = 8;
-    let count = data.len() / stride;
-    for i in 0..count {
-        let off = i * stride;
-        if off + 8 <= data.len() {
-            swap_u32(data, off);
-            swap_u32(data, off + 4);
-        }
-    }
+    swap_u32_array(data);
 }
 
 /// Convert bodies for non-ECS (generic) containers with tag-aware dispatch.
@@ -1218,7 +1325,79 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
-    use super::{fix_embedded_havok_layoutrules, HAVOK_PACKFILE_MAGIC};
+    use super::{
+        convert_keyed_group_records_inplace, fix_embedded_havok_layoutrules,
+        is_ecs_name_identifier, HAVOK_PACKFILE_MAGIC,
+    };
+
+    #[test]
+    fn ecs_name_identifier_rejects_binary_hashes() {
+        // Real component names are valid identifiers.
+        assert!(is_ecs_name_identifier(b"Transform"));
+        assert!(is_ecs_name_identifier(b"ModelName"));
+        assert!(is_ecs_name_identifier(b"PointLocation"));
+        // Printable compact hashes (with punctuation) are NOT names.
+        assert!(!is_ecs_name_identifier(b"N+lT")); // 0x4E2B6C54
+        assert!(!is_ecs_name_identifier(b"iV~b")); // 0x69567E62
+        assert!(!is_ecs_name_identifier(b"")); // empty
+        assert!(!is_ecs_name_identifier(b"A")); // too short
+    }
+
+    #[test]
+    fn keyed_group_pointlocation_record36() {
+        // [u32 count=1][1×36-byte record][u8 flag=0]
+        let mut data = Vec::new();
+        data.extend_from_slice(&1u32.to_be_bytes());
+        data.extend_from_slice(&0x80005B9Fu32.to_be_bytes()); // key
+        for _ in 0..7 {
+            data.extend_from_slice(&0u32.to_be_bytes());
+        }
+        data.extend_from_slice(&0x3F800000u32.to_be_bytes()); // 1.0f
+        data.push(0x00); // flag
+        assert_eq!(data.len(), 41);
+
+        let mut out = data.clone();
+        assert!(convert_keyed_group_records_inplace(&mut out, 36));
+        // count and key now little-endian; trailing flag byte unchanged.
+        assert_eq!(&out[0..4], &1u32.to_le_bytes());
+        assert_eq!(&out[4..8], &0x80005B9Fu32.to_le_bytes());
+        assert_eq!(out[40], 0x00);
+    }
+
+    #[test]
+    fn keyed_group_entity_ref_list_record4() {
+        // Two groups: [count=2][k0][k1][flag][count=1][k2][flag]
+        let mut data = Vec::new();
+        data.extend_from_slice(&2u32.to_be_bytes());
+        data.extend_from_slice(&0x8000_0001u32.to_be_bytes());
+        data.extend_from_slice(&0x8000_0002u32.to_be_bytes());
+        data.push(0x01);
+        data.extend_from_slice(&1u32.to_be_bytes());
+        data.extend_from_slice(&0x8000_0003u32.to_be_bytes());
+        data.push(0x01);
+
+        let mut out = data.clone();
+        assert!(convert_keyed_group_records_inplace(&mut out, 4));
+        assert_eq!(&out[0..4], &2u32.to_le_bytes());
+        assert_eq!(&out[4..8], &0x8000_0001u32.to_le_bytes());
+        assert_eq!(out[12], 0x01, "group-0 flag preserved");
+        // group 1
+        assert_eq!(&out[13..17], &1u32.to_le_bytes());
+        assert_eq!(out[21], 0x01, "group-1 flag preserved");
+    }
+
+    #[test]
+    fn keyed_group_rejects_mismatched_layout() {
+        // record_size=4 but a trailing byte makes consumption inexact.
+        let mut data = Vec::new();
+        data.extend_from_slice(&1u32.to_be_bytes());
+        data.extend_from_slice(&0x8000_0001u32.to_be_bytes());
+        data.push(0x01);
+        data.push(0xFF); // extra junk -> must NOT consume exactly
+        let mut out = data.clone();
+        assert!(!convert_keyed_group_records_inplace(&mut out, 4));
+        assert_eq!(out, data, "buffer left unchanged on mismatch");
+    }
 
     #[test]
     fn layoutrules_embedded_repair() {

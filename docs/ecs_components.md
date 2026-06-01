@@ -145,3 +145,59 @@ the shared `entity_id` field.
 
 Not found as an explicit ASCII string in `layers_static` or `vz_base` blobs.
 May be hash-identified in `schm` tables without a plaintext `info` name.
+
+## resident / worldentity META — compact `info` + "keyed-group" data
+
+**Date:** 2026-06-01 · **Source:** DLC `blocks\dlc01\resident_P000_Q3.block`
+(Xbox 360 BE) · **Tools:** [`tools/ucfx_be_to_le.py`](../tools/ucfx_be_to_le.py),
+[`tools/wad_simulator/crates/ucfx_byteswap/src/convert.rs`](../tools/wad_simulator/crates/ucfx_byteswap/src/convert.rs)
+
+The `resident` singleton (type_hash `0xE6B81A54` ECS_NODE, also `0x5647C35D`
+worldentity / `0x140E8728` guidmap) packs hundreds of components in **compact**
+`info` form. Two details broke the BE→LE port and are now handled:
+
+### 1. Compact `info` discriminator
+
+A compact `info` body is `[u32 comp_hash (BE)][12 bytes metadata]` (16 bytes).
+The component hash can be **coincidentally printable**, so "first bytes printable
+⇒ ASCII name" is wrong:
+
+| comp_hash (BE) | printable bytes | actual meaning |
+|----------------|-----------------|----------------|
+| `0x4E2B6C54` | `N+lT` | compact hash (unknown component) |
+| `0x69567E62` | `iV~b` | compact hash (unknown component) |
+
+Resolve in order: **(a)** recognized hash → named; **(b)** candidate is a valid
+C++-style identifier (`[A-Za-z_][A-Za-z0-9_]*`, len ≥ 2) → full-format name;
+**(c)** otherwise → compact `__hash_0x…`. Real names (`Transform`, `ModelName`,
+`PointLocation`, …) pass (b); hashes with `+`/`~` correctly fall to (c).
+
+### 2. "Keyed-group" data layout (mixed u8/u32)
+
+Some components store their `data` as a sequence of groups:
+
+```
+[ u32 count ][ count × record ][ u8 flag ]   (repeated until body end)
+```
+
+The per-group trailing **`u8` flag** is why these bodies are not u32-aligned; a
+blanket u32 sweep corrupts everything past the first flag. The converter
+(`_convert_keyed_group_records`) byte-reverses `count` and every 4-byte record
+field, copies the `u8` flag verbatim, and **requires exact consumption** (raises
+rather than emit a corrupt buffer).
+
+| comp_hash | name | record size | notes |
+|-----------|------|-------------|-------|
+| `0x60B7ABE0` | **PointLocation** | 36 B (key + 8×u32/f32) | docs list 2 entities in `layers_static`; resident sample: 1 group, flag=0 |
+| `0x2E2659F0` | *(name not in rainbow table)* | 4 B (entity-ref key) | resident sample: 26 groups, flag=1 — an entity-reference list |
+
+### 3. ModelName variable records
+
+Besides the fixed `(key, hash)` pairs (stride 8), `ModelName` also appears as
+variable records `[u32 count][count × u32 keys][u32 model_hash]` (u32- but not
+8-aligned). Every field is a u32, so the converter swaps the whole body as a
+u32 array (alignment requirement relaxed from `% 8` to `% 4`).
+
+With these three handlers the DLC resident block converts cleanly (933 UCFX
+entries, **0 errors, 0 blind u32 fallbacks**). Verified by
+`tools/test_ecs_comp_byteswap.py` (Python) and `convert::tests` (Rust).

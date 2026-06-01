@@ -993,6 +993,9 @@ _ECS_NUMERIC_COMPONENTS = frozenset({
     "HibernationControl",
     "AtmosphereBase", "IntersectionToIntersection",
     "SoundAmbience", "AiBehavior", "Path", "LaneData",
+    # PointLocation: keyed-group when compact (stride 0); when a schm defines a
+    # stride (layers_static) it is a plain keyed-record numeric component.
+    "PointLocation",
 })
 
 # Hash → component name lookup for compact-format info bodies (16-byte binary,
@@ -1022,6 +1025,22 @@ _ECS_COMP_HASH_TO_NAME: dict[int, str] = {
     0xDECD8889: "AiBehavior",
     0xBCFE6314: "Path",
     0x6FA2F9D4: "LaneData",
+    0x60B7ABE0: "PointLocation",
+}
+
+# "Keyed-group" ECS components: their ``data`` body is a sequence of
+#   [u32 count][count × record][u8 flag]
+# groups (NOT a flat u32 array). The per-group trailing u8 flag is why the
+# body is not u32-aligned, so a blanket u32 swap corrupts everything after the
+# first flag (the mixed u8/u32 pitfall in AGENTS.md). Each record is composed
+# of ``record_size`` bytes of u32/f32 fields (byte-reversed individually); the
+# u8 flag is copied verbatim. Verified by exact-consumption parse of the DLC
+# resident META block (PointLocation: 1 group of 36-byte records; 0x2E2659F0:
+# 26 groups of 4-byte entity-reference keys). Keyed by component name so both
+# the named (PointLocation) and hash-only (0x2E2659F0) forms resolve.
+_ECS_GROUP_RECORD_COMPONENTS: dict[str, int] = {
+    "PointLocation": 36,
+    "__hash_0x2E2659F0": 4,
 }
 
 # Full record strides for compact-format COMP groups (no schm): 4 + payload_stride.
@@ -1071,6 +1090,72 @@ def _classify_contexts(descriptors: list[tuple[str, int, int, int, int]]) -> lis
     return contexts
 
 
+def _convert_keyed_group_records(body_be: bytes, record_size: int) -> bytes:
+    """Convert a 'keyed-group' ECS component body (BE -> LE).
+
+    Layout: a sequence of ``[u32 count][count × record][u8 flag]`` groups
+    until the body is exhausted. Each record is ``record_size`` bytes of
+    u32/f32 fields (byte-reversed individually); the per-group trailing u8
+    flag is copied verbatim.
+
+    Self-validating: the parse must consume the body *exactly*. If the record
+    size / group layout assumption is wrong the structure won't line up, and
+    we raise ``UnhandledByteSwapError`` rather than emit a corrupt buffer
+    (per the no-silent-corruption byte-swap policy).
+    """
+    if record_size <= 0 or record_size % 4 != 0:
+        raise UnhandledByteSwapError(
+            f"keyed-group record_size {record_size} is not a positive multiple of 4"
+        )
+    out = bytearray()
+    pos = 0
+    n = len(body_be)
+    while pos < n:
+        if pos + 4 > n:
+            raise UnhandledByteSwapError(
+                f"keyed-group: {n - pos} dangling byte(s) before a group count"
+            )
+        count = struct.unpack_from(">I", body_be, pos)[0]
+        out += struct.pack("<I", count)
+        pos += 4
+        span = count * record_size
+        if span < 0 or pos + span + 1 > n:
+            raise UnhandledByteSwapError(
+                f"keyed-group: group count={count} (record_size={record_size}) "
+                f"overruns body ({pos}+{span}+1 > {n})"
+            )
+        for off in range(pos, pos + span, 4):
+            out += struct.pack("<I", struct.unpack_from(">I", body_be, off)[0])
+        pos += span
+        out += body_be[pos:pos + 1]  # per-group u8 flag, endian-neutral
+        pos += 1
+    if pos != n:
+        raise UnhandledByteSwapError(
+            f"keyed-group: consumed {pos} bytes != body length {n}"
+        )
+    return bytes(out)
+
+
+def _is_ecs_name_identifier(candidate: bytes) -> bool:
+    """True if *candidate* looks like a full-format ECS component name.
+
+    Real component names are C++-style identifiers (``Transform``, ``ModelName``,
+    ``PhysicalLink``, …): they start with a letter/underscore and contain only
+    ``[A-Za-z0-9_]``. This rejects compact 4-byte BE hashes that happen to be
+    printable but contain punctuation (e.g. ``b"N+lT"``, ``b"iV~b"``), which must
+    be treated as hashes, not names. Require length >= 2 to avoid 1-char noise.
+    """
+    if len(candidate) < 2:
+        return False
+    first = candidate[0]
+    if not ((0x41 <= first <= 0x5A) or (0x61 <= first <= 0x7A) or first == 0x5F):
+        return False
+    return all(
+        (0x41 <= b <= 0x5A) or (0x61 <= b <= 0x7A) or (0x30 <= b <= 0x39) or b == 0x5F
+        for b in candidate
+    )
+
+
 def _build_ecs_comp_map(
     descriptors: list[tuple[str, int, int, int, int]],
     container_be: bytes,
@@ -1114,19 +1199,28 @@ def _build_ecs_comp_map(
         if tag == "info" and current_name is None:
             # Two info body formats:
             # 1) Full: "ComponentName\0" + hash(4) + metadata (size > 16, starts with ASCII)
-            # 2) Compact: hash(4 BE) + metadata (exactly 16 bytes, no ASCII)
+            # 2) Compact: hash(4 BE) + metadata (exactly 16 bytes, binary)
+            #
+            # The discriminator must NOT assume "first bytes printable => name":
+            # a compact 4-byte BE hash can be coincidentally printable (e.g.
+            # 0x4E2B6C54 = b"N+lT", 0x69567E62 = b"iV~b" in the DLC resident
+            # block). Resolve in priority order: (a) recognized hash, (b) a
+            # candidate that is a *valid identifier* (real component names are
+            # C++-style identifiers — no '+', '~', etc.), else (c) compact hash.
             nul = body.find(b"\x00")
             candidate = body[:nul] if nul > 0 else b""
-            if candidate and all(32 <= b < 127 for b in candidate):
-                # Full format: name string at start
+            comp_hash = struct.unpack_from(">I", body, 0)[0] if len(body) >= 4 else 0
+            if comp_hash in _ECS_COMP_HASH_TO_NAME:
+                # Compact format with a recognized hash (even if printable).
+                current_name = _ECS_COMP_HASH_TO_NAME[comp_hash]
+                if current_name in _ECS_COMP_DEFAULT_STRIDE:
+                    current_stride = _ECS_COMP_DEFAULT_STRIDE[current_name]
+            elif _is_ecs_name_identifier(candidate):
+                # Full format: name string at start.
                 current_name = candidate.decode("ascii")
             elif len(body) >= 4:
-                # Compact format: first 4 bytes = component hash (BE)
-                comp_hash = struct.unpack_from(">I", body, 0)[0]
-                current_name = _ECS_COMP_HASH_TO_NAME.get(
-                    comp_hash, f"__hash_0x{comp_hash:08X}"
-                )
-                # No schm in compact format — use default stride
+                # Compact format: unrecognized component hash.
+                current_name = f"__hash_0x{comp_hash:08X}"
                 if current_name in _ECS_COMP_DEFAULT_STRIDE:
                     current_stride = _ECS_COMP_DEFAULT_STRIDE[current_name]
 
@@ -1165,6 +1259,14 @@ def _convert_ecs_comp_data(
     name = comp_info.component_name
     stride = comp_info.schema_stride
 
+    # Keyed-group layout only applies to the compact/no-schm form (resident /
+    # worldentity META, stride == 0). When a schm is present (layers_static)
+    # the same component uses the standard keyed-record format, so fall through.
+    if name in _ECS_GROUP_RECORD_COMPONENTS and stride == 0:
+        return _convert_keyed_group_records(
+            body_be, _ECS_GROUP_RECORD_COMPONENTS[name]
+        )
+
     if name == "Transform":
         if len(body_be) % 42 != 0:
             raise UnhandledByteSwapError(
@@ -1174,15 +1276,17 @@ def _convert_ecs_comp_data(
         return _convert_transform_records(body_be)
 
     if name == "ModelName":
-        if len(body_be) % 8 != 0:
+        # ModelName is a pure-u32 stream. The fixed-pair (key, hash) layout is
+        # only one shape; the resident/worldentity META block uses variable
+        # records ([u32 count][count×u32 keys][u32 model_hash], repeated), which
+        # is u32- but not 8-aligned. Every field is a u32 either way, so a
+        # u32-array swap is byte-for-byte identical to the pair logic. Require
+        # u32 alignment only.
+        if len(body_be) % 4 != 0:
             raise UnhandledByteSwapError(
-                f"ModelName data body size {len(body_be)} is not a multiple of 8"
+                f"ModelName data body size {len(body_be)} is not a multiple of 4"
             )
-        out = bytearray()
-        for pos in range(0, len(body_be), 8):
-            u32s = struct.unpack_from(">2I", body_be, pos)
-            out += struct.pack("<2I", *u32s)
-        return bytes(out)
+        return _convert_u32_array(body_be)
 
     if name in _ECS_STRING_COMPONENTS:
         return body_be
