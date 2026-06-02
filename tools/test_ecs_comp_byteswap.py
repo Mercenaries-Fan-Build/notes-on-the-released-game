@@ -17,7 +17,9 @@ from ucfx_be_to_le import (
     UnhandledByteSwapError,
     _CompInfo,
     _convert_ecs_comp_data,
+    _convert_hibernation_records,
     _convert_keyed_group_records,
+    _convert_numeric_records,
     _is_ecs_name_identifier,
 )
 
@@ -79,6 +81,49 @@ class KeyedGroupTests(unittest.TestCase):
         out = _convert_ecs_comp_data(be, _CompInfo("__hash_0x2E2659F0", 0), {})
         self.assertEqual(struct.unpack_from("<I", out, 0)[0], 1)
         self.assertEqual(out[8], 0x01)
+
+
+class HibernationControlTests(unittest.TestCase):
+    """HibernationControl payload is u16 + u8 + u8 + u8 + bitflags (stride 10).
+
+    A blanket u32 sweep corrupts the u16; only the entity-key u32 and the
+    payload u16 may be swapped. Byte pattern verified against retail PC
+    layers_static block 29 (raw ``XX 00 a0 3c 14 00``) and DLC block 18.
+    """
+
+    def _be_record(self, key: int, u16: int) -> bytes:
+        # BE source: key, u16 field, then constant u8 params a0/3c/14/00.
+        return struct.pack(">I", key) + struct.pack(">H", u16) + bytes([0xA0, 0x3C, 0x14, 0x00])
+
+    def test_typed_swap_matches_retail_layout(self) -> None:
+        be = self._be_record(0x00150626, 0x00FE)
+        out = _convert_hibernation_records(be)
+        # entity key + payload u16 swapped; u8/bit tail untouched.
+        self.assertEqual(struct.unpack_from("<I", out, 0)[0], 0x00150626)
+        self.assertEqual(struct.unpack_from("<H", out, 4)[0], 0x00FE)
+        self.assertEqual(out[6:10], bytes([0xA0, 0x3C, 0x14, 0x00]))
+        self.assertEqual(out.hex(), "26061500" + "fe00a03c1400")
+
+    def test_typed_swap_differs_from_u32_sweep(self) -> None:
+        # The old (buggy) numeric u32 sweep would scramble the u16 into 0xA03C.
+        be = self._be_record(0x00150626, 0x00FE)
+        buggy = _convert_numeric_records(be, 10)
+        good = _convert_hibernation_records(be)
+        self.assertNotEqual(buggy, good)
+        # Buggy output reads a constant garbage u16 (0xA03C) at payload+0.
+        self.assertEqual(struct.unpack_from("<H", buggy, 4)[0], 0xA03C)
+        # Correct output preserves the real per-entity value.
+        self.assertEqual(struct.unpack_from("<H", good, 4)[0], 0x00FE)
+
+    def test_dispatch_via_comp_data(self) -> None:
+        be = self._be_record(0x003B5341, 0x01F4) + self._be_record(0x003C5341, 0x00E3)
+        out = _convert_ecs_comp_data(be, _CompInfo("HibernationControl", 10), {})
+        self.assertEqual(struct.unpack_from("<H", out, 4)[0], 0x01F4)
+        self.assertEqual(struct.unpack_from("<H", out, 14)[0], 0x00E3)
+
+    def test_bad_size_raises(self) -> None:
+        with self.assertRaises(UnhandledByteSwapError):
+            _convert_hibernation_records(b"\x00" * 13)
 
 
 if __name__ == "__main__":

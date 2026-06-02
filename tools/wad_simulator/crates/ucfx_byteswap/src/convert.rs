@@ -773,6 +773,16 @@ fn convert_comp_data_inplace(
             convert_modelname_data_inplace(data);
             return;
         }
+        "HibernationControl" if data.len() % 10 == 0 => {
+            // Sub-u32 layout (u16 + u8 + u8 + u8 + bitflags, stride 10). A
+            // blanket u32 sweep reverses a word across the u16+u8+u8 region and
+            // corrupts the u16; swap only the entity-key u32 and the payload u16.
+            if let Some(ref mut rpt) = report {
+                rpt.record_no_schema(comp_name, data_size, "hardcoded handler");
+            }
+            convert_hibernation_data_inplace(data);
+            return;
+        }
         _ => {}
     }
 
@@ -838,14 +848,21 @@ fn convert_comp_data_inplace(
         }
 
         if comp_name == "Transform" {
-            // Hardcoded Transform layout: 3xf32 pos + f32 pad + 4xf32 quat + 6 raw bytes
-            for field_off in [0, 4, 8, 12, 16, 20, 24, 28] {
+            // On-disk Transform payload (38 bytes) per schm: blob32 (8×f32) at
+            // payload+0, f32 at payload+32, u16 at payload+36. Swap the 9 u32
+            // words (key already swapped above, then payload 0..36) and the
+            // trailing u16. Matches `_convert_transform_records` (10×u32 + u16)
+            // in ucfx_be_to_le.py and the retail PC byte layout.
+            for field_off in [0, 4, 8, 12, 16, 20, 24, 28, 32] {
                 let off = rec_start + 4 + field_off;
                 if off + 4 <= data.len() {
                     swap_u32(data, off);
                 }
             }
-            // Tail 6 bytes at +32..+37: no swap (u8 data)
+            let u16_off = rec_start + 4 + 36;
+            if u16_off + 2 <= data.len() {
+                swap_u16(data, u16_off);
+            }
         } else {
             // Schema-driven swap
             let schema = schema.unwrap();
@@ -906,6 +923,31 @@ fn convert_name_data_inplace(data: &mut [u8]) {
 /// relaxed (`% 4`) handler in ucfx_be_to_le.py.
 fn convert_modelname_data_inplace(data: &mut [u8]) {
     swap_u32_array(data);
+}
+
+/// Convert HibernationControl component data in-place (stride 10).
+///
+/// schm-declared payload layout (verified byte-identical to retail PC
+/// `layers_static` block 29 and DLC block 18):
+///   +0  u32 entity_key
+///   +4  u16 field (type 4, name_hash 0xCBE8ED58)
+///   +6  u8 / +7 u8 / +8 u8 (type 2)
+///   +9  u8 bit-flags (two type-1 bits)
+///
+/// The payload is NOT a u32 array — a blanket u32 sweep reverses a 4-byte word
+/// across the `u16 + u8 + u8` region (and a u16 across the `u8 + bitflags`
+/// tail), corrupting the u16 into a constant (0xA03C). Swap only the entity-key
+/// u32 and the payload u16; the trailing u8/bit fields are endian-neutral.
+/// Mirrors `_convert_hibernation_records` in ucfx_be_to_le.py.
+fn convert_hibernation_data_inplace(data: &mut [u8]) {
+    const STRIDE: usize = 10;
+    let mut pos = 0usize;
+    while pos + STRIDE <= data.len() {
+        swap_u32(data, pos); // entity key
+        swap_u16(data, pos + 4); // u16 field at payload+0
+        // pos+6..pos+10 (u8 + u8 + u8 + bitflags) are endian-neutral.
+        pos += STRIDE;
+    }
 }
 
 /// Convert bodies for non-ECS (generic) containers with tag-aware dispatch.
@@ -1326,9 +1368,27 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_keyed_group_records_inplace, fix_embedded_havok_layoutrules,
-        is_ecs_name_identifier, HAVOK_PACKFILE_MAGIC,
+        convert_hibernation_data_inplace, convert_keyed_group_records_inplace,
+        fix_embedded_havok_layoutrules, is_ecs_name_identifier, HAVOK_PACKFILE_MAGIC,
     };
+
+    #[test]
+    fn hibernation_typed_swap_matches_retail_layout() {
+        // BE source: key, u16 field, then constant u8 params a0/3c/14/00.
+        let mut data = Vec::new();
+        data.extend_from_slice(&0x0015_0626u32.to_be_bytes());
+        data.extend_from_slice(&0x00FEu16.to_be_bytes());
+        data.extend_from_slice(&[0xA0, 0x3C, 0x14, 0x00]);
+        assert_eq!(data.len(), 10);
+
+        convert_hibernation_data_inplace(&mut data);
+        // entity key + payload u16 swapped; u8/bit tail untouched.
+        assert_eq!(&data[0..4], &0x0015_0626u32.to_le_bytes());
+        assert_eq!(&data[4..6], &0x00FEu16.to_le_bytes());
+        assert_eq!(&data[6..10], &[0xA0, 0x3C, 0x14, 0x00]);
+        // Matches retail PC byte pattern `XX 00 a0 3c 14 00`.
+        assert_eq!(&data[4..10], &[0xFE, 0x00, 0xA0, 0x3C, 0x14, 0x00]);
+    }
 
     #[test]
     fn ecs_name_identifier_rejects_binary_hashes() {

@@ -155,6 +155,40 @@ def _convert_transform_records(be: bytes) -> bytes:
     return bytes(out)
 
 
+def _convert_hibernation_records(be: bytes) -> bytes:
+    """Convert HibernationControl records (ECS_NODE 'data' body, stride 10).
+
+    schm-declared payload layout (verified byte-identical to retail PC
+    ``layers_static`` block 29 and DLC block 18):
+
+        +0  u32 entity_key
+        +4  u16 field      (type 4, name_hash 0xCBE8ED58)
+        +6  u8             (type 2)
+        +7  u8             (type 2)
+        +8  u8             (type 2)
+        +9  u8 bit-flags   (two type-1 bits at byte 5)
+
+    The payload is **not** a u32 array: a blanket u32 sweep reverses a 4-byte
+    word across the ``u16 + u8 + u8`` region (and a u16 across the
+    ``u8 + bitflags`` tail), corrupting the u16 into a constant (0xA03C) and
+    scrambling the per-entity value. Swap only the entity-key u32 and the
+    payload u16; the trailing u8/bit fields are endian-neutral. Reproduces the
+    retail ``XX 00 a0 3c 14 00`` byte pattern exactly.
+    """
+    STRIDE = 10
+    if len(be) % STRIDE != 0:
+        raise UnhandledByteSwapError(
+            f"HibernationControl data body size {len(be)} is not a multiple of "
+            f"{STRIDE}; corrupt or unknown record format"
+        )
+    out = bytearray(be)
+    for pos in range(0, len(be), STRIDE):
+        struct.pack_into("<I", out, pos, struct.unpack_from(">I", be, pos)[0])
+        struct.pack_into("<H", out, pos + 4, struct.unpack_from(">H", be, pos + 4)[0])
+        # out[pos+6 .. pos+10] (u8 + u8 + u8 + bitflags) are endian-neutral.
+    return bytes(out)
+
+
 def _convert_numeric_records(be: bytes, stride: int) -> bytes:
     """Convert fixed-stride numeric records where stride is not a multiple of 4.
 
@@ -1290,6 +1324,11 @@ def _convert_ecs_comp_data(
 
     if name in _ECS_STRING_COMPONENTS:
         return body_be
+
+    if name == "HibernationControl" and len(body_be) % 10 == 0:
+        # Sub-u32 layout (u16 + u8 + u8 + u8 + bitflags); a numeric u32 sweep
+        # would corrupt the u16. Always stride 10 (schm payload 6 / compact).
+        return _convert_hibernation_records(body_be)
 
     if name in _ECS_NUMERIC_COMPONENTS:
         if stride > 0 and stride % 4 != 0:
