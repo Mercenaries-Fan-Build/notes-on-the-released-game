@@ -527,6 +527,9 @@ class _BlockWorkerArgs:
     byteswap_python_ecs: bool = False
     byteswap_python_ecs_fallback: bool = False
     byteswap_python_ecs_paths: bool = True
+    no_resident_dedupe: bool = False
+    no_resident_overrides: bool = False
+    no_base_overrides: bool = False
 
 
 @dataclass
@@ -602,18 +605,22 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     strip_entries: frozenset[tuple[int, int]] | None = None
     stripped_singleton_hashes: set[int] = set()
 
-    if args.base_anim_index and source_wad:
+    if args.base_anim_index and source_wad and not args.no_base_overrides:
         from ucfx_be_to_le import _parse_entry_table_be
         from aset_type_ids import type_id_for_type_hash
 
-        override_all = is_dlc_script_resident_path(args.path)
+        override_all = (
+            is_dlc_script_resident_path(args.path)
+            and not args.no_resident_overrides
+        )
+        is_resident = is_dlc_script_resident_path(args.path)
 
         # Cross-WAD dedupe: on the dlc01 script resident only, strip the
         # world-container singletons that the base WAD already provides
         # (byte-identical) so they resolve to the always-loaded base copies
         # instead of double-registering a render object on load.  Gated on the
         # exact (asset_hash, type_id) existing in the base ASET index.
-        if override_all:
+        if is_resident and not args.no_resident_dedupe:
             # Cross-WAD dedupe gate.  Derived once here from the already-loaded
             # base ASET index (override_all is true only for the single dlc01
             # resident block), keyed on asset_hash (see
@@ -1057,6 +1064,9 @@ def port_x360_dlc(
     fail_on_placement_violations: bool = False,
     descriptor_limit: int | None = None,
     exclude_blocks: str | None = None,
+    no_resident_dedupe: bool = False,
+    no_resident_overrides: bool = False,
+    no_base_overrides: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -1078,6 +1088,15 @@ def port_x360_dlc(
         print("  Byte-swap backend: Rust + Python (layer/path: dlc01_base, speedcity, dlccon)")
     else:
         print("  Byte-swap backend: Rust (ucfx_byteswap)")
+    if no_base_overrides:
+        print("  Base overrides: OFF (all blocks — pure BE→LE conversion)")
+    elif no_resident_overrides or no_resident_dedupe:
+        parts = []
+        if no_resident_overrides:
+            parts.append("resident override_all OFF")
+        if no_resident_dedupe:
+            parts.append("resident singleton dedupe OFF")
+        print(f"  Base overrides: partial ({'; '.join(parts)})")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -1214,6 +1233,9 @@ def port_x360_dlc(
             byteswap_python_ecs=byteswap_python_ecs,
             byteswap_python_ecs_fallback=byteswap_python_ecs_fallback,
             byteswap_python_ecs_paths=byteswap_python_ecs_paths,
+            no_resident_dedupe=no_resident_dedupe,
+            no_resident_overrides=no_resident_overrides,
+            no_base_overrides=no_base_overrides,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -2256,6 +2278,24 @@ def main() -> int:
                          "PC engine limit is ~15,500.")
     ap.add_argument("--exclude-blocks", type=str, default=None,
                     help="Comma-separated block paths (substrings) to exclude from output")
+    ap.add_argument(
+        "--no-resident-dedupe",
+        action="store_true",
+        help="Do not strip byte-identical worldentity/guidmap/foliage from "
+             "dlc01 resident (Build B: reverts cross-WAD singleton dedupe)",
+    )
+    ap.add_argument(
+        "--no-resident-overrides",
+        action="store_true",
+        help="Do not substitute base-game UCFX for dlc01 resident entries "
+             "(Build C/D: pure BE→LE for resident; per-type overrides elsewhere)",
+    )
+    ap.add_argument(
+        "--no-base-overrides",
+        action="store_true",
+        help="Disable all base-game UCFX substitution (override_all + "
+             "_OVERRIDE_TYPE_HASHES); pure BE→LE everywhere",
+    )
 
     args = ap.parse_args()
 
@@ -2329,6 +2369,9 @@ def main() -> int:
         fail_on_placement_violations=args.fail_on_placement_violations,
         descriptor_limit=args.descriptor_limit,
         exclude_blocks=args.exclude_blocks,
+        no_resident_dedupe=args.no_resident_dedupe,
+        no_resident_overrides=args.no_resident_overrides,
+        no_base_overrides=args.no_base_overrides,
     )
 
 
