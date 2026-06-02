@@ -345,16 +345,20 @@ def _apply_overrides_and_strips(
     le_block: bytes,
     base_overrides: dict[int, bytes] | None,
     strip_hashes: frozenset[int] | None,
+    strip_entries: frozenset[tuple[int, int]] | None = None,
 ) -> tuple[bytes, int]:
     """Apply entry-level overrides and type_hash stripping to an LE block.
 
     - base_overrides: maps entry index → LE UCFX container bytes (no CSUM).
       Replaces the Rust-converted container with the pre-converted PC version.
     - strip_hashes: type_hashes to remove from the block entirely.
+    - strip_entries: exact ``(name_hash, type_hash)`` pairs to remove.  Takes
+      precedence over ``base_overrides`` (used for the cross-WAD dedupe of
+      world-container singletons that the base WAD already provides).
 
     Returns (modified_block, stripped_count).
     """
-    if not base_overrides and not strip_hashes:
+    if not base_overrides and not strip_hashes and not strip_entries:
         return le_block, 0
     if len(le_block) < 4:
         return le_block, 0
@@ -381,6 +385,11 @@ def _apply_overrides_and_strips(
         else:
             chunk_data = le_block[pos:container_end]
         pos = container_end
+
+        # Exact-pair strip (cross-WAD singleton dedupe) — authoritative,
+        # overrides any base_override for the same entry.
+        if strip_entries and (h, t) in strip_entries:
+            continue
 
         # Strip?
         if strip_hashes and t in strip_hashes and (
@@ -412,6 +421,22 @@ def _apply_overrides_and_strips(
 _TYPE_ECS_LAYER = 0xE6B81A54
 _TYPE_WORLD_ENTITY = 0x5647C35D
 _TYPE_GUIDMAP = 0x140E8728
+_TYPE_FOLIAGE = 0x34612F86
+
+# Redundant world-container singletons that the dlc01 script resident
+# (blocks\dlc01\resident_P000_Q3.block) re-ships byte-identically even though
+# the always-loaded base VZ resident (blocks\VZ\resident_P000_Q3.block) already
+# provides them.  Registering them a second time in the patch makes the engine's
+# load-time render-view handle resolve loop re-resolve an already-resolved row
+# and stamp 0xFFFF → crash (docs/render_view_handle_crash_analysis.md).  Stripped
+# from the patch resident ONLY when the same (asset_hash, type_id) is present in
+# the base ASET, so the DLC references the base copies instead of duplicating
+# them.  Each entry is (asset_hash, type_hash).
+_REDUNDANT_RESIDENT_SINGLETONS: frozenset[tuple[int, int]] = frozenset({
+    (0x50075B3B, _TYPE_WORLD_ENTITY),  # worldentity — master ECS/scene container
+    (0x385EA82C, _TYPE_GUIDMAP),       # guidmap
+    (0x27E02A15, _TYPE_FOLIAGE),       # foliage
+})
 
 
 _PYTHON_ECS_PATH_MARKERS = ("dlc01_base", "speedcity", "dlccon")
@@ -557,12 +582,29 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     override_msg = ""
     base_block_cache: dict[int, bytes] = {}
     source_wad = Path(args.source_wad_path) if args.source_wad_path else None
+    strip_entries: frozenset[tuple[int, int]] | None = None
+    stripped_singleton_hashes: set[int] = set()
 
     if args.base_anim_index and source_wad:
         from ucfx_be_to_le import _parse_entry_table_be
         from aset_type_ids import type_id_for_type_hash
 
         override_all = is_dlc_script_resident_path(args.path)
+
+        # Cross-WAD dedupe: on the dlc01 script resident only, strip the
+        # world-container singletons that the base WAD already provides
+        # (byte-identical) so they resolve to the always-loaded base copies
+        # instead of double-registering a render object on load.  Gated on the
+        # exact (asset_hash, type_id) existing in the base ASET index.
+        if override_all:
+            _strip_pairs: set[tuple[int, int]] = set()
+            for _ah, _th in _REDUNDANT_RESIDENT_SINGLETONS:
+                _tid = type_id_for_type_hash(_th)
+                if _tid is not None and (_ah, _tid) in args.base_anim_index:
+                    _strip_pairs.add((_ah, _th))
+                    stripped_singleton_hashes.add(_ah)
+            if _strip_pairs:
+                strip_entries = frozenset(_strip_pairs)
 
         be_entries = _parse_entry_table_be(decompressed)
         override_counts: dict[int, int] = {}
@@ -674,9 +716,9 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         )
 
     # Post-processing: apply base_overrides and strip_hashes on the LE output
-    if base_overrides or strip_hashes:
+    if base_overrides or strip_hashes or strip_entries:
         swapped, stripped_count = _apply_overrides_and_strips(
-            swapped, base_overrides, strip_hashes,
+            swapped, base_overrides, strip_hashes, strip_entries,
         )
         if base_overrides:
             stats["overrides_applied"] = len(base_overrides)
@@ -684,7 +726,13 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
 
     stripped_count = stats.get("stripped_count", 0)
     if stripped_count:
-        strip_msg = f"{stripped_count} audio entry(ies) stripped"
+        if strip_entries and not strip_hashes:
+            strip_msg = (
+                f"{stripped_count} redundant base singleton(s) stripped "
+                f"(resolve to base copy)"
+            )
+        else:
+            strip_msg = f"{stripped_count} audio entry(ies) stripped"
         override_msg = f"{override_msg}; {strip_msg}" if override_msg else strip_msg
 
     if args.fix_stringdb_descriptors:
@@ -721,13 +769,23 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     correct_pages = (len(swapped) + 0x7FFF) // 0x8000
     recomputed_packed = (xbox_tier << 24) | correct_pages
 
+    # Drop the ASET rows for any stripped singleton so INDX/ASET/PTHS stay
+    # consistent with the removed UCFX entries (the asset still resolves via the
+    # base WAD's always-loaded copy).
+    block_asets = list(args.block_asets)
+    if stripped_singleton_hashes:
+        block_asets = [
+            row for row in block_asets
+            if row.get("asset_hash") not in stripped_singleton_hashes
+        ]
+
     return _BlockWorkerResult(
         blk_idx=blk_idx,
         skipped=False,
         patch_block=PatchBlock(
             compressed_data=pc_sges,
             path_string=args.path,
-            aset_entries=list(args.block_asets),
+            aset_entries=block_asets,
             packed_field=recomputed_packed,
             flags=args.flags,
         ),
