@@ -17,6 +17,28 @@ The **entity key** is the same u32 that appears in the Name COMP and the
 Transform COMP for the same entity.  All COMPs in a sub-block share the
 same key space.
 
+### CHDR header `{ u16; u16; u32 }` and the Transform stride gate
+
+Each sub-UCFX opens with a **CHDR** chunk. The engine chunk dispatcher
+`0x654940` reads the CHDR body as:
+
+```
+struct CHDR { u16 fieldA @ +0;  u16 stride @ +2;  u32 flags @ +4; }
+```
+
+Retail `layers_static` block 29 stores `00 00 38 00 02 00 00 00` in **all 173**
+sub-blocks → `u16@+0 = 0`, `u16@+2 = 0x0038 (56)`, `flags = 2`. The `u16@+2`
+value is written to process-global `[0x01176078]`; the Transform record builder
+`0x0063D7C0` strides **42** only when that gate is `>= 0x2A`, otherwise **40**.
+
+**Byte-swap rule (DLC port):** swap the CHDR header per-field — `u16@+0`,
+`u16@+2`, then `u32@+4` — **not** as two `u32`s. A whole-`u32` swap transposes
+the two `u16` fields, zeroing the stride gate (`u16@+2 = 0`), which makes the
+engine stride 40, drifts every Transform record by 2 bytes, and crashes the
+spatial hash on save-load (AV `0x0248BBE2`). Implemented in
+`ucfx_be_to_le.py::_swap_chdr_header` and `convert.rs::swap_chdr_header_inplace`;
+see `docs/spatial_hash_crash_analysis.md` §2026-06-01b.
+
 ### Stride determination
 
 The `schm` child of each COMP carries a binary schema descriptor:

@@ -117,6 +117,38 @@ def _convert_u16_array(be: bytes) -> bytes:
     return out
 
 
+def _convert_efct_header(be: bytes) -> bytes:
+    """EFCT particle-effect header — whole u32 words (+ a trailing u16 tail).
+
+    The body is an array of u32 words, several of which pack two u16
+    sub-fields. Verified against the retail PC oracle (vz.wad ``particle``
+    blocks, 18-byte EFCT):
+
+      * ``u32[0]`` = ``{ u16 emitter_count ; u16 0x0226 magic }`` — the
+        constant ``0x0226`` magic sits at byte **+2** in every effect.
+      * ``u32[3]`` = ``{ u16 reserved ; u16 sub_component_count }`` — the
+        sub-component count sits at byte **+14** (retail values 4..11).
+
+    A blanket *u16* sweep (the old behaviour) transposes the two halves of
+    **every** u32: it moves the ``0x0226`` magic to byte +0 and, fatally,
+    **zeroes the +14 sub-component count**. The engine effect loader
+    (``mercenaries2.exe`` 0x00492AF0) then allocates a zero-length descriptor
+    array (``[EDI+0x60]`` stays NULL) and crashes on the first ``COLR`` record
+    append — an access-violation WRITE to 0x4 at 0x00493102, observed "as the
+    layer tries to join". Swapping whole u32 words preserves the field
+    positions so the count survives. Same bug class as the CHDR ``{u16;u16;u32}``
+    stride gate. See ``docs/spatial_hash_crash_analysis.md``.
+    """
+    if len(be) < 4 or len(be) % 2 != 0:
+        raise UnhandledByteSwapError(
+            f"EFCT header has unexpected size {len(be)} bytes "
+            f"(expected >= 4 and 2-byte aligned)"
+        )
+    # _convert_u32_array swaps the whole u32 words and, for a 2-byte
+    # remainder, the trailing u16 — exactly the {u32 x N; u16} EFCT layout.
+    return _convert_u32_array(be)
+
+
 def _convert_deps_body(be: bytes) -> bytes:
     """Convert a DEPS chunk: [u8 count] [u32 hash × count].
 
@@ -2415,8 +2447,15 @@ def _convert_body(
     if tag in ("HIER", "MTRL", "SEGM", "PRMT", "BSHI"):
         return _convert_u16_array(body_be)
 
-    # ── Particle system tags: u16 fields ──
-    if tag in ("EFCT", "EMTR"):
+    # ── EFCT: effect header — packed u32 words ({u16;u16}) + u16 tail.
+    #    A u16 sweep transposes each u32 and zeroes the +14 sub-component
+    #    count gate → engine skips the descriptor-array alloc → NULL deref on
+    #    the first COLR append (AV @ mercenaries2.exe 0x00493102). Must be u32.
+    if tag == "EFCT":
+        return _convert_efct_header(body_be)
+
+    # ── EMTR: 2-byte emitter count (genuine u16) ──
+    if tag == "EMTR":
         return _convert_u16_array(body_be)
 
     # ── CHDR: 8-byte header scalars; large ECS bodies use sibling descriptors ──

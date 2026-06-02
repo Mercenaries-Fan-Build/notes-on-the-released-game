@@ -18,9 +18,11 @@ from ucfx_be_to_le import (
     _CompInfo,
     _convert_chdr_body,
     _convert_ecs_comp_data,
+    _convert_efct_header,
     _convert_hibernation_records,
     _convert_keyed_group_records,
     _convert_numeric_records,
+    _convert_u16_array,
     _is_ecs_name_identifier,
     _swap_chdr_header,
 )
@@ -177,6 +179,54 @@ class ChdrHeaderTests(unittest.TestCase):
         out = _convert_chdr_body(be, type_hash=0, context="META")
         self.assertEqual(out[:8].hex(), "0000380002000000")
         self.assertEqual(out[8:], tail, "trailing guidmap region must be untouched")
+
+
+class EfctHeaderTests(unittest.TestCase):
+    """EFCT effect header is an array of u32 words (several packing two u16
+    sub-fields) plus a trailing u16. Engine loader 0x00492AF0.
+
+    Oracle: retail PC vz.wad ``particle`` EFCT (entry 0xFE1E7109) =
+    ``02 00 26 02 02 00 02 00 0c 00 00 00 00 00 04 00 20 03`` — the constant
+    ``0x0226`` magic at byte +2 and the sub-component count ``0x0004`` at byte
+    +14. A whole-body u16 sweep transposes each u32, moving the magic to +0 and
+    **zeroing the +14 count**, which makes the engine allocate a zero-length
+    descriptor array and crash on the first COLR append (AV write @ 0x00493102).
+    """
+
+    # Retail (correct LE) EFCT body.
+    RETAIL_LE = bytes.fromhex("0200260202000200" "0c00000000000400" "2003")
+
+    def _be_source(self) -> bytes:
+        # The correct converter (u32 words + u16 tail) is an involution, so the
+        # BE source = applying that same swap to the retail LE bytes.
+        be = bytearray(self.RETAIL_LE)
+        for off in range(0, 16, 4):
+            be[off:off + 4] = be[off:off + 4][::-1]
+        be[16:18] = be[16:18][::-1]
+        return bytes(be)
+
+    def test_typed_swap_reproduces_retail_oracle(self) -> None:
+        be = self._be_source()
+        out = _convert_efct_header(be)
+        self.assertEqual(out, self.RETAIL_LE)
+        # Magic 0x0226 lands at byte +2; sub-component count 0x0004 at +14.
+        self.assertEqual(struct.unpack_from("<H", out, 2)[0], 0x0226)
+        self.assertEqual(struct.unpack_from("<H", out, 14)[0], 0x0004)
+
+    def test_old_u16_sweep_zeroes_the_count_gate(self) -> None:
+        be = self._be_source()
+        buggy = _convert_u16_array(be)
+        good = _convert_efct_header(be)
+        self.assertNotEqual(buggy, good)
+        # The buggy sweep moves the magic to +0 and zeroes the +14 count.
+        self.assertEqual(struct.unpack_from("<H", buggy, 0)[0], 0x0226)
+        self.assertEqual(struct.unpack_from("<H", buggy, 14)[0], 0x0000)
+        # The typed swap keeps the real count alive.
+        self.assertEqual(struct.unpack_from("<H", good, 14)[0], 0x0004)
+
+    def test_bad_size_raises(self) -> None:
+        with self.assertRaises(UnhandledByteSwapError):
+            _convert_efct_header(b"\x00\x00\x00")  # odd size
 
 
 if __name__ == "__main__":

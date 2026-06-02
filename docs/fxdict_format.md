@@ -90,7 +90,7 @@ Each of the **314** effect payloads is a UCFX container. Chunk sets are mostly c
 
 | Chunk | Payload size | Header hints | Probable role |
 |-------|--------------|--------------|---------------|
-| **EFCT** | 18 | — | Effect header (version/type, emitter count guess at +4) |
+| **EFCT** | 18 | `{u32 ×4; u16}` | Effect header. **`0x0226` magic @ byte +2; sub-component count @ byte +14** (gates the loader's `[EDI+0x60]` descriptor-array alloc, engine `0x00492AF0`). Several u32 words pack two u16 halves — **must byteswap as u32**, not u16, or the count zeroes → NULL-deref crash @ `0x00493102`. See `spatial_hash_crash_analysis.md` §2026-06-01c |
 | **EMTR** | 2 | `u2=9`, `u3=2` | Emitter table metadata (counts in header) |
 | **EMIT** | 0 | `u2` = 1–7 typical | Emitter count / spawn slots (**histogram verified**) |
 | **GEOM** | 4 | — | Unknown index / LOD hook |

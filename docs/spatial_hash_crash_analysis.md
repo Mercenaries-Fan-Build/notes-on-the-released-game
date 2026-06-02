@@ -1,10 +1,150 @@
 # Spatial Hash Table Crash Analysis: Asset Registration Overflow
 
-**Date**: 2026-05-28 (updated 2026-05-31)  
+**Date**: 2026-05-28 (updated 2026-06-01b)  
 **Primary crash sites**: `0x248BB7C` (read), `0x248BBE2` (write) — same function `0x248BB60`  
-**Status**: **ROOT-CAUSE CANDIDATE FOUND & FIXED (2026-06-01)** — `schm` field-`offset` words were byteswapped as a `u32`, but the word is `{u16 byte_offset; u8; u8}`; correct conversion swaps **only the byte_offset u16**. Verified against retail PC oracle (**47/47** `vz_mar_roads`, **12/12** `layers_static`). Fixed in `ucfx_be_to_le.py` + `convert.rs` (parity). Test WADs spliced for game A/B: `output/data/vz-patch-block18-fixed.wad`, `vz-patch-block13-fixed.wad`. Awaiting game-test to confirm it clears `0x248BB*`. See **§2026-06-01** below.
+**Status**: **ROOT CAUSE CONFIRMED & FIXED (2026-06-01b)** — the **CHDR chunk header** was byteswapped as two `u32`s, but the engine dispatcher `0x654940` reads it as `{ u16 fieldA@+0; u16 stride@+2; u32 flags@+4 }`. The whole-`u32` swap **transposes the two u16 fields**, zeroing the `u16@+2` stride gate that the engine writes to process-global `[0x01176078]`. The Transform record builder `0x0063D7C0` then strides **40** (gate `< 0x2A`) instead of **42** → cumulative 2-byte/record drift → record-1 garbage position → unclamped `cvttss2si` → wild spatial-hash cell → AV write `0x0248BBE2`. **Fix:** swap CHDR header as `u16@+0`, `u16@+2`, `u32@+4` in both converters. Verified: retail `layers_static` block 29 oracle = `00 00 38 00 02 00 00 00` (u16@+2 = 56 ≥ 42); deployed (old) block 18 = `38 00 00 00 02 00 00 00` (u16@+2 = 0, broken); fixed Python **and** Rust converters both produce `00 00 38 00 02 00 00 00` (u16@+2 = 56). Transform data still decodes to 734/734 clean Maracaibo coords. See **§2026-06-01b** below. (The earlier `schm` half-swap — §2026-06-01 — was a real but non-fatal defect; this CHDR gate is the actual crash differentiator.)
 
 > Prior status (2026-05-31): OPEN — offline scan **0** violations on SHA `8700856a…`. **Fix target: index 18** (`dlc01_dlccon004_roads_P000_Q3`) — necessary for full-patch AV; **1-block repro WAD** sufficient. **Index 13** (`dlccon002_race`) also sufficient alone. **Index 6** (`dlccon002_roads`) ruled **OUT**. Confirmed deploy `vz-patch-keep-dlccon004-roads-only.wad` SHA **`6809da8e…`** → Shop/players then FATAL @ **`0x0248BB7C`** / `fault=0x6F319F84` after ~**30 s**. Block **18** on-disk record bytes clean; suspected runtime entity mis-base.
+
+## 2026-06-01c — SECOND crash: EFCT effect header u16-swept (count gate zeroed) → COLR-append NULL deref
+
+**Symptom:** after the CHDR fix the save-load no longer crashed in the spatial
+hash, but a **new** first-chance access violation fired **"as the layer tries to
+join"**: a **WRITE to `0x00000004`** (null + 0x4) at `mercenaries2.exe`
+**`0x00493102`**, inside the particle-effect component loader `0x00492AF0`.
+
+### The engine read (live debug + static RE)
+
+`0x00492AF0` walks an effect container's chunks and, for a `COLR`
+(`0x524C4F43`) chunk, **appends a 16-byte descriptor** into a per-effect array
+at `[EDI+0x60]` indexed by `[EDI+0x70]`:
+
+```
+mov edx,[edi+0x70]      ; index (0 on first COLR)
+add edx,[edi+0x60]      ; + record-array base  ← base is NULL
+mov [edx+0x04], ecx     ; 0x00493102  → WRITE to 0x4  (AV)
+```
+
+At the fault: `[EDI+0x60] = NULL` (record array never allocated),
+`[EDI+0x64]` = a valid sibling array, `[EDI+0x70] = 0`,
+`[EDI+0x6C] = 0xFFFF9001` (a sign-extended garbage count). The array at
+`[EDI+0x60]` is sized from a **sub-component count** the loader reads out of the
+effect header (**`EFCT`** chunk). A zero/garbage count → zero-length (NULL)
+allocation → the first `COLR` append dereferences NULL.
+
+### The bug — EFCT swapped as a u16 array (must be u32)
+
+`EFCT` is an 18-byte header = **`{ u32 ×4 ; u16 }`** where several u32 words pack
+two `u16` sub-fields. Verified against the retail PC oracle (`vz.wad` `particle`
+blocks): the constant magic **`0x0226` sits at byte +2**, and the
+**sub-component count sits at byte +14** (retail values 4..11). The Python
+converter routed `EFCT` to `_convert_u16_array`, which **transposes the two
+halves of every u32** — moving the magic to +0 and **zeroing the +14 count**:
+
+```
+BE source (u32[3])    : 00 04 00 00
+whole-u16 swap (BUGGY) : 04 00 00 00   → u16@+14 = 0x0000  → NULL alloc → CRASH
+whole-u32 swap (FIX)   : 00 00 04 00   → u16@+14 = 0x0004  → allocate → OK
+```
+
+Same bug class as the CHDR `{u16;u16;u32}` gate above. (COLR content itself is
+genuine 4-byte fields — BGRA color + a time/key per 16-byte stride — and was
+already swapped correctly as u32; it is *not* the corrupted field.)
+
+### Oracle + deployed-data verification (no game)
+
+| Source | EFCT magic @+2 | count @+14 | Result |
+|--------|----------------|-----------|--------|
+| Retail `vz.wad` particle EFCT (native-LE oracle) | `0x0226` | 4..11 | alloc OK |
+| Deployed `vz-patch.wad` EFCT (OLD u16 converter), **all 4 chunks** | (at +0) | **0** | NULL → crash |
+| Re-converted from inferred BE — **fixed Python** `_convert_efct_header` | `0x0226` | nonzero | alloc OK |
+| Re-converted — **fixed Rust** `convert_efct_header_inplace` | `0x0226` | nonzero | alloc OK |
+
+Validation: every one of the **4** EFCT chunks in `vz-patch.wad` has
+`count@+14 == 0` under the old output (all would crash); the fixed converter
+restores `magic@+2 = 0x0226` and a nonzero `+14` count for all 4, with 0
+anomalies.
+
+**Fix:** route `EFCT` to a typed `{u32 ×4 ; u16}` swap in both converters
+(`_convert_efct_header` in `tools/ucfx_be_to_le.py`,
+`convert_efct_header_inplace` in `tools/wad_simulator/.../convert.rs`); keep
+`EMTR` (a 2-byte u16 emitter count) as a u16 swap. Regression tests
+(`tools/test_ecs_comp_byteswap.py::EfctHeaderTests`, Rust
+`efct_header_u32_swap_preserves_count_gate`) assert the +14 count survives.
+The deployed `vz-patch.wad` must be rebuilt with the fixed converter to clear
+this crash (not done here per instruction).
+
+---
+
+## 2026-06-01b — ROOT CAUSE: CHDR `{u16;u16;u32}` header transposed by whole-u32 swap
+
+**Method:** static RE of the engine chunk dispatcher + on-disk CHDR decode against
+the retail PC native-LE oracle, then BE-source re-derivation (ground truth).
+
+### The engine read (static RE)
+
+The chunk dispatcher `0x654940` reads the **CHDR body** as:
+
+```
+struct CHDR { u16 fieldA @ +0;  u16 stride @ +2;  u32 flags @ +4; }
+```
+
+The `u16 @ +2` is stored to process-global `[0x01176078]`. The **Transform** record
+builder `0x0063D7C0` uses it as the per-record **stride gate**:
+
+```
+stride = ([0x01176078] >= 0x2A) ? 42 : 40;   // 40 skips a 2-byte flags trailer
+```
+
+A stride of 40 instead of 42 introduces a **2-byte drift per record**: record 0 reads
+OK, record 1 onward reads a position field 2 bytes early → garbage float → unclamped
+`cvttss2si` → out-of-range spatial-hash cell → AV write `0x0248BBE2`.
+
+### The bug
+
+Both converters reversed the CHDR first 8 bytes as **two `u32`s**, which **transposes**
+the two `u16` fields:
+
+```
+BE source              : 00 00 00 38 | 00 00 00 02
+whole-u32 swap (BUGGY)  : 38 00 00 00 | 02 00 00 00   → u16@+2 = 0x0000 (0)   < 42 → stride 40 → CRASH
+per-u16 swap   (FIX)    : 00 00 38 00 | 02 00 00 00   → u16@+2 = 0x0038 (56) ≥ 42 → stride 42 → OK
+```
+
+### Oracle + end-to-end verification (no game)
+
+| Source | CHDR body (LE) | `u16@+2` | Engine stride |
+|--------|----------------|----------|---------------|
+| Retail `layers_static` block 29 (native-LE oracle, all 173 sub-blocks) | `00 00 38 00 02 00 00 00` | **56** | 42 (OK) |
+| Deployed `vz-patch.wad` block 18 (OLD converter) | `38 00 00 00 02 00 00 00` | **0** | 40 (CRASH) |
+| Re-converted block 18 — **fixed Python** | `00 00 38 00 02 00 00 00` | **56** | 42 (OK) |
+| Re-converted block 18 — **fixed Rust** (`make dlc-port` path) | `00 00 38 00 02 00 00 00` | **56** | 42 (OK) |
+
+- Retail scan: **no** CHDR with body > 16 B exists in the first 250 `layers_static`
+  blocks, so the small (≤ 16 B) branch covers every real CHDR; the large/`guidmap`
+  branch needed only the same `{u16;u16;u32}` header swap (rest of the region is
+  reached via sibling enum/COMP/flgs descriptors and is left untouched). No
+  all-`u32` CHDR is corrupted by the change.
+- Converted block 18 Transform data: **734/734** records (stride 42) decode to
+  finite, in-envelope Maracaibo coords with unit quaternions — the gate fix does
+  not alter the stored record bytes.
+
+### The fix (verified, parity)
+
+- `tools/ucfx_be_to_le.py::_swap_chdr_header` (new) — swaps `u16@+0`, `u16@+2`,
+  `u32@+4`; called by `_convert_chdr_body` in the small, ECS/META-large, and
+  generic-large branches. Bytes beyond +8 keep each branch's prior treatment.
+- `tools/wad_simulator/crates/ucfx_byteswap/src/convert.rs::swap_chdr_header_inplace`
+  (new) — same logic; `convert_chdr_body_inplace` applies it in both the `≤ 16` and
+  large branches.
+- Regression tests: `tools/test_ecs_comp_byteswap.py::ChdrHeaderTests` and
+  `convert.rs` `chdr_header_per_u16_swap_matches_retail_oracle` /
+  `chdr_large_guidmap_only_swaps_header`. Python 16/16 pass; Rust `ucfx_byteswap`
+  8/8 pass.
+
+**Next step:** rebuild the patch WAD on the build machine (`make dlc-port`, Rust
+path), redeploy, and re-run the in-game save-load — the spatial-hash AV
+(`0x0248BBE2` / `0x0248BB7C`) should be cleared.
 
 ## 2026-06-01 — ROOT CAUSE: `schm` field-`offset` half-swap (converter bug)
 
