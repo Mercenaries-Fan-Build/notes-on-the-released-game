@@ -1583,6 +1583,33 @@ _RESIDENT_ONLY_TYPES = {
 _U32_INFO_TYPES = _U32_DATA_TYPES | _RESIDENT_ONLY_TYPES | _AUDIO_TYPES
 
 
+def _swap_chdr_header(header_be: bytes) -> bytes:
+    """Byte-swap the CHDR 8-byte header as ``{ u16 @+0 ; u16 @+2 ; u32 @+4 }``.
+
+    The engine chunk dispatcher (0x654940) reads the CHDR body as two ``u16``
+    fields followed by a ``u32`` flags word — it is a single generic reader, so
+    every CHDR header has this layout regardless of total body size.  The
+    ``u16 @ +2`` is written to the process-global stride gate ``[0x01176078]``;
+    the Transform record builder (0x0063D7C0) strides 42 only when that value is
+    ``>= 0x2A``, otherwise 40 (it skips the 2-byte flags trailer).  Reversing the
+    first 8 bytes as two ``u32`` words *transposes* the two ``u16`` fields,
+    zeroing the gate → 40-byte strides → cumulative 2-byte/record drift →
+    record-1 garbage position → unclamped spatial-hash cell → access violation on
+    save-load.  See docs/spatial_hash_crash_analysis.md.
+
+    Swaps only the bytes that are present (handles short < 8-byte headers
+    gracefully); callers convert any bytes beyond +8 themselves.
+    """
+    out = bytearray(header_be[:8])
+    if len(out) >= 2:
+        out[0:2] = out[0:2][::-1]
+    if len(out) >= 4:
+        out[2:4] = out[2:4][::-1]
+    if len(out) >= 8:
+        out[4:8] = out[4:8][::-1]
+    return bytes(out)
+
+
 def _convert_chdr_body(
     body_be: bytes,
     *,
@@ -1597,6 +1624,11 @@ def _convert_chdr_body(
     chunk-table region is also reached via sibling enum/COMP/flgs descriptors.
     Only the first 8 bytes are CHDR-specific scalars; the remainder must not
     be blind u32-swept.
+
+    The 8-byte CHDR header is ``{ u16 @+0 ; u16 @+2 ; u32 @+4 }`` (see
+    :func:`_swap_chdr_header`).  A whole-``u32`` swap of those 8 bytes was the
+    root cause of the DLC spatial-hash save-load crash, so the header is swapped
+    per-field in *every* branch; only the treatment of bytes beyond +8 differs.
     """
     if len(body_be) <= 16:
         if len(body_be) not in (0, 8, 12, 16) and len(body_be) % 4 != 0:
@@ -1606,20 +1638,25 @@ def _convert_chdr_body(
             )
         if len(body_be) == 0:
             return body_be
-        return _convert_u32_array(body_be)
+        out = bytearray(body_be)
+        out[:8] = _swap_chdr_header(bytes(out[:8]))
+        # Any words beyond the 8-byte header are plain u32 scalars.
+        if len(out) > 8:
+            out[8:] = _convert_u32_array(bytes(out[8:]))
+        return bytes(out)
     if type_hash in _ECS_STRUCTURE_TYPES or context == "META":
         out = bytearray(body_be)
-        if len(out) >= 8:
-            out[:8] = _convert_u32_array(bytes(out[:8]))
-        elif len(out) >= 4:
-            out[:4] = _convert_u32_array(bytes(out[:4]))
+        out[:8] = _swap_chdr_header(bytes(out[:8]))
         return bytes(out)
     if len(body_be) % 4 != 0:
         raise UnhandledByteSwapError(
             f"CHDR body has unexpected size {len(body_be)} bytes "
             f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
         )
-    return _convert_u32_array(body_be)
+    out = bytearray(body_be)
+    out[:8] = _swap_chdr_header(bytes(out[:8]))
+    out[8:] = _convert_u32_array(bytes(out[8:]))
+    return bytes(out)
 
 
 def _convert_ecs_info(be: bytes) -> bytes:

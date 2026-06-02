@@ -16,11 +16,13 @@ import unittest
 from ucfx_be_to_le import (
     UnhandledByteSwapError,
     _CompInfo,
+    _convert_chdr_body,
     _convert_ecs_comp_data,
     _convert_hibernation_records,
     _convert_keyed_group_records,
     _convert_numeric_records,
     _is_ecs_name_identifier,
+    _swap_chdr_header,
 )
 
 
@@ -124,6 +126,57 @@ class HibernationControlTests(unittest.TestCase):
     def test_bad_size_raises(self) -> None:
         with self.assertRaises(UnhandledByteSwapError):
             _convert_hibernation_records(b"\x00" * 13)
+
+
+class ChdrHeaderTests(unittest.TestCase):
+    """CHDR header is ``{ u16 @+0 ; u16 @+2 ; u32 @+4 }`` (engine 0x654940).
+
+    The ``u16 @ +2`` gates the Transform record stride ([0x01176078] >= 0x2A →
+    stride 42, else 40). A whole-u32 swap of the first 8 bytes transposes the
+    two u16 fields, zeroing the stride gate and crashing the spatial-hash on
+    save-load. Oracle: retail layers_static block 29 CHDR body =
+    ``00 00 38 00 02 00 00 00`` (u16@+2 = 0x38 = 56 ≥ 42 → stride 42 → OK);
+    DLC source BE = ``00 00 00 38 | 00 00 00 02``.
+    """
+
+    def test_per_u16_swap_matches_retail_oracle(self) -> None:
+        # BE source: u16@+0=0x0000, u16@+2=0x0038, u32@+4=0x00000002.
+        be = bytes.fromhex("00000038") + struct.pack(">I", 0x00000002)
+        out = _swap_chdr_header(be)
+        # u16@+2 must be 56 (0x0038) so the engine reads stride 42.
+        self.assertEqual(struct.unpack_from("<H", out, 2)[0], 0x0038)
+        self.assertEqual(struct.unpack_from("<H", out, 0)[0], 0x0000)
+        # flags is a genuine u32 → whole-u32 swap is correct there.
+        self.assertEqual(struct.unpack_from("<I", out, 4)[0], 0x00000002)
+        # Exact retail block-29 byte layout.
+        self.assertEqual(out.hex(), "00003800" + "02000000")
+
+    def test_old_whole_u32_swap_would_zero_the_stride_gate(self) -> None:
+        # Regression guard: the OLD behavior reversed the first 8 bytes as two
+        # u32 words, which transposes the u16 fields → u16@+2 == 0 (< 42).
+        be = bytes.fromhex("00000038") + struct.pack(">I", 0x00000002)
+        buggy = struct.pack("<I", struct.unpack_from(">I", be, 0)[0])
+        buggy += struct.pack("<I", struct.unpack_from(">I", be, 4)[0])
+        self.assertEqual(buggy.hex(), "38000000" + "02000000")
+        self.assertEqual(struct.unpack_from("<H", buggy, 2)[0], 0x0000)
+        # The fixed header swap disagrees with the buggy whole-u32 swap.
+        self.assertNotEqual(_swap_chdr_header(be), buggy)
+
+    def test_convert_chdr_body_8byte_block18(self) -> None:
+        # Full 8-byte CHDR body path (block 18 dlc01_dlccon004_roads shape).
+        be = bytes.fromhex("0000003800000002")
+        out = _convert_chdr_body(be, type_hash=0, context=None)
+        self.assertEqual(out.hex(), "0000380002000000")
+        self.assertEqual(struct.unpack_from("<H", out, 2)[0], 0x0038)
+
+    def test_convert_chdr_body_large_guidmap_only_swaps_header(self) -> None:
+        # Large/guidmap CHDR: only the 8-byte header is swapped; the trailing
+        # region (reached via sibling descriptors) is left untouched.
+        tail = bytes(range(0, 40))
+        be = bytes.fromhex("0000003800000002") + tail
+        out = _convert_chdr_body(be, type_hash=0, context="META")
+        self.assertEqual(out[:8].hex(), "0000380002000000")
+        self.assertEqual(out[8:], tail, "trailing guidmap region must be untouched")
 
 
 if __name__ == "__main__":

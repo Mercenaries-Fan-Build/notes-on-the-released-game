@@ -1293,15 +1293,47 @@ fn swap_u32_array(data: &mut [u8]) {
     }
 }
 
+/// Swap the CHDR header as `{ u16 @+0 ; u16 @+2 ; u32 @+4 }`.
+///
+/// The engine chunk dispatcher (0x654940) reads the CHDR body as two `u16`
+/// fields followed by a `u32` flags word — a single generic reader, so every
+/// CHDR header uses this layout regardless of total body size. The `u16 @ +2`
+/// is written to the process-global stride gate `[0x01176078]`; the Transform
+/// record builder (0x0063D7C0) strides 42 only when that value is `>= 0x2A`,
+/// otherwise 40. Reversing the first 8 bytes as two `u32` words *transposes*
+/// the two `u16` fields, zeroing the gate → 40-byte strides → spatial-hash
+/// access violation on save-load. See docs/spatial_hash_crash_analysis.md.
+///
+/// Swaps only the bytes that are present; callers handle bytes beyond +8.
+fn swap_chdr_header_inplace(data: &mut [u8]) {
+    if data.len() >= 2 {
+        swap_u16(data, 0);
+    }
+    if data.len() >= 4 {
+        swap_u16(data, 2);
+    }
+    if data.len() >= 8 {
+        swap_u32(data, 4);
+    }
+}
+
 /// CHDR bodies: 8-byte header scalars only when the descriptor spans a large region.
+///
+/// The header is `{ u16; u16; u32 }` in BOTH the small and large/guidmap
+/// branches (the engine's CHDR reader is generic); only the handling of bytes
+/// beyond the 8-byte header differs.
 fn convert_chdr_body_inplace(data: &mut [u8]) {
     if data.len() <= 16 {
-        swap_u32_array(data);
-    } else if data.len() >= 8 {
-        swap_u32(data, 0);
-        swap_u32(data, 4);
-    } else if data.len() >= 4 {
-        swap_u32(data, 0);
+        swap_chdr_header_inplace(data);
+        // Words beyond the 8-byte header are plain u32 scalars.
+        if data.len() > 8 {
+            swap_u32_array(&mut data[8..]);
+        }
+    } else {
+        // Large/guidmap CHDR: only the 8-byte header is CHDR-specific; the rest
+        // of the region is reached via sibling enum/COMP/flgs descriptors and is
+        // left untouched here (unchanged from prior behavior).
+        swap_chdr_header_inplace(data);
     }
 }
 
@@ -1368,8 +1400,9 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_hibernation_data_inplace, convert_keyed_group_records_inplace,
-        fix_embedded_havok_layoutrules, is_ecs_name_identifier, HAVOK_PACKFILE_MAGIC,
+        convert_chdr_body_inplace, convert_hibernation_data_inplace,
+        convert_keyed_group_records_inplace, fix_embedded_havok_layoutrules,
+        is_ecs_name_identifier, HAVOK_PACKFILE_MAGIC,
     };
 
     #[test]
@@ -1457,6 +1490,41 @@ mod tests {
         let mut out = data.clone();
         assert!(!convert_keyed_group_records_inplace(&mut out, 4));
         assert_eq!(out, data, "buffer left unchanged on mismatch");
+    }
+
+    #[test]
+    fn chdr_header_per_u16_swap_matches_retail_oracle() {
+        // BE source: u16@+0=0x0000, u16@+2=0x0038, u32@+4=0x00000002.
+        // Retail layers_static block 29 CHDR (LE oracle) = 00 00 38 00 02 00 00 00.
+        let mut data = vec![0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x02];
+        convert_chdr_body_inplace(&mut data);
+        assert_eq!(&data, &[0x00, 0x00, 0x38, 0x00, 0x02, 0x00, 0x00, 0x00]);
+        // u16@+2 must read 56 (0x0038) so the engine strides 42 (>= 0x2A).
+        assert_eq!(u16::from_le_bytes([data[2], data[3]]), 0x0038);
+        assert_eq!(u16::from_le_bytes([data[0], data[1]]), 0x0000);
+        // flags is a genuine u32 → whole-u32 swap is correct there.
+        assert_eq!(
+            u32::from_le_bytes([data[4], data[5], data[6], data[7]]),
+            0x0000_0002
+        );
+
+        // Regression guard: the OLD whole-u32 swap of the first 8 bytes would
+        // transpose the u16 fields → u16@+2 == 0 (< 42 → stride 40 → CRASH).
+        let buggy = [0x38u8, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
+        assert_eq!(u16::from_le_bytes([buggy[2], buggy[3]]), 0x0000);
+        assert_ne!(&data[..], &buggy[..]);
+    }
+
+    #[test]
+    fn chdr_large_guidmap_only_swaps_header() {
+        // Large/guidmap CHDR: only the 8-byte header is swapped; the trailing
+        // region (reached via sibling descriptors) is left untouched.
+        let mut data = vec![0x00u8, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x02];
+        let tail: Vec<u8> = (0u8..40).collect();
+        data.extend_from_slice(&tail);
+        convert_chdr_body_inplace(&mut data);
+        assert_eq!(&data[..8], &[0x00, 0x00, 0x38, 0x00, 0x02, 0x00, 0x00, 0x00]);
+        assert_eq!(&data[8..], &tail[..], "trailing guidmap region untouched");
     }
 
     #[test]
