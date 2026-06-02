@@ -118,35 +118,40 @@ def _convert_u16_array(be: bytes) -> bytes:
 
 
 def _convert_efct_header(be: bytes) -> bytes:
-    """EFCT particle-effect header — whole u32 words (+ a trailing u16 tail).
+    """EFCT particle-effect header — an array of u16 fields.
 
-    The body is an array of u32 words, several of which pack two u16
-    sub-fields. Verified against the retail PC oracle (vz.wad ``particle``
-    blocks, 18-byte EFCT):
+    Verified against **real Xbox 360 DLC bytes** (``blocks\\dlc01\\
+    effects_P000_Q3.block``) cross-checked with the retail PC oracle
+    (``pc-game-vz.wad`` ``particle`` blocks, 18-byte EFCT). The body is a
+    sequence of u16 fields, and the constant ``0x0226`` magic is a u16 that
+    sits at byte **+2** in BOTH the big-endian source and the little-endian
+    output; the ``u16 @ +14`` sub-component count likewise stays in place
+    (retail values 2..11). A per-field **u16** swap therefore preserves the
+    field positions exactly.
 
-      * ``u32[0]`` = ``{ u16 emitter_count ; u16 0x0226 magic }`` — the
-        constant ``0x0226`` magic sits at byte **+2** in every effect.
-      * ``u32[3]`` = ``{ u16 reserved ; u16 sub_component_count }`` — the
-        sub-component count sits at byte **+14** (retail values 4..11).
+    Example (real Xbox DLC EFCT, entry ``0x5af5da9f``)::
 
-    A blanket *u16* sweep (the old behaviour) transposes the two halves of
-    **every** u32: it moves the ``0x0226`` magic to byte +0 and, fatally,
-    **zeroes the +14 sub-component count**. The engine effect loader
-    (``mercenaries2.exe`` 0x00492AF0) then allocates a zero-length descriptor
-    array (``[EDI+0x60]`` stays NULL) and crashes on the first ``COLR`` record
-    append — an access-violation WRITE to 0x4 at 0x00493102, observed "as the
-    layer tries to join". Swapping whole u32 words preserves the field
-    positions so the count survives. Same bug class as the CHDR ``{u16;u16;u32}``
-    stride gate. See ``docs/spatial_hash_crash_analysis.md``.
+        BE  00 02 02 26 00 00 00 02 00 0c 00 00 00 00 00 04 03 20
+        LE  02 00 26 02 00 00 02 00 0c 00 00 00 00 00 04 00 20 03
+            └ +0 ┘└ +2 ┘                      └ +14 ┘
+                   0x0226 magic                 0x0004 count
+
+    A whole-**u32**-word swap (the regression introduced in commit df9c418 and
+    reverted here) transposes the two halves of every u32: it moves the
+    ``0x0226`` magic to byte +0 and, fatally, **zeroes the +14 sub-component
+    count**. The engine effect loader (``mercenaries2.exe`` 0x00492AF0) then
+    allocates a zero-length descriptor array (``[EDI+0x60]`` stays NULL) and
+    crashes on the first ``COLR`` record append — an access-violation WRITE to
+    0x4 at 0x00493102. See ``docs/spatial_hash_crash_analysis.md``.
     """
     if len(be) < 4 or len(be) % 2 != 0:
         raise UnhandledByteSwapError(
             f"EFCT header has unexpected size {len(be)} bytes "
             f"(expected >= 4 and 2-byte aligned)"
         )
-    # _convert_u32_array swaps the whole u32 words and, for a 2-byte
-    # remainder, the trailing u16 — exactly the {u32 x N; u16} EFCT layout.
-    return _convert_u32_array(be)
+    # The EFCT body is an array of u16 fields (magic @ +2, count @ +14); a
+    # per-field u16 swap keeps every field at its byte offset.
+    return _convert_u16_array(be)
 
 
 def _convert_deps_body(be: bytes) -> bytes:
@@ -2447,10 +2452,11 @@ def _convert_body(
     if tag in ("HIER", "MTRL", "SEGM", "PRMT", "BSHI"):
         return _convert_u16_array(body_be)
 
-    # ── EFCT: effect header — packed u32 words ({u16;u16}) + u16 tail.
-    #    A u16 sweep transposes each u32 and zeroes the +14 sub-component
-    #    count gate → engine skips the descriptor-array alloc → NULL deref on
-    #    the first COLR append (AV @ mercenaries2.exe 0x00493102). Must be u32.
+    # ── EFCT: effect header — array of u16 fields (magic @ +2, count @ +14).
+    #    A u32-word swap transposes each pair of u16s, moving the 0x0226 magic
+    #    to +0 and zeroing the +14 sub-component count gate → engine skips the
+    #    descriptor-array alloc → NULL deref on the first COLR append
+    #    (AV @ mercenaries2.exe 0x00493102). Must be a per-field u16 swap.
     if tag == "EFCT":
         return _convert_efct_header(body_be)
 

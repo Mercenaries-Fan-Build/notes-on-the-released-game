@@ -23,6 +23,7 @@ from ucfx_be_to_le import (
     _convert_keyed_group_records,
     _convert_numeric_records,
     _convert_u16_array,
+    _convert_u32_array,
     _is_ecs_name_identifier,
     _swap_chdr_header,
 )
@@ -182,46 +183,40 @@ class ChdrHeaderTests(unittest.TestCase):
 
 
 class EfctHeaderTests(unittest.TestCase):
-    """EFCT effect header is an array of u32 words (several packing two u16
-    sub-fields) plus a trailing u16. Engine loader 0x00492AF0.
+    """EFCT effect header is an array of u16 fields. Engine loader 0x00492AF0.
 
-    Oracle: retail PC vz.wad ``particle`` EFCT (entry 0xFE1E7109) =
-    ``02 00 26 02 02 00 02 00 0c 00 00 00 00 00 04 00 20 03`` — the constant
-    ``0x0226`` magic at byte +2 and the sub-component count ``0x0004`` at byte
-    +14. A whole-body u16 sweep transposes each u32, moving the magic to +0 and
-    **zeroing the +14 count**, which makes the engine allocate a zero-length
+    The constant ``0x0226`` magic is a u16 at byte +2 and the sub-component
+    count is a u16 at byte +14 — in BOTH the big-endian source and the
+    little-endian output. A per-field **u16** swap keeps both in place; a
+    whole-body **u32** swap transposes each pair of u16s, moving the magic to +0
+    and **zeroing the +14 count**, which makes the engine allocate a zero-length
     descriptor array and crash on the first COLR append (AV write @ 0x00493102).
+
+    Oracle is **real Xbox 360 DLC bytes** (blocks\\dlc01\\effects_P000_Q3.block,
+    entry 0x5af5da9f), cross-checked against retail ``pc-game-vz.wad`` EFCT
+    (all 314 chunks: magic@+2 = 0x0226, count@+14 in 2..21).
     """
 
-    # Retail (correct LE) EFCT body.
-    RETAIL_LE = bytes.fromhex("0200260202000200" "0c00000000000400" "2003")
+    # Real Xbox 360 DLC EFCT body (big-endian, as extracted from the retail DLC).
+    BE_SOURCE = bytes.fromhex("0002022600000002" "000c0000000000040320")
+    # Correct LE (matches the retail PC layout): magic 0x0226 @ +2, count 4 @ +14.
+    CORRECT_LE = bytes.fromhex("0200260200000200" "0c00000000000400" "2003")
 
-    def _be_source(self) -> bytes:
-        # The correct converter (u32 words + u16 tail) is an involution, so the
-        # BE source = applying that same swap to the retail LE bytes.
-        be = bytearray(self.RETAIL_LE)
-        for off in range(0, 16, 4):
-            be[off:off + 4] = be[off:off + 4][::-1]
-        be[16:18] = be[16:18][::-1]
-        return bytes(be)
-
-    def test_typed_swap_reproduces_retail_oracle(self) -> None:
-        be = self._be_source()
-        out = _convert_efct_header(be)
-        self.assertEqual(out, self.RETAIL_LE)
+    def test_u16_swap_reproduces_retail_oracle(self) -> None:
+        out = _convert_efct_header(self.BE_SOURCE)
+        self.assertEqual(out, self.CORRECT_LE)
         # Magic 0x0226 lands at byte +2; sub-component count 0x0004 at +14.
         self.assertEqual(struct.unpack_from("<H", out, 2)[0], 0x0226)
         self.assertEqual(struct.unpack_from("<H", out, 14)[0], 0x0004)
 
-    def test_old_u16_sweep_zeroes_the_count_gate(self) -> None:
-        be = self._be_source()
-        buggy = _convert_u16_array(be)
-        good = _convert_efct_header(be)
+    def test_u32_swap_zeroes_the_count_gate(self) -> None:
+        good = _convert_efct_header(self.BE_SOURCE)
+        # The regressed whole-u32-word swap moves the magic to +0 and zeroes +14.
+        buggy = _convert_u32_array(self.BE_SOURCE)
         self.assertNotEqual(buggy, good)
-        # The buggy sweep moves the magic to +0 and zeroes the +14 count.
         self.assertEqual(struct.unpack_from("<H", buggy, 0)[0], 0x0226)
         self.assertEqual(struct.unpack_from("<H", buggy, 14)[0], 0x0000)
-        # The typed swap keeps the real count alive.
+        # The u16 swap keeps the real count alive.
         self.assertEqual(struct.unpack_from("<H", good, 14)[0], 0x0004)
 
     def test_bad_size_raises(self) -> None:

@@ -6,6 +6,19 @@
 
 > Prior status (2026-05-31): OPEN — offline scan **0** violations on SHA `8700856a…`. **Fix target: index 18** (`dlc01_dlccon004_roads_P000_Q3`) — necessary for full-patch AV; **1-block repro WAD** sufficient. **Index 13** (`dlccon002_race`) also sufficient alone. **Index 6** (`dlccon002_roads`) ruled **OUT**. Confirmed deploy `vz-patch-keep-dlccon004-roads-only.wad` SHA **`6809da8e…`** → Shop/players then FATAL @ **`0x0248BB7C`** / `fault=0x6F319F84` after ~**30 s**. Block **18** on-disk record bytes clean; suspected runtime entity mis-base.
 
+> **2026-06-01d CORRECTION (supersedes the 2026-06-01c analysis below):** the
+> EFCT body is an **array of u16 fields**, NOT `{u32 ×4 ; u16}`. The correct
+> BE→LE conversion is a **per-field u16 swap**; the **u32-word swap** is what
+> zeroes the +14 count and crashes. The 2026-06-01c entry had the swap direction
+> **backwards** because it reconstructed the BE source by *assuming* a u32
+> relationship (inferred `00 04 00 00`) instead of reading the real Xbox bytes.
+> Real Xbox DLC EFCT (entry `0x5af5da9f`) is `00 02 02 26 … 00 04 03 20`; a u16
+> swap yields `02 00 26 02 … 04 00 20 03` (magic@+2 = 0x0226, count@+14 = 4),
+> matching all **314** retail `pc-game-vz.wad` EFCT chunks (count@+14 = 2..21).
+> Both converters now route `EFCT` to a u16 swap. The deployed buggy WAD was
+> built by the **compiled Rust binary** (default particle path) applying the u32
+> swap — not by a u16 converter as the table below mistakenly states.
+
 ## 2026-06-01c — SECOND crash: EFCT effect header u16-swept (count gate zeroed) → COLR-append NULL deref
 
 **Symptom:** after the CHDR fix the save-load no longer crashed in the spatial

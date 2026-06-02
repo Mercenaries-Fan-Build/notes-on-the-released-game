@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 
 _BINARY_NAME = "ucfx_byteswap"
@@ -15,6 +16,10 @@ _SEARCH_PATHS = [
     Path(__file__).resolve().parent / "wad_simulator" / "target" / "release" / _BINARY_NAME,
     Path(__file__).resolve().parent / "wad_simulator" / "target" / "debug" / _BINARY_NAME,
 ]
+_CRATE_SRC = (
+    Path(__file__).resolve().parent / "wad_simulator" / "crates" / "ucfx_byteswap" / "src"
+)
+_STALENESS_WARNED = False
 
 
 def _find_binary() -> Path | None:
@@ -28,6 +33,36 @@ def _find_binary() -> Path | None:
             if candidate.exists():
                 return candidate
     return None
+
+
+def _warn_if_stale(binary: Path) -> None:
+    """Warn (once) if the compiled binary predates its Rust source.
+
+    A stale ``target/release/ucfx_byteswap`` silently runs old machine code even
+    when the source (and git hash) contain a fix — the exact trap that produced
+    a buggy EFCT layout despite a fixed ``convert.rs``. Direct ``dlc_port.py``
+    invocations do not run ``cargo build``; this guard makes the staleness loud.
+    """
+    global _STALENESS_WARNED
+    if _STALENESS_WARNED or not _CRATE_SRC.is_dir():
+        return
+    try:
+        bin_mtime = binary.stat().st_mtime
+        newest_src = max(
+            (p.stat().st_mtime for p in _CRATE_SRC.rglob("*.rs")),
+            default=0.0,
+        )
+    except OSError:
+        return
+    if newest_src > bin_mtime:
+        _STALENESS_WARNED = True
+        print(
+            f"WARNING: {binary.name} ({binary}) is OLDER than its Rust source in "
+            f"{_CRATE_SRC}. The compiled binary may not contain recent fixes. "
+            f"Rebuild with: cargo build --release -p ucfx_byteswap "
+            f"(or: make build-ucfx-byteswap).",
+            file=sys.stderr,
+        )
 
 
 def rust_binary_available() -> bool:
@@ -135,6 +170,7 @@ def byteswap_block_rust(
             f"ucfx_byteswap binary not found. Build with: "
             f"cargo build --release -p ucfx_byteswap"
         )
+    _warn_if_stale(binary)
 
     cmd = [str(binary), "--stdin", "--stdout"]
     if not validate:

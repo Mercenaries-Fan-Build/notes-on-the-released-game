@@ -1023,8 +1023,9 @@ fn convert_generic_bodies(
                         }
                     }
                     ChunkTag::Unknown(b) if b == *b"EFCT" => {
-                        // EFCT effect header: whole u32 words + trailing u16. A
-                        // u16 sweep transposes each u32 and zeroes the +14
+                        // EFCT effect header: array of u16 fields (magic @ +2,
+                        // count @ +14). A u32-word swap transposes each pair of
+                        // u16s, moving 0x0226 to +0 and zeroing the +14
                         // sub-component count, crashing the effect loader on the
                         // first COLR append (AV @ 0x00493102). See Python
                         // _convert_efct_header / docs/spatial_hash_crash_analysis.md.
@@ -1307,29 +1308,24 @@ fn swap_u32_array(data: &mut [u8]) {
     }
 }
 
-/// EFCT particle-effect header: whole u32 words (several packing two u16
-/// sub-fields) plus a trailing u16. Mirrors `_convert_efct_header` in
-/// `tools/ucfx_be_to_le.py`.
+/// EFCT particle-effect header: an array of u16 fields. Mirrors
+/// `_convert_efct_header` in `tools/ucfx_be_to_le.py`.
 ///
-/// The `u16 @ +14` sub-component count gates the engine effect loader's
-/// descriptor-array allocation (`mercenaries2.exe` 0x00492AF0). A blanket u16
-/// sweep transposes the two halves of every u32, moving the `0x0226` magic to
+/// Verified against real Xbox 360 DLC bytes (`blocks\dlc01\effects_P000_Q3`)
+/// cross-checked with the retail PC oracle (`pc-game-vz.wad`): the constant
+/// `0x0226` magic is a u16 at byte +2 in BOTH the big-endian source and the
+/// little-endian output, and the `u16 @ +14` sub-component count likewise stays
+/// in place. The count gates the engine effect loader's descriptor-array
+/// allocation (`mercenaries2.exe` 0x00492AF0).
+///
+/// A whole-**u32**-word swap (the regression introduced in df9c418 and reverted
+/// here) transposes the two halves of every u32, moving the `0x0226` magic to
 /// byte +0 and zeroing the +14 count — the loader then allocates a zero-length
 /// array (`[EDI+0x60]` NULL) and crashes on the first `COLR` record append (AV
-/// write to 0x4 at 0x00493102). Swapping whole u32 words and the trailing u16
-/// preserves the field positions. Oracle: retail vz.wad particle EFCT has the
-/// constant `0x0226` magic at byte +2.
+/// write to 0x4 at 0x00493102). A per-field u16 swap preserves the field
+/// positions exactly.
 fn convert_efct_header_inplace(data: &mut [u8]) {
-    let n = data.len() / 4;
-    for i in 0..n {
-        let off = i * 4;
-        data[off..off + 4].reverse();
-    }
-    // Trailing u16 tail (EFCT bodies are 18 bytes = 4×u32 + u16).
-    if data.len() - n * 4 >= 2 {
-        let off = n * 4;
-        data[off..off + 2].reverse();
-    }
+    swap_u16_array(data);
 }
 
 /// Swap the CHDR header as `{ u16 @+0 ; u16 @+2 ; u32 @+4 }`.
@@ -1441,35 +1437,45 @@ mod tests {
     use super::{
         convert_chdr_body_inplace, convert_efct_header_inplace,
         convert_hibernation_data_inplace, convert_keyed_group_records_inplace,
-        fix_embedded_havok_layoutrules, is_ecs_name_identifier, swap_u16_array,
+        fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
     };
 
     #[test]
-    fn efct_header_u32_swap_preserves_count_gate() {
-        // Retail PC vz.wad particle EFCT (entry 0xFE1E7109), correct LE:
-        // magic 0x0226 at byte +2, sub-component count 0x0004 at byte +14.
-        let retail_le: [u8; 18] = [
-            0x02, 0x00, 0x26, 0x02, 0x02, 0x00, 0x02, 0x00, 0x0c, 0x00, 0x00,
+    fn efct_header_u16_swap_preserves_count_gate() {
+        // REAL Xbox 360 DLC particle EFCT (blocks\dlc01\effects_P000_Q3.block,
+        // entry 0x5af5da9f), big-endian source as extracted from the retail DLC:
+        let be: [u8; 18] = [
+            0x00, 0x02, 0x02, 0x26, 0x00, 0x00, 0x00, 0x02, 0x00, 0x0c, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x04, 0x03, 0x20,
+        ];
+        // Correct LE (matches the retail PC pc-game-vz.wad EFCT layout): the
+        // 0x0226 magic stays at byte +2 and the sub-component count 0x0004 stays
+        // at byte +14 — a per-field u16 swap.
+        let correct_le: [u8; 18] = [
+            0x02, 0x00, 0x26, 0x02, 0x00, 0x00, 0x02, 0x00, 0x0c, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x04, 0x00, 0x20, 0x03,
         ];
-        // The correct converter is an involution → BE source = same swap of LE.
-        let mut be = retail_le;
-        for off in (0..16).step_by(4) {
-            be[off..off + 4].reverse();
-        }
-        be[16..18].reverse();
 
         let mut fixed = be;
         convert_efct_header_inplace(&mut fixed);
-        assert_eq!(fixed, retail_le, "u32 swap must reproduce retail layout");
-        assert_eq!(u16::from_le_bytes([fixed[2], fixed[3]]), 0x0226);
-        assert_eq!(u16::from_le_bytes([fixed[14], fixed[15]]), 0x0004);
+        assert_eq!(fixed, correct_le, "u16 swap must reproduce retail layout");
+        assert_eq!(u16::from_le_bytes([fixed[2], fixed[3]]), 0x0226); // magic @ +2
+        assert_eq!(u16::from_le_bytes([fixed[14], fixed[15]]), 0x0004); // count @ +14
 
-        // The old whole-body u16 sweep zeroes the +14 count gate.
+        // The regressed whole-u32-word swap moves the magic to +0 and zeroes
+        // the +14 count gate → effect loader NULL-derefs on the first COLR append.
         let mut buggy = be;
-        swap_u16_array(&mut buggy);
-        assert_ne!(buggy, retail_le);
+        let n = buggy.len() / 4;
+        for i in 0..n {
+            let off = i * 4;
+            buggy[off..off + 4].reverse();
+        }
+        if buggy.len() - n * 4 >= 2 {
+            let off = n * 4;
+            buggy[off..off + 2].reverse();
+        }
+        assert_ne!(buggy, correct_le);
         assert_eq!(u16::from_le_bytes([buggy[0], buggy[1]]), 0x0226); // magic moved to +0
         assert_eq!(u16::from_le_bytes([buggy[14], buggy[15]]), 0x0000); // count zeroed
     }
