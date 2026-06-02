@@ -26,6 +26,7 @@ from dlc_port import (
     _TYPE_GUIDMAP,
     _TYPE_WORLD_ENTITY,
     _apply_overrides_and_strips,
+    _resident_singletons_to_strip,
 )
 from wad_patcher import parse_block_entries
 
@@ -36,6 +37,20 @@ WORLDENTITY = (0x50075B3B, _TYPE_WORLD_ENTITY)
 GUIDMAP = (0x385EA82C, _TYPE_GUIDMAP)
 FOLIAGE = (0x27E02A15, _TYPE_FOLIAGE)
 SINGLETON_HASHES = {0x50075B3B, 0x385EA82C, 0x27E02A15}
+SINGLETON_PAIRS = frozenset({WORLDENTITY, GUIDMAP, FOLIAGE})
+
+
+def _ordered_chunks(block: bytes) -> list[tuple[int, int, bytes]]:
+    """Ordered (name_hash, type_hash, chunk_bytes) for a PC-format block.
+
+    Order-preserving so duplicate name_hashes are compared correctly (block 464
+    contains one duplicated name_hash).
+    """
+    out: list[tuple[int, int, bytes]] = []
+    for e in parse_block_entries(block):
+        chunk = block[e["offset"]:e["offset"] + e["size"]]
+        out.append((e["hash"], e["type_hash"], chunk))
+    return out
 
 
 def _build_block(entries: list[tuple[int, int, bytes]]) -> bytes:
@@ -83,15 +98,11 @@ class SyntheticStripTests(unittest.TestCase):
             kept_hashes, {0xAAAA0001, 0xAAAA0002, 0xAAAA0003, 0xAAAA0004})
 
     def test_kept_entries_byte_identical(self) -> None:
-        strip = frozenset({WORLDENTITY, GUIDMAP, FOLIAGE})
-        out, _ = _apply_overrides_and_strips(self.block, None, None, strip)
-        kept = parse_block_entries(out)
-        want = {nh: chunk for nh, th, chunk in self.entries
-                if nh not in SINGLETON_HASHES}
-        for e in kept:
-            got = out[e["offset"]:e["offset"] + e["size"]]
-            self.assertEqual(got, want[e["hash"]],
-                             f"chunk for 0x{e['hash']:08X} must be untouched")
+        out, _ = _apply_overrides_and_strips(self.block, None, None, SINGLETON_PAIRS)
+        want = [(nh, th, chunk) for nh, th, chunk in self.entries
+                if (nh, th) not in SINGLETON_PAIRS]
+        self.assertEqual(_ordered_chunks(out), want,
+                         "kept entries must be byte-identical and in order")
 
     def test_entry_table_offsets_consistent(self) -> None:
         """field_c must be 0 and chunks must be densely sequential."""
@@ -149,32 +160,54 @@ class RealBlock464StripTest(unittest.TestCase):
         if blk_path is None:
             self.skipTest("extracted dlc01 resident (block 464) not present")
         data = blk_path.read_bytes()
-        before = parse_block_entries(data)
-        present = {e["hash"] for e in before} & SINGLETON_HASHES
-        if present != SINGLETON_HASHES:
+        before = _ordered_chunks(data)
+        present = {(nh, th) for nh, th, _ in before} & SINGLETON_PAIRS
+        if present != SINGLETON_PAIRS:
             self.skipTest(f"extracted block lacks the singletons (found {present})")
 
-        strip = frozenset({WORLDENTITY, GUIDMAP, FOLIAGE})
-        out, stripped = _apply_overrides_and_strips(data, None, None, strip)
+        out, stripped = _apply_overrides_and_strips(data, None, None, SINGLETON_PAIRS)
         self.assertEqual(stripped, 3)
 
-        after = parse_block_entries(out)
+        after = _ordered_chunks(out)
         self.assertEqual(len(after), len(before) - 3)
-        after_hashes = {e["hash"] for e in after}
-        self.assertFalse(after_hashes & SINGLETON_HASHES)
+        self.assertFalse(
+            {(nh, th) for nh, th, _ in after} & SINGLETON_PAIRS,
+            "no singleton (hash,type) pair may survive")
 
-        # Every surviving entry is byte-identical to its original chunk.
-        before_chunks = {e["hash"]: data[e["offset"]:e["offset"] + e["size"]]
-                         for e in before if e["hash"] not in SINGLETON_HASHES}
-        for e in after:
-            got = out[e["offset"]:e["offset"] + e["size"]]
-            self.assertEqual(got, before_chunks[e["hash"]])
+        # Every surviving entry is byte-identical and in original order.
+        want = [t for t in before if (t[0], t[1]) not in SINGLETON_PAIRS]
+        self.assertEqual(after, want)
+
+        # Stripped block is strictly smaller; decomp pages do not grow.
+        self.assertLess(len(out), len(data))
+        pages_before = (len(data) + 0x7FFF) // 0x8000
+        pages_after = (len(out) + 0x7FFF) // 0x8000
+        self.assertLessEqual(pages_after, pages_before)
 
     def test_constant_matches_spec(self) -> None:
         self.assertEqual(
             _REDUNDANT_RESIDENT_SINGLETONS,
             frozenset({WORLDENTITY, GUIDMAP, FOLIAGE}),
         )
+
+
+class GateTests(unittest.TestCase):
+    """The base-presence gate keys on asset_hash, not (hash, type_id)."""
+
+    def test_all_present_selects_all_three(self) -> None:
+        base = frozenset({0x50075B3B, 0x385EA82C, 0x27E02A15, 0xDEAD0000})
+        self.assertEqual(
+            _resident_singletons_to_strip(base), SINGLETON_PAIRS)
+
+    def test_partial_presence_selects_subset(self) -> None:
+        base = frozenset({0x50075B3B})  # only worldentity in base
+        self.assertEqual(
+            _resident_singletons_to_strip(base), frozenset({WORLDENTITY}))
+
+    def test_absent_selects_nothing(self) -> None:
+        # A DLC-unique hash not in base must never be stripped.
+        self.assertEqual(
+            _resident_singletons_to_strip(frozenset()), frozenset())
 
 
 if __name__ == "__main__":

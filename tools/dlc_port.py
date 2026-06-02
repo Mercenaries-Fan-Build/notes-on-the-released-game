@@ -439,6 +439,23 @@ _REDUNDANT_RESIDENT_SINGLETONS: frozenset[tuple[int, int]] = frozenset({
 })
 
 
+def _resident_singletons_to_strip(
+    base_aset_hashes: frozenset[int] | set[int],
+) -> frozenset[tuple[int, int]]:
+    """Pick which redundant world-container singletons to strip.
+
+    A singleton is stripped only when its ``asset_hash`` exists in the base
+    WAD's ASET (so it resolves to the base copy after removal).  The base ASET
+    stores these under type_ids that differ from the canonical ones, so the
+    gate is keyed on ``asset_hash`` membership (same semantics as
+    ``trim_patch_wad.build_base_aset_set``), never on ``(hash, type_id)``.
+    """
+    return frozenset(
+        (ah, th) for ah, th in _REDUNDANT_RESIDENT_SINGLETONS
+        if ah in base_aset_hashes
+    )
+
+
 _PYTHON_ECS_PATH_MARKERS = ("dlc01_base", "speedcity", "dlccon")
 
 
@@ -597,14 +614,15 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         # instead of double-registering a render object on load.  Gated on the
         # exact (asset_hash, type_id) existing in the base ASET index.
         if override_all:
-            _strip_pairs: set[tuple[int, int]] = set()
-            for _ah, _th in _REDUNDANT_RESIDENT_SINGLETONS:
-                _tid = type_id_for_type_hash(_th)
-                if _tid is not None and (_ah, _tid) in args.base_anim_index:
-                    _strip_pairs.add((_ah, _th))
-                    stripped_singleton_hashes.add(_ah)
-            if _strip_pairs:
-                strip_entries = frozenset(_strip_pairs)
+            # Cross-WAD dedupe gate.  Derived once here from the already-loaded
+            # base ASET index (override_all is true only for the single dlc01
+            # resident block), keyed on asset_hash (see
+            # _resident_singletons_to_strip).
+            base_hashes = frozenset(k[0] for k in args.base_anim_index)
+            pairs = _resident_singletons_to_strip(base_hashes)
+            if pairs:
+                strip_entries = pairs
+                stripped_singleton_hashes = {ah for ah, _th in pairs}
 
         be_entries = _parse_entry_table_be(decompressed)
         override_counts: dict[int, int] = {}

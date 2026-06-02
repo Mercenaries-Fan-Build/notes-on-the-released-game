@@ -267,6 +267,76 @@ hashes rather than `Transform` floats.
 
 ---
 
+## 7. Implemented data-side fix — cross-WAD dedupe of redundant resident singletons
+
+**Date:** 2026-06-02 · **Status:** code implemented + unit-tested locally; patch
+WAD rebuild pending on the separate build machine.
+
+### Root cause confirmed against the WADs (read-only)
+
+The DLC script resident `blocks\dlc01\resident_P000_Q3.block` (**patch block 464**)
+re-ships **byte-identical copies** (SHA-256 verified) of three base-game singletons
+that the always-loaded base VZ resident `blocks\VZ\resident_P000_Q3.block`
+(**base block 3185**) already provides:
+
+| Asset | name_hash | type_hash | size | base block | SHA-256 (dlc01 vs base) |
+|-------|-----------|-----------|------|------------|-------------------------|
+| worldentity (master ECS/scene container) | `0x50075B3B` | `0x5647C35D` | 1,819,324 B | 3185 | identical (`d08a79d9c1a868b5…`) |
+| guidmap | `0x385EA82C` | `0x140E8728` | 388,819 B | 3185 | identical (`324677e43be63c5b…`) |
+| foliage | `0x27E02A15` | `0x34612F86` | 254,690 B | 3185 | identical (`5eedfbac221d304d…`) |
+
+The patch ASET registers exactly **one** worldentity and **one** guidmap, both the
+base hashes, both pointing at block 464 — i.e. the DLC defines **no distinct world
+container**, it duplicates the base one. Asset lookup is last-opened-file-wins, so the
+second always-loaded resident makes these singletons register twice, which is the
+data-side trigger for the §1/§5 render-view re-resolve (`worldentity 0x5647C35D` is an
+ECS/scene host that registers render objects at load — see `tools/render_object_audit.py`).
+
+Provenance: this is an **unstripped Xbox-DLC-template artifact** normalised by the
+`override_all` base-substitution in `dlc_port.py` (commit `3dce623`), whose goal was
+byte-identity-to-base ("0 MISMATCH"), never cross-WAD de-registration. `dlc_aset_normalize`
+only dedupes within the patch (145 of 933 resident hashes are base duplicates; only these
+3 world-container singletons are stripped — scripts/contracts resolve on-demand and stay).
+
+### The fix (conservative, data-side, no engine/ASI change)
+
+`tools/dlc_port.py` strips ONLY these three `(asset_hash, type_hash)` entries from the
+dlc01 script resident, and ONLY when the `asset_hash` is present in the base WAD's ASET
+(so the DLC then resolves the identical base copies):
+
+- `_REDUNDANT_RESIDENT_SINGLETONS` constant + `_resident_singletons_to_strip()` gate
+  (keyed on **asset_hash**, because the base ASET stores these under type_ids 17/1/20 that
+  differ from the canonical 8/10/0 — a `(hash, type_id)` match would silently never fire).
+- In `_process_one_block`, gated by `is_dlc_script_resident_path(args.path)` (the same gate
+  as `override_all`), the strip set is passed to `_apply_overrides_and_strips(...,
+  strip_entries=...)`, which removes the UCFX entries and rebuilds the entry table
+  (`field_c=0`, dense sequential chunks); `packed_field`/decomp-pages are recomputed from the
+  smaller block.
+- The 3 matching ASET rows are dropped from the block's `PatchBlock.aset_entries` at the
+  same point (the source consumed by `ffcs_patch_wad.build_patch_wad_multi`), so
+  INDX/ASET/PTHS stay consistent. (Implemented at the `PatchBlock` source rather than
+  hardcoding the hashes into the shared assembler — same consistency guarantee, no impact
+  on the single-block mod workflow.)
+- Strip takes precedence over `override_all` for these 3 entries; the load-bearing
+  asset-payload overrides in `_OVERRIDE_TYPE_HASHES` (texture/mesh/anim/stance/audio) are
+  untouched.
+
+Expected effect on the rebuilt patch: block 464 entry count 933 → **930**, patch ASET
+rows 5,451 → **5,448**, and the 3 singletons no longer registered by the patch.
+
+### Verification
+
+- Unit tests: `tools/test_resident_singleton_strip.py` (11 tests) — synthetic strip
+  correctness, the base-presence gate (asset_hash, partial/absent), and the **real
+  extracted block 464** (933→930, 3 singletons removed, all other entries byte-identical
+  and in order, pages do not grow). All pass; existing `test_chdr_byteswap` /
+  `test_ecs_comp_byteswap` (23 tests) still pass.
+- Post-rebuild (on the build machine): `tools/render_object_audit.py` must show the 3
+  singletons gone from the patch ASET / block 464; `make verify-patch-wad-structure` and
+  `tools/verify_dlc_import_chain.py` must still pass (dlccon* chain intact).
+
+---
+
 ## Appendix — function map
 
 | VA | Name (assigned) | Role |
