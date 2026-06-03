@@ -1231,6 +1231,179 @@ fn linear_mip_chain_size(width: usize, height: usize, fourcc: &[u8; 4], mips: us
     total
 }
 
+fn single_mip_tiled_size(
+    width: usize,
+    height: usize,
+    fourcc: &[u8; 4],
+    mip: usize,
+) -> Option<(usize, usize, usize)> {
+    let (block_px, texel_pitch, _) = dxt_format(fourcc)?;
+    let wpx = (width >> mip).max(1);
+    let hpx = (height >> mip).max(1);
+    let wb = ((wpx + block_px - 1) / block_px).max(1);
+    let hb = ((hpx + block_px - 1) / block_px).max(1);
+    if wpx.min(hpx) >= 32 {
+        let awb = (wb + 31) & !31;
+        let ahb = (hb + 31) & !31;
+        Some((awb * ahb * texel_pitch, wpx, hpx))
+    } else {
+        Some((32 * 32 * texel_pitch, wpx, hpx))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TiledBodyKind {
+    Full,
+    Prefix(usize),
+    Single(usize),
+    TailPage,
+    StreamPage,
+}
+
+fn classify_tiled_body(
+    width: usize,
+    height: usize,
+    fourcc: &[u8; 4],
+    mips: usize,
+    body_len: usize,
+) -> Option<TiledBodyKind> {
+    let expect = tiled_body_size(width, height, fourcc, mips);
+    if body_len >= expect {
+        return Some(TiledBodyKind::Full);
+    }
+    for n in (1..=mips).rev() {
+        if tiled_body_size(width, height, fourcc, n) == body_len {
+            return Some(TiledBodyKind::Prefix(n));
+        }
+    }
+    for m in 0..mips {
+        if let Some((sz, _, _)) = single_mip_tiled_size(width, height, fourcc, m) {
+            if sz == body_len {
+                return Some(TiledBodyKind::Single(m));
+            }
+        }
+    }
+    let (_, texel_pitch, _) = dxt_format(fourcc)?;
+    let tail = 32 * 32 * texel_pitch;
+    if body_len == tail {
+        return Some(TiledBodyKind::TailPage);
+    }
+    if body_len == 2 * tail {
+        return Some(TiledBodyKind::StreamPage);
+    }
+    Some(TiledBodyKind::StreamPage)
+}
+
+fn untile_own_surface(tiled: &[u8], width_px: usize, height_px: usize, fourcc: &[u8; 4]) -> Option<Vec<u8>> {
+    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let wb = ((width_px + block_px - 1) / block_px).max(1);
+    let hb = ((height_px + block_px - 1) / block_px).max(1);
+    let awb = (wb + 31) & !31;
+    let ahb = (hb + 31) & !31;
+    let need = (awb * ahb * texel_pitch).min(tiled.len());
+    let mut lin = untile_surface(&tiled[..need], awb, ahb, texel_pitch, log_bpb);
+    swap16_blocks(&mut lin);
+    Some(crop_blocks(&lin, awb, wb, hb, texel_pitch))
+}
+
+fn untile_streaming_page(tiled: &[u8], fourcc: &[u8; 4]) -> Option<Vec<u8>> {
+    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let (awb, ahb, wb, hb) = if fourcc == b"DXT5" {
+        if tiled.len() == 32 * 32 * texel_pitch {
+            (32usize, 32usize, 32usize, 32usize)
+        } else if tiled.len() == 32 * 64 * texel_pitch {
+            (32, 64, 32, 64)
+        } else {
+            (32, (tiled.len() / texel_pitch).max(1) / 32, 32, (tiled.len() / texel_pitch).max(1) / 32)
+        }
+    } else if tiled.len() == 32 * 64 * texel_pitch {
+        (32, 64, 32, 64)
+    } else if tiled.len() == 64 * 64 * texel_pitch {
+        (64, 64, 64, 64)
+    } else if tiled.len() == 32 * 32 * texel_pitch {
+        (32, 32, 32, 32)
+    } else {
+        let ahb = (tiled.len() / texel_pitch).max(1) / 32;
+        (32, ahb.max(1), 32, ahb.max(1))
+    };
+    let mut lin = untile_surface(tiled, awb, ahb, texel_pitch, log_bpb);
+    swap16_blocks(&mut lin);
+    Some(crop_blocks(&lin, awb, wb, hb, texel_pitch))
+}
+
+fn untile_tail_page(
+    tiled_page: &[u8],
+    width: usize,
+    height: usize,
+    fourcc: &[u8; 4],
+    max_mips: usize,
+) -> Option<(Vec<u8>, usize)> {
+    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let page_bytes = (32 * 32 * texel_pitch).min(tiled_page.len());
+    let mut tail_lin = untile_surface(&tiled_page[..page_bytes], 32, 32, texel_pitch, log_bpb);
+    swap16_blocks(&mut tail_lin);
+    let mut first_tail = max_mips;
+    for m in 0..max_mips {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        if wpx.min(hpx) < 32 {
+            first_tail = m;
+            break;
+        }
+    }
+    let mut out: Vec<u8> = Vec::new();
+    for m in first_tail..max_mips {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        let wb = ((wpx + block_px - 1) / block_px).max(1);
+        let hb = ((hpx + block_px - 1) / block_px).max(1);
+        let (bx, by) = if wb >= hb { (wb, 0) } else { (0, hb) };
+        for r in 0..hb {
+            let base = ((by + r) * 32 + bx) * texel_pitch;
+            if base + wb * texel_pitch <= tail_lin.len() {
+                out.extend_from_slice(&tail_lin[base..base + wb * texel_pitch]);
+            }
+        }
+    }
+    let resident = (max_mips - first_tail).max(1);
+    Some((out, resident))
+}
+
+/// Convert a streamed/partial tiled BODY to PC-linear bytes. Returns
+/// (linear_body, resident_mips_for_info).
+fn convert_streamed_body(
+    tiled: &[u8],
+    width: usize,
+    height: usize,
+    fourcc: &[u8; 4],
+    mips: usize,
+) -> Option<(Vec<u8>, usize)> {
+    let kind = classify_tiled_body(width, height, fourcc, mips, tiled.len())?;
+    match kind {
+        TiledBodyKind::Full => {
+            let body = untile_dxt_body(tiled, width, height, fourcc, mips)?;
+            Some((body, mips))
+        }
+        TiledBodyKind::Prefix(n) => {
+            let body = untile_dxt_body(tiled, width, height, fourcc, n)?;
+            Some((body, n))
+        }
+        TiledBodyKind::Single(m) => {
+            let wpx = (width >> m).max(1);
+            let hpx = (height >> m).max(1);
+            let body = untile_own_surface(tiled, wpx, hpx, fourcc)?;
+            Some((body, 1))
+        }
+        TiledBodyKind::TailPage if fourcc == b"DXT5" && tiled.len() == 32 * 32 * 16 => {
+            untile_tail_page(tiled, width, height, fourcc, mips)
+        }
+        TiledBodyKind::TailPage | TiledBodyKind::StreamPage => {
+            let body = untile_streaming_page(tiled, fourcc)?;
+            Some((body, mips))
+        }
+    }
+}
+
 /// Bytes the Xbox tiled BODY occupies for a full (non-streamed) texture.
 fn tiled_body_size(width: usize, height: usize, fourcc: &[u8; 4], mips: usize) -> usize {
     let (block_px, texel_pitch, _) = dxt_format(fourcc).unwrap();
@@ -1304,12 +1477,12 @@ fn untile_dxt_body(tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], 
 
 /// Rebuild a 34-byte PC texture INFO from the basic-swapped ("rust xi") INFO.
 /// Mirrors `xbox_texture_codec.rebuild_texture_info`.
-fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], linear_total: u32) -> [u8; 34] {
+fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], mips: usize, linear_total: u32) -> [u8; 34] {
     let mut out = [0u8; 34];
     out[0..4].copy_from_slice(&xi[0..4]);
     // transpose [4:6]<->[6:8]
     out[4..6].copy_from_slice(&xi[6..8]);
-    out[6..8].copy_from_slice(&xi[4..6]);
+    out[6..8].copy_from_slice(&(mips as u16).to_le_bytes());
     // [8:10]<->[10:12] transpose; clear the Xbox 0x10 "tiled" flag bit.
     let f8 = (u16::from_le_bytes([xi[10], xi[11]]) & !0x10).to_le_bytes();
     out[8..10].copy_from_slice(&f8);
@@ -1329,8 +1502,8 @@ fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], linear_total: u32) -> [u8; 
 }
 
 /// Post-process a converted texture container: rebuild INFO + untile BODY and
-/// reframe. `out` is the LE container after the generic body pass (INFO already
-/// basic-swapped, BODY still tiled passthrough). Returns true if untiled.
+/// reframe. Handles full, prefix, single-mip, streamed pages, and INFO-only
+/// stubs (sentinel BODY). Returns true when INFO was rebuilt to PC FourCC form.
 fn apply_texture_untile(
     out: &mut Vec<u8>,
     descriptors: &[Descriptor],
@@ -1339,7 +1512,6 @@ fn apply_texture_untile(
 ) -> bool {
     let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
 
-    // First INFO + first BODY descriptor.
     let mut info_idx = None;
     let mut body_idx = None;
     for (i, d) in descriptors.iter().enumerate() {
@@ -1348,27 +1520,24 @@ fn apply_texture_untile(
         }
         if d.tag == ChunkTag::InfoUpper && info_idx.is_none() {
             info_idx = Some(i);
-        } else if d.tag == ChunkTag::Body && body_idx.is_none() {
+        } else if d.tag == ChunkTag::Body && body_idx.is_none() && d.body_size > 0 {
             body_idx = Some(i);
         }
     }
-    let (info_idx, body_idx) = match (info_idx, body_idx) {
-        (Some(a), Some(b)) => (a, b),
-        _ => return false,
+    let info_idx = match info_idx {
+        Some(i) => i,
+        None => return false,
     };
 
     let info = &descriptors[info_idx];
-    let body = &descriptors[body_idx];
     if info.body_size < 34 {
         return false;
     }
     let info_abs = data_start + info.row_u0 as usize;
-    let body_abs = data_start + body.row_u0 as usize;
-    if info_abs + 34 > out.len() || body_abs + body.body_size as usize > out.len() {
+    if info_abs + 34 > out.len() {
         return false;
     }
 
-    // Geometry from the already basic-swapped INFO ("rust xi" form).
     let xi = out[info_abs..info_abs + 34].to_vec();
     let fourcc = match fourcc_from_format_byte(xi[17]) {
         Some(f) => f,
@@ -1384,44 +1553,66 @@ fn apply_texture_untile(
         mips = tex_mip_levels(width, height);
     }
 
-    // Only convert full (non-streamed) bodies that carry the whole tiled chain.
-    let expect = tiled_body_size(width, height, &fourcc, mips);
-    let tiled = &out[body_abs..body_abs + body.body_size as usize];
-    if tiled.len() < expect {
-        return false;
-    }
-    let tiled = tiled.to_vec();
-    let untiled = match untile_dxt_body(&tiled, width, height, &fourcc, mips) {
-        Some(u) => u,
-        None => return false,
+    let (pc_body, resident_mips, body_idx, mut body_abs_val) = if let Some(body_idx) = body_idx {
+        let body = &descriptors[body_idx];
+        let body_abs = data_start + body.row_u0 as usize;
+        if body_abs + body.body_size as usize > out.len() {
+            return false;
+        }
+        let tiled = &out[body_abs..body_abs + body.body_size as usize];
+        match convert_streamed_body(tiled, width, height, &fourcc, mips) {
+            Some((b, rm)) => (Some(b), rm, Some(body_idx), Some(body_abs)),
+            None => return false,
+        }
+    } else {
+        (None, mips, None, None)
     };
-    let linear = linear_mip_chain_size(width, height, &fourcc, mips);
-    if untiled.len() != linear {
-        return false;
-    }
 
-    // BODY must be the last chunk in the data area for an in-place truncate.
-    let body_start_rel = body.row_u0 as usize;
-    for (i, d) in descriptors.iter().enumerate() {
-        if i == body_idx || d.row_u0 == 0xFFFFFFFF {
-            continue;
-        }
-        if d.row_u0 as usize + d.body_size as usize > body_start_rel {
-            return false; // a chunk sits at/after BODY — bail (no untile)
-        }
-    }
-
-    // Overwrite INFO with the rebuilt PC INFO (same 34 bytes).
-    let pc_info = rebuild_texture_info(&xi, &fourcc, linear as u32);
+    let linear_total = pc_body
+        .as_ref()
+        .map(|b| b.len() as u32)
+        .unwrap_or_else(|| linear_mip_chain_size(width, height, &fourcc, resident_mips) as u32);
+    let pc_info = rebuild_texture_info(&xi, &fourcc, resident_mips, linear_total);
     out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
 
-    // Patch the BODY descriptor's body_size in the LE descriptor table.
-    let body_size_field = 20 + body_idx * 20 + 8;
-    out[body_size_field..body_size_field + 4].copy_from_slice(&(untiled.len() as u32).to_le_bytes());
+    let mut body_abs_val = body_abs_val;
+    let info_size_field = 20 + info_idx * 20 + 8;
+    if info.body_size as usize > 34 {
+        let shrink = info.body_size as usize - 34;
+        let info_end = info_abs + info.body_size as usize;
+        if info_end <= out.len() {
+            let tail = out[info_end..].to_vec();
+            out.truncate(info_abs + 34);
+            out.extend_from_slice(&tail);
+            if let Some(ref mut abs) = body_abs_val {
+                if *abs >= info_end {
+                    *abs -= shrink;
+                }
+            }
+            for (i, d) in descriptors.iter().enumerate() {
+                if i == info_idx || d.row_u0 == 0xFFFFFFFF {
+                    continue;
+                }
+                if d.row_u0 as usize + data_start >= info_end {
+                    let row_field = 20 + i * 20 + 4;
+                    let new_u0 = d.row_u0 - shrink as u32;
+                    out[row_field..row_field + 4].copy_from_slice(&new_u0.to_le_bytes());
+                }
+            }
+        }
+        out[info_size_field..info_size_field + 4].copy_from_slice(&34u32.to_le_bytes());
+    }
 
-    // Replace the BODY region: truncate at body start, append the linear chain.
-    out.truncate(body_abs);
-    out.extend_from_slice(&untiled);
+    if let (Some(body_idx), Some(body_abs_val)) = (body_idx, body_abs_val) {
+        if let Some(untiled) = pc_body {
+            let body_size_field = 20 + body_idx * 20 + 8;
+            out[body_size_field..body_size_field + 4]
+                .copy_from_slice(&(untiled.len() as u32).to_le_bytes());
+            out.truncate(body_abs_val);
+            out.extend_from_slice(&untiled);
+        }
+    }
+
     true
 }
 

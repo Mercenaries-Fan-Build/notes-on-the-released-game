@@ -205,15 +205,24 @@ than from instrumented breakpoints.
 
 ## 7. Open items / next-step backlog
 
-1. **Root-cause the GlobalEnter loop `0x004B1180`:** identify the work item it polls, the
-   readiness predicate that never satisfies, and the path by which a patch block becomes the
-   data-as-code transfer target (`0x2004FFB0` / `0x00000B70`). Relevant frames:
-   `0x004B1201`, `0x004C9C80`; paired worker started at `0x00876400`.
-2. **Fix the 334 unconverted textures** (FourCC `0x1a200152` / `0x1a200154`): determine which
-   build/override step failed to convert them, rebuild the patch WAD, and retest whether the
-   livelock clears. (Tests the §5 hypothesis directly.)
+1. ~~**Root-cause the GlobalEnter loop `0x004B1180`**~~ **ROOT CAUSE CONFIRMED (2026-06-03):**
+   220/220 unconverted textures in `vz-patch.wad` — all left Xbox GPU format at
+   `INFO[14:18]` because `apply_texture_untile` bailed on streamed/partial entries:
+   - **114** INFO-only stubs (sentinel BODY, 42-byte streaming INFO)
+   - **106** partial mip pages (16384/32768-byte bodies, not full tiled chains)
+   Diagnosis: `tools/diagnose_unconverted_textures.py` →
+   `output/_scratch/unconverted_texture_diagnosis.json`.
+
+2. ~~**Fix the 334 unconverted textures**~~ **FIX IMPLEMENTED (2026-06-03):**
+   - Rust: expanded `apply_texture_untile` in `convert.rs` (full / prefix / single-mip /
+     tail-page / stream-page + INFO-only stubs with `FF FF` resident sentinel).
+   - Python mirror: `xbox_texture_codec.convert_streamed_texture` + `ucfx_be_to_le`.
+   - Post-fix on existing WAD: `tools/fix_patch_textures.py` →
+     `output/data/vz-patch-fixed.wad` (**0 CRITICAL**, 0 unconverted textures;
+     validate 2026-06-03). **Redeploy and retest VZ load to close faults #2/#3.**
+
 3. **(Optional) Fix the cosmetic `UnicodeEncodeError`** in `validate_patch_wad.py`'s summary
-   print (encoding-safe output / ASCII fallback for the `⚠` glyph).
+   print (encoding-safe output / ASCII fallback for the warning glyph).
 
 ---
 

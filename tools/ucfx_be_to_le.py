@@ -2559,7 +2559,7 @@ def _convert_texture_entry(
         return container_be[start:min(start + size, len(container_be))]
 
     be_info, be_body = _raw(info_idx), _raw(body_idx)
-    if be_info is None or be_body is None or len(be_info) < 34:
+    if be_info is None or len(be_info) < 34:
         return {}
 
     # INFO[4:8] and INFO[8:12] are u32 fields. `_convert_texture_info` swaps
@@ -2573,25 +2573,20 @@ def _convert_texture_entry(
     rebuild_in[4:6], rebuild_in[6:8] = le_info[6:8], le_info[4:6]
     rebuild_in[8:10], rebuild_in[10:12] = le_info[10:12], le_info[8:10]
     rebuild_in = bytes(rebuild_in)
-    geom = texcodec.texture_geometry(rebuild_in)
-    if geom is None:
+    try:
+        pc_info, pc_body = texcodec.convert_streamed_texture(
+            rebuild_in, be_body if be_body is not None else b""
+        )
+    except texcodec.UnsupportedTexture:
         _tex_stat(stats, "texture_nondxt_passthrough")
         return {}
-    fourcc, width, height, mips = geom
-    expect = texcodec.tiled_body_size(width, height, fourcc, mips)
-    if len(be_body) < expect:
-        _tex_stat(stats, "texture_streamed_stub_passthrough")
-        return {}
-    try:
-        pc_body = texcodec.untile_dxt_body(be_body, width, height, fourcc, mips=mips)
-        linear = texcodec.linear_mip_chain_size(width, height, fourcc, mips)
-        pc_info = texcodec.rebuild_texture_info(rebuild_in, fourcc, mips, linear)
-    except Exception as exc:  # noqa: BLE001 — fall back, never abort the block
-        stats.setdefault("errors", []).append(f"texture codec failed: {exc}")
-        _tex_stat(stats, "texture_codec_error")
-        return {}
-    _tex_stat(stats, "texture_untiled")
-    return {info_idx: pc_info, body_idx: pc_body}
+    out: dict[int, bytes] = {info_idx: pc_info}
+    if pc_body is not None and body_idx is not None and be_body is not None:
+        out[body_idx] = pc_body
+        _tex_stat(stats, "texture_untiled")
+    else:
+        _tex_stat(stats, "texture_info_only_stub")
+    return out
 
 
 def _convert_container(
