@@ -1608,6 +1608,30 @@ def port_x360_dlc(
     if descriptor_limit is not None:
         _trim_to_descriptor_limit(converted, descriptor_limit, source_wad, verbose)
 
+    # ── Strip base-game ASET collisions ─────────────────────────────
+    # The Xbox DLC source is a full game+DLC WAD.  Its ASET entries for
+    # base-game assets get carried through and cause the engine to load
+    # wrong blocks when the patch WAD is used as a differential overlay.
+    if source_wad is not None:
+        protect = set()
+        if scripts_vz_idx is not None:
+            protect.add(scripts_vz_idx)
+        blocks_dropped, aset_stripped = _strip_base_game_aset_collisions(
+            converted,
+            source_wad,
+            protect_indices=protect,
+            verbose=verbose,
+        )
+        if blocks_dropped or aset_stripped:
+            print(f"\n  ASET collision fix: dropped {blocks_dropped} redundant blocks, "
+                  f"stripped {aset_stripped} shared ASET entries")
+            if scripts_vz_idx is not None and blocks_dropped:
+                scripts_vz_idx = next(
+                    (i for i, blk in enumerate(converted)
+                     if "scripts_vz" in blk.path_string.lower()),
+                    None,
+                )
+
     # ── Explicit block exclusion ──────────────────────────────────────
     if exclude_blocks:
         patterns = [p.strip().lower() for p in exclude_blocks.split(",")]
