@@ -151,3 +151,133 @@ pub fn print_aset_summary(stats: &AsetStats) {
         println!("  {} No OOB sub_entry accesses", "OK:".green().bold());
     }
 }
+
+// ── ASET hash ownership validation ──────────────────────────────────
+
+#[derive(Debug)]
+pub struct GhostDetail {
+    pub aset_index: usize,
+    pub asset_hash: u32,
+    pub type_id: u32,
+    pub block_index: u16,
+    pub block_hashes: Vec<u32>,
+}
+
+#[derive(Debug, Default)]
+pub struct HashValidationStats {
+    pub total_aset: usize,
+    pub verified: usize,
+    pub ghost_entries: usize,
+    pub decompression_failures: usize,
+    pub ghost_details: Vec<GhostDetail>,
+}
+
+/// Check that every ASET entry's `asset_hash` actually exists in the
+/// block entry table it claims to own.  Entries whose hash is absent
+/// from the block are "false ownership" / ghost entries — the engine
+/// will load wrong data from this block instead of falling through to
+/// the base WAD.
+pub fn run_aset_hash_validation(
+    wad_path: &std::path::Path,
+    limit: usize,
+) -> Result<HashValidationStats, Box<dyn std::error::Error>> {
+    let mut file = File::open(wad_path)?;
+    let file_size = file.metadata()?.len();
+    let arch = load_ffcs_archive(&mut file, file_size)?;
+    let aset_entries = arch.aset;
+    let indx_entries = arch.indx;
+
+    let mut block_hash_cache: HashMap<u16, Result<Vec<u32>, String>> = HashMap::new();
+    let mut stats = HashValidationStats {
+        total_aset: aset_entries.len(),
+        ..Default::default()
+    };
+
+    let process_count = if limit > 0 {
+        limit.min(aset_entries.len())
+    } else {
+        aset_entries.len()
+    };
+
+    for (i, aset) in aset_entries.iter().enumerate().take(process_count) {
+        let block_idx = aset.block_index();
+
+        if !block_hash_cache.contains_key(&block_idx) {
+            let result = decompress_block(&mut file, &indx_entries, block_idx);
+            let hash_result = match result {
+                Ok(decompressed) => {
+                    let (entry_count, entries) = parse_block_entry_table(&decompressed);
+                    let hashes: Vec<u32> = entries
+                        .iter()
+                        .take(entry_count as usize)
+                        .map(|e| e.name_hash)
+                        .collect();
+                    Ok(hashes)
+                }
+                Err(e) => Err(e),
+            };
+            block_hash_cache.insert(block_idx, hash_result);
+        }
+
+        match block_hash_cache.get(&block_idx).unwrap() {
+            Err(_) => {
+                stats.decompression_failures += 1;
+            }
+            Ok(block_hashes) => {
+                if block_hashes.contains(&aset.asset_hash) {
+                    stats.verified += 1;
+                } else {
+                    stats.ghost_entries += 1;
+                    if stats.ghost_details.len() < 100 {
+                        stats.ghost_details.push(GhostDetail {
+                            aset_index: i,
+                            asset_hash: aset.asset_hash,
+                            type_id: aset.type_id,
+                            block_index: block_idx,
+                            block_hashes: block_hashes.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(stats)
+}
+
+pub fn print_hash_validation_summary(stats: &HashValidationStats) {
+    println!(
+        "  Total ASET: {}  Verified: {}  Ghost: {}",
+        stats.total_aset, stats.verified, stats.ghost_entries
+    );
+    if stats.ghost_entries > 0 {
+        println!(
+            "  {} {} ASET entries claim ownership of assets not in their block",
+            "WARNING:".red().bold(),
+            stats.ghost_entries
+        );
+        let show = stats.ghost_details.len().min(10);
+        for d in &stats.ghost_details[..show] {
+            println!(
+                "    ASET[{:5}] hash=0x{:08X} type={:2} block={:4} — block has {} entries, none match",
+                d.aset_index, d.asset_hash, d.type_id, d.block_index,
+                d.block_hashes.len()
+            );
+        }
+        if stats.ghost_details.len() > 10 {
+            println!("    ... and {} more", stats.ghost_details.len() - 10);
+        }
+        if stats.ghost_entries > stats.ghost_details.len() {
+            println!(
+                "    (detail capped at {}; {} total ghost entries)",
+                stats.ghost_details.len(),
+                stats.ghost_entries
+            );
+        }
+    } else {
+        println!(
+            "  {} All ASET entries verified against block content",
+            "OK:".green().bold()
+        );
+    }
+}
