@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
-"""Verify LE endianness of UCFX blocks in a patch WAD.
+"""Verify LE endianness of UCFX blocks in a patch WAD — DETERMINISTIC ONLY.
 
 Structurally walks each decompressed block using ``iter_ucfx_containers`` and
-validates field values in context. Flags values that look like they are still
-big-endian (LE implausible, BE plausible).
+runs only checks that reflect real corruption, never plausibility guesses:
+
+* structural ``body_len`` bounds (a body that overruns the block is corrupt);
+* the exact Havok packfile little-endian flag byte (magic+17 must be 1);
+* ``--report-blind-swaps``: strict-mode swap failures + typed-coverage gaps.
+
+The old "looks still big-endian" float/range heuristics (BNDS / ``flgs`` /
+vertex / index) were REMOVED, not gated behind a flag: they fired on the
+retail, known-good LE ``game-files/vz.wad`` at ~4634 issues / 400 blocks — a
+higher rate than a converted patch — so they proved nothing and only misled.
+We have ground truth; prove conversions against it instead of guessing. See
+``.cursor/rules/deterministic-verification.mdc``.
+
+To actually prove a conversion, diff against ground truth:
+``tools/wad_be_le_oracle.py`` (converter output == retail ``vz.wad``
+byte-for-byte), or round-trip BE→LE→BE == original Xbox bytes.
 
 Usage:
-  python3 tools/verify_ucfx_endian.py --wad output/data/vz-patch.wad
-  python3 tools/verify_ucfx_endian.py --wad vz-patch.wad --max-blocks 50 --verbose
+  python3 tools/verify_ucfx_endian.py --wad output/data/vz-patch.wad --report-blind-swaps
 """
 from __future__ import annotations
 
 import argparse
-import math
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -29,14 +41,6 @@ from ucfx_mesh_codec import (  # noqa: E402
     CHUNK_HDR,
     iter_ucfx_containers,
 )
-
-COORD_MIN = -5000.0
-COORD_MAX = 5000.0
-ELEV_MIN = -500.0
-ELEV_MAX = 1000.0
-BNDS_LIMIT = 10000.0
-VERTEX_LIMIT = 1_000_000.0
-
 
 @dataclass
 class EndianIssue:
@@ -68,20 +72,6 @@ def _body_abs(
     else:
         ba = ucfx_start + 8 + body_off_rel
     return ba, body_len
-
-
-def _likely_still_be_f32(raw: bytes, lo: float, hi: float) -> tuple[bool, float, float]:
-    le_v = struct.unpack_from("<f", raw, 0)[0]
-    be_v = struct.unpack_from(">f", raw, 0)[0]
-
-    def ok(v: float) -> bool:
-        if math.isnan(v) or math.isinf(v):
-            return False
-        return lo <= v <= hi
-
-    le_ok = ok(le_v)
-    be_ok = ok(be_v)
-    return (not le_ok and be_ok), le_v, be_v
 
 
 def _likely_still_be_u32(raw: bytes, max_val: int) -> tuple[bool, int, int]:
@@ -166,157 +156,8 @@ def _check_descriptor_row(
     return last_container
 
 
-def _check_bnds(
-    data: bytes,
-    stats: VerifyStats,
-    *,
-    block_index: int,
-    block_path: str,
-    ucfx_off: int,
-    ba: int,
-    body_len: int,
-) -> None:
-    end = min(ba + body_len, len(data))
-    for i in range(10):
-        off = ba + i * 4
-        if off + 4 > end:
-            break
-        raw = data[off : off + 4]
-        still_be, le_v, be_v = _likely_still_be_f32(raw, -BNDS_LIMIT, BNDS_LIMIT)
-        if still_be:
-            _add_issue(
-                stats,
-                block_index=block_index,
-                block_path=block_path,
-                ucfx_off=ucfx_off,
-                tag="BNDS",
-                field_name=f"float[{i}]",
-                offset=off,
-                value_le=le_v,
-                value_be=be_v,
-                message="BNDS float looks BE",
-            )
-
-
-def _check_flgs(
-    data: bytes,
-    stats: VerifyStats,
-    *,
-    block_index: int,
-    block_path: str,
-    ucfx_off: int,
-    ba: int,
-    body_len: int,
-) -> None:
-    end = min(ba + body_len, len(data))
-    pos = ba
-    while pos + 42 <= end:
-        # vz_state flgs 42-byte record (see docs/placement_data_format.md §3.3)
-        for field_name, foff, lo, hi in (
-            ("x", 0x12, COORD_MIN, COORD_MAX),
-            ("y", 0x16, ELEV_MIN, ELEV_MAX),
-            ("z", 0x1A, COORD_MIN, COORD_MAX),
-            ("qx", 26, -1.5, 1.5),
-            ("qy", 30, -1.5, 1.5),
-            ("qz", 34, -1.5, 1.5),
-            ("qw", 38, -1.5, 1.5),
-        ):
-            off = pos + foff
-            raw = data[off : off + 4]
-            still_be, le_v, be_v = _likely_still_be_f32(raw, lo, hi)
-            if still_be:
-                _add_issue(
-                    stats,
-                    block_index=block_index,
-                    block_path=block_path,
-                    ucfx_off=ucfx_off,
-                    tag="flgs",
-                    field_name=field_name,
-                    offset=off,
-                    value_le=le_v,
-                    value_be=be_v,
-                    message="placement float looks BE",
-                )
-        pos += 42
-
-
-def _check_vertex_data(
-    data: bytes,
-    stats: VerifyStats,
-    *,
-    block_index: int,
-    block_path: str,
-    ucfx_off: int,
-    ba: int,
-    body_len: int,
-) -> None:
-    end = min(ba + body_len, len(data))
-    samples = 0
-    pos = ba
-    while pos + 4 <= end and samples < 64:
-        raw = data[pos : pos + 4]
-        le_v = struct.unpack_from("<f", raw, 0)[0]
-        if abs(le_v) > VERTEX_LIMIT and not math.isnan(le_v):
-            still_be, _, be_v = _likely_still_be_f32(raw, -VERTEX_LIMIT, VERTEX_LIMIT)
-            if still_be:
-                _add_issue(
-                    stats,
-                    block_index=block_index,
-                    block_path=block_path,
-                    ucfx_off=ucfx_off,
-                    tag="data",
-                    field_name="vertex_f32",
-                    offset=pos,
-                    value_le=le_v,
-                    value_be=be_v,
-                    message="vertex float looks BE",
-                )
-                break
-        pos += 4
-        samples += 1
-
-
-def _check_ibuf_data(
-    data: bytes,
-    stats: VerifyStats,
-    *,
-    block_index: int,
-    block_path: str,
-    ucfx_off: int,
-    ba: int,
-    body_len: int,
-) -> None:
-    end = min(ba + body_len, len(data))
-    if end - ba < 2:
-        return
-    n = min((end - ba) // 2, 256)
-    words = struct.unpack_from(f"<{n}H", data, ba)
-    if not words:
-        return
-    mx = max(words)
-    if mx == 0xFFFF:
-        return
-    # Many valid meshes have max index < 65535; BE u16 often yields 0xXX00 patterns
-    be_words = struct.unpack_from(f">{n}H", data, ba)
-    be_mx = max(be_words)
-    if mx > 60000 and be_mx < mx // 256:
-        _add_issue(
-            stats,
-            block_index=block_index,
-            block_path=block_path,
-            ucfx_off=ucfx_off,
-            tag="data",
-            field_name="index_u16_max",
-            offset=ba,
-            value_le=mx,
-            value_be=be_mx,
-            message="index buffer max looks BE-swapped wrong",
-        )
-
-
 HAVOK_MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
 HAVOK_LE_FLAG_OFFSET = 17
-VALID_ANIMATION_TYPES = (1, 2, 3)
 
 
 def _find_havok_data_section(data: bytes, packfile_start: int) -> int | None:
@@ -351,8 +192,6 @@ def _check_havok_packfile(
         "packfiles_found": 0,
         "le_flag_ok": 0,
         "le_flag_bad": 0,
-        "anim_type_ok": 0,
-        "anim_type_bad": 0,
         "wavelet_decode_ok": 0,
         "wavelet_decode_fail": 0,
     }
@@ -384,36 +223,13 @@ def _check_havok_packfile(
                     message=f"Havok packfile is_little_endian={le_flag} (expected 1)",
                 )
 
-        # Try to find __data__ section and check animationType
+        # Locate __data__ section only for the real decode gate below. We do NOT
+        # sample animationType for a "looks like garbage / still BE?" heuristic:
+        # the section/object offset here is approximate, so that test was noise.
         data_sec = _find_havok_data_section(block_data, pos)
         if data_sec is not None and data_sec + 12 <= len(block_data):
-            # animationType lives at offset +8 within __data__ payload objects
-            # (first object after virtual fixup base). We sample the u32 at +8.
-            anim_type_off = data_sec + 8
-            if anim_type_off + 4 <= len(block_data):
-                anim_type = struct.unpack_from("<I", block_data, anim_type_off)[0]
-                if anim_type in VALID_ANIMATION_TYPES:
-                    havok_stats["anim_type_ok"] += 1
-                elif anim_type == 0:
-                    # 0 could mean non-animation data in __data__; not an issue
-                    pass
-                elif anim_type > 0xFFFF:
-                    havok_stats["anim_type_bad"] += 1
-                    be_anim = struct.unpack_from(">I", block_data, anim_type_off)[0]
-                    _add_issue(
-                        stats,
-                        block_index=block_index,
-                        block_path=block_path,
-                        ucfx_off=pos,
-                        tag="HavokPF",
-                        field_name="animationType",
-                        offset=anim_type_off,
-                        value_le=anim_type,
-                        value_be=be_anim,
-                        message="animationType looks like garbage (still BE?)",
-                    )
-
-            # --havok-decode-gate: attempt wavelet decode
+            # --havok-decode-gate: attempt wavelet decode (a real decode, not a
+            # plausibility guess — it either decodes or raises).
             if havok_decode_gate and data_sec + 8 + 4 <= len(block_data):
                 atype = struct.unpack_from("<I", block_data, data_sec + 8)[0]
                 if atype == 3:
@@ -461,55 +277,9 @@ def verify_block(
                 last_container=last_container,
             )
 
-            body_off_rel, body_len = int(cu[0]), int(cu[1])
-            if body_off_rel == CONTAINER_SENTINEL or body_len <= 0:
-                continue
-            ba, _ = _body_abs(block_data, ucfx_off, row_pos, data_base, ucfx_u0)
-            if ba >= len(block_data):
-                continue
-
-            le_tag = tag.decode("ascii", errors="replace")
-            if le_tag == "BNDS":
-                _check_bnds(
-                    block_data,
-                    stats,
-                    block_index=block_index,
-                    block_path=block_path,
-                    ucfx_off=ucfx_off,
-                    ba=ba,
-                    body_len=body_len,
-                )
-            elif le_tag == "flgs":
-                _check_flgs(
-                    block_data,
-                    stats,
-                    block_index=block_index,
-                    block_path=block_path,
-                    ucfx_off=ucfx_off,
-                    ba=ba,
-                    body_len=body_len,
-                )
-            elif le_tag == "data":
-                if last_container == "IBUF":
-                    _check_ibuf_data(
-                        block_data,
-                        stats,
-                        block_index=block_index,
-                        block_path=block_path,
-                        ucfx_off=ucfx_off,
-                        ba=ba,
-                        body_len=body_len,
-                    )
-                else:
-                    _check_vertex_data(
-                        block_data,
-                        stats,
-                        block_index=block_index,
-                        block_path=block_path,
-                        ucfx_off=ucfx_off,
-                        ba=ba,
-                        body_len=body_len,
-                    )
+            # Body-level float/range plausibility checks were removed: they are
+            # noise (fire on retail LE vz.wad). Endianness is proven against
+            # ground truth (oracle / round-trip), not inferred per-field here.
 
     # Havok packfile scan — independent of UCFX chunk structure
     havok_stats = _check_havok_packfile(
@@ -568,8 +338,6 @@ def main() -> int:
     total_havok_packfiles = 0
     total_havok_le_ok = 0
     total_havok_le_bad = 0
-    total_havok_anim_ok = 0
-    total_havok_anim_bad = 0
     total_wavelet_ok = 0
     total_wavelet_fail = 0
     # Havok class-aware stats from byteswap (aggregated under --report-blind-swaps)
@@ -602,8 +370,6 @@ def main() -> int:
         total_havok_packfiles += havok_block.get("packfiles_found", 0)
         total_havok_le_ok += havok_block.get("le_flag_ok", 0)
         total_havok_le_bad += havok_block.get("le_flag_bad", 0)
-        total_havok_anim_ok += havok_block.get("anim_type_ok", 0)
-        total_havok_anim_bad += havok_block.get("anim_type_bad", 0)
         total_wavelet_ok += havok_block.get("wavelet_decode_ok", 0)
         total_wavelet_fail += havok_block.get("wavelet_decode_fail", 0)
 
@@ -647,8 +413,6 @@ def main() -> int:
         print(f"  Havok packfiles:    {total_havok_packfiles}")
         print(f"    LE flag OK:       {total_havok_le_ok}")
         print(f"    LE flag BAD:      {total_havok_le_bad}")
-        print(f"    animType OK:      {total_havok_anim_ok}")
-        print(f"    animType BAD:     {total_havok_anim_bad}")
     if args.havok_decode_gate and (total_wavelet_ok or total_wavelet_fail):
         print(f"  Wavelet decode OK:  {total_wavelet_ok}")
         print(f"  Wavelet decode FAIL:{total_wavelet_fail}")
