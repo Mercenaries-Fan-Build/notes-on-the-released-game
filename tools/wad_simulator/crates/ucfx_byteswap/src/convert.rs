@@ -264,6 +264,15 @@ fn convert_container(
         fix_embedded_havok_layoutrules(container, &mut out);
     }
 
+    // Xbox 360 textures: rebuild INFO + untile the GPU-tiled DXT BODY. The
+    // generic pass left INFO basic-swapped and BODY as tiled passthrough; this
+    // reframes the container (BODY shrinks tiled->linear). Full (non-streamed)
+    // DXT entries only; stubs / non-DXT / non-trailing BODY fall through
+    // unchanged. convert_block recomputes chunk_size + CSUM from the new length.
+    if is_be && type_hash == types::TYPE_HASH_TEXTURE {
+        apply_texture_untile(&mut out, &descriptors, data_area_off, desc_table_end);
+    }
+
     Ok(out)
 }
 
@@ -1103,6 +1112,317 @@ fn convert_texture_info(body: &mut [u8]) {
     swap_u32(body, 22); // total_size
     swap_u32(body, 26);
     swap_u32(body, 30);
+}
+
+// ── Xbox 360 texture untile + INFO rebuild ───────────────────────────
+//
+// Ports tools/xbox_texture_codec.py. The generic body pass already runs
+// `convert_texture_info` on the INFO chunk (basic field swap = the "rust xi"
+// form) and leaves the BODY as raw tiled passthrough. The post-process below
+// (a) rebuilds the 34-byte PC INFO from that swapped INFO and (b) untiles the
+// GPU-tiled DXT BODY into the PC-linear mip chain, then reframes the container.
+// Validated byte-exact (pixel data + INFO header) against the Rosetta corpus;
+// the [12:14] field and [32:34] streaming tail are non-reconstructible PC
+// metadata (see .cursor/notes/rosetta_oracle_baseline.md).
+
+/// (block_px, texel_pitch, log2(bytes_per_block)) for a DXT FourCC.
+fn dxt_format(fourcc: &[u8; 4]) -> Option<(usize, usize, usize)> {
+    match fourcc {
+        b"DXT1" => Some((4, 8, 3)),
+        b"DXT3" => Some((4, 16, 4)),
+        b"DXT5" => Some((4, 16, 4)),
+        _ => None,
+    }
+}
+
+/// Xbox D3D format word low byte (INFO[17]) -> PC FourCC.
+fn fourcc_from_format_byte(b: u8) -> Option<[u8; 4]> {
+    match b {
+        0x52 => Some(*b"DXT1"),
+        0x54 => Some(*b"DXT5"),
+        0x53 => Some(*b"DXT3"),
+        _ => None,
+    }
+}
+
+#[inline]
+fn read_u16_le(d: &[u8], off: usize) -> usize {
+    u16::from_le_bytes([d[off], d[off + 1]]) as usize
+}
+
+/// Number of mip levels in a full chain down to 1x1.
+fn tex_mip_levels(width: usize, height: usize) -> usize {
+    let m = width.max(height).max(1) as u32;
+    (32 - m.leading_zeros()) as usize
+}
+
+/// XGAddress2DTiledOffset returning a *block* index (gildor/Noesis form).
+fn tiled_block_index(x: usize, y: usize, width_blocks: usize, log_bpb: usize) -> usize {
+    let aligned_w = (width_blocks + 31) & !31;
+    let macro_ = ((x >> 5) + (y >> 5) * (aligned_w >> 5)) << (log_bpb + 7);
+    let micro = ((x & 7) + ((y & 0xE) << 2)) << log_bpb;
+    let offset = macro_ + ((micro & !0xF) << 1) + (micro & 0xF) + ((y & 1) << 4);
+    (((offset & !0x1FF) << 3)
+        + ((y & 16) << 7)
+        + ((offset & 0x1C0) << 2)
+        + (((((y & 8) >> 2) + (x >> 3)) & 3) << 6)
+        + (offset & 0x3F))
+        >> log_bpb
+}
+
+/// Untile one mip surface (block granularity) to linear block order.
+fn untile_surface(
+    tiled: &[u8],
+    width_blocks: usize,
+    height_blocks: usize,
+    texel_pitch: usize,
+    log_bpb: usize,
+) -> Vec<u8> {
+    let mut out = vec![0u8; width_blocks * height_blocks * texel_pitch];
+    for j in 0..height_blocks {
+        let row = j * width_blocks;
+        for i in 0..width_blocks {
+            let ti = tiled_block_index(i, j, width_blocks, log_bpb);
+            let src = ti * texel_pitch;
+            if src + texel_pitch > tiled.len() {
+                continue;
+            }
+            let dst = (row + i) * texel_pitch;
+            out[dst..dst + texel_pitch].copy_from_slice(&tiled[src..src + texel_pitch]);
+        }
+    }
+    out
+}
+
+/// Byte-swap every 16-bit word (Xbox DXT block words are big-endian).
+fn swap16_blocks(data: &mut [u8]) {
+    let n = data.len() / 2;
+    for i in 0..n {
+        data.swap(i * 2, i * 2 + 1);
+    }
+}
+
+/// Drop the 32-block width/height padding, yielding the wb x hb surface.
+fn crop_blocks(linear: &[u8], aligned_wb: usize, wb: usize, hb: usize, texel_pitch: usize) -> Vec<u8> {
+    if aligned_wb == wb {
+        return linear[..wb * hb * texel_pitch].to_vec();
+    }
+    let mut out = vec![0u8; wb * hb * texel_pitch];
+    for j in 0..hb {
+        let s = j * aligned_wb * texel_pitch;
+        let d = j * wb * texel_pitch;
+        out[d..d + wb * texel_pitch].copy_from_slice(&linear[s..s + wb * texel_pitch]);
+    }
+    out
+}
+
+/// Total bytes of a PC-linear DXT mip chain (no tile padding).
+fn linear_mip_chain_size(width: usize, height: usize, fourcc: &[u8; 4], mips: usize) -> usize {
+    let (block_px, texel_pitch, _) = dxt_format(fourcc).unwrap();
+    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
+    let mut total = 0;
+    for m in 0..n {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        let wb = ((wpx + block_px - 1) / block_px).max(1);
+        let hb = ((hpx + block_px - 1) / block_px).max(1);
+        total += wb * hb * texel_pitch;
+    }
+    total
+}
+
+/// Bytes the Xbox tiled BODY occupies for a full (non-streamed) texture.
+fn tiled_body_size(width: usize, height: usize, fourcc: &[u8; 4], mips: usize) -> usize {
+    let (block_px, texel_pitch, _) = dxt_format(fourcc).unwrap();
+    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
+    let mut total = 0;
+    let mut tail_added = false;
+    for m in 0..n {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        if wpx.min(hpx) >= 32 {
+            let wb = ((wpx + block_px - 1) / block_px).max(1);
+            let hb = ((hpx + block_px - 1) / block_px).max(1);
+            let awb = (wb + 31) & !31;
+            let ahb = (hb + 31) & !31;
+            total += awb * ahb * texel_pitch;
+        } else if !tail_added {
+            total += 32 * 32 * texel_pitch;
+            tail_added = true;
+        }
+    }
+    total
+}
+
+/// Assemble a full PC-linear DXT mip chain from a tiled Xbox BODY (incl. the
+/// packed sub-32 "mip tail"). Returns None if the body is too short.
+fn untile_dxt_body(tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], mips: usize) -> Option<Vec<u8>> {
+    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
+    let mut out: Vec<u8> = Vec::new();
+    let mut pos = 0usize;
+    let mut tail_lin: Option<Vec<u8>> = None;
+    for m in 0..n {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        let wb = ((wpx + block_px - 1) / block_px).max(1);
+        let hb = ((hpx + block_px - 1) / block_px).max(1);
+        if wpx.min(hpx) >= 32 {
+            let awb = (wb + 31) & !31;
+            let ahb = (hb + 31) & !31;
+            let size = awb * ahb * texel_pitch;
+            if pos + size > tiled.len() {
+                break;
+            }
+            let mut lin = untile_surface(&tiled[pos..pos + size], awb, ahb, texel_pitch, log_bpb);
+            swap16_blocks(&mut lin);
+            out.extend_from_slice(&crop_blocks(&lin, awb, wb, hb, texel_pitch));
+            pos += size;
+        } else {
+            if tail_lin.is_none() {
+                let size = 32 * 32 * texel_pitch;
+                if pos + size > tiled.len() {
+                    break;
+                }
+                let mut t = untile_surface(&tiled[pos..pos + size], 32, 32, texel_pitch, log_bpb);
+                swap16_blocks(&mut t);
+                tail_lin = Some(t);
+                pos += size;
+            }
+            let tl = tail_lin.as_ref().unwrap();
+            let (bx, by) = if wb >= hb { (wb, 0) } else { (0, hb) };
+            for r in 0..hb {
+                let base = ((by + r) * 32 + bx) * texel_pitch;
+                if base + wb * texel_pitch <= tl.len() {
+                    out.extend_from_slice(&tl[base..base + wb * texel_pitch]);
+                }
+            }
+        }
+    }
+    Some(out)
+}
+
+/// Rebuild a 34-byte PC texture INFO from the basic-swapped ("rust xi") INFO.
+/// Mirrors `xbox_texture_codec.rebuild_texture_info`.
+fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], linear_total: u32) -> [u8; 34] {
+    let mut out = [0u8; 34];
+    out[0..4].copy_from_slice(&xi[0..4]);
+    // transpose [4:6]<->[6:8]
+    out[4..6].copy_from_slice(&xi[6..8]);
+    out[6..8].copy_from_slice(&xi[4..6]);
+    // [8:10]<->[10:12] transpose; clear the Xbox 0x10 "tiled" flag bit.
+    let f8 = (u16::from_le_bytes([xi[10], xi[11]]) & !0x10).to_le_bytes();
+    out[8..10].copy_from_slice(&f8);
+    out[10..12].copy_from_slice(&xi[8..10]);
+    out[12..14].copy_from_slice(&xi[12..14]);
+    out[14..18].copy_from_slice(fourcc);
+    // LOD-bias float is big-endian on Xbox (passthrough in the basic swap) -> LE.
+    out[18] = xi[21];
+    out[19] = xi[20];
+    out[20] = xi[19];
+    out[21] = xi[18];
+    out[22..26].copy_from_slice(&linear_total.to_le_bytes());
+    // [26:32] zero; [32:34] fully-resident streaming sentinel.
+    out[32] = 0xFF;
+    out[33] = 0xFF;
+    out
+}
+
+/// Post-process a converted texture container: rebuild INFO + untile BODY and
+/// reframe. `out` is the LE container after the generic body pass (INFO already
+/// basic-swapped, BODY still tiled passthrough). Returns true if untiled.
+fn apply_texture_untile(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) -> bool {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+
+    // First INFO + first BODY descriptor.
+    let mut info_idx = None;
+    let mut body_idx = None;
+    for (i, d) in descriptors.iter().enumerate() {
+        if d.row_u0 == 0xFFFFFFFF {
+            continue;
+        }
+        if d.tag == ChunkTag::InfoUpper && info_idx.is_none() {
+            info_idx = Some(i);
+        } else if d.tag == ChunkTag::Body && body_idx.is_none() {
+            body_idx = Some(i);
+        }
+    }
+    let (info_idx, body_idx) = match (info_idx, body_idx) {
+        (Some(a), Some(b)) => (a, b),
+        _ => return false,
+    };
+
+    let info = &descriptors[info_idx];
+    let body = &descriptors[body_idx];
+    if info.body_size < 34 {
+        return false;
+    }
+    let info_abs = data_start + info.row_u0 as usize;
+    let body_abs = data_start + body.row_u0 as usize;
+    if info_abs + 34 > out.len() || body_abs + body.body_size as usize > out.len() {
+        return false;
+    }
+
+    // Geometry from the already basic-swapped INFO ("rust xi" form).
+    let xi = out[info_abs..info_abs + 34].to_vec();
+    let fourcc = match fourcc_from_format_byte(xi[17]) {
+        Some(f) => f,
+        None => return false,
+    };
+    let width = read_u16_le(&xi, 0);
+    let height = read_u16_le(&xi, 2);
+    let mut mips = read_u16_le(&xi, 4);
+    if width == 0 || height == 0 {
+        return false;
+    }
+    if mips == 0 {
+        mips = tex_mip_levels(width, height);
+    }
+
+    // Only convert full (non-streamed) bodies that carry the whole tiled chain.
+    let expect = tiled_body_size(width, height, &fourcc, mips);
+    let tiled = &out[body_abs..body_abs + body.body_size as usize];
+    if tiled.len() < expect {
+        return false;
+    }
+    let tiled = tiled.to_vec();
+    let untiled = match untile_dxt_body(&tiled, width, height, &fourcc, mips) {
+        Some(u) => u,
+        None => return false,
+    };
+    let linear = linear_mip_chain_size(width, height, &fourcc, mips);
+    if untiled.len() != linear {
+        return false;
+    }
+
+    // BODY must be the last chunk in the data area for an in-place truncate.
+    let body_start_rel = body.row_u0 as usize;
+    for (i, d) in descriptors.iter().enumerate() {
+        if i == body_idx || d.row_u0 == 0xFFFFFFFF {
+            continue;
+        }
+        if d.row_u0 as usize + d.body_size as usize > body_start_rel {
+            return false; // a chunk sits at/after BODY — bail (no untile)
+        }
+    }
+
+    // Overwrite INFO with the rebuilt PC INFO (same 34 bytes).
+    let pc_info = rebuild_texture_info(&xi, &fourcc, linear as u32);
+    out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
+
+    // Patch the BODY descriptor's body_size in the LE descriptor table.
+    let body_size_field = 20 + body_idx * 20 + 8;
+    out[body_size_field..body_size_field + 4].copy_from_slice(&(untiled.len() as u32).to_le_bytes());
+
+    // Replace the BODY region: truncate at body start, append the linear chain.
+    out.truncate(body_abs);
+    out.extend_from_slice(&untiled);
+    true
 }
 
 /// Convert an `enum` body in-place from BE to LE.

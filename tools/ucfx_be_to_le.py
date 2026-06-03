@@ -2562,8 +2562,18 @@ def _convert_texture_entry(
     if be_info is None or be_body is None or len(be_info) < 34:
         return {}
 
+    # INFO[4:8] and INFO[8:12] are u32 fields. `_convert_texture_info` swaps
+    # them as 2x u16 (position-preserving); the codec's `texture_geometry` /
+    # `rebuild_texture_info` expect the u32-swapped form (as the Rust converter
+    # produces, which the codec was validated against). Transpose the u16 halves
+    # so geometry (incl. the mip count, which lives in the [4:8] u32) and the
+    # INFO rebuild read the correct fields.
     le_info = _convert_texture_info(be_info)
-    geom = texcodec.texture_geometry(le_info)
+    rebuild_in = bytearray(le_info)
+    rebuild_in[4:6], rebuild_in[6:8] = le_info[6:8], le_info[4:6]
+    rebuild_in[8:10], rebuild_in[10:12] = le_info[10:12], le_info[8:10]
+    rebuild_in = bytes(rebuild_in)
+    geom = texcodec.texture_geometry(rebuild_in)
     if geom is None:
         _tex_stat(stats, "texture_nondxt_passthrough")
         return {}
@@ -2572,18 +2582,10 @@ def _convert_texture_entry(
     if len(be_body) < expect:
         _tex_stat(stats, "texture_streamed_stub_passthrough")
         return {}
-    # INFO[4:8] and INFO[8:12] are u32 fields. `_convert_texture_info` swaps
-    # them as 2x u16 (position-preserving); `rebuild_texture_info` expects the
-    # u32-swapped form (as produced by the Rust converter it was validated
-    # against) and transposes the halves to recover the PC layout. Transpose
-    # the halves here so the python and Rust INFO inputs agree.
-    rebuild_in = bytearray(le_info)
-    rebuild_in[4:6], rebuild_in[6:8] = le_info[6:8], le_info[4:6]
-    rebuild_in[8:10], rebuild_in[10:12] = le_info[10:12], le_info[8:10]
     try:
         pc_body = texcodec.untile_dxt_body(be_body, width, height, fourcc, mips=mips)
         linear = texcodec.linear_mip_chain_size(width, height, fourcc, mips)
-        pc_info = texcodec.rebuild_texture_info(bytes(rebuild_in), fourcc, mips, linear)
+        pc_info = texcodec.rebuild_texture_info(rebuild_in, fourcc, mips, linear)
     except Exception as exc:  # noqa: BLE001 — fall back, never abort the block
         stats.setdefault("errors", []).append(f"texture codec failed: {exc}")
         _tex_stat(stats, "texture_codec_error")
