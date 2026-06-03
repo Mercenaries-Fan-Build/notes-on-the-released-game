@@ -68,6 +68,30 @@ def read_chunk_header(data: bytes, pos: int) -> tuple[bytes, tuple[int, int, int
     return tag, (u0, u1, u2, u3)
 
 
+def maybe_untile_xbox_texture(info: bytes, body: bytes) -> tuple[bytes, bytes]:
+    """If (info, body) is a raw Xbox 360 texture, return PC (info, body).
+
+    PC textures carry an ASCII FourCC at INFO[14:18] and are returned
+    unchanged. Xbox textures carry a packed GPU format word there; for full
+    (non-streamed) DXT entries we untile the body to PC-linear and rebuild the
+    INFO via the shared codec. Streamed stubs / non-DXT / failures pass through
+    untouched so the existing mip-assembly path still applies.
+    """
+    if len(info) < 18 or info[14:18] in (b"DXT1", b"DXT3", b"DXT5"):
+        return info, body
+    try:
+        import xbox_texture_codec as texcodec
+        geom = texcodec.texture_geometry(info)
+        if geom is None:
+            return info, body
+        fourcc, w, h, mips = geom
+        if len(body) < texcodec.tiled_body_size(w, h, fourcc, mips):
+            return info, body  # streamed stub
+        return texcodec.convert_texture_chunks(info, body)
+    except Exception:
+        return info, body
+
+
 def parse_ucfx_texture_info(info: bytes) -> tuple[int, int, int, bytes, int] | None:
     """Return width, height, mip_count, fourcc, total_size or None."""
     if len(info) < 26:
@@ -321,11 +345,13 @@ def extract_ucfx_textures(
         if ip + info_len > len(data) or bp + body_len > len(data):
             continue
         info = data[ip : ip + info_len]
+        body = data[bp : bp + body_len]
+        info, body = maybe_untile_xbox_texture(info, body)
+        body_len = len(body)
         parsed = parse_ucfx_texture_info(info)
         if not parsed:
             continue
         w, h, mip_count, fourcc, total_size = parsed
-        body = data[bp : bp + body_len]
         sizes = mip_sizes_chain(w, h, fourcc, mip_count)
         chain_sum = sum(sizes)
         if total_size > 0 and chain_sum != total_size:

@@ -2519,6 +2519,79 @@ def _convert_body(
 
 # ── Container conversion ──────────────────────────────────────────────
 
+def _tex_stat(stats: dict, key: str) -> None:
+    stats[key] = stats.get(key, 0) + 1
+
+
+def _convert_texture_entry(
+    descriptors: list[tuple[str, int, int, int, int]],
+    container_be: bytes,
+    data_area_off: int,
+    stats: dict,
+) -> dict[int, bytes]:
+    """Convert a texture entry's INFO+BODY together via the Xbox texture codec.
+
+    Returns ``{info_idx: pc_info, body_idx: pc_body}`` when the entry is a full
+    (non-streamed) DXT texture; otherwise ``{}`` so the per-chunk fallback runs.
+    The codec untiles the Xbox GPU-tiled DXT body to PC-linear, assembles the
+    full mip chain (incl. packed mip tail) and rebuilds the 34-byte PC INFO
+    (field re-layout, FourCC, LE LOD float, linear total_size). Validated
+    byte-exact against the base-game Rosetta corpus.
+    """
+    import xbox_texture_codec as texcodec
+
+    info_idx = body_idx = None
+    for i, (tag, _row, _sz, _f3, _f4) in enumerate(descriptors):
+        if tag == "INFO" and info_idx is None:
+            info_idx = i
+        elif tag == "BODY" and body_idx is None:
+            body_idx = i
+    if info_idx is None or body_idx is None:
+        return {}
+
+    def _raw(i: int) -> bytes | None:
+        _tag, row_u0, size, _f3, _f4 = descriptors[i]
+        if row_u0 == CONTAINER_SENTINEL:
+            return None
+        start = (data_area_off + row_u0) if data_area_off > 0 else (8 + row_u0)
+        if start >= len(container_be):
+            return None
+        return container_be[start:min(start + size, len(container_be))]
+
+    be_info, be_body = _raw(info_idx), _raw(body_idx)
+    if be_info is None or be_body is None or len(be_info) < 34:
+        return {}
+
+    le_info = _convert_texture_info(be_info)
+    geom = texcodec.texture_geometry(le_info)
+    if geom is None:
+        _tex_stat(stats, "texture_nondxt_passthrough")
+        return {}
+    fourcc, width, height, mips = geom
+    expect = texcodec.tiled_body_size(width, height, fourcc, mips)
+    if len(be_body) < expect:
+        _tex_stat(stats, "texture_streamed_stub_passthrough")
+        return {}
+    # INFO[4:8] and INFO[8:12] are u32 fields. `_convert_texture_info` swaps
+    # them as 2x u16 (position-preserving); `rebuild_texture_info` expects the
+    # u32-swapped form (as produced by the Rust converter it was validated
+    # against) and transposes the halves to recover the PC layout. Transpose
+    # the halves here so the python and Rust INFO inputs agree.
+    rebuild_in = bytearray(le_info)
+    rebuild_in[4:6], rebuild_in[6:8] = le_info[6:8], le_info[4:6]
+    rebuild_in[8:10], rebuild_in[10:12] = le_info[10:12], le_info[8:10]
+    try:
+        pc_body = texcodec.untile_dxt_body(be_body, width, height, fourcc, mips=mips)
+        linear = texcodec.linear_mip_chain_size(width, height, fourcc, mips)
+        pc_info = texcodec.rebuild_texture_info(bytes(rebuild_in), fourcc, mips, linear)
+    except Exception as exc:  # noqa: BLE001 — fall back, never abort the block
+        stats.setdefault("errors", []).append(f"texture codec failed: {exc}")
+        _tex_stat(stats, "texture_codec_error")
+        return {}
+    _tex_stat(stats, "texture_untiled")
+    return {info_idx: pc_info, body_idx: pc_body}
+
+
 def _convert_container(
     container_be: bytes,
     stats: dict,
@@ -2578,6 +2651,13 @@ def _convert_container(
     if type_hash in _ECS_STRUCTURE_TYPES:
         comp_map = _build_ecs_comp_map(descriptors, container_be, data_area_off)
 
+    # Texture entries: untile + INFO-rebuild INFO/BODY together. Streamed
+    # stubs / non-DXT formats yield {} and fall through to the per-chunk path.
+    tex_override: dict[int, bytes] = {}
+    if type_hash == _TYPE_TEXTURE:
+        tex_override = _convert_texture_entry(
+            descriptors, container_be, data_area_off, stats)
+
     # Extract and convert each body
     bodies_le: list[bytes] = []
     texture_fmt = b"DXT5"  # Default; overwritten from INFO if type is texture
@@ -2618,6 +2698,8 @@ def _convert_container(
                     f"CONTAINER_SENTINEL row for tag {tag!r} "
                     f"(type_hash=0x{type_hash:08X}) needs semantic handler"
                 )
+        elif idx in tex_override:
+            bodies_le.append(tex_override[idx])
         else:
             bodies_le.append(
                 _convert_body(
