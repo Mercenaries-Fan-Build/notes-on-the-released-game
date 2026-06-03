@@ -737,21 +737,35 @@ rows referencing base-game assets that happened to be in those same blocks.
 `asset_hash` already exists in the retail base-game WAD**. The fix is option (a):
 strip those 3,773 entries.
 
-### §14.3 — The fix
+### §14.3 — The fix (IMPLEMENTED)
 
-Add a post-conversion step in `dlc_port.py` (after all synthetic ASET rows are
-generated, but before FFCS assembly) that:
+`_strip_base_game_aset_collisions()` added to `dlc_port.py` (runs after all
+ASET normalization/dedup/contract fixes, before FFCS assembly):
 
-1. Loads the retail `vz.wad` ASET hash set.
-2. For each patch block, removes any `aset_entries` whose `asset_hash` exists in
-   the retail set — **unless** the asset is an intentional DLC override (e.g.
-   `scripts_vz` bootstrap at block 2196, which must override the base game's
-   `scripts_vz` to inject `dlc01`).
-3. Preserves DLC-only entries (1,622 assets not in retail) unchanged.
+1. **Pass 1 — redundant block removal:** drops blocks where every UCFX entry's
+   `asset_hash` exists in the retail ASET (891 blocks — all byte-identical base-game
+   copies carried from the Xbox source, including Havok animations, textures, meshes,
+   stances, soundbanks, and wavebanks via the `_OVERRIDE_TYPE_HASHES` mechanism).
+2. **Pass 2 — shared ASET entry stripping:** removes individual `aset_entries`
+   from remaining mixed blocks whose `asset_hash` is in the retail set.
+3. **Protection:** `scripts_vz` bootstrap block is exempt (must override the
+   base game's `scripts_vz` to inject `dlc01`).
 
-Expected result: patch WAD drops from 5,448 to ~1,675 ASET entries. The engine's
-"last-opened-file-wins" search will no longer find ghost entries in the patch,
-and all base-game assets will correctly resolve to the retail WAD.
+Expected result: patch WAD drops from 2,197 to ~1,306 blocks and from 5,448 to
+~1,640 ASET entries. The engine's "last-opened-file-wins" search will no longer
+find ghost entries in the patch, and all base-game assets will correctly resolve
+to the retail WAD.
+
+### §14.4 — Why base-game copies existed
+
+The Xbox 360 DLC source is a **complete replacement WAD** (11,087 blocks = full
+base game + DLC), not a differential patch.  `dlc_port.py` extracted only the
+~2,197 DLC-range blocks, but those blocks contained UCFX entries for base-game
+assets co-located alongside DLC content.  The existing `_OVERRIDE_TYPE_HASHES`
+mechanism (`_extract_base_entry_ucfx`) further substituted Xbox UCFX bodies with
+byte-identical PC retail copies for animations, textures, meshes, etc.  This
+produced blocks that were correct in *data* but carried ASET registrations that
+silently hijacked base-game asset lookups.
 
 **Probe:** `output/_scratch/aset_source_audit.py`, `output/_scratch/aset_collision_audit.py`
 

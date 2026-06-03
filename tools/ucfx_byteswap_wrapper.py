@@ -1,8 +1,8 @@
 """Wrapper to call the Rust ucfx_byteswap binary from Python.
 
 Provides a drop-in replacement for the byte-swap step in the DLC port
-pipeline.  The Rust binary handles the structural BE→LE conversion;
-entry-level overrides and type-hash stripping remain in Python.
+pipeline.  The Rust binary handles the full structural BE→LE conversion
+(all chunk tags and type_hashes) for decompressed Xbox 360 blocks.
 """
 from __future__ import annotations
 

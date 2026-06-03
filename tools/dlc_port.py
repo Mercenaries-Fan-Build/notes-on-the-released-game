@@ -128,123 +128,6 @@ def _crc32_mercs2(data: bytes) -> int:
     return crc & 0xFFFFFFFF
 
 
-# ── Type hashes for base-game override (platform-specific formats) ───
-_ANIMATION_TYPE_HASH = 0x18166555  # pandemic_hash_m2("animation")
-_TEXTURE_TYPE_HASH = 0xF011157A    # pandemic_hash_m2("texture")
-_MESH_B_TYPE_HASH = 0x5B724250
-_STANCE_TYPE_HASH = 0x207359C7
-_UNKNOWN_E5_TYPE_HASH = 0xE5273C14
-_SOUNDBANK_TYPE_HASH = 0x9F8BCA10   # pandemic_hash_m2("soundbank")
-_WAVEBANK_TYPE_HASH = 0xF753F6D0    # pandemic_hash_m2("wavebank")
-
-_OVERRIDE_TYPE_HASHES = frozenset((
-    _ANIMATION_TYPE_HASH,
-    _TEXTURE_TYPE_HASH,
-    _MESH_B_TYPE_HASH,
-    _STANCE_TYPE_HASH,
-    _UNKNOWN_E5_TYPE_HASH,  # audio group graph — Xbox DLC differs from PC retail
-    _SOUNDBANK_TYPE_HASH,   # soundbank header has mixed u16/u8 fields
-    _WAVEBANK_TYPE_HASH,    # wavebank data includes embedded audio clips
-))
-
-# Havok magic used to confirm an entry's data body contains Havok
-_HAVOK_MAGIC = b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10"
-
-
-# ── Base game Havok data extraction ──────────────────────────────────
-
-def _build_base_aset_index(source_wad: Path) -> dict[tuple[int, int], int]:
-    """Build (hash, type_id)→block_index lookup from the base game's ASET table.
-
-    Keys on (asset_hash, type_id) to disambiguate assets that share a hash
-    but exist under different types (e.g. texture vs mesh).
-    """
-    from ffcs_wad import parse_ffcs, extract_slice
-    raw = source_wad.read_bytes()
-    arch = parse_ffcs(source_wad)
-    aset_chunk = next((c for c in arch.chunks if c.tag == "ASET"), None)
-    if aset_chunk is None:
-        return {}
-    aset_data = extract_slice(raw, aset_chunk)
-    num_entries = aset_chunk.meta
-
-    index: dict[tuple[int, int], int] = {}
-    for i in range(num_entries):
-        off = i * 16
-        if off + 16 > len(aset_data):
-            break
-        asset_hash, _u1, u2, type_id = struct.unpack_from("<IIII", aset_data, off)
-        block_idx = (u2 >> 16) & 0xFFFF
-        if block_idx != 0xFFFF and asset_hash != 0:
-            index[(asset_hash, type_id)] = block_idx
-    return index
-
-
-def _extract_base_entry_ucfx(
-    source_wad: Path,
-    block_index: int,
-    target_hash: int,
-    target_type_hash: int,
-    *,
-    _block_cache: dict[int, bytes] | None = None,
-) -> bytes | None:
-    """Extract a specific entry's UCFX container (LE, without CSUM) from vz.wad.
-
-    Matches on both hash and type_hash to avoid pulling the wrong asset type
-    when a block contains entries with the same hash under different types.
-    Returns the raw UCFX bytes (sans CSUM trailer) or None if not found.
-    """
-    import mmap as mmap_mod
-    from ffcs_wad import parse_ffcs, extract_slice
-    from wad_patcher import get_block_boundaries
-
-    # Use cache to avoid redundant decompression
-    if _block_cache is not None and block_index in _block_cache:
-        decompressed = _block_cache[block_index]
-    else:
-        raw = source_wad.read_bytes()
-        arch = parse_ffcs(source_wad)
-        data_chunk = next((c for c in arch.chunks if c.tag == "DATA"), None)
-        if data_chunk is None:
-            return None
-        with open(source_wad, "rb") as f:
-            mm = mmap_mod.mmap(f.fileno(), 0, access=mmap_mod.ACCESS_READ)
-        try:
-            boundaries = get_block_boundaries(mm, data_chunk.offset, data_chunk.size)
-            if block_index >= len(boundaries):
-                return None
-            blk_start, blk_end = boundaries[block_index]
-            compressed = bytes(mm[blk_start:blk_end])
-        finally:
-            mm.close()
-
-        decompressed = decompress_sges_block(compressed, 0, len(compressed))
-        if _block_cache is not None:
-            _block_cache[block_index] = decompressed
-
-    # Parse LE entry table
-    if len(decompressed) < 4:
-        return None
-    count = struct.unpack_from("<I", decompressed, 0)[0]
-    if count > 50_000:
-        return None
-
-    header_end = 4 + count * 16
-    pos = header_end
-    for i in range(count):
-        eoff = 4 + i * 16
-        h, th, _fc, s = struct.unpack_from("<IIII", decompressed, eoff)
-        entry_end = pos + s
-        if h == target_hash and th == target_type_hash:
-            container = decompressed[pos:entry_end]
-            # Strip CSUM trailer if present
-            if len(container) >= 8 and container[-8:-4] == b"CSUM":
-                return container[:-8]
-            return container
-        pos = entry_end
-
-    return None
-
 _STRINGDB_TYPE_HASH = 0x39E5E978  # pandemic_hash_m2("stringdb")
 
 def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
@@ -341,120 +224,10 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
     return bytes(data)
 
 
-def _apply_overrides_and_strips(
-    le_block: bytes,
-    base_overrides: dict[int, bytes] | None,
-    strip_hashes: frozenset[int] | None,
-    strip_entries: frozenset[tuple[int, int]] | None = None,
-) -> tuple[bytes, int]:
-    """Apply entry-level overrides and type_hash stripping to an LE block.
-
-    - base_overrides: maps entry index → LE UCFX container bytes (no CSUM).
-      Replaces the Rust-converted container with the pre-converted PC version.
-    - strip_hashes: type_hashes to remove from the block entirely.
-    - strip_entries: exact ``(name_hash, type_hash)`` pairs to remove.  Takes
-      precedence over ``base_overrides`` (used for the cross-WAD dedupe of
-      world-container singletons that the base WAD already provides).
-
-    Returns (modified_block, stripped_count).
-    """
-    if not base_overrides and not strip_hashes and not strip_entries:
-        return le_block, 0
-    if len(le_block) < 4:
-        return le_block, 0
-
-    entry_count = struct.unpack_from("<I", le_block, 0)[0]
-    header_size = 4 + entry_count * 16
-    if header_size > len(le_block):
-        return le_block, 0
-
-    entries: list[tuple[int, int, int, int]] = []
-    for i in range(entry_count):
-        off = 4 + i * 16
-        h, t, o, s = struct.unpack_from("<IIII", le_block, off)
-        entries.append((h, t, o, s))
-
-    # Walk containers — chunk_size includes CSUM trailer (PC format).
-    pos = header_size
-    kept: list[tuple[int, int, bytes]] = []  # (name_hash, type_hash, full_chunk_with_csum)
-    for ei, (h, t, o, s) in enumerate(entries):
-        chunk_size = s
-        container_end = pos + chunk_size
-        if container_end > len(le_block):
-            chunk_data = le_block[pos:]
-        else:
-            chunk_data = le_block[pos:container_end]
-        pos = container_end
-
-        # Exact-pair strip (cross-WAD singleton dedupe) — authoritative,
-        # overrides any base_override for the same entry.
-        if strip_entries and (h, t) in strip_entries:
-            continue
-
-        # Strip?
-        if strip_hashes and t in strip_hashes and (
-            base_overrides is None or ei not in base_overrides
-        ):
-            continue
-
-        # Override?
-        if base_overrides and ei in base_overrides:
-            ucfx_le = base_overrides[ei]
-            csum_val = _crc32_mercs2(ucfx_le)
-            full_chunk = ucfx_le + b"CSUM" + struct.pack("<I", csum_val)
-            kept.append((h, t, full_chunk))
-        else:
-            kept.append((h, t, bytes(chunk_data)))
-
-    # Rebuild block: field_c is always 0 (engine walks sequentially via chunk_size).
-    out = struct.pack("<I", len(kept))
-    for h, t, full_chunk in kept:
-        chunk_sz = len(full_chunk)
-        out += struct.pack("<IIII", h, t, 0, chunk_sz)
-    for _, _, full_chunk in kept:
-        out += full_chunk
-
-    stripped_count = entry_count - len(kept)
-    return out, stripped_count
-
-
 _TYPE_ECS_LAYER = 0xE6B81A54
 _TYPE_WORLD_ENTITY = 0x5647C35D
 _TYPE_GUIDMAP = 0x140E8728
 _TYPE_FOLIAGE = 0x34612F86
-
-# Redundant world-container singletons that the dlc01 script resident
-# (blocks\dlc01\resident_P000_Q3.block) re-ships byte-identically even though
-# the always-loaded base VZ resident (blocks\VZ\resident_P000_Q3.block) already
-# provides them.  Registering them a second time in the patch makes the engine's
-# load-time render-view handle resolve loop re-resolve an already-resolved row
-# and stamp 0xFFFF → crash (docs/render_view_handle_crash_analysis.md).  Stripped
-# from the patch resident ONLY when the same (asset_hash, type_id) is present in
-# the base ASET, so the DLC references the base copies instead of duplicating
-# them.  Each entry is (asset_hash, type_hash).
-_REDUNDANT_RESIDENT_SINGLETONS: frozenset[tuple[int, int]] = frozenset({
-    (0x50075B3B, _TYPE_WORLD_ENTITY),  # worldentity — master ECS/scene container
-    (0x385EA82C, _TYPE_GUIDMAP),       # guidmap
-    (0x27E02A15, _TYPE_FOLIAGE),       # foliage
-})
-
-
-def _resident_singletons_to_strip(
-    base_aset_hashes: frozenset[int] | set[int],
-) -> frozenset[tuple[int, int]]:
-    """Pick which redundant world-container singletons to strip.
-
-    A singleton is stripped only when its ``asset_hash`` exists in the base
-    WAD's ASET (so it resolves to the base copy after removal).  The base ASET
-    stores these under type_ids that differ from the canonical ones, so the
-    gate is keyed on ``asset_hash`` membership (same semantics as
-    ``trim_patch_wad.build_base_aset_set``), never on ``(hash, type_id)``.
-    """
-    return frozenset(
-        (ah, th) for ah, th in _REDUNDANT_RESIDENT_SINGLETONS
-        if ah in base_aset_hashes
-    )
-
 
 _PYTHON_ECS_PATH_MARKERS = ("dlc01_base", "speedcity", "dlccon")
 
@@ -516,20 +289,15 @@ class _BlockWorkerArgs:
     block_asets: list[dict]
     packed_field: int
     flags: int
-    base_anim_index: dict[tuple[int, int], int]
     source_wad_path: str | None
     fix_stringdb_descriptors: bool
     dump_dir_path: str | None
     verbose: bool
     collect_hashes: bool
     permissive: bool = False
-    strip_audio: bool = False
     byteswap_python_ecs: bool = False
     byteswap_python_ecs_fallback: bool = False
     byteswap_python_ecs_paths: bool = True
-    no_resident_dedupe: bool = False
-    no_resident_overrides: bool = False
-    no_base_overrides: bool = False
 
 
 @dataclass
@@ -542,7 +310,6 @@ class _BlockWorkerResult:
     patch_block: PatchBlock | None = None
     hash_entries: list[int] = field(default_factory=list)
     tags_seen: dict[str, int] = field(default_factory=dict)
-    override_msg: str = ""
 
 
 def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
@@ -598,122 +365,6 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         dump_dir.mkdir(parents=True, exist_ok=True)
         (dump_dir / f"block_{blk_idx:04d}_be.bin").write_bytes(decompressed)
 
-    base_overrides: dict[int, bytes] | None = None
-    override_msg = ""
-    base_block_cache: dict[int, bytes] = {}
-    source_wad = Path(args.source_wad_path) if args.source_wad_path else None
-    strip_entries: frozenset[tuple[int, int]] | None = None
-    stripped_singleton_hashes: set[int] = set()
-
-    if args.base_anim_index and source_wad and not args.no_base_overrides:
-        from ucfx_be_to_le import _parse_entry_table_be
-        from aset_type_ids import type_id_for_type_hash
-
-        override_all = (
-            is_dlc_script_resident_path(args.path)
-            and not args.no_resident_overrides
-        )
-        is_resident = is_dlc_script_resident_path(args.path)
-
-        # Cross-WAD dedupe: on the dlc01 script resident only, strip the
-        # world-container singletons that the base WAD already provides
-        # (byte-identical) so they resolve to the always-loaded base copies
-        # instead of double-registering a render object on load.  Gated on the
-        # exact (asset_hash, type_id) existing in the base ASET index.
-        if is_resident and not args.no_resident_dedupe:
-            # Cross-WAD dedupe gate.  Derived once here from the already-loaded
-            # base ASET index (override_all is true only for the single dlc01
-            # resident block), keyed on asset_hash (see
-            # _resident_singletons_to_strip).
-            base_hashes = frozenset(k[0] for k in args.base_anim_index)
-            pairs = _resident_singletons_to_strip(base_hashes)
-            if pairs:
-                strip_entries = pairs
-                stripped_singleton_hashes = {ah for ah, _th in pairs}
-
-        be_entries = _parse_entry_table_be(decompressed)
-        override_counts: dict[int, int] = {}
-        for eidx, (ehash, etype, _eoff, _esize) in enumerate(be_entries):
-            if override_all or etype in _OVERRIDE_TYPE_HASHES:
-                tid = type_id_for_type_hash(etype)
-                if tid is not None and (ehash, tid) in args.base_anim_index:
-                    base_blk = args.base_anim_index[(ehash, tid)]
-                    le_ucfx = _extract_base_entry_ucfx(
-                        source_wad,
-                        base_blk,
-                        ehash,
-                        etype,
-                        _block_cache=base_block_cache,
-                    )
-                    if le_ucfx is not None:
-                        if base_overrides is None:
-                            base_overrides = {}
-                        base_overrides[eidx] = le_ucfx
-                        override_counts[etype] = override_counts.get(etype, 0) + 1
-
-        if override_all:
-            not_overridden = [
-                (eidx, ehash, etype)
-                for eidx, (ehash, etype, _, _) in enumerate(be_entries)
-                if base_overrides is None or eidx not in base_overrides
-            ]
-            if not_overridden and base_block_cache:
-                for base_blk_idx in list(base_block_cache.keys()):
-                    still_missing = not_overridden[:]
-                    for eidx, ehash, etype in still_missing:
-                        le_ucfx = _extract_base_entry_ucfx(
-                            source_wad,
-                            base_blk_idx,
-                            ehash,
-                            etype,
-                            _block_cache=base_block_cache,
-                        )
-                        if le_ucfx is not None:
-                            if base_overrides is None:
-                                base_overrides = {}
-                            base_overrides[eidx] = le_ucfx
-                            override_counts[etype] = (
-                                override_counts.get(etype, 0) + 1
-                            )
-                            not_overridden.remove((eidx, ehash, etype))
-                    if not not_overridden:
-                        break
-
-        if base_overrides:
-            _override_labels = {
-                _ANIMATION_TYPE_HASH: "Havok",
-                _TEXTURE_TYPE_HASH: "texture",
-                _MESH_B_TYPE_HASH: "mesh_B",
-                _STANCE_TYPE_HASH: "stance",
-                _UNKNOWN_E5_TYPE_HASH: "unknown_E5",
-                _SOUNDBANK_TYPE_HASH: "soundbank",
-                _WAVEBANK_TYPE_HASH: "wavebank",
-            }
-            if override_all:
-                non_labeled = sum(
-                    c for t, c in override_counts.items()
-                    if t not in _override_labels
-                )
-                parts = [
-                    f"{override_counts[th]} {_override_labels[th]}"
-                    for th in _OVERRIDE_TYPE_HASHES
-                    if override_counts.get(th)
-                ]
-                if non_labeled:
-                    parts.append(f"{non_labeled} resident-shared")
-                override_msg = " + ".join(parts) + " override(s) from base game"
-            else:
-                parts = [
-                    f"{override_counts[th]} {_override_labels[th]}"
-                    for th in _OVERRIDE_TYPE_HASHES
-                    if override_counts.get(th)
-                ]
-                override_msg = " + ".join(parts) + " override(s) from base game"
-
-    strip_hashes: frozenset[int] | None = None
-    if args.strip_audio:
-        strip_hashes = frozenset({_SOUNDBANK_TYPE_HASH, _WAVEBANK_TYPE_HASH})
-
     try:
         if _should_use_python_ecs_byteswap(
             decompressed,
@@ -739,26 +390,6 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
             skipped=True,
             skip_reason=f"byte-swap failed: {e}",
         )
-
-    # Post-processing: apply base_overrides and strip_hashes on the LE output
-    if base_overrides or strip_hashes or strip_entries:
-        swapped, stripped_count = _apply_overrides_and_strips(
-            swapped, base_overrides, strip_hashes, strip_entries,
-        )
-        if base_overrides:
-            stats["overrides_applied"] = len(base_overrides)
-        stats["stripped_count"] = stripped_count
-
-    stripped_count = stats.get("stripped_count", 0)
-    if stripped_count:
-        if strip_entries and not strip_hashes:
-            strip_msg = (
-                f"{stripped_count} redundant base singleton(s) stripped "
-                f"(resolve to base copy)"
-            )
-        else:
-            strip_msg = f"{stripped_count} audio entry(ies) stripped"
-        override_msg = f"{override_msg}; {strip_msg}" if override_msg else strip_msg
 
     if args.fix_stringdb_descriptors:
         swapped = _fix_stringdb_descriptors(swapped)
@@ -795,14 +426,7 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
     recomputed_packed = (xbox_tier << 24) | correct_pages
 
     # Drop the ASET rows for any stripped singleton so INDX/ASET/PTHS stay
-    # consistent with the removed UCFX entries (the asset still resolves via the
-    # base WAD's always-loaded copy).
     block_asets = list(args.block_asets)
-    if stripped_singleton_hashes:
-        block_asets = [
-            row for row in block_asets
-            if row.get("asset_hash") not in stripped_singleton_hashes
-        ]
 
     return _BlockWorkerResult(
         blk_idx=blk_idx,
@@ -816,7 +440,6 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         ),
         hash_entries=hash_entries,
         tags_seen=dict(stats.get("tags_seen", {})),
-        override_msg=override_msg,
     )
 
 
@@ -836,8 +459,6 @@ def _collect_block_results(
         if res.skipped:
             skipped += 1
             continue
-        if res.override_msg and verbose:
-            print(f"  [{res.blk_idx}] → {res.override_msg}")
         for tag, cnt in res.tags_seen.items():
             total_swap_stats[tag] = total_swap_stats.get(tag, 0) + cnt
         for h in res.hash_entries:
@@ -920,196 +541,6 @@ def _recompute_aset_sub_entries(converted: list[PatchBlock], *, verbose: bool = 
 # ── Pipeline ──────────────────────────────────────────────────────────
 
 
-def _count_block_entries(blk: PatchBlock) -> int:
-    """Decompress and return entry_count for a single PatchBlock."""
-    compressed = blk.compressed_data
-    try:
-        if compressed[:4] == b"sges":
-            decompressed = decompress_sges_block(compressed, 0, len(compressed))
-        else:
-            decompressed = compressed
-        if len(decompressed) >= 4:
-            count = struct.unpack_from("<I", decompressed, 0)[0]
-            return count if count < 50000 else 0
-    except Exception:
-        return 0
-    return 0
-
-
-def _get_block_name_hashes(blk: PatchBlock) -> list[int]:
-    """Decompress and return name_hashes from a block's entry table."""
-    compressed = blk.compressed_data
-    try:
-        if compressed[:4] == b"sges":
-            decompressed = decompress_sges_block(compressed, 0, len(compressed))
-        else:
-            decompressed = compressed
-        if len(decompressed) < 4:
-            return []
-        count = struct.unpack_from("<I", decompressed, 0)[0]
-        if count > 50000:
-            return []
-        hashes = []
-        for i in range(count):
-            off = 4 + i * 16
-            if off + 16 > len(decompressed):
-                break
-            h = struct.unpack_from("<I", decompressed, off)[0]
-            hashes.append(h)
-        return hashes
-    except Exception:
-        return []
-
-
-def _trim_to_descriptor_limit(
-    converted: list[PatchBlock],
-    limit: int,
-    source_wad: Path | None,
-    verbose: bool,
-) -> None:
-    """Remove redundant blocks until combined descriptor count is under *limit*.
-
-    Descriptors = len(blocks) + sum(aset_entries) + sum(block_entry_counts).
-    Only removes blocks whose entries all exist in the base game ASET table
-    (i.e., the base game already has these assets — patch override is redundant).
-    Removes largest-entry-count blocks first to minimize blocks removed.
-    Modifies *converted* in place.
-    """
-    # Compute current totals
-    total_aset = sum(len(blk.aset_entries) for blk in converted)
-    block_entries = []
-    for blk in converted:
-        block_entries.append(_count_block_entries(blk))
-    total_block_entries = sum(block_entries)
-    total_descriptors = len(converted) + total_aset + total_block_entries
-
-    print(f"\n  Descriptor check: {total_descriptors:,} "
-          f"(limit={limit:,}, INDX={len(converted)}, "
-          f"ASET={total_aset}, entries={total_block_entries})")
-
-    if total_descriptors <= limit:
-        print(f"  Already under limit ({total_descriptors} <= {limit}). No trimming needed.")
-        return
-
-    excess = total_descriptors - limit
-    print(f"  Over limit by {excess}. Auto-trimming redundant blocks...")
-
-    # Build base game hash set for redundancy detection
-    if source_wad is None:
-        print("  WARNING: --source-wad required for auto-trim. Cannot determine redundancy.")
-        return
-
-    from trim_patch_wad import build_base_aset_set  # noqa: E402 — avoid circular at top
-    base_hashes = build_base_aset_set(source_wad)
-
-    # Find redundant blocks (all entry hashes exist in base game)
-    redundant: list[tuple[int, int]] = []  # (combined_cost, index)
-    for i, blk in enumerate(converted):
-        entry_hashes = _get_block_name_hashes(blk)
-        if not entry_hashes:
-            continue
-        if all(h in base_hashes for h in entry_hashes):
-            # Cost of keeping this block: 1 (INDX) + aset_entries + block_entries
-            cost = 1 + len(blk.aset_entries) + len(entry_hashes)
-            redundant.append((cost, i))
-
-    # Sort by cost descending (remove highest-cost first = fewest removals)
-    redundant.sort(reverse=True)
-
-    removed_indices: set[int] = set()
-    removed_descriptors = 0
-    for cost, idx in redundant:
-        if removed_descriptors >= excess:
-            break
-        removed_indices.add(idx)
-        removed_descriptors += cost
-        if verbose:
-            print(f"    Trim: [{idx}] cost={cost} path={converted[idx].path_string}")
-
-    # Remove in reverse order to preserve indices
-    for idx in sorted(removed_indices, reverse=True):
-        del converted[idx]
-
-    # Recount
-    new_aset = sum(len(blk.aset_entries) for blk in converted)
-    new_entries = sum(_count_block_entries(blk) for blk in converted)
-    new_total = len(converted) + new_aset + new_entries
-    print(f"  Trimmed {len(removed_indices)} redundant blocks "
-          f"(removed {removed_descriptors} descriptors)")
-    print(f"  New total: {new_total:,} descriptors "
-          f"(INDX={len(converted)}, ASET={new_aset}, entries={new_entries})")
-
-
-def _strip_base_game_aset_collisions(
-    converted: list[PatchBlock],
-    source_wad: Path,
-    *,
-    protect_indices: set[int] | None = None,
-    verbose: bool = False,
-) -> tuple[int, int]:
-    """Remove ASET entries whose asset_hash already exists in the retail WAD.
-
-    This prevents the patch WAD from falsely claiming ownership of base-game
-    assets.  When the engine's "last-opened-file wins" search finds a patch
-    ASET entry for a base-game hash, it reads the wrong block (patch-local
-    index interpreted as a base-game index) and loads corrupt data.
-
-    Two passes:
-      1. Drop entirely-redundant blocks (all UCFX entries exist in retail).
-      2. Strip individual shared ASET entries from remaining mixed blocks.
-
-    *protect_indices* — patch block indices exempt from stripping (e.g. the
-    scripts_vz bootstrap must override the base game's scripts_vz).
-
-    Returns (blocks_dropped, aset_entries_stripped).
-    """
-    from trim_patch_wad import build_base_aset_set  # noqa: E402
-
-    base_hashes = build_base_aset_set(source_wad)
-    if not base_hashes:
-        return 0, 0
-
-    protect = protect_indices or set()
-
-    # Pass 1: drop blocks where every UCFX entry hash is in the retail WAD.
-    redundant_indices: set[int] = set()
-    for i, blk in enumerate(converted):
-        if i in protect:
-            continue
-        entry_hashes = _get_block_name_hashes(blk)
-        if entry_hashes and all(h in base_hashes for h in entry_hashes):
-            redundant_indices.add(i)
-
-    for idx in sorted(redundant_indices, reverse=True):
-        if verbose:
-            print(f"    Drop redundant block [{idx}] {converted[idx].path_string}")
-        del converted[idx]
-
-    # Rebuild protect set after deletions (indices shifted).
-    if protect and redundant_indices:
-        new_protect: set[int] = set()
-        for old_idx in protect:
-            if old_idx in redundant_indices:
-                continue
-            shift = sum(1 for r in redundant_indices if r < old_idx)
-            new_protect.add(old_idx - shift)
-        protect = new_protect
-
-    # Pass 2: strip individual ASET entries from remaining mixed blocks.
-    stripped = 0
-    for i, blk in enumerate(converted):
-        if i in protect:
-            continue
-        before = len(blk.aset_entries)
-        blk.aset_entries[:] = [
-            e for e in blk.aset_entries
-            if e["asset_hash"] not in base_hashes
-        ]
-        stripped += before - len(blk.aset_entries)
-
-    return len(redundant_indices), stripped
-
-
 def port_x360_dlc(
     doh: bytes,
     *,
@@ -1127,16 +558,11 @@ def port_x360_dlc(
     synth_stringdb_aset: bool = True,
     jobs: int | None = None,
     permissive: bool = False,
-    strip_audio: bool = False,
     byteswap_python_ecs: bool = False,
     byteswap_python_ecs_fallback: bool = False,
     byteswap_python_ecs_paths: bool = True,
     fail_on_placement_violations: bool = False,
-    descriptor_limit: int | None = None,
     exclude_blocks: str | None = None,
-    no_resident_dedupe: bool = False,
-    no_resident_overrides: bool = False,
-    no_base_overrides: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -1158,15 +584,6 @@ def port_x360_dlc(
         print("  Byte-swap backend: Rust + Python (layer/path: dlc01_base, speedcity, dlccon)")
     else:
         print("  Byte-swap backend: Rust (ucfx_byteswap)")
-    if no_base_overrides:
-        print("  Base overrides: OFF (all blocks — pure BE→LE conversion)")
-    elif no_resident_overrides or no_resident_dedupe:
-        parts = []
-        if no_resident_overrides:
-            parts.append("resident override_all OFF")
-        if no_resident_dedupe:
-            parts.append("resident singleton dedupe OFF")
-        print(f"  Base overrides: partial ({'; '.join(parts)})")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -1257,13 +674,6 @@ def port_x360_dlc(
     if jobs > 1:
         print(f"  Parallel workers: {jobs}")
 
-    # Build base game animation index for Havok override
-    base_anim_index: dict[tuple[int, int], int] = {}
-    if source_wad:
-        base_anim_index = _build_base_aset_index(source_wad)
-        if base_anim_index:
-            print(f"  Base game animation index: {len(base_anim_index)} entries")
-
     collect_hashes = bool(global_aset)
     dump_dir_str = str(dump_dir) if dump_dir else None
     source_wad_str = str(source_wad) if source_wad else None
@@ -1292,20 +702,15 @@ def port_x360_dlc(
             block_asets=list(aset_by_block.get(blk_idx, [])),
             packed_field=indx.packed_field,
             flags=indx.flags,
-            base_anim_index=base_anim_index,
             source_wad_path=source_wad_str,
             fix_stringdb_descriptors=fix_stringdb_descriptors,
             dump_dir_path=dump_dir_str,
             verbose=verbose,
             collect_hashes=collect_hashes,
             permissive=permissive,
-            strip_audio=strip_audio,
             byteswap_python_ecs=byteswap_python_ecs,
             byteswap_python_ecs_fallback=byteswap_python_ecs_fallback,
             byteswap_python_ecs_paths=byteswap_python_ecs_paths,
-            no_resident_dedupe=no_resident_dedupe,
-            no_resident_overrides=no_resident_overrides,
-            no_base_overrides=no_base_overrides,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1602,36 +1007,6 @@ def port_x360_dlc(
             print(f"    - {name}")
 
     # ── Descriptor limit trimming ─────────────────────────────────────
-    # If --descriptor-limit is set, auto-remove redundant blocks to stay
-    # under the engine's descriptor table size limit (~15,500 on PC).
-    # "Descriptors" = INDX entries + ASET entries + sum of per-block entry counts.
-    if descriptor_limit is not None:
-        _trim_to_descriptor_limit(converted, descriptor_limit, source_wad, verbose)
-
-    # ── Strip base-game ASET collisions ─────────────────────────────
-    # The Xbox DLC source is a full game+DLC WAD.  Its ASET entries for
-    # base-game assets get carried through and cause the engine to load
-    # wrong blocks when the patch WAD is used as a differential overlay.
-    if source_wad is not None:
-        protect = set()
-        if scripts_vz_idx is not None:
-            protect.add(scripts_vz_idx)
-        blocks_dropped, aset_stripped = _strip_base_game_aset_collisions(
-            converted,
-            source_wad,
-            protect_indices=protect,
-            verbose=verbose,
-        )
-        if blocks_dropped or aset_stripped:
-            print(f"\n  ASET collision fix: dropped {blocks_dropped} redundant blocks, "
-                  f"stripped {aset_stripped} shared ASET entries")
-            if scripts_vz_idx is not None and blocks_dropped:
-                scripts_vz_idx = next(
-                    (i for i, blk in enumerate(converted)
-                     if "scripts_vz" in blk.path_string.lower()),
-                    None,
-                )
-
     # ── Explicit block exclusion ──────────────────────────────────────
     if exclude_blocks:
         patterns = [p.strip().lower() for p in exclude_blocks.split(",")]
@@ -2339,10 +1714,6 @@ def main() -> int:
     ap.add_argument("--permissive", action="store_true",
                     help="Allow blind u32 fallbacks on unknown chunks (testing only; "
                          "default is strict — unhandled tags raise)")
-    ap.add_argument("--strip-audio", action="store_true",
-                    help="Strip soundbank/wavebank UCFX entries from blocks when no "
-                         "base-game override is available (prevents crash in "
-                         "PalSoundEngine::MixSources from malformed audio data)")
     ap.add_argument("--fix-stringdb-descriptors", action="store_true",
                     help="Run heuristic SYEK/SRTS descriptor fixup (off by default; "
                          "see tools/dlc_stringdb_forensic.py)")
@@ -2366,30 +1737,8 @@ def main() -> int:
                     help="Extract .pws audio files to this directory")
     ap.add_argument("--work-dir", type=Path, default=None,
                     help="Working directory for temp files")
-    ap.add_argument("--descriptor-limit", type=int, default=None,
-                    help="Max combined descriptors (ASET + INDX + block entries). "
-                         "If exceeded, auto-trim redundant blocks. Requires --source-wad. "
-                         "PC engine limit is ~15,500.")
     ap.add_argument("--exclude-blocks", type=str, default=None,
                     help="Comma-separated block paths (substrings) to exclude from output")
-    ap.add_argument(
-        "--no-resident-dedupe",
-        action="store_true",
-        help="Do not strip byte-identical worldentity/guidmap/foliage from "
-             "dlc01 resident (Build B: reverts cross-WAD singleton dedupe)",
-    )
-    ap.add_argument(
-        "--no-resident-overrides",
-        action="store_true",
-        help="Do not substitute base-game UCFX for dlc01 resident entries "
-             "(Build C/D: pure BE→LE for resident; per-type overrides elsewhere)",
-    )
-    ap.add_argument(
-        "--no-base-overrides",
-        action="store_true",
-        help="Disable all base-game UCFX substitution (override_all + "
-             "_OVERRIDE_TYPE_HASHES); pure BE→LE everywhere",
-    )
 
     args = ap.parse_args()
 
@@ -2456,16 +1805,11 @@ def main() -> int:
         synth_stringdb_aset=not args.no_synth_stringdb_aset,
         jobs=args.jobs,
         permissive=args.permissive,
-        strip_audio=args.strip_audio,
         byteswap_python_ecs=args.byteswap_python_ecs,
         byteswap_python_ecs_fallback=args.byteswap_python_ecs_fallback,
         byteswap_python_ecs_paths=not args.no_byteswap_python_ecs_paths,
         fail_on_placement_violations=args.fail_on_placement_violations,
-        descriptor_limit=args.descriptor_limit,
         exclude_blocks=args.exclude_blocks,
-        no_resident_dedupe=args.no_resident_dedupe,
-        no_resident_overrides=args.no_resident_overrides,
-        no_base_overrides=args.no_base_overrides,
     )
 
 

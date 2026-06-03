@@ -662,7 +662,6 @@ dlc-port: build-luac build-ucfx-byteswap
 	  --x360-rar "$(DLC_RAR)" \
 	  --source-wad "$(SOURCE_WAD)" \
 	  --no-hook \
-	  $(if $(DESCRIPTOR_LIMIT),--descriptor-limit $(DESCRIPTOR_LIMIT),) \
 	  $(if $(JOBS),--jobs $(JOBS),) \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"

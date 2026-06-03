@@ -1307,7 +1307,7 @@ fn untile_own_surface(tiled: &[u8], width_px: usize, height_px: usize, fourcc: &
 }
 
 fn untile_streaming_page(tiled: &[u8], fourcc: &[u8; 4]) -> Option<Vec<u8>> {
-    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let (_block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
     let (awb, ahb, wb, hb) = if fourcc == b"DXT5" {
         if tiled.len() == 32 * 32 * texel_pitch {
             (32usize, 32usize, 32usize, 32usize)
@@ -1553,7 +1553,7 @@ fn apply_texture_untile(
         mips = tex_mip_levels(width, height);
     }
 
-    let (pc_body, resident_mips, body_idx, mut body_abs_val) = if let Some(body_idx) = body_idx {
+    let (pc_body, resident_mips, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
         let body = &descriptors[body_idx];
         let body_abs = data_start + body.row_u0 as usize;
         if body_abs + body.body_size as usize > out.len() {

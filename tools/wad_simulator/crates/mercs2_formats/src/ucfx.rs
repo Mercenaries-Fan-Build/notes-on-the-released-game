@@ -72,7 +72,7 @@ pub fn walk_decompressed_block(decompressed: &[u8], label: &str) -> (ParsedBlock
             });
             break;
         }
-        let mut container = decompressed[pos..pos + chunk_size].to_vec();
+        let container = decompressed[pos..pos + chunk_size].to_vec();
         pos += chunk_size;
 
         if let Some(csum_issues) = verify_ucfx_container(&container, &format!("{label}/entry[{i}]"), entry.type_hash) {

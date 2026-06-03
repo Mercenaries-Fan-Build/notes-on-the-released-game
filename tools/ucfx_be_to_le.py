@@ -1606,18 +1606,13 @@ _U32_DATA_TYPES = (
         _TYPE_UNKNOWN_E5,  # Audio group descriptor — has own converter but INFO is u32
         _TYPE_LOW_RES_TERRAIN, _TYPE_EFFECT, _TYPE_PATH,
         _TYPE_RESIDENT_MISC,  # verified pure u32/f32 from DLC block 464 analysis
+        _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_LEVEL, _TYPE_LAYER,
+        _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
     }
 )
 
-# Types whose INFO is u32 but only exist in the resident block (never in DLC).
-# If encountered during DLC port, raise rather than blindly swapping.
-_RESIDENT_ONLY_TYPES = {
-    _TYPE_STANCE, _TYPE_STATE_MACHINE, _TYPE_LEVEL, _TYPE_LAYER,
-    _TYPE_MATERIALTABLE, _TYPE_UNKNOWN_DE,
-}
-
 # Combined set for INFO tag dispatch (all are u32-safe for INFO bodies).
-_U32_INFO_TYPES = _U32_DATA_TYPES | _RESIDENT_ONLY_TYPES | _AUDIO_TYPES
+_U32_INFO_TYPES = _U32_DATA_TYPES | _AUDIO_TYPES
 
 
 def _swap_chdr_header(header_be: bytes) -> bytes:
@@ -2337,11 +2332,6 @@ def _convert_body(
             return _convert_cfx_compressed_data(body_be)
         if type_hash in _U32_DATA_TYPES:
             return _convert_u32_array(body_be)
-        if type_hash in _RESIDENT_ONLY_TYPES:
-            raise UnhandledByteSwapError(
-                f"Resident-only type 0x{type_hash:08X} encountered in data chunk "
-                f"(body_size={len(body_be)}); this type should not appear in DLC blocks"
-            )
         return _fallback_u32_or_raise(
             body_be,
             reason="unknown data chunk type_hash",

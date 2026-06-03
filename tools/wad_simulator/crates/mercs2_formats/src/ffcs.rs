@@ -160,7 +160,7 @@ pub fn parse_pths(file: &mut File, row: &ChunkRow, file_size: u64) -> io::Result
         return Ok(Vec::new());
     }
     // Read until next chunk or reasonable cap
-    let mut end = file_size;
+    let _end = file_size;
     file.seek(SeekFrom::Start(start))?;
     let mut raw = Vec::new();
     let mut chunk = [0u8; 65536];
