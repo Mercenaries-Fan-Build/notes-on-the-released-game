@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match aset_validate::run_aset_hash_validation(&cli.wad, cli.limit) {
             Ok(stats) => {
                 aset_validate::print_hash_validation_summary(&stats);
-                if stats.ghost_entries > 0 {
+                if stats.misrouted > 0 || stats.true_ghost > 0 {
                     exit_code = 1;
                 }
             }

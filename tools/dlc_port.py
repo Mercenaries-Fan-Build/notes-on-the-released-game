@@ -541,13 +541,39 @@ def _recompute_aset_sub_entries(converted: list[PatchBlock], *, verbose: bool = 
 # ── Content-validated ASET filtering ──────────────────────────────────
 
 
+def _build_block_hash_map(
+    converted: list[PatchBlock],
+) -> dict[int, list[tuple[int, int]]]:
+    """Build a global asset_hash → [(block_index, sub_entry_index)] map.
+
+    Scans every block's decompressed UCFX entry table and records which
+    block(s) actually contain each asset hash.  Used by
+    ``_validate_aset_against_content`` to remap orphaned ASET entries to
+    their correct block instead of dropping them.
+    """
+    hash_map: dict[int, list[tuple[int, int]]] = {}
+    for blk_idx, blk in enumerate(converted):
+        try:
+            decomp = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data),
+            )
+            entries = parse_block_entries(decomp)
+        except Exception:
+            continue
+        for sub_idx, entry in enumerate(entries):
+            h = entry.get("hash")
+            if h is not None and h != 0:
+                hash_map.setdefault(h, []).append((blk_idx, sub_idx))
+    return hash_map
+
+
 def _validate_aset_against_content(
     converted: list[PatchBlock],
     *,
     protected_hashes: set[int] | None = None,
     verbose: bool = False,
-) -> tuple[int, int, int]:
-    """Remove ASET entries not backed by actual UCFX content in the block.
+) -> tuple[int, int, int, int]:
+    """Remap or remove ASET entries not backed by actual UCFX content.
 
     The Xbox DLC source is a full replacement WAD whose ASET table covers
     all 11,087 blocks (base game + DLC).  When ``dlc_port.py`` extracts
@@ -556,49 +582,71 @@ def _validate_aset_against_content(
     "ghost" entries cause **false ownership**: the engine loads the wrong
     data from the patch WAD instead of the retail ``vz.wad``.
 
-    This pass scans each block's decompressed UCFX entry table and removes
-    any ASET entry whose ``asset_hash`` is not found in the block's content.
+    **Phase 1 — remap:** build a global hash→block map from all blocks'
+    UCFX content.  For each orphaned ASET entry (hash not in its claimed
+    block), check whether the hash exists in *another* block in the patch
+    WAD and remap the entry to point there.
+
+    **Phase 2 — remove:** entries whose hash is not found in *any* block
+    are truly ghosts (base-game-only assets) and are removed.
 
     *protected_hashes* — asset hashes that must never be removed (e.g.
     bootstrap ``scripts_vz`` entries).
 
-    Returns ``(kept, removed, blocks_dropped)``.
+    Returns ``(kept, remapped, removed, blocks_dropped)``.
     """
     _resolver = _get_hash_resolver()
     protected = protected_hashes or set()
+
+    # Phase 1: build global hash → [(block_idx, sub_entry)] map
+    global_hash_map = _build_block_hash_map(converted)
+
+    # Per-block content hash sets (cached from the global scan)
+    block_hash_sets: dict[int, set[int]] = {}
+    for h, locations in global_hash_map.items():
+        for blk_idx, _ in locations:
+            block_hash_sets.setdefault(blk_idx, set()).add(h)
+
     total_kept = 0
+    total_remapped = 0
     total_removed = 0
     blocks_dropped = 0
 
     for blk_idx, blk in enumerate(converted):
         if not blk.aset_entries:
-            total_kept += 0
             continue
 
-        # Decompress and parse the UCFX entry table to get actual hashes
-        actual_hashes: set[int] = set()
-        try:
-            decomp = decompress_sges_block(
-                blk.compressed_data, 0, len(blk.compressed_data),
-            )
-            entries = parse_block_entries(decomp)
-            for entry in entries:
-                h = entry.get("hash")
-                if h is not None and h != 0:
-                    actual_hashes.add(h)
-        except Exception:
-            # If we can't decompress/parse, keep all entries as a safety net
-            total_kept += len(blk.aset_entries)
-            continue
+        local_hashes = block_hash_sets.get(blk_idx, set())
 
         surviving: list[dict] = []
         removed_this_block: list[dict] = []
+        remapped_this_block: list[tuple[dict, int, int]] = []
+
         for ae in blk.aset_entries:
             ah = ae["asset_hash"]
-            if ah in actual_hashes or ah in protected:
+            if ah in local_hashes or ah in protected:
                 surviving.append(ae)
+                continue
+
+            # Hash not in this block — try to find it elsewhere
+            locations = global_hash_map.get(ah)
+            if locations:
+                new_blk_idx, new_sub_idx = locations[0]
+                remapped_entry = dict(ae)
+                remapped_entry["_remap_target_block"] = new_blk_idx
+                remapped_this_block.append(
+                    (remapped_entry, new_blk_idx, new_sub_idx))
             else:
                 removed_this_block.append(ae)
+
+        # Move remapped entries to their correct blocks
+        for ae, target_blk_idx, target_sub_idx in remapped_this_block:
+            del ae["_remap_target_block"]
+            converted[target_blk_idx].aset_entries.append(ae)
+            total_remapped += 1
+            if verbose:
+                print(f"    [ASET validate] block {blk_idx} → {target_blk_idx}: "
+                      f"remapped {_resolver.annotate(ae['asset_hash'])}")
 
         if removed_this_block:
             if verbose:
@@ -607,9 +655,13 @@ def _validate_aset_against_content(
                           f"({blk.path_string}): removed ghost entry "
                           f"{_resolver.annotate(ae['asset_hash'])}")
 
-            blk.aset_entries[:] = surviving
+        blk.aset_entries[:] = surviving
 
-            if not surviving:
+        if not surviving and not any(
+            t == blk_idx for _, t, _ in remapped_this_block
+        ):
+            # Only mark as dropped if no other entries were remapped INTO it
+            if not blk.aset_entries:
                 blocks_dropped += 1
                 if verbose:
                     print(f"    [ASET validate] block {blk_idx} "
@@ -619,7 +671,7 @@ def _validate_aset_against_content(
         total_kept += len(surviving)
         total_removed += len(removed_this_block)
 
-    return total_kept, total_removed, blocks_dropped
+    return total_kept, total_remapped, total_removed, blocks_dropped
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────
@@ -1115,15 +1167,15 @@ def port_x360_dlc(
             bootstrap_hashes = {
                 e["asset_hash"] for e in converted[scripts_vz_idx].aset_entries
             }
-        kept, removed, blocks_dropped = _validate_aset_against_content(
+        kept, remapped, removed, blocks_dropped = _validate_aset_against_content(
             converted,
             protected_hashes=bootstrap_hashes,
             verbose=verbose,
         )
         if blocks_dropped:
             converted = [blk for blk in converted if blk.aset_entries]
-        print(f"\n  ASET validation: {kept} kept, {removed} removed "
-              f"({blocks_dropped} empty blocks dropped)")
+        print(f"\n  ASET validation: {kept} kept, {remapped} remapped, "
+              f"{removed} removed ({blocks_dropped} empty blocks dropped)")
     else:
         print("\n  ASET validation: skipped (--no-aset-validation)")
 

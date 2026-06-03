@@ -160,23 +160,30 @@ pub struct GhostDetail {
     pub asset_hash: u32,
     pub type_id: u32,
     pub block_index: u16,
-    pub block_hashes: Vec<u32>,
+    /// If the hash exists in another block, this is `Some(correct_block)`.
+    pub remappable_to: Option<u16>,
 }
 
 #[derive(Debug, Default)]
 pub struct HashValidationStats {
     pub total_aset: usize,
     pub verified: usize,
-    pub ghost_entries: usize,
+    /// Hash exists in another block — wrong block_index, remappable.
+    pub misrouted: usize,
+    /// Hash not found in any block — true ghost / base-game-only.
+    pub true_ghost: usize,
     pub decompression_failures: usize,
     pub ghost_details: Vec<GhostDetail>,
 }
 
 /// Check that every ASET entry's `asset_hash` actually exists in the
-/// block entry table it claims to own.  Entries whose hash is absent
-/// from the block are "false ownership" / ghost entries — the engine
-/// will load wrong data from this block instead of falling through to
-/// the base WAD.
+/// block entry table it claims to own.
+///
+/// Entries whose hash is absent from their claimed block are classified:
+/// - **misrouted** — hash exists in a *different* block (wrong block_index,
+///   the build pipeline should remap these)
+/// - **true ghost** — hash not found in *any* block (base-game-only asset,
+///   should be removed)
 pub fn run_aset_hash_validation(
     wad_path: &std::path::Path,
     limit: usize,
@@ -187,7 +194,30 @@ pub fn run_aset_hash_validation(
     let aset_entries = arch.aset;
     let indx_entries = arch.indx;
 
-    let mut block_hash_cache: HashMap<u16, Result<Vec<u32>, String>> = HashMap::new();
+    // Pre-decompress all blocks and build a global hash → block_index map
+    let block_count = indx_entries.len();
+    let mut block_hash_cache: HashMap<u16, Vec<u32>> = HashMap::new();
+    let mut global_hash_map: HashMap<u32, u16> = HashMap::new();
+
+    for blk_idx in 0..block_count {
+        let idx = blk_idx as u16;
+        match decompress_block(&mut file, &indx_entries, idx) {
+            Ok(decompressed) => {
+                let (entry_count, entries) = parse_block_entry_table(&decompressed);
+                let hashes: Vec<u32> = entries
+                    .iter()
+                    .take(entry_count as usize)
+                    .map(|e| e.name_hash)
+                    .collect();
+                for &h in &hashes {
+                    global_hash_map.entry(h).or_insert(idx);
+                }
+                block_hash_cache.insert(idx, hashes);
+            }
+            Err(_) => {}
+        }
+    }
+
     let mut stats = HashValidationStats {
         total_aset: aset_entries.len(),
         ..Default::default()
@@ -202,39 +232,28 @@ pub fn run_aset_hash_validation(
     for (i, aset) in aset_entries.iter().enumerate().take(process_count) {
         let block_idx = aset.block_index();
 
-        if !block_hash_cache.contains_key(&block_idx) {
-            let result = decompress_block(&mut file, &indx_entries, block_idx);
-            let hash_result = match result {
-                Ok(decompressed) => {
-                    let (entry_count, entries) = parse_block_entry_table(&decompressed);
-                    let hashes: Vec<u32> = entries
-                        .iter()
-                        .take(entry_count as usize)
-                        .map(|e| e.name_hash)
-                        .collect();
-                    Ok(hashes)
-                }
-                Err(e) => Err(e),
-            };
-            block_hash_cache.insert(block_idx, hash_result);
-        }
-
-        match block_hash_cache.get(&block_idx).unwrap() {
-            Err(_) => {
+        match block_hash_cache.get(&block_idx) {
+            None => {
                 stats.decompression_failures += 1;
             }
-            Ok(block_hashes) => {
+            Some(block_hashes) => {
                 if block_hashes.contains(&aset.asset_hash) {
                     stats.verified += 1;
                 } else {
-                    stats.ghost_entries += 1;
-                    if stats.ghost_details.len() < 100 {
+                    // Not in claimed block — check global map
+                    let remap_target = global_hash_map.get(&aset.asset_hash).copied();
+                    if let Some(_correct_blk) = remap_target {
+                        stats.misrouted += 1;
+                    } else {
+                        stats.true_ghost += 1;
+                    }
+                    if stats.ghost_details.len() < 200 {
                         stats.ghost_details.push(GhostDetail {
                             aset_index: i,
                             asset_hash: aset.asset_hash,
                             type_id: aset.type_id,
                             block_index: block_idx,
-                            block_hashes: block_hashes.clone(),
+                            remappable_to: remap_target,
                         });
                     }
                 }
@@ -246,32 +265,45 @@ pub fn run_aset_hash_validation(
 }
 
 pub fn print_hash_validation_summary(stats: &HashValidationStats) {
+    let orphan_total = stats.misrouted + stats.true_ghost;
     println!(
-        "  Total ASET: {}  Verified: {}  Ghost: {}",
-        stats.total_aset, stats.verified, stats.ghost_entries
+        "  Total ASET: {}  Verified: {}  Misrouted: {}  True ghost: {}",
+        stats.total_aset, stats.verified, stats.misrouted, stats.true_ghost
     );
-    if stats.ghost_entries > 0 {
-        println!(
-            "  {} {} ASET entries claim ownership of assets not in their block",
-            "WARNING:".red().bold(),
-            stats.ghost_entries
-        );
-        let show = stats.ghost_details.len().min(10);
-        for d in &stats.ghost_details[..show] {
+    if orphan_total > 0 {
+        if stats.misrouted > 0 {
             println!(
-                "    ASET[{:5}] hash=0x{:08X} type={:2} block={:4} — block has {} entries, none match",
-                d.aset_index, d.asset_hash, d.type_id, d.block_index,
-                d.block_hashes.len()
+                "  {} {} ASET entries point to the wrong block (hash exists in another block)",
+                "ERROR:".red().bold(),
+                stats.misrouted
             );
         }
-        if stats.ghost_details.len() > 10 {
-            println!("    ... and {} more", stats.ghost_details.len() - 10);
-        }
-        if stats.ghost_entries > stats.ghost_details.len() {
+        if stats.true_ghost > 0 {
             println!(
-                "    (detail capped at {}; {} total ghost entries)",
+                "  {} {} ASET entries reference assets not in any block (base-game ghosts)",
+                "WARNING:".yellow().bold(),
+                stats.true_ghost
+            );
+        }
+        let show = stats.ghost_details.len().min(20);
+        for d in &stats.ghost_details[..show] {
+            let tag = match d.remappable_to {
+                Some(target) => format!("MISROUTED → block {target}"),
+                None => "TRUE GHOST".to_string(),
+            };
+            println!(
+                "    ASET[{:5}] hash=0x{:08X} type={:2} block={:4} — {}",
+                d.aset_index, d.asset_hash, d.type_id, d.block_index, tag
+            );
+        }
+        if stats.ghost_details.len() > 20 {
+            println!("    ... and {} more", stats.ghost_details.len() - 20);
+        }
+        if orphan_total > stats.ghost_details.len() {
+            println!(
+                "    (detail capped at {}; {} total orphan entries)",
                 stats.ghost_details.len(),
-                stats.ghost_entries
+                orphan_total
             );
         }
     } else {
