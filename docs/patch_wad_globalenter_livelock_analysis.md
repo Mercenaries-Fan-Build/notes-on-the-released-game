@@ -737,24 +737,40 @@ rows referencing base-game assets that happened to be in those same blocks.
 `asset_hash` already exists in the retail base-game WAD**. The fix is option (a):
 strip those 3,773 entries.
 
-### §14.3 — The fix (IMPLEMENTED)
+### §14.3 — The fix
 
-`_strip_base_game_aset_collisions()` added to `dlc_port.py` (runs after all
-ASET normalization/dedup/contract fixes, before FFCS assembly):
+#### v1 (REMOVED): blunt ASET collision strip
 
-1. **Pass 1 — redundant block removal:** drops blocks where every UCFX entry's
-   `asset_hash` exists in the retail ASET (891 blocks — all byte-identical base-game
-   copies carried from the Xbox source, including Havok animations, textures, meshes,
-   stances, soundbanks, and wavebanks via the `_OVERRIDE_TYPE_HASHES` mechanism).
-2. **Pass 2 — shared ASET entry stripping:** removes individual `aset_entries`
-   from remaining mixed blocks whose `asset_hash` is in the retail set.
-3. **Protection:** `scripts_vz` bootstrap block is exempt (must override the
-   base game's `scripts_vz` to inject `dlc01`).
+`_strip_base_game_aset_collisions()` was added to `dlc_port.py` and proved the
+concept — the `dedup-strip` variant reached in-world.  However, it stripped ALL
+3,773 shared entries, including ~113 legitimate DLC overrides (e.g. `scripts_vz`,
+modified c3 cells), making DLC content invisible at runtime.  The function and its
+associated base-game override mechanism (`_OVERRIDE_TYPE_HASHES`,
+`_extract_base_entry_ucfx`, etc.) were removed during the "DLC port deoverride
+cleanup" phase.
 
-Expected result: patch WAD drops from 2,197 to ~1,306 blocks and from 5,448 to
-~1,640 ASET entries. The engine's "last-opened-file-wins" search will no longer
-find ghost entries in the patch, and all base-game assets will correctly resolve
-to the retail WAD.
+#### v2 (CURRENT): content-validated ASET filtering
+
+`_validate_aset_against_content()` replaces the blunt strip with a precision
+pass that uses each block's actual UCFX content as ground truth:
+
+1. For each converted block: decompress, parse the UCFX entry table, collect the
+   set of `asset_hash` values actually present in the block.
+2. For each ASET entry on that block: **keep** if the hash exists in the block's
+   content, **remove** if it does not (ghost/false-ownership entry).
+3. Blocks with zero surviving ASET entries are dropped entirely.
+4. Bootstrap `scripts_vz` entry hashes are protected (always kept).
+
+This is strictly correct: an ASET entry should only claim ownership of an asset
+that actually exists in that block's data.  No base-game comparison is needed —
+the block's own content is the sole source of truth.
+
+- **Legitimate overrides** (DLC block genuinely contains the asset): ASET entry
+  survives → engine loads DLC version (last-opened-wins).
+- **Ghost entries** (Xbox ASET inherited hash but block doesn't contain it): ASET
+  entry removed → engine correctly falls through to retail `vz.wad`.
+
+CLI flag `--no-aset-validation` skips this pass for debugging/comparison.
 
 ### §14.4 — Why base-game copies existed
 

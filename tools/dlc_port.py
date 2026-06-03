@@ -538,6 +538,90 @@ def _recompute_aset_sub_entries(converted: list[PatchBlock], *, verbose: bool = 
     return resolved, unresolved
 
 
+# ── Content-validated ASET filtering ──────────────────────────────────
+
+
+def _validate_aset_against_content(
+    converted: list[PatchBlock],
+    *,
+    protected_hashes: set[int] | None = None,
+    verbose: bool = False,
+) -> tuple[int, int, int]:
+    """Remove ASET entries not backed by actual UCFX content in the block.
+
+    The Xbox DLC source is a full replacement WAD whose ASET table covers
+    all 11,087 blocks (base game + DLC).  When ``dlc_port.py`` extracts
+    only the ~2,197 DLC-range blocks, some blocks inherit ASET entries for
+    base-game assets that the block does not actually contain.  These
+    "ghost" entries cause **false ownership**: the engine loads the wrong
+    data from the patch WAD instead of the retail ``vz.wad``.
+
+    This pass scans each block's decompressed UCFX entry table and removes
+    any ASET entry whose ``asset_hash`` is not found in the block's content.
+
+    *protected_hashes* — asset hashes that must never be removed (e.g.
+    bootstrap ``scripts_vz`` entries).
+
+    Returns ``(kept, removed, blocks_dropped)``.
+    """
+    _resolver = _get_hash_resolver()
+    protected = protected_hashes or set()
+    total_kept = 0
+    total_removed = 0
+    blocks_dropped = 0
+
+    for blk_idx, blk in enumerate(converted):
+        if not blk.aset_entries:
+            total_kept += 0
+            continue
+
+        # Decompress and parse the UCFX entry table to get actual hashes
+        actual_hashes: set[int] = set()
+        try:
+            decomp = decompress_sges_block(
+                blk.compressed_data, 0, len(blk.compressed_data),
+            )
+            entries = parse_block_entries(decomp)
+            for entry in entries:
+                h = entry.get("hash")
+                if h is not None and h != 0:
+                    actual_hashes.add(h)
+        except Exception:
+            # If we can't decompress/parse, keep all entries as a safety net
+            total_kept += len(blk.aset_entries)
+            continue
+
+        surviving: list[dict] = []
+        removed_this_block: list[dict] = []
+        for ae in blk.aset_entries:
+            ah = ae["asset_hash"]
+            if ah in actual_hashes or ah in protected:
+                surviving.append(ae)
+            else:
+                removed_this_block.append(ae)
+
+        if removed_this_block:
+            if verbose:
+                for ae in removed_this_block:
+                    print(f"    [ASET validate] block {blk_idx} "
+                          f"({blk.path_string}): removed ghost entry "
+                          f"{_resolver.annotate(ae['asset_hash'])}")
+
+            blk.aset_entries[:] = surviving
+
+            if not surviving:
+                blocks_dropped += 1
+                if verbose:
+                    print(f"    [ASET validate] block {blk_idx} "
+                          f"({blk.path_string}): all entries removed — "
+                          f"block will be dropped")
+
+        total_kept += len(surviving)
+        total_removed += len(removed_this_block)
+
+    return total_kept, total_removed, blocks_dropped
+
+
 # ── Pipeline ──────────────────────────────────────────────────────────
 
 
@@ -563,6 +647,7 @@ def port_x360_dlc(
     byteswap_python_ecs_paths: bool = True,
     fail_on_placement_violations: bool = False,
     exclude_blocks: str | None = None,
+    no_aset_validation: bool = False,
 ) -> int:
     """Convert a big-endian DOH (DLC01.doh content) into a PC vz-patch.wad.
 
@@ -1018,6 +1103,29 @@ def port_x360_dlc(
         excluded_count = before_count - len(converted)
         if excluded_count:
             print(f"\n  Excluded {excluded_count} blocks matching --exclude-blocks patterns")
+
+    # ── Content-validated ASET filtering ─────────────────────────────
+    # Remove ASET entries not backed by actual UCFX content in the block.
+    # This strips "false ownership" entries inherited from the Xbox source
+    # WAD (which was a full replacement WAD, not a diff patch) while
+    # preserving legitimate DLC overrides.
+    if not no_aset_validation:
+        bootstrap_hashes: set[int] | None = None
+        if scripts_vz_idx is not None and scripts_vz_idx < len(converted):
+            bootstrap_hashes = {
+                e["asset_hash"] for e in converted[scripts_vz_idx].aset_entries
+            }
+        kept, removed, blocks_dropped = _validate_aset_against_content(
+            converted,
+            protected_hashes=bootstrap_hashes,
+            verbose=verbose,
+        )
+        if blocks_dropped:
+            converted = [blk for blk in converted if blk.aset_entries]
+        print(f"\n  ASET validation: {kept} kept, {removed} removed "
+              f"({blocks_dropped} empty blocks dropped)")
+    else:
+        print("\n  ASET validation: skipped (--no-aset-validation)")
 
     # ── Recompute ASET sub-entry indices from block entry tables ─────
     _recompute_aset_sub_entries(converted, verbose=verbose)
@@ -1739,6 +1847,9 @@ def main() -> int:
                     help="Working directory for temp files")
     ap.add_argument("--exclude-blocks", type=str, default=None,
                     help="Comma-separated block paths (substrings) to exclude from output")
+    ap.add_argument("--no-aset-validation", action="store_true",
+                    help="Skip content-validated ASET filtering (keep all Xbox ASET "
+                         "entries including false-ownership ghosts)")
 
     args = ap.parse_args()
 
@@ -1810,6 +1921,7 @@ def main() -> int:
         byteswap_python_ecs_paths=not args.no_byteswap_python_ecs_paths,
         fail_on_placement_violations=args.fail_on_placement_violations,
         exclude_blocks=args.exclude_blocks,
+        no_aset_validation=args.no_aset_validation,
     )
 
 
