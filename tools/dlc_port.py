@@ -1040,6 +1040,76 @@ def _trim_to_descriptor_limit(
           f"(INDX={len(converted)}, ASET={new_aset}, entries={new_entries})")
 
 
+def _strip_base_game_aset_collisions(
+    converted: list[PatchBlock],
+    source_wad: Path,
+    *,
+    protect_indices: set[int] | None = None,
+    verbose: bool = False,
+) -> tuple[int, int]:
+    """Remove ASET entries whose asset_hash already exists in the retail WAD.
+
+    This prevents the patch WAD from falsely claiming ownership of base-game
+    assets.  When the engine's "last-opened-file wins" search finds a patch
+    ASET entry for a base-game hash, it reads the wrong block (patch-local
+    index interpreted as a base-game index) and loads corrupt data.
+
+    Two passes:
+      1. Drop entirely-redundant blocks (all UCFX entries exist in retail).
+      2. Strip individual shared ASET entries from remaining mixed blocks.
+
+    *protect_indices* — patch block indices exempt from stripping (e.g. the
+    scripts_vz bootstrap must override the base game's scripts_vz).
+
+    Returns (blocks_dropped, aset_entries_stripped).
+    """
+    from trim_patch_wad import build_base_aset_set  # noqa: E402
+
+    base_hashes = build_base_aset_set(source_wad)
+    if not base_hashes:
+        return 0, 0
+
+    protect = protect_indices or set()
+
+    # Pass 1: drop blocks where every UCFX entry hash is in the retail WAD.
+    redundant_indices: set[int] = set()
+    for i, blk in enumerate(converted):
+        if i in protect:
+            continue
+        entry_hashes = _get_block_name_hashes(blk)
+        if entry_hashes and all(h in base_hashes for h in entry_hashes):
+            redundant_indices.add(i)
+
+    for idx in sorted(redundant_indices, reverse=True):
+        if verbose:
+            print(f"    Drop redundant block [{idx}] {converted[idx].path_string}")
+        del converted[idx]
+
+    # Rebuild protect set after deletions (indices shifted).
+    if protect and redundant_indices:
+        new_protect: set[int] = set()
+        for old_idx in protect:
+            if old_idx in redundant_indices:
+                continue
+            shift = sum(1 for r in redundant_indices if r < old_idx)
+            new_protect.add(old_idx - shift)
+        protect = new_protect
+
+    # Pass 2: strip individual ASET entries from remaining mixed blocks.
+    stripped = 0
+    for i, blk in enumerate(converted):
+        if i in protect:
+            continue
+        before = len(blk.aset_entries)
+        blk.aset_entries[:] = [
+            e for e in blk.aset_entries
+            if e["asset_hash"] not in base_hashes
+        ]
+        stripped += before - len(blk.aset_entries)
+
+    return len(redundant_indices), stripped
+
+
 def port_x360_dlc(
     doh: bytes,
     *,
