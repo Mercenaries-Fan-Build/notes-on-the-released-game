@@ -200,34 +200,44 @@ void Detour_HashTableLookup(void) {
  * Memory layout (single VirtualAlloc PAGE_EXECUTE_READWRITE block):
  *
  *   +0x00  Thunk code (machine code for no-op returns):
- *            +0x00  C3              ret        — default no-op
+ *            +0x00  C3              ret        — default no-op (0-arg __thiscall)
  *            +0x01  C2 04 00        ret 4      — 1-arg cleanup
  *            +0x04  C2 08 00        ret 8      — 2-arg cleanup
- *            +0x07  31 C0 C2 0C 00  xor eax,eax; ret 12  — Read()
+ *            +0x07  83 C8 FF C2 0C 00  or eax,-1; ret 12  — Read() returns -1 (E_FAIL)
  *
  *   +0x10  vtable[8] (DWORD pointers into thunk area):
  *            [0..4] → thunk_ret    (plain ret)
- *            [5]    → thunk_ret12  (Read: return 0, clean 3 stack args)
+ *            [5]    → thunk_read   (Read: return -1/E_FAIL, clean 3 stack args)
  *            [6..7] → thunk_ret    (plain ret)
  *
- *   +0x30  Reader object (0x20 bytes, zeroed except vtable ptr):
+ *   +0x30  Reader object (0x20 bytes):
  *            [+0x00] = &vtable
- *            [+0x04 .. +0x1C] = 0
+ *            [+0x04 .. +0x0C] = 0
+ *            [+0x10] = 0          (position low — callers increment this)
+ *            [+0x14] = 0          (position high)
+ *            [+0x18] = &dummy_buf (buffer base — callers index directly!)
+ *            [+0x1C] = 0          (buffer size / remaining)
+ *
+ *   +0x50  Dummy buffer (256 bytes, zeroed):
+ *            Safe read target — callers that index into [+0x18] get zeros.
  *
  * Callers observed to access:
  *   [reader+0x00] — vtable pointer
- *   [reader+0x10] — counter field (INFO handler: add [reader+0x10], 1)
- *   vtable[5]     — Read() (__thiscall, ret 12, returns 0 bytes read)
+ *   [reader+0x10] — position counter (INFO handler: add [reader+0x10], 1)
+ *   [reader+0x18] — buffer pointer  (INFO handler: movzx ax,[buf+pos])
+ *   vtable[5]     — Read() (__thiscall, ret 12, returns -1 = E_FAIL)
  *
  * NOTE: The static EXE patch at 0x750B90 in patch_anim_table.py (texture
  * BODY processor caller) is also made redundant by the stub reader but
  * lives in a separate file.  Remove it in a future cleanup pass.
  */
 
-#define STUB_ALLOC_SIZE     0x50
+#define STUB_ALLOC_SIZE     0x150
 #define STUB_THUNK_OFFSET   0x00
 #define STUB_VTABLE_OFFSET  0x10
 #define STUB_OBJECT_OFFSET  0x30
+#define STUB_BUFFER_OFFSET  0x50
+#define STUB_BUFFER_SIZE    0x100
 #define STUB_VTABLE_SLOTS   8
 
 static void *g_stubReader = NULL;
@@ -255,17 +265,18 @@ static int AllocStubReader(void) {
     block[0x01] = 0xC2; block[0x02] = 0x04; block[0x03] = 0x00;
     /* +0x04: ret 8 */
     block[0x04] = 0xC2; block[0x05] = 0x08; block[0x06] = 0x00;
-    /* +0x07: xor eax,eax; ret 12 */
-    block[0x07] = 0x31; block[0x08] = 0xC0;
-    block[0x09] = 0xC2; block[0x0A] = 0x0C; block[0x0B] = 0x00;
+    /* +0x07: or eax,-1; ret 12 — Read() returns -1 (E_FAIL), not S_OK */
+    block[0x07] = 0x83; block[0x08] = 0xC8; block[0x09] = 0xFF;
+    block[0x0A] = 0xC2; block[0x0B] = 0x0C; block[0x0C] = 0x00;
 
     vtable = (DWORD *)(block + STUB_VTABLE_OFFSET);
     for (i = 0; i < STUB_VTABLE_SLOTS; i++)
         vtable[i] = base + 0x00;    /* default: plain ret */
-    vtable[5] = base + 0x07;        /* Read(): xor eax,eax; ret 12 */
+    vtable[5] = base + 0x07;        /* Read(): or eax,-1; ret 12 */
 
     obj = (DWORD *)(block + STUB_OBJECT_OFFSET);
-    obj[0] = base + STUB_VTABLE_OFFSET;
+    obj[0] = base + STUB_VTABLE_OFFSET;  /* +0x00: vtable ptr */
+    obj[6] = base + STUB_BUFFER_OFFSET;  /* +0x18: buffer base → dummy buf */
 
     FlushInstructionCache(GetCurrentProcess(), block, STUB_ALLOC_SIZE);
 
@@ -293,20 +304,20 @@ static int AllocStubReader(void) {
 typedef void* (__stdcall *fn_GetChunkDataReader)(void *chunkTablePtr);
 static fn_GetChunkDataReader g_origGetChunkDataReader = NULL;
 
+/*
+ * IMPORTANT: This hook must be fully non-blocking.  GetChunkDataReader is
+ * called from ANY thread, including the D3D9 rendering thread.  The main
+ * thread's render-queue drain loop (Sleep(0) at 0x8766E7) deadlocks if the
+ * render thread blocks in pmc_log I/O.  Same pattern as P1 — atomic
+ * counting only; totals printed at session shutdown via PrintCompatStats().
+ */
 static void* __stdcall Detour_GetChunkDataReader(void *chunkTablePtr) {
     void *result = g_origGetChunkDataReader(chunkTablePtr);
 
     if (result == NULL) {
-        int mode = (int)g_hookMode;
         InterlockedIncrement(&g_statNullReaders);
 
-        if (mode >= PMC_HOOK_LOG) {
-            void *caller = __builtin_return_address(0);
-            pmc_log("compat", "STUB_READER chunk_caller=0x%08X ptr=0x%08X",
-                    (unsigned int)(DWORD_PTR)caller,
-                    (unsigned int)(DWORD_PTR)chunkTablePtr);
-        }
-        if (mode >= PMC_HOOK_BREAK) {
+        if ((int)g_hookMode >= PMC_HOOK_BREAK) {
             DebugBreak();
         }
 
