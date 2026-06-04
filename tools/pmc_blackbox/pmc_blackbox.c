@@ -60,6 +60,9 @@ static void CreateSecuROMEvent(void) {
 static FILE*           g_logfile = NULL;
 static CRITICAL_SECTION g_logLock;
 
+static volatile LONG g_logPending = 0;
+#define LOG_FLUSH_THRESHOLD 64
+
 static void InitLogFile(void) {
     char exe_dir[MAX_PATH];
     GetModuleFileNameA(NULL, exe_dir, MAX_PATH);
@@ -69,6 +72,8 @@ static void InitLogFile(void) {
     char log_path[MAX_PATH];
     wsprintfA(log_path, "%spmc_blackbox.log", exe_dir);
     g_logfile = fopen(log_path, "w");
+    if (g_logfile)
+        setvbuf(g_logfile, NULL, _IOFBF, 8192);
 
     InitializeCriticalSection(&g_logLock);
 }
@@ -98,13 +103,24 @@ __declspec(dllexport) void pmc_log(const char *source, const char *fmt, ...) {
     EnterCriticalSection(&g_logLock);
 
     fputs(line, stdout);
-    fflush(stdout);
 
-    if (g_logfile) {
+    if (g_logfile)
         fputs(line, g_logfile);
-        fflush(g_logfile);
+
+    if (InterlockedIncrement(&g_logPending) >= LOG_FLUSH_THRESHOLD) {
+        fflush(stdout);
+        if (g_logfile) fflush(g_logfile);
+        InterlockedExchange(&g_logPending, 0);
     }
 
+    LeaveCriticalSection(&g_logLock);
+}
+
+__declspec(dllexport) void pmc_log_flush(void) {
+    EnterCriticalSection(&g_logLock);
+    fflush(stdout);
+    if (g_logfile) fflush(g_logfile);
+    InterlockedExchange(&g_logPending, 0);
     LeaveCriticalSection(&g_logLock);
 }
 

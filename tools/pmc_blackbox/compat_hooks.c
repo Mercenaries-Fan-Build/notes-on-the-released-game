@@ -106,17 +106,25 @@ void *g_origHashTableLookup = NULL;
  * Miss-path helper — called from the naked detour with __cdecl.
  * Non-static so the naked detour's basic asm can reference the symbol.
  */
+#define MISS_LOG_LIMIT 64
+
 void HashTableLookup_logMiss(DWORD hashKey, int tableSize, DWORD callerAddr) {
-    int mode = (int)g_hookMode;
-    InterlockedIncrement(&g_statHashMisses);
+    LONG total = InterlockedIncrement(&g_statHashMisses);
     RecordUniqueHash(hashKey);
 
-    if (mode >= PMC_HOOK_LOG) {
-        pmc_log("compat", "MISS hash=0x%08X table_size=%d caller=0x%08X",
-                hashKey, tableSize, callerAddr);
-    }
-    if (mode >= PMC_HOOK_BREAK) {
-        DebugBreak();
+    if (total <= MISS_LOG_LIMIT) {
+        int mode = (int)g_hookMode;
+        if (mode >= PMC_HOOK_LOG) {
+            pmc_log("compat", "MISS hash=0x%08X table_size=%d caller=0x%08X",
+                    hashKey, tableSize, callerAddr);
+        }
+        if (total == MISS_LOG_LIMIT && mode >= PMC_HOOK_LOG) {
+            pmc_log("compat", "MISS log limit reached (%d); further misses counted silently",
+                    MISS_LOG_LIMIT);
+        }
+        if (mode >= PMC_HOOK_BREAK) {
+            DebugBreak();
+        }
     }
 }
 
@@ -331,3 +339,4 @@ void ShutdownCompatHooks(void) {
     MH_Uninitialize();
     DeleteCriticalSection(&g_uniqueHashLock);
 }
+        
