@@ -203,11 +203,11 @@ void Detour_HashTableLookup(void) {
  *            +0x00  C3              ret        — default no-op (0-arg __thiscall)
  *            +0x01  C2 04 00        ret 4      — 1-arg cleanup
  *            +0x04  C2 08 00        ret 8      — 2-arg cleanup
- *            +0x07  83 C8 FF C2 0C 00  or eax,-1; ret 12  — Read() returns -1 (E_FAIL)
+ *            +0x07  31 C0 C2 0C 00     xor eax,eax; ret 12  — Read() returns 0 (S_OK)
  *
  *   +0x10  vtable[8] (DWORD pointers into thunk area):
  *            [0..4] → thunk_ret    (plain ret)
- *            [5]    → thunk_read   (Read: return -1/E_FAIL, clean 3 stack args)
+ *            [5]    → thunk_read   (Read: return 0/S_OK, clean 3 stack args)
  *            [6..7] → thunk_ret    (plain ret)
  *
  *   +0x30  Reader object (0x20 bytes):
@@ -225,7 +225,7 @@ void Detour_HashTableLookup(void) {
  *   [reader+0x00] — vtable pointer
  *   [reader+0x10] — position counter (INFO handler: add [reader+0x10], 1)
  *   [reader+0x18] — buffer pointer  (INFO handler: movzx ax,[buf+pos])
- *   vtable[5]     — Read() (__thiscall, ret 12, returns -1 = E_FAIL)
+ *   vtable[5]     — Read() (__thiscall, ret 12, returns 0 = S_OK)
  *
  * NOTE: The static EXE patch at 0x750B90 in patch_anim_table.py (texture
  * BODY processor caller) is also made redundant by the stub reader but
@@ -265,14 +265,14 @@ static int AllocStubReader(void) {
     block[0x01] = 0xC2; block[0x02] = 0x04; block[0x03] = 0x00;
     /* +0x04: ret 8 */
     block[0x04] = 0xC2; block[0x05] = 0x08; block[0x06] = 0x00;
-    /* +0x07: or eax,-1; ret 12 — Read() returns -1 (E_FAIL), not S_OK */
-    block[0x07] = 0x83; block[0x08] = 0xC8; block[0x09] = 0xFF;
-    block[0x0A] = 0xC2; block[0x0B] = 0x0C; block[0x0C] = 0x00;
+    /* +0x07: xor eax,eax; ret 12 — Read() returns 0 (S_OK) */
+    block[0x07] = 0x31; block[0x08] = 0xC0;
+    block[0x09] = 0xC2; block[0x0A] = 0x0C; block[0x0B] = 0x00;
 
     vtable = (DWORD *)(block + STUB_VTABLE_OFFSET);
     for (i = 0; i < STUB_VTABLE_SLOTS; i++)
         vtable[i] = base + 0x00;    /* default: plain ret */
-    vtable[5] = base + 0x07;        /* Read(): or eax,-1; ret 12 */
+    vtable[5] = base + 0x07;        /* Read(): xor eax,eax; ret 12 */
 
     obj = (DWORD *)(block + STUB_OBJECT_OFFSET);
     obj[0] = base + STUB_VTABLE_OFFSET;  /* +0x00: vtable ptr */
