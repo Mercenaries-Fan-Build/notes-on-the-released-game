@@ -16,9 +16,8 @@ TARGET      = pmc_bb.dll
 DEF         = pmc_blackbox.def
 
 # --- Source files ---
-SRCS_MAIN   = pmc_blackbox.c compat_hooks.c
-SRCS_MINHOOK = minhook/hook.c minhook/buffer.c minhook/trampoline.c minhook/hde/hde32.c
-SRCS_ALL    = $(SRCS_MAIN) $(SRCS_MINHOOK)
+# MinHook is loaded dynamically from MinHook.x86.dll at runtime (no source compilation).
+SRCS_ALL    = pmc_blackbox.c compat_hooks.c
 
 CFLAGS      = -O2 -Wall -Wno-unused-function -shared -Wl,--enable-stdcall-fixup
 LDFLAGS     = -lkernel32 -luser32
@@ -46,7 +45,8 @@ help:
 	@echo "  make msvc   — Compile with MSVC (Windows)"
 	@echo "  make clean  — Remove build artifacts"
 	@echo ""
-	@echo "Output: pmc_bb.dll (~8-12 KB) [PMC Blackbox v3]"
-	@echo "  Place next to Mercenaries2.exe."
+	@echo "Output: pmc_bb.dll (~6-8 KB) [PMC Blackbox v3]"
+	@echo "  Place next to Mercenaries2.exe (alongside MinHook.x86.dll)."
 	@echo "  Game import table must reference pmc_bb.dll (patch with exe tool)."
 	@echo "  Includes: SecuROM bypass, debug console, compat hooks, ASI loader."
+	@echo "  Requires: MinHook.x86.dll in game directory (loaded at runtime)."
