@@ -325,8 +325,14 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         InitDebugConsole();
 
         /* Runtime compat hooks — inline hooks for crash prevention & diagnostics.
-         * Must be after console (needs pmc_log) and before ASI load. */
+         * Must be after console (needs pmc_log) and before ASI load.
+         * Build with -DPMC_NO_COMPAT_HOOKS for a vanilla control run (DLL present,
+         * SecuROM spoof + console + ASI loader active, but no engine detours). */
+#ifdef PMC_NO_COMPAT_HOOKS
+        pmc_log("[compat] engine detours DISABLED at build time (vanilla control)");
+#else
         InstallCompatHooks();
+#endif
 
         /* Fix underground spawn — early write + deferred watchdog thread.
          * Game init zeroes this flag; the watchdog re-applies it. */

@@ -1,27 +1,23 @@
 /**
  * compat_hooks.c — Runtime compatibility hook implementation
  *
- * Hooks the game's core lookup/resolution functions to provide:
- *   - Structured diagnostic logging on lookup failures
- *   - Safe fallback behavior (skip, clamp) to prevent NULL crashes
- *   - Session statistics for modders
+ * Minimal, diagnostic-only hook layer.  These hooks observe what the engine
+ * is doing on its core lookup/resolution paths and record statistics; they
+ * do NOT lie to the engine (no stub objects, no synchronization patches, no
+ * NULL substitution).  The engine sees real return values and behaves exactly
+ * as it would without us.  The only mutation is a mild, safe input
+ * sanitization in P3 (clamping an out-of-range stream index).
  *
  * Hook targets (confirmed via x32dbg crash investigation):
- *   P1: 0x8242B0 — Generic hash table lookup (diagnostic-only)
- *   P2: 0x464780 — GetChunkDataReader (stub reader on NULL return)
- *   P3: 0x74D6D0 — Vertex declaration validator (clamp stream index)
+ *   P1: 0x8242B0 — Generic hash table lookup (passive: count misses)
+ *   P2: 0x464780 — GetChunkDataReader (passive: count NULL returns)
+ *   P3: 0x74D6D0 — Vertex declaration validator (clamp stream index in place)
  *
- * Static code patches:
- *   S1: 0x8766F9 — Bounded-retry code cave for render-queue drain loop
- *                   Replaces `jnz` with jmp to cave that allows up to
- *                   10000 retries then force-matches the counter pair.
- *                   Prevents deadlock without removing synchronization.
- *
- * Superseded patches (removed — stub reader makes them unnecessary):
- *   P4: 0x45B1C9 — was inline code-cave NULL guard for chunk reader
- *   P5: 0x59CFF2 — was inline code-cave NULL guard for tag dispatch
- *   0x750B90     — static EXE patch in patch_anim_table.py (still present,
- *                  now redundant, remove in future cleanup)
+ * Note on the 0x750B90 static EXE patch in patch_anim_table.py: it remains in
+ * place and addresses a genuine animation-table capacity/format issue.  An
+ * earlier header revision flagged it as "redundant" relative to the (now
+ * removed) stub reader; that note is retained for the record, but the static
+ * patch is independent of this file and is intentionally left untouched.
  *
  * MinHook is compiled directly from submodules/minhook/ (git submodule).
  */
@@ -48,20 +44,20 @@ int GetCompatHookMode(void) {
 
 /* --- Statistics (atomic increments, lock-free reads) --- */
 
-static volatile LONG g_statHashMisses      = 0;
-static volatile LONG g_statHashUnique      = 0;
-static volatile LONG g_statNullReaders     = 0;
-static volatile LONG g_statStreamClamps    = 0;
+static volatile LONG g_statHashMisses   = 0;
+static volatile LONG g_statHashUnique   = 0;
+static volatile LONG g_statNullReaders  = 0;
+static volatile LONG g_statStreamClamps = 0;
 
 #define UNIQUE_HASH_CAPACITY 256
 static volatile LONG  g_uniqueHashCount = 0;
 static DWORD          g_uniqueHashes[UNIQUE_HASH_CAPACITY];
 
 /*
- * Lock-free unique hash recording.  The previous implementation used a
- * CRITICAL_SECTION, which could deadlock when the hash hook fires on the
- * D3D9 rendering thread while the main thread holds the same lock (or
- * waits on the render queue that this thread must complete).
+ * Lock-free unique hash recording.  A CRITICAL_SECTION here could deadlock
+ * when the hash hook fires on the D3D9 rendering thread while the main thread
+ * holds the same lock (or waits on the render queue that this thread must
+ * complete).
  *
  * Uses InterlockedCompareExchange to CAS-append.  Duplicates are benign
  * (the count is an approximation for diagnostics).
@@ -88,8 +84,7 @@ void PrintCompatStats(void) {
     pmc_log("compat", "=== Session Summary ===");
     pmc_log("compat", "  Hash lookup misses: %ld (%ld unique hashes)",
             (long)g_statHashMisses, (long)g_statHashUnique);
-    pmc_log("compat", "  NULL chunk readers (stub returns): %ld",
-            (long)g_statNullReaders);
+    pmc_log("compat", "  NULL chunk readers: %ld", (long)g_statNullReaders);
     pmc_log("compat", "  Stream index clamps: %ld", (long)g_statStreamClamps);
     if (g_logDropped > 0)
         pmc_log("compat", "  Log messages dropped (contention): %ld",
@@ -115,7 +110,7 @@ void PrintCompatStats(void) {
  * crashes executing zeroed memory.
  *
  * Fix: naked detour that matches the original convention exactly.
- * A separate C helper handles the miss-logging path.
+ * A separate C helper handles the miss-counting path.
  */
 
 #define ADDR_HASH_TABLE_LOOKUP ((LPVOID)0x8242B0)
@@ -191,118 +186,24 @@ void Detour_HashTableLookup(void) {
     );
 }
 
-/* --- Stub Reader Object ---
- *
- * When GetChunkDataReader returns NULL (chunk not present in this WAD),
- * instead of propagating NULL to callers that dereference without checking,
- * the P2 hook returns a pointer to this static stub object.  It has a valid
- * vtable where all methods are safe no-ops, so callers can dereference
- * vtable slots, call Read(), and touch fields like [reader+0x10] without
- * crashing.
- *
- * This replaces per-caller code-cave patches (the old P4 at 0x45B1C9 and
- * P5 at 0x59CFF2) with a single fix at the source.
- *
- * Memory layout (single VirtualAlloc PAGE_EXECUTE_READWRITE block):
- *
- *   +0x00  Thunk code (machine code for no-op returns):
- *            +0x00  C3              ret        — default no-op (0-arg __thiscall)
- *            +0x01  C2 04 00        ret 4      — 1-arg cleanup
- *            +0x04  C2 08 00        ret 8      — 2-arg cleanup
- *            +0x07  31 C0 C2 0C 00     xor eax,eax; ret 12  — Read() returns 0 (S_OK)
- *
- *   +0x10  vtable[8] (DWORD pointers into thunk area):
- *            [0..4] → thunk_ret    (plain ret)
- *            [5]    → thunk_read   (Read: return 0/S_OK, clean 3 stack args)
- *            [6..7] → thunk_ret    (plain ret)
- *
- *   +0x30  Reader object (0x20 bytes):
- *            [+0x00] = &vtable
- *            [+0x04 .. +0x0C] = 0
- *            [+0x10] = 0          (position low — callers increment this)
- *            [+0x14] = 0          (position high)
- *            [+0x18] = &dummy_buf (buffer base — callers index directly!)
- *            [+0x1C] = 0          (buffer size / remaining)
- *
- *   +0x50  Dummy buffer (256 bytes, zeroed):
- *            Safe read target — callers that index into [+0x18] get zeros.
- *
- * Callers observed to access:
- *   [reader+0x00] — vtable pointer
- *   [reader+0x10] — position counter (INFO handler: add [reader+0x10], 1)
- *   [reader+0x18] — buffer pointer  (INFO handler: movzx ax,[buf+pos])
- *   vtable[5]     — Read() (__thiscall, ret 12, returns 0 = S_OK)
- *
- * NOTE: The static EXE patch at 0x750B90 in patch_anim_table.py (texture
- * BODY processor caller) is also made redundant by the stub reader but
- * lives in a separate file.  Remove it in a future cleanup pass.
- */
-
-#define STUB_ALLOC_SIZE     0x150
-#define STUB_THUNK_OFFSET   0x00
-#define STUB_VTABLE_OFFSET  0x10
-#define STUB_OBJECT_OFFSET  0x30
-#define STUB_BUFFER_OFFSET  0x50
-#define STUB_BUFFER_SIZE    0x100
-#define STUB_VTABLE_SLOTS   8
-
-static void *g_stubReader = NULL;
-
-static int AllocStubReader(void) {
-    BYTE *block;
-    DWORD *vtable;
-    DWORD *obj;
-    DWORD base;
-    int i;
-
-    block = (BYTE *)VirtualAlloc(NULL, STUB_ALLOC_SIZE,
-                                 MEM_COMMIT | MEM_RESERVE,
-                                 PAGE_EXECUTE_READWRITE);
-    if (!block) {
-        pmc_log("compat", "AllocStubReader: VirtualAlloc failed");
-        return 0;
-    }
-    memset(block, 0, STUB_ALLOC_SIZE);
-    base = (DWORD)(DWORD_PTR)block;
-
-    /* +0x00: ret */
-    block[0x00] = 0xC3;
-    /* +0x01: ret 4 */
-    block[0x01] = 0xC2; block[0x02] = 0x04; block[0x03] = 0x00;
-    /* +0x04: ret 8 */
-    block[0x04] = 0xC2; block[0x05] = 0x08; block[0x06] = 0x00;
-    /* +0x07: xor eax,eax; ret 12 — Read() returns 0 (S_OK) */
-    block[0x07] = 0x31; block[0x08] = 0xC0;
-    block[0x09] = 0xC2; block[0x0A] = 0x0C; block[0x0B] = 0x00;
-
-    vtable = (DWORD *)(block + STUB_VTABLE_OFFSET);
-    for (i = 0; i < STUB_VTABLE_SLOTS; i++)
-        vtable[i] = base + 0x00;    /* default: plain ret */
-    vtable[5] = base + 0x07;        /* Read(): xor eax,eax; ret 12 */
-
-    obj = (DWORD *)(block + STUB_OBJECT_OFFSET);
-    obj[0] = base + STUB_VTABLE_OFFSET;  /* +0x00: vtable ptr */
-    obj[6] = base + STUB_BUFFER_OFFSET;  /* +0x18: buffer base → dummy buf */
-
-    FlushInstructionCache(GetCurrentProcess(), block, STUB_ALLOC_SIZE);
-
-    g_stubReader = (void *)obj;
-    pmc_log("compat", "  StubReader @ 0x%08X (vtable 0x%08X, thunks 0x%08X)",
-            (unsigned)(base + STUB_OBJECT_OFFSET),
-            (unsigned)(base + STUB_VTABLE_OFFSET),
-            (unsigned)(base + STUB_THUNK_OFFSET));
-    return 1;
-}
-
 /* --- Hook: GetChunkDataReader (0x464780) ---
  *
  * Returns a reader object for chunk data, or NULL if the chunk is missing.
- * When NULL, the hook substitutes g_stubReader so callers never see NULL.
+ * This hook is PASSIVE: it returns the original result unchanged, including
+ * NULL, so the engine behaves exactly as it would without us.  On a NULL
+ * return it only bumps an atomic counter.
+ *
  * Actual calling convention (confirmed via trampoline + ret 0x04):
  *   __stdcall with 1 arg (chunkTablePtr).
  *   Prologue: test eax,eax / push ebp / mov ebp,[esp+8] / ...
  *   Epilogue: pop ebp / ret 0x04
  *   Note: EAX is also an input (tested before any stack reads).
+ *
+ * IMPORTANT: This hook must be fully non-blocking.  GetChunkDataReader is
+ * called from ANY thread, including the D3D9 rendering thread.  The main
+ * thread's render-queue drain loop (Sleep(0) at 0x8766E7) deadlocks if the
+ * render thread blocks in pmc_log I/O.  Same pattern as P1 — atomic
+ * counting only; totals printed at session shutdown via PrintCompatStats().
  */
 
 #define ADDR_GET_CHUNK_DATA_READER ((LPVOID)0x464780)
@@ -310,25 +211,11 @@ static int AllocStubReader(void) {
 typedef void* (__stdcall *fn_GetChunkDataReader)(void *chunkTablePtr);
 static fn_GetChunkDataReader g_origGetChunkDataReader = NULL;
 
-/*
- * IMPORTANT: This hook must be fully non-blocking.  GetChunkDataReader is
- * called from ANY thread, including the D3D9 rendering thread.  The main
- * thread's render-queue drain loop (Sleep(0) at 0x8766E7) deadlocks if the
- * render thread blocks in pmc_log I/O.  Same pattern as P1 — atomic
- * counting only; totals printed at session shutdown via PrintCompatStats().
- */
 static void* __stdcall Detour_GetChunkDataReader(void *chunkTablePtr) {
     void *result = g_origGetChunkDataReader(chunkTablePtr);
 
-    if (result == NULL) {
+    if (result == NULL)
         InterlockedIncrement(&g_statNullReaders);
-
-        if ((int)g_hookMode >= PMC_HOOK_BREAK) {
-            DebugBreak();
-        }
-
-        return g_stubReader;
-    }
 
     return result;
 }
@@ -349,7 +236,8 @@ static void* __stdcall Detour_GetChunkDataReader(void *chunkTablePtr) {
  *
  * Fix: walk the element array BEFORE calling the original function and
  * clamp any Stream field > 15 to 15 in-place (the array is writable
- * scratch in game memory).
+ * scratch in game memory).  This is mild, safe input sanitization, not a
+ * substitution of engine behavior.
  */
 
 #define ADDR_VERTEX_DECL_VALIDATOR ((LPVOID)0x74D6D0)
@@ -404,158 +292,6 @@ typedef struct {
     const char *name;
 } HookDef;
 
-/* --- S1: Bounded-retry code cave for render-queue drain loop (0x8766F9) ---
- *
- * The drain function at 0x8765C0 waits for a submitted/completed counter
- * pair ([arg+0] vs [arg+4]) to equalize.  When the stub reader short-
- * circuits a render command (Read() returns 0, no async completion fires),
- * the counters diverge permanently and the main thread spins Sleep(0)
- * forever.
- *
- * Fix: replace the 6-byte `jnz 0x876610` with a `jmp code_cave; nop`.
- * The cave implements bounded retry:
- *   - If counters match (ZF=1 from the preceding `cmp`), reset retry
- *     counter and exit normally.
- *   - If counters don't match, decrement a retry counter.  If retries
- *     remain, jump back into the loop (Sleep(0) + cooperative drain).
- *   - If retries exhausted, force-match the counters ([arg+0] = [arg+4])
- *     so the game state stays consistent, then exit.
- *
- * This preserves render-queue synchronization for the common case while
- * preventing permanent deadlock from stub-reader counter divergence.
- */
-#define ADDR_DRAIN_LOOP_JNZ   ((BYTE *)0x8766F9)
-#define ADDR_DRAIN_LOOP_BODY  0x876610u
-#define ADDR_DRAIN_EXIT       0x8766FFu
-#define DRAIN_PATCH_SIZE      6
-#define DRAIN_MAX_RETRIES     10000
-#define DRAIN_CAVE_SIZE       0x50
-
-static const BYTE kDrainOriginal[DRAIN_PATCH_SIZE] = {0x0F,0x85,0x11,0xFF,0xFF,0xFF};
-
-static int ApplyDrainLoopPatch(void) {
-    BYTE *cave;
-    DWORD caveAddr, retriesAddr;
-    DWORD oldProt;
-    BYTE jmpPatch[DRAIN_PATCH_SIZE];
-    int off;
-
-    if (memcmp(ADDR_DRAIN_LOOP_JNZ, kDrainOriginal, DRAIN_PATCH_SIZE) != 0) {
-        pmc_log("compat", "S1: drain loop bytes at 0x%08X unexpected — skipping",
-                (unsigned)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ);
-        return 0;
-    }
-
-    cave = (BYTE *)VirtualAlloc(NULL, DRAIN_CAVE_SIZE,
-                                MEM_COMMIT | MEM_RESERVE,
-                                PAGE_EXECUTE_READWRITE);
-    if (!cave) {
-        pmc_log("compat", "S1: VirtualAlloc for code cave failed");
-        return 0;
-    }
-    memset(cave, 0xCC, DRAIN_CAVE_SIZE);
-
-    caveAddr    = (DWORD)(DWORD_PTR)cave;
-    retriesAddr = caveAddr + 0x40;
-
-    /* Write the retry counter initial value */
-    *(DWORD *)(cave + 0x40) = DRAIN_MAX_RETRIES;
-
-    off = 0;
-
-    /* 0x00: je cave_exit (short jump, ZF=1 from preceding cmp edx,eax) */
-    cave[off++] = 0x74;               /* je rel8 */
-    cave[off++] = 0x31 - 0x02;        /* offset to cave_exit at 0x31 */
-
-    /* 0x02: push eax */
-    cave[off++] = 0x50;
-
-    /* 0x03: mov eax, [g_retries] */
-    cave[off++] = 0xA1;
-    *(DWORD *)(cave + off) = retriesAddr; off += 4;
-
-    /* 0x08: dec eax */
-    cave[off++] = 0x48;
-
-    /* 0x09: mov [g_retries], eax */
-    cave[off++] = 0xA3;
-    *(DWORD *)(cave + off) = retriesAddr; off += 4;
-
-    /* 0x0E: pop eax */
-    cave[off++] = 0x58;
-
-    /* 0x0F: jnz cave_retry (retries remaining → loop back) */
-    cave[off++] = 0x75;               /* jnz rel8 */
-    cave[off++] = 0x2C - 0x11;        /* offset to cave_retry at 0x2C */
-
-    /* 0x11: retries exhausted — force-match counters and exit */
-    /* push eax */
-    cave[off++] = 0x50;
-    /* push ecx */
-    cave[off++] = 0x51;
-    /* mov eax, [ebp+0x08] — counter struct ptr (drain func arg) */
-    cave[off++] = 0x8B; cave[off++] = 0x45; cave[off++] = 0x08;
-    /* mov ecx, [eax+0x04] — "submitted" counter */
-    cave[off++] = 0x8B; cave[off++] = 0x48; cave[off++] = 0x04;
-    /* mov [eax], ecx — force "completed" = "submitted" */
-    cave[off++] = 0x89; cave[off++] = 0x08;
-    /* pop ecx */
-    cave[off++] = 0x59;
-    /* pop eax */
-    cave[off++] = 0x58;
-
-    /* 0x1D: mov dword [g_retries], DRAIN_MAX_RETRIES — reset counter */
-    cave[off++] = 0xC7; cave[off++] = 0x05;
-    *(DWORD *)(cave + off) = retriesAddr; off += 4;
-    *(DWORD *)(cave + off) = DRAIN_MAX_RETRIES; off += 4;
-
-    /* 0x27: jmp ADDR_DRAIN_EXIT */
-    cave[off++] = 0xE9;
-    *(DWORD *)(cave + off) = ADDR_DRAIN_EXIT - (caveAddr + (DWORD)off + 4);
-    off += 4;
-
-    /* 0x2C (cave_retry): jmp ADDR_DRAIN_LOOP_BODY */
-    cave[off++] = 0xE9;
-    *(DWORD *)(cave + off) = ADDR_DRAIN_LOOP_BODY - (caveAddr + (DWORD)off + 4);
-    off += 4;
-
-    /* 0x31 (cave_exit): mov dword [g_retries], DRAIN_MAX_RETRIES — reset */
-    cave[off++] = 0xC7; cave[off++] = 0x05;
-    *(DWORD *)(cave + off) = retriesAddr; off += 4;
-    *(DWORD *)(cave + off) = DRAIN_MAX_RETRIES; off += 4;
-
-    /* 0x3B: jmp ADDR_DRAIN_EXIT */
-    cave[off++] = 0xE9;
-    *(DWORD *)(cave + off) = ADDR_DRAIN_EXIT - (caveAddr + (DWORD)off + 4);
-    off += 4;
-
-    FlushInstructionCache(GetCurrentProcess(), cave, DRAIN_CAVE_SIZE);
-
-    /* Patch the original jnz to jump into the cave */
-    if (!VirtualProtect(ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE,
-                        PAGE_EXECUTE_READWRITE, &oldProt)) {
-        pmc_log("compat", "S1: VirtualProtect on game code failed");
-        VirtualFree(cave, 0, MEM_RELEASE);
-        return 0;
-    }
-
-    /* E9 rel32 = jmp cave_start; 90 = nop (pad to 6 bytes) */
-    jmpPatch[0] = 0xE9;
-    *(DWORD *)(jmpPatch + 1) = caveAddr -
-        ((DWORD)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ + 5);
-    jmpPatch[5] = 0x90;
-
-    memcpy(ADDR_DRAIN_LOOP_JNZ, jmpPatch, DRAIN_PATCH_SIZE);
-    VirtualProtect(ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE, oldProt, &oldProt);
-    FlushInstructionCache(GetCurrentProcess(),
-                          ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE);
-
-    pmc_log("compat", "S1: drain-loop cave at 0x%08X, max %d retries "
-            "(patch at 0x%08X)", caveAddr, DRAIN_MAX_RETRIES,
-            (unsigned)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ);
-    return 1;
-}
-
 int InstallCompatHooks(void) {
     MH_STATUS status;
     int installed = 0;
@@ -577,13 +313,6 @@ int InstallCompatHooks(void) {
           (LPVOID*)&g_origVertexDeclValidator,
           "VertexDeclValidator" },
     };
-
-    if (!AllocStubReader()) {
-        pmc_log("compat", "FATAL: stub reader allocation failed, P2 hook unsafe");
-        return 0;
-    }
-
-    ApplyDrainLoopPatch();
 
     status = MH_Initialize();
     if (status != MH_OK) {

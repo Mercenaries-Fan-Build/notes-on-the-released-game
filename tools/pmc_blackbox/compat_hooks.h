@@ -2,8 +2,9 @@
  * compat_hooks.h — Runtime compatibility hook layer for Mercenaries 2
  *
  * Provides inline hooks via MinHook for the game's core lookup functions.
- * When a lookup fails (NULL return, -1 index, out-of-bounds), the hooks
- * log structured diagnostics and optionally break into the debugger.
+ * The hooks are diagnostic-only: they observe lookup outcomes (NULL return,
+ * -1 index, out-of-bounds) and record statistics, optionally breaking into
+ * the debugger.  They do not substitute or alter engine return values.
  *
  * Three operating modes (PMC_HOOK_*) control verbosity.
  */
@@ -14,9 +15,9 @@
 #include <windows.h>
 
 /* --- Hook operating modes --- */
-#define PMC_HOOK_SILENT  0   /* Safe stubs only, no logging */
-#define PMC_HOOK_LOG     1   /* Safe stubs + structured log lines (default) */
-#define PMC_HOOK_BREAK   2   /* Safe stubs + log + __debugbreak() on miss */
+#define PMC_HOOK_SILENT  0   /* Count only, no logging */
+#define PMC_HOOK_LOG     1   /* Count + structured log lines (default) */
+#define PMC_HOOK_BREAK   2   /* Count + log + __debugbreak() on event */
 
 /* --- Public API --- */
 
