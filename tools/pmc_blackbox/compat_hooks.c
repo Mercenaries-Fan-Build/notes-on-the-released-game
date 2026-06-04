@@ -10,12 +10,14 @@
  *   P1: 0x8242B0 — Generic hash table lookup (diagnostic-only)
  *   P2: 0x464780 — GetChunkDataReader (diagnostic-only)
  *   P3: 0x74D6D0 — Vertex declaration validator (clamp stream index)
+ *   P4: 0x45B1C9 — Chunk read NULL guard (inline code-cave patch)
  *
  * MinHook is compiled directly from submodules/minhook/ (git submodule).
  */
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <string.h>
 #include "compat_hooks.h"
 #include "MinHook.h"
 
@@ -75,7 +77,8 @@ void PrintCompatStats(void) {
     pmc_log("compat", "=== Session Summary ===");
     pmc_log("compat", "  Hash lookup misses: %ld (%ld unique hashes)",
             (long)g_statHashMisses, (long)g_statHashUnique);
-    pmc_log("compat", "  NULL chunk readers: %ld", (long)g_statNullReaders);
+    pmc_log("compat", "  NULL chunk readers: %ld (guarded at 0x45B1C9)",
+            (long)g_statNullReaders);
     pmc_log("compat", "  Stream index clamps: %ld", (long)g_statStreamClamps);
     if (g_logDropped > 0)
         pmc_log("compat", "  Log messages dropped (contention): %ld",
@@ -276,6 +279,124 @@ static int __cdecl Detour_VertexDeclValidator(VertexElement9 *pDecl, int *pOutCo
     return g_origVertexDeclValidator(pDecl, pOutCount, arg3);
 }
 
+/* --- Inline Patch: Chunk Read NULL Guard (0x45B1C9) ---
+ *
+ * The function at 0x45B0D0 iterates UCFX sub-chunks and reads their data
+ * via a reader interface obtained from GetChunkDataReader (0x464780).  When
+ * the reader is NULL (DLC chunk not available), the code at 0x45B1D2 blindly
+ * dereferences ECX (the reader ptr) to read its vtable, causing an AV.
+ *
+ * At 0x45B1C9 (reached from both the fast-path at 0x45B154 and the
+ * allocation fall-through at 0x45B1BD), registers are:
+ *   ECX = reader ptr (possibly NULL)
+ *   EBX = chunk object ptr
+ *   ESI = allocated buffer (or 1 for fast-path)
+ *
+ * Original bytes at 0x45B1C9 (17 bytes through 0x45B1D9):
+ *   8B 43 1C        mov eax, [ebx+0x1C]     ; data size
+ *   99              cdq
+ *   52              push edx                  ; hi dword
+ *   50              push eax                  ; lo dword
+ *   89 73 18        mov [ebx+0x18], esi      ; store buffer
+ *   8B 01           mov eax, [ecx]           ; ← CRASH if ecx==0
+ *   8B 50 14        mov edx, [eax+0x14]      ; vtable[5] = Read
+ *   56              push esi                  ; buffer arg
+ *   FF D2           call edx                  ; reader->Read (ret 12)
+ *
+ * Fix: Replace with JMP to a code cave that tests ECX first.
+ * If NULL, store buffer in object, zero the size, and skip the Read.
+ * The reader->Read is __thiscall ret 12 (cleans 3 stack args).
+ */
+
+#define CHUNK_READ_PATCH_ADDR  0x0045B1C9u
+#define CHUNK_READ_RESUME_ADDR 0x0045B1DAu
+#define CHUNK_READ_PATCH_LEN   17
+
+static int PatchChunkReadNullGuard(void) {
+    BYTE *cave;
+    DWORD oldProt;
+    BYTE *patch_site = (BYTE *)(DWORD_PTR)CHUNK_READ_PATCH_ADDR;
+    DWORD cave_addr;
+    DWORD resume_addr = CHUNK_READ_RESUME_ADDR;
+    int off;
+
+    /* Trampoline layout (41 bytes):
+     *  [0]  test ecx, ecx
+     *  [2]  jz +22 → null_reader
+     *  --- normal path ---
+     *  [4]  mov eax, [ebx+0x1C]
+     *  [7]  cdq
+     *  [8]  push edx
+     *  [9]  push eax
+     * [10]  mov [ebx+0x18], esi
+     * [13]  mov eax, [ecx]
+     * [15]  mov edx, [eax+0x14]
+     * [18]  push esi
+     * [19]  call edx
+     * [21]  jmp resume
+     *  --- null_reader (offset 26) ---
+     * [26]  mov [ebx+0x18], esi
+     * [29]  mov dword [ebx+0x1C], 0
+     * [36]  jmp resume
+     */
+    static const BYTE template[41] = {
+        0x85, 0xC9,                         /* test ecx, ecx        */
+        0x74, 0x16,                         /* jz +22 → offset 26   */
+        0x8B, 0x43, 0x1C,                   /* mov eax, [ebx+0x1C]  */
+        0x99,                               /* cdq                   */
+        0x52,                               /* push edx              */
+        0x50,                               /* push eax              */
+        0x89, 0x73, 0x18,                   /* mov [ebx+0x18], esi  */
+        0x8B, 0x01,                         /* mov eax, [ecx]       */
+        0x8B, 0x50, 0x14,                   /* mov edx, [eax+0x14]  */
+        0x56,                               /* push esi              */
+        0xFF, 0xD2,                         /* call edx              */
+        0xE9, 0x00, 0x00, 0x00, 0x00,       /* jmp resume (fixup)   */
+        /* null_reader: */
+        0x89, 0x73, 0x18,                   /* mov [ebx+0x18], esi  */
+        0xC7, 0x43, 0x1C, 0x00,0x00,0x00,0x00, /* mov dword [ebx+0x1C], 0 */
+        0xE9, 0x00, 0x00, 0x00, 0x00        /* jmp resume (fixup)   */
+    };
+
+    cave = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE,
+                                PAGE_EXECUTE_READWRITE);
+    if (!cave) {
+        pmc_log("compat", "PatchChunkReadNullGuard: VirtualAlloc failed");
+        return 0;
+    }
+
+    memcpy(cave, template, sizeof(template));
+    cave_addr = (DWORD)(DWORD_PTR)cave;
+
+    /* Fixup JMP at offset 21 → resume_addr */
+    off = (int)(resume_addr - (cave_addr + 21 + 5));
+    memcpy(cave + 22, &off, 4);
+
+    /* Fixup JMP at offset 36 → resume_addr */
+    off = (int)(resume_addr - (cave_addr + 36 + 5));
+    memcpy(cave + 37, &off, 4);
+
+    /* Patch the original site: JMP cave (5 bytes) + NOP padding (12 bytes) */
+    if (!VirtualProtect(patch_site, CHUNK_READ_PATCH_LEN, PAGE_EXECUTE_READWRITE, &oldProt)) {
+        pmc_log("compat", "PatchChunkReadNullGuard: VirtualProtect failed");
+        VirtualFree(cave, 0, MEM_RELEASE);
+        return 0;
+    }
+
+    patch_site[0] = 0xE9; /* JMP rel32 */
+    off = (int)(cave_addr - ((DWORD)(DWORD_PTR)patch_site + 5));
+    memcpy(patch_site + 1, &off, 4);
+    memset(patch_site + 5, 0x90, CHUNK_READ_PATCH_LEN - 5); /* NOP fill */
+
+    VirtualProtect(patch_site, CHUNK_READ_PATCH_LEN, oldProt, &oldProt);
+    FlushInstructionCache(GetCurrentProcess(), patch_site, CHUNK_READ_PATCH_LEN);
+    FlushInstructionCache(GetCurrentProcess(), cave, sizeof(template));
+
+    pmc_log("compat", "  ChunkReadNullGuard @ 0x%08X → cave 0x%08X",
+            CHUNK_READ_PATCH_ADDR, cave_addr);
+    return 1;
+}
+
 /* --- Hook Installation --- */
 
 typedef struct {
@@ -334,6 +455,9 @@ int InstallCompatHooks(void) {
             installed, (int)(sizeof(hooks) / sizeof(hooks[0])),
             g_hookMode == PMC_HOOK_SILENT ? "silent" :
             g_hookMode == PMC_HOOK_LOG    ? "log"    : "break");
+
+    /* Inline patches (not MinHook-based) */
+    installed += PatchChunkReadNullGuard();
 
     return installed;
 }
