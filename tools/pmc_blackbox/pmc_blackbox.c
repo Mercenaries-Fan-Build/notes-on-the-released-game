@@ -61,6 +61,7 @@ static FILE*           g_logfile = NULL;
 static CRITICAL_SECTION g_logLock;
 
 static volatile LONG g_logPending = 0;
+volatile LONG g_logDropped = 0;
 #define LOG_FLUSH_THRESHOLD 64
 
 static void InitLogFile(void) {
@@ -100,7 +101,15 @@ __declspec(dllexport) void pmc_log(const char *source, const char *fmt, ...) {
               st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
               source ? source : "???", msg);
 
-    EnterCriticalSection(&g_logLock);
+    /*
+     * Use TryEnterCriticalSection so callers on latency-sensitive threads
+     * (D3D9 rendering, audio) never block.  Dropped messages are counted
+     * via g_logDropped and reported at shutdown.
+     */
+    if (!TryEnterCriticalSection(&g_logLock)) {
+        InterlockedIncrement(&g_logDropped);
+        return;
+    }
 
     fputs(line, stdout);
 

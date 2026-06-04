@@ -43,26 +43,33 @@ static volatile LONG g_statStreamClamps = 0;
 #define UNIQUE_HASH_CAPACITY 256
 static volatile LONG  g_uniqueHashCount = 0;
 static DWORD          g_uniqueHashes[UNIQUE_HASH_CAPACITY];
-static CRITICAL_SECTION g_uniqueHashLock;
 
+/*
+ * Lock-free unique hash recording.  The previous implementation used a
+ * CRITICAL_SECTION, which could deadlock when the hash hook fires on the
+ * D3D9 rendering thread while the main thread holds the same lock (or
+ * waits on the render queue that this thread must complete).
+ *
+ * Uses InterlockedCompareExchange to CAS-append.  Duplicates are benign
+ * (the count is an approximation for diagnostics).
+ */
 static void RecordUniqueHash(DWORD hash) {
     LONG i, count;
 
-    EnterCriticalSection(&g_uniqueHashLock);
     count = g_uniqueHashCount;
     for (i = 0; i < count; i++) {
-        if (g_uniqueHashes[i] == hash) {
-            LeaveCriticalSection(&g_uniqueHashLock);
+        if (g_uniqueHashes[i] == hash)
             return;
-        }
     }
     if (count < UNIQUE_HASH_CAPACITY) {
-        g_uniqueHashes[count] = hash;
-        g_uniqueHashCount = count + 1;
-        InterlockedIncrement(&g_statHashUnique);
+        if (InterlockedCompareExchange(&g_uniqueHashCount, count + 1, count) == count) {
+            g_uniqueHashes[count] = hash;
+            InterlockedIncrement(&g_statHashUnique);
+        }
     }
-    LeaveCriticalSection(&g_uniqueHashLock);
 }
+
+extern volatile LONG g_logDropped;
 
 void PrintCompatStats(void) {
     pmc_log("compat", "=== Session Summary ===");
@@ -70,6 +77,9 @@ void PrintCompatStats(void) {
             (long)g_statHashMisses, (long)g_statHashUnique);
     pmc_log("compat", "  NULL chunk readers: %ld", (long)g_statNullReaders);
     pmc_log("compat", "  Stream index clamps: %ld", (long)g_statStreamClamps);
+    if (g_logDropped > 0)
+        pmc_log("compat", "  Log messages dropped (contention): %ld",
+                (long)g_logDropped);
 }
 
 /* --- Hook: Hash Table Lookup (0x8242B0) ---
@@ -105,27 +115,24 @@ void *g_origHashTableLookup = NULL;
 /*
  * Miss-path helper — called from the naked detour with __cdecl.
  * Non-static so the naked detour's basic asm can reference the symbol.
+ *
+ * IMPORTANT: This function must be fully non-blocking.  It is called from
+ * ANY thread that hits the hash table lookup, including the D3D9 rendering
+ * thread (e.g. caller 0x00873217).  The main thread waits on a render-queue
+ * drain loop (Sleep(0) at 0x8766E7) that blocks until the rendering thread
+ * finishes its frame.  If this function calls pmc_log (which does fputs →
+ * ZwWriteFile), the console/file I/O can block, stalling the render thread
+ * and deadlocking the main thread's drain loop.
+ *
+ * Fix: atomic counting only.  Totals are printed at session shutdown via
+ * PrintCompatStats().  For interactive diagnosis, use PMC_HOOK_BREAK mode
+ * (triggers DebugBreak on the first miss) or read the stats in the debugger.
  */
-#define MISS_LOG_LIMIT 64
-
 void HashTableLookup_logMiss(DWORD hashKey, int tableSize, DWORD callerAddr) {
-    LONG total = InterlockedIncrement(&g_statHashMisses);
+    (void)tableSize;
+    (void)callerAddr;
+    InterlockedIncrement(&g_statHashMisses);
     RecordUniqueHash(hashKey);
-
-    if (total <= MISS_LOG_LIMIT) {
-        int mode = (int)g_hookMode;
-        if (mode >= PMC_HOOK_LOG) {
-            pmc_log("compat", "MISS hash=0x%08X table_size=%d caller=0x%08X",
-                    hashKey, tableSize, callerAddr);
-        }
-        if (total == MISS_LOG_LIMIT && mode >= PMC_HOOK_LOG) {
-            pmc_log("compat", "MISS log limit reached (%d); further misses counted silently",
-                    MISS_LOG_LIMIT);
-        }
-        if (mode >= PMC_HOOK_BREAK) {
-            DebugBreak();
-        }
-    }
 }
 
 /*
@@ -300,8 +307,6 @@ int InstallCompatHooks(void) {
           "VertexDeclValidator" },
     };
 
-    InitializeCriticalSection(&g_uniqueHashLock);
-
     status = MH_Initialize();
     if (status != MH_OK) {
         pmc_log("compat", "MH_Initialize failed: %s", MH_StatusToString(status));
@@ -337,6 +342,5 @@ void ShutdownCompatHooks(void) {
     PrintCompatStats();
     MH_DisableHook(MH_ALL_HOOKS);
     MH_Uninitialize();
-    DeleteCriticalSection(&g_uniqueHashLock);
 }
         
