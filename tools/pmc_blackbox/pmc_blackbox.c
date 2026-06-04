@@ -1,5 +1,5 @@
 /**
- * pmc_bb.dll — SecuROM Spoof + Debug Console + ASI Loader
+ * pmc_bb.dll — SecuROM Spoof + Debug Console + ASI Loader + Compat Hooks
  *                    for Mercenaries 2: World in Flames
  *
  * Self-contained entry point that replaces the need for a separate ASI loader
@@ -12,22 +12,23 @@
  * Responsibilities:
  *   1. Creates the SecuROM v7 spoof Event (mandatory for game boot)
  *   2. Allocates a debug console window with stdout/stderr redirection
- *   3. Discovers and LoadLibrary's all .asi plugins from:
+ *   3. Installs runtime compatibility hooks (MinHook) for crash prevention
+ *   4. Fixes underground spawn validation
+ *   5. Discovers and LoadLibrary's all .asi plugins from:
  *      - Game root directory
  *      - scripts/ subfolder
  *      - plugins/ subfolder
  *      - update/ subfolder
- *   4. Reports load success/failure for each plugin
- *   5. Exports pmc_log() — centralized logging API for all ASI plugins.
+ *   6. Reports load success/failure for each plugin
+ *   7. Exports pmc_log() — centralized logging API for all ASI plugins.
  *      Writes timestamped, source-tagged lines to the console AND to a
  *      single pmc_blackbox.log file on disk.
  *
  * The DLL exports BlackboxEntry by ordinal #1 (the game's import table
  * resolves this by ordinal) and pmc_log by name.
  *
- * Build (MinGW cross-compile from macOS/Linux):
- *   i686-w64-mingw32-gcc -shared -o pmc_bb.dll pmc_blackbox.c pmc_blackbox.def \
- *       -lkernel32 -luser32 -O2 -s -Wl,--enable-stdcall-fixup
+ * Build (MinGW cross-compile):
+ *   make mingw   (see Makefile for full command)
  *
  * Architecture: 32-bit (x86) Windows DLL — Mercenaries 2 is a 32-bit game.
  */
@@ -37,8 +38,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include "compat_hooks.h"
 
-#define PMC_BLACKBOX_VERSION "2.1.0"
+#define PMC_BLACKBOX_VERSION "3.0.0"
 #define SECUROM_XOR_KEY 0x19EA3FD3
 
 /* --- SecuROM event spoof --- */
@@ -296,6 +298,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
+
+        /* Runtime compat hooks — inline hooks for crash prevention & diagnostics.
+         * Must be after console (needs pmc_log) and before ASI load. */
+        InstallCompatHooks();
 
         /* Fix underground spawn — early write + deferred watchdog thread.
          * Game init zeroes this flag; the watchdog re-applies it. */
