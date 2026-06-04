@@ -11,6 +11,12 @@
  *   P2: 0x464780 — GetChunkDataReader (stub reader on NULL return)
  *   P3: 0x74D6D0 — Vertex declaration validator (clamp stream index)
  *
+ * Static code patches:
+ *   S1: 0x8766F9 — Bounded-retry code cave for render-queue drain loop
+ *                   Replaces `jnz` with jmp to cave that allows up to
+ *                   10000 retries then force-matches the counter pair.
+ *                   Prevents deadlock without removing synchronization.
+ *
  * Superseded patches (removed — stub reader makes them unnecessary):
  *   P4: 0x45B1C9 — was inline code-cave NULL guard for chunk reader
  *   P5: 0x59CFF2 — was inline code-cave NULL guard for tag dispatch
@@ -398,6 +404,158 @@ typedef struct {
     const char *name;
 } HookDef;
 
+/* --- S1: Bounded-retry code cave for render-queue drain loop (0x8766F9) ---
+ *
+ * The drain function at 0x8765C0 waits for a submitted/completed counter
+ * pair ([arg+0] vs [arg+4]) to equalize.  When the stub reader short-
+ * circuits a render command (Read() returns 0, no async completion fires),
+ * the counters diverge permanently and the main thread spins Sleep(0)
+ * forever.
+ *
+ * Fix: replace the 6-byte `jnz 0x876610` with a `jmp code_cave; nop`.
+ * The cave implements bounded retry:
+ *   - If counters match (ZF=1 from the preceding `cmp`), reset retry
+ *     counter and exit normally.
+ *   - If counters don't match, decrement a retry counter.  If retries
+ *     remain, jump back into the loop (Sleep(0) + cooperative drain).
+ *   - If retries exhausted, force-match the counters ([arg+0] = [arg+4])
+ *     so the game state stays consistent, then exit.
+ *
+ * This preserves render-queue synchronization for the common case while
+ * preventing permanent deadlock from stub-reader counter divergence.
+ */
+#define ADDR_DRAIN_LOOP_JNZ   ((BYTE *)0x8766F9)
+#define ADDR_DRAIN_LOOP_BODY  0x876610u
+#define ADDR_DRAIN_EXIT       0x8766FFu
+#define DRAIN_PATCH_SIZE      6
+#define DRAIN_MAX_RETRIES     10000
+#define DRAIN_CAVE_SIZE       0x50
+
+static const BYTE kDrainOriginal[DRAIN_PATCH_SIZE] = {0x0F,0x85,0x11,0xFF,0xFF,0xFF};
+
+static int ApplyDrainLoopPatch(void) {
+    BYTE *cave;
+    DWORD caveAddr, retriesAddr;
+    DWORD oldProt;
+    BYTE jmpPatch[DRAIN_PATCH_SIZE];
+    int off;
+
+    if (memcmp(ADDR_DRAIN_LOOP_JNZ, kDrainOriginal, DRAIN_PATCH_SIZE) != 0) {
+        pmc_log("compat", "S1: drain loop bytes at 0x%08X unexpected — skipping",
+                (unsigned)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ);
+        return 0;
+    }
+
+    cave = (BYTE *)VirtualAlloc(NULL, DRAIN_CAVE_SIZE,
+                                MEM_COMMIT | MEM_RESERVE,
+                                PAGE_EXECUTE_READWRITE);
+    if (!cave) {
+        pmc_log("compat", "S1: VirtualAlloc for code cave failed");
+        return 0;
+    }
+    memset(cave, 0xCC, DRAIN_CAVE_SIZE);
+
+    caveAddr    = (DWORD)(DWORD_PTR)cave;
+    retriesAddr = caveAddr + 0x40;
+
+    /* Write the retry counter initial value */
+    *(DWORD *)(cave + 0x40) = DRAIN_MAX_RETRIES;
+
+    off = 0;
+
+    /* 0x00: je cave_exit (short jump, ZF=1 from preceding cmp edx,eax) */
+    cave[off++] = 0x74;               /* je rel8 */
+    cave[off++] = 0x31 - 0x02;        /* offset to cave_exit at 0x31 */
+
+    /* 0x02: push eax */
+    cave[off++] = 0x50;
+
+    /* 0x03: mov eax, [g_retries] */
+    cave[off++] = 0xA1;
+    *(DWORD *)(cave + off) = retriesAddr; off += 4;
+
+    /* 0x08: dec eax */
+    cave[off++] = 0x48;
+
+    /* 0x09: mov [g_retries], eax */
+    cave[off++] = 0xA3;
+    *(DWORD *)(cave + off) = retriesAddr; off += 4;
+
+    /* 0x0E: pop eax */
+    cave[off++] = 0x58;
+
+    /* 0x0F: jnz cave_retry (retries remaining → loop back) */
+    cave[off++] = 0x75;               /* jnz rel8 */
+    cave[off++] = 0x2C - 0x11;        /* offset to cave_retry at 0x2C */
+
+    /* 0x11: retries exhausted — force-match counters and exit */
+    /* push eax */
+    cave[off++] = 0x50;
+    /* push ecx */
+    cave[off++] = 0x51;
+    /* mov eax, [ebp+0x08] — counter struct ptr (drain func arg) */
+    cave[off++] = 0x8B; cave[off++] = 0x45; cave[off++] = 0x08;
+    /* mov ecx, [eax+0x04] — "submitted" counter */
+    cave[off++] = 0x8B; cave[off++] = 0x48; cave[off++] = 0x04;
+    /* mov [eax], ecx — force "completed" = "submitted" */
+    cave[off++] = 0x89; cave[off++] = 0x08;
+    /* pop ecx */
+    cave[off++] = 0x59;
+    /* pop eax */
+    cave[off++] = 0x58;
+
+    /* 0x1D: mov dword [g_retries], DRAIN_MAX_RETRIES — reset counter */
+    cave[off++] = 0xC7; cave[off++] = 0x05;
+    *(DWORD *)(cave + off) = retriesAddr; off += 4;
+    *(DWORD *)(cave + off) = DRAIN_MAX_RETRIES; off += 4;
+
+    /* 0x27: jmp ADDR_DRAIN_EXIT */
+    cave[off++] = 0xE9;
+    *(DWORD *)(cave + off) = ADDR_DRAIN_EXIT - (caveAddr + (DWORD)off + 4);
+    off += 4;
+
+    /* 0x2C (cave_retry): jmp ADDR_DRAIN_LOOP_BODY */
+    cave[off++] = 0xE9;
+    *(DWORD *)(cave + off) = ADDR_DRAIN_LOOP_BODY - (caveAddr + (DWORD)off + 4);
+    off += 4;
+
+    /* 0x31 (cave_exit): mov dword [g_retries], DRAIN_MAX_RETRIES — reset */
+    cave[off++] = 0xC7; cave[off++] = 0x05;
+    *(DWORD *)(cave + off) = retriesAddr; off += 4;
+    *(DWORD *)(cave + off) = DRAIN_MAX_RETRIES; off += 4;
+
+    /* 0x3B: jmp ADDR_DRAIN_EXIT */
+    cave[off++] = 0xE9;
+    *(DWORD *)(cave + off) = ADDR_DRAIN_EXIT - (caveAddr + (DWORD)off + 4);
+    off += 4;
+
+    FlushInstructionCache(GetCurrentProcess(), cave, DRAIN_CAVE_SIZE);
+
+    /* Patch the original jnz to jump into the cave */
+    if (!VirtualProtect(ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE,
+                        PAGE_EXECUTE_READWRITE, &oldProt)) {
+        pmc_log("compat", "S1: VirtualProtect on game code failed");
+        VirtualFree(cave, 0, MEM_RELEASE);
+        return 0;
+    }
+
+    /* E9 rel32 = jmp cave_start; 90 = nop (pad to 6 bytes) */
+    jmpPatch[0] = 0xE9;
+    *(DWORD *)(jmpPatch + 1) = caveAddr -
+        ((DWORD)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ + 5);
+    jmpPatch[5] = 0x90;
+
+    memcpy(ADDR_DRAIN_LOOP_JNZ, jmpPatch, DRAIN_PATCH_SIZE);
+    VirtualProtect(ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE, oldProt, &oldProt);
+    FlushInstructionCache(GetCurrentProcess(),
+                          ADDR_DRAIN_LOOP_JNZ, DRAIN_PATCH_SIZE);
+
+    pmc_log("compat", "S1: drain-loop cave at 0x%08X, max %d retries "
+            "(patch at 0x%08X)", caveAddr, DRAIN_MAX_RETRIES,
+            (unsigned)(DWORD_PTR)ADDR_DRAIN_LOOP_JNZ);
+    return 1;
+}
+
 int InstallCompatHooks(void) {
     MH_STATUS status;
     int installed = 0;
@@ -424,6 +582,8 @@ int InstallCompatHooks(void) {
         pmc_log("compat", "FATAL: stub reader allocation failed, P2 hook unsafe");
         return 0;
     }
+
+    ApplyDrainLoopPatch();
 
     status = MH_Initialize();
     if (status != MH_OK) {
