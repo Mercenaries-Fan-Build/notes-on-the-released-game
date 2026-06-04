@@ -10,76 +10,16 @@
  *   P1: 0x8242B0 — Generic hash table lookup (diagnostic-only)
  *   P2: 0x464780 — GetChunkDataReader (diagnostic-only)
  *   P3: 0x74D6D0 — Vertex declaration validator (clamp stream index)
+ *
+ * MinHook is compiled directly from submodules/minhook/ (git submodule).
  */
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "compat_hooks.h"
+#include "MinHook.h"
 
-/* pmc_log is defined in pmc_blackbox.c; same compilation unit (DLL) */
 extern void pmc_log(const char *source, const char *fmt, ...);
-
-/* --- Dynamic MinHook loading ---
- * We load MinHook.x86.dll at runtime instead of vendoring the source.
- * This uses the official pre-built binary, avoiding subtle compilation issues.
- */
-
-typedef enum MH_STATUS {
-    MH_UNKNOWN = -1,
-    MH_OK = 0,
-    MH_ERROR_ALREADY_INITIALIZED,
-    MH_ERROR_NOT_INITIALIZED,
-    MH_ERROR_ALREADY_CREATED,
-    MH_ERROR_NOT_CREATED,
-    MH_ERROR_ENABLED,
-    MH_ERROR_DISABLED,
-    MH_ERROR_NOT_EXECUTABLE,
-    MH_ERROR_UNSUPPORTED_FUNCTION,
-    MH_ERROR_MEMORY_ALLOC,
-    MH_ERROR_MEMORY_PROTECT,
-    MH_ERROR_MODULE_NOT_FOUND,
-    MH_ERROR_FUNCTION_NOT_FOUND
-} MH_STATUS;
-
-#define MH_ALL_HOOKS NULL
-
-typedef MH_STATUS (WINAPI *pfn_MH_Initialize)(void);
-typedef MH_STATUS (WINAPI *pfn_MH_Uninitialize)(void);
-typedef MH_STATUS (WINAPI *pfn_MH_CreateHook)(LPVOID, LPVOID, LPVOID*);
-typedef MH_STATUS (WINAPI *pfn_MH_EnableHook)(LPVOID);
-typedef MH_STATUS (WINAPI *pfn_MH_DisableHook)(LPVOID);
-typedef const char* (WINAPI *pfn_MH_StatusToString)(MH_STATUS);
-
-static pfn_MH_Initialize      p_MH_Initialize      = NULL;
-static pfn_MH_Uninitialize     p_MH_Uninitialize     = NULL;
-static pfn_MH_CreateHook       p_MH_CreateHook       = NULL;
-static pfn_MH_EnableHook       p_MH_EnableHook       = NULL;
-static pfn_MH_DisableHook      p_MH_DisableHook      = NULL;
-static pfn_MH_StatusToString   p_MH_StatusToString   = NULL;
-static HMODULE                 g_hMinHook            = NULL;
-
-static int LoadMinHook(void) {
-    g_hMinHook = LoadLibraryA("MinHook.x86.dll");
-    if (!g_hMinHook) {
-        pmc_log("compat", "FATAL: MinHook.x86.dll not found (place next to exe)");
-        return 0;
-    }
-    p_MH_Initialize    = (pfn_MH_Initialize)   GetProcAddress(g_hMinHook, "MH_Initialize");
-    p_MH_Uninitialize  = (pfn_MH_Uninitialize) GetProcAddress(g_hMinHook, "MH_Uninitialize");
-    p_MH_CreateHook    = (pfn_MH_CreateHook)   GetProcAddress(g_hMinHook, "MH_CreateHook");
-    p_MH_EnableHook    = (pfn_MH_EnableHook)   GetProcAddress(g_hMinHook, "MH_EnableHook");
-    p_MH_DisableHook   = (pfn_MH_DisableHook)  GetProcAddress(g_hMinHook, "MH_DisableHook");
-    p_MH_StatusToString = (pfn_MH_StatusToString)GetProcAddress(g_hMinHook, "MH_StatusToString");
-
-    if (!p_MH_Initialize || !p_MH_CreateHook || !p_MH_EnableHook) {
-        pmc_log("compat", "FATAL: MinHook.x86.dll missing required exports");
-        FreeLibrary(g_hMinHook);
-        g_hMinHook = NULL;
-        return 0;
-    }
-    pmc_log("compat", "MinHook.x86.dll loaded OK");
-    return 1;
-}
 
 /* --- Configuration --- */
 
@@ -134,40 +74,92 @@ void PrintCompatStats(void) {
 
 /* --- Hook: Hash Table Lookup (0x8242B0) ---
  *
- * Generic hash table slot lookup used by effects, textures, meshes, etc.
- * Actual calling convention (confirmed via trampoline disasm):
- *   ECX = hashKey, first stack arg = tableSize
- *   Prologue: test ecx,ecx / push ebx / mov ebx,[esp+8] / ...
- * This is a __thiscall-like convention; the detour must use __fastcall
- * to capture ECX (hashKey) and EDX (unused) as register args, with
- * tableSize as the first stack arg after the two hidden register slots.
- * Returns slot index (>=0) on hit, -1 on miss.
+ * Actual calling convention (confirmed via x32dbg disassembly of all
+ * exit paths at 0x8242DC and 0x824398):
+ *
+ *   INPUT:  ECX = hashKey
+ *           [ESP+4] = tableSize  (stack arg, after return address)
+ *           ESI = hash table pointer  (implicit register input)
+ *   OUTPUT: EAX = slot index (>=0) on hit, -1 on miss
+ *   EXIT:   pop edi / pop ebp / pop ebx / ret   (plain ret, NO cleanup)
+ *
+ * This is a CUSTOM convention: ECX as a register arg with __cdecl-style
+ * caller cleanup.  Using __fastcall is WRONG — it generates 'ret 4'
+ * (callee pops the stack arg), but the original uses plain 'ret'.
+ * The 4-byte stack over-cleanup causes progressive corruption: after
+ * enough calls, the return address shifts into .data and the game
+ * crashes executing zeroed memory.
+ *
+ * Fix: naked detour that matches the original convention exactly.
+ * A separate C helper handles the miss-logging path.
  */
 
 #define ADDR_HASH_TABLE_LOOKUP ((LPVOID)0x8242B0)
 
-typedef int (__fastcall *fn_HashTableLookup)(DWORD hashKey, DWORD _edx_unused, int tableSize);
-static fn_HashTableLookup g_origHashTableLookup = NULL;
+/*
+ * Trampoline pointer — written by MH_CreateHook().
+ * Non-static so the naked detour's basic asm can reference the symbol.
+ */
+void *g_origHashTableLookup = NULL;
 
-static int __fastcall Detour_HashTableLookup(DWORD hashKey, DWORD _edx_unused, int tableSize) {
-    int result = g_origHashTableLookup(hashKey, _edx_unused, tableSize);
+/*
+ * Miss-path helper — called from the naked detour with __cdecl.
+ * Non-static so the naked detour's basic asm can reference the symbol.
+ */
+void HashTableLookup_logMiss(DWORD hashKey, int tableSize, DWORD callerAddr) {
+    int mode = (int)g_hookMode;
+    InterlockedIncrement(&g_statHashMisses);
+    RecordUniqueHash(hashKey);
 
-    if (result == -1) {
-        int mode = (int)g_hookMode;
-        InterlockedIncrement(&g_statHashMisses);
-        RecordUniqueHash(hashKey);
-
-        if (mode >= PMC_HOOK_LOG) {
-            void *caller = __builtin_return_address(0);
-            pmc_log("compat", "MISS hash=0x%08X table_size=%d caller=0x%08X",
-                    hashKey, tableSize, (unsigned int)(DWORD_PTR)caller);
-        }
-        if (mode >= PMC_HOOK_BREAK) {
-            DebugBreak();
-        }
+    if (mode >= PMC_HOOK_LOG) {
+        pmc_log("compat", "MISS hash=0x%08X table_size=%d caller=0x%08X",
+                hashKey, tableSize, callerAddr);
     }
+    if (mode >= PMC_HOOK_BREAK) {
+        DebugBreak();
+    }
+}
 
-    return result;
+/*
+ * Naked detour — matches the original function's register/stack protocol
+ * exactly so that every caller (including high-address callers in .data
+ * thunks or SecuROM stubs) gets correct stack cleanup.
+ *
+ * Strategy:
+ *   1. Save EBX, stash hashKey there (trampoline preserves EBX for us)
+ *   2. Call trampoline with original convention, do caller cleanup
+ *   3. On miss, push __cdecl args and call the C helper
+ *   4. Restore EBX, plain ret
+ */
+__attribute__((naked, used))
+void Detour_HashTableLookup(void) {
+    __asm__ (
+        /* entry: ECX=hashKey, ESI=table, [ESP]=retAddr, [ESP+4]=tableSize */
+        "pushl %ebx\n\t"
+        "movl %ecx, %ebx\n\t"
+
+        /* call trampoline: ECX=hashKey, push tableSize, caller cleanup */
+        "pushl 8(%esp)\n\t"
+        "call *_g_origHashTableLookup\n\t"
+        "addl $4, %esp\n\t"
+
+        /* EAX=result; trampoline restored EBX to our saved hashKey */
+        "cmpl $-1, %eax\n\t"
+        "jne 1f\n\t"
+
+        /* miss: HashTableLookup_logMiss(hashKey, tableSize, callerAddr) */
+        "movl 4(%esp), %eax\n\t"
+        "pushl %eax\n\t"
+        "pushl 12(%esp)\n\t"
+        "pushl %ebx\n\t"
+        "call _HashTableLookup_logMiss\n\t"
+        "addl $12, %esp\n\t"
+        "movl $-1, %eax\n\t"
+
+        "1:\n\t"
+        "popl %ebx\n\t"
+        "ret\n\t"
+    );
 }
 
 /* --- Hook: GetChunkDataReader (0x464780) ---
@@ -282,7 +274,6 @@ int InstallCompatHooks(void) {
     MH_STATUS status;
     int installed = 0;
     int i;
-    const char *status_str;
 
     HookDef hooks[] = {
         { ADDR_HASH_TABLE_LOOKUP,
@@ -303,31 +294,26 @@ int InstallCompatHooks(void) {
 
     InitializeCriticalSection(&g_uniqueHashLock);
 
-    if (!LoadMinHook()) return 0;
-
-    status = p_MH_Initialize();
+    status = MH_Initialize();
     if (status != MH_OK) {
-        status_str = p_MH_StatusToString ? p_MH_StatusToString(status) : "?";
-        pmc_log("compat", "MH_Initialize failed: %s", status_str);
+        pmc_log("compat", "MH_Initialize failed: %s", MH_StatusToString(status));
         return 0;
     }
 
     for (i = 0; i < (int)(sizeof(hooks) / sizeof(hooks[0])); i++) {
-        status = p_MH_CreateHook(hooks[i].target, hooks[i].detour, hooks[i].ppOriginal);
+        status = MH_CreateHook(hooks[i].target, hooks[i].detour, hooks[i].ppOriginal);
         if (status != MH_OK) {
-            status_str = p_MH_StatusToString ? p_MH_StatusToString(status) : "?";
             pmc_log("compat", "  [SKIP] %s @ 0x%08X: %s",
                     hooks[i].name, (unsigned int)(DWORD_PTR)hooks[i].target,
-                    status_str);
+                    MH_StatusToString(status));
             continue;
         }
         installed++;
     }
 
-    status = p_MH_EnableHook(MH_ALL_HOOKS);
+    status = MH_EnableHook(MH_ALL_HOOKS);
     if (status != MH_OK) {
-        status_str = p_MH_StatusToString ? p_MH_StatusToString(status) : "?";
-        pmc_log("compat", "MH_EnableHook(ALL) failed: %s", status_str);
+        pmc_log("compat", "MH_EnableHook(ALL) failed: %s", MH_StatusToString(status));
         return 0;
     }
 
@@ -341,8 +327,7 @@ int InstallCompatHooks(void) {
 
 void ShutdownCompatHooks(void) {
     PrintCompatStats();
-    if (p_MH_DisableHook)  p_MH_DisableHook(MH_ALL_HOOKS);
-    if (p_MH_Uninitialize) p_MH_Uninitialize();
+    MH_DisableHook(MH_ALL_HOOKS);
+    MH_Uninitialize();
     DeleteCriticalSection(&g_uniqueHashLock);
-    if (g_hMinHook) { FreeLibrary(g_hMinHook); g_hMinHook = NULL; }
 }
