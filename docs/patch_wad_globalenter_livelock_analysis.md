@@ -1,5 +1,15 @@
 # Patch-WAD GlobalEnter busy-poll livelock + data-as-code faults — live-debug analysis
 
+> **⚠️ STATUS UPDATE (2026-06-04): the "GlobalEnter livelock" in this doc is a TEST-HARNESS ARTIFACT, not a shipping bug.**
+> §13 (2026-06-03) establishes that the `0x2004FFB0` / `0x004B1180` spin **does not occur with the full
+> `vz-patch.wad`**. It is manufactured by `trim_patch_wad` dropping block 2196 (`scripts_vz`) while keeping
+> `commonlocations` → `dlccon*` references, which orphans the contract ASET entries and yields
+> `STATUS_OBJECT_NAME_NOT_FOUND`. With the complete WAD the contracts resolve and the spin never appears.
+> The harness that produced this was a developer-experience detour, now retired.
+> **Treat §1–§11 as superseded by §12–§13.** The real full-WAD load faults are: render-view `0xFFFF` stall
+> (block 18), NULL-ptr AV at `0x858DB8` (effect-object table miss), and the compact-ECS byte-order converter
+> gap (blocks 0/4/15/16/17). Do **not** chase the GlobalEnter livelock as a load blocker.
+
 **Date:** 2026-06-02  
 **Binary:** `…\Mercenaries 2 World in Flames\Mercenaries2.exe` (cracked v1.1, image base
 `0x00400000`, VAs map 1:1 — same EXE as the render-view and spatial-hash analyses).  
