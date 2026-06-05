@@ -1544,7 +1544,7 @@ structural deltas (identical pre/post sges fix → not artifacts; all absent in 
 
 | Patch-only delta | Count | Where | Read |
 |------------------|-------|-------|------|
-| `STRM decl stride 1712992 out of range [8,256]` | 334 | `block[367]`(81), 256/315/338/349/517/993… | `decl+4` reads a constant absurd stride → DLC STRM decl layout/byte-swap deviates from retail (mesh geometry, not placement) |
+| `STRM decl stride 1712992 out of range [8,256]` | 334 | `block[367]`(81), 256/315/338/349/517/993… | `decl+4` reads a constant absurd stride → DLC STRM decl layout/byte-swap deviates from retail (mesh geometry, not placement). **Resolved:** the Xbox `decl` is a 12-B→8-B *format translation*, not a swap — see [`format_reference.md` §15.1](format_reference.md). |
 | `Havok packfile endianness byte = 0 (expected 1 = LE)` | 15 | `block[903]` `dlc01/vehiclenameanimgroup` | **embedded** Havok header `layoutRules` u32-swapped, **not** zero-padding (see below) |
 | ECS `Name`/`ModelName` non-printable | 25 | various | string-field byte-swap corruption |
 

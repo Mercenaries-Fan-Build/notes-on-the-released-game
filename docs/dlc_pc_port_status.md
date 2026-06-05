@@ -45,9 +45,11 @@ tools/
 | BE sges decompression | Done | Multi-segment raw deflate, 16-byte aligned |
 | UCFX container swap (headers) | Done | Magic, chunk table, CSUM trailers |
 | UCFX deep swap (INFO, BNDS, PRMG, IBUF, MESH, HIER, INDX) | Done | Structure-aware per-chunk |
+| UCFX `decl` (vertex declaration) | Done | Xbox 12-B elements → PC 8-B `D3DVERTEXELEMENT9` *format translation* (not a swap); END-only decls → bare PC `D3DDECL_END` (reskins). See [`format_reference.md` §15.1](format_reference.md) |
 | UCFX deep swap (STRM vertex data) | **Gap** | Needs per-format f16/f32/u8 swap |
 | UCFX deep swap (texture BODY) | **Gap** | Possible Xbox 360 tile swizzle |
-| UCFX deep swap (Havok) | Done | Class-aware per-field swap (`hk_class_layouts.CLASS_REGISTRY`, 14 HK550 classes) |
+| UCFX deep swap (Havok animation) | Done | Class-aware per-field swap (`hk_class_layouts.CLASS_REGISTRY`, 14 HK550 classes) |
+| UCFX `PHY2` (Havok collision) | Done | `[u32 header][section-aware packfile][u32-swapped trailing]`; fixed world-load AVs `0x00414B4C` (string scramble) + `0x0248C13E` (trailing relocation). See [`format_reference.md` §15.2](format_reference.md). *Physics `__data__` is still a blind u32 sweep (no `hkp*` layouts) — remaining gap.* |
 | UCFX deep swap (Lua bytecode) | **Gap** | Endianness flag + opcode layout |
 | UCFX deep swap (COMP placements) | **Gap** | 42-byte record fields |
 | PC sges recompression | Done | segment_size=64KB, level=6, major=4 |

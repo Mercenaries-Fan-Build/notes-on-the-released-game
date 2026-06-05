@@ -583,3 +583,88 @@ Always-loaded `resident_P000_Q3` block. Type hashes: see `docs/type_hash_registr
 | `0xFA46D8A8` | UCFX → INFO+DICT | [`docs/fxdict_format.md`](fxdict_format.md) — global FX params (`pandemic_hash_m2("fx")`); **resident** only |
 
 Extraction: `tools/extract_single_block.py --path "blocks\\VZ\\resident_P000_Q3.block"`.
+
+---
+
+## 15. Xbox 360 → PC mesh conversion (`decl` translation + `PHY2` Havok collision)
+
+Two mesh chunks need **format-aware** conversion that a numeric byte-swap gets
+wrong. Both are implemented twice — Python ([`tools/ucfx_be_to_le.py`](../tools/ucfx_be_to_le.py),
+the reference) and Rust ([`tools/wad_simulator/crates/ucfx_byteswap/`](../tools/wad_simulator/crates/ucfx_byteswap/),
+the default build backend) — and the Rust output is held **byte-for-byte
+identical** to Python by parity tests (fixtures under
+`crates/ucfx_byteswap/tests/fixtures/`).
+
+### 15.1 Vertex declaration (`decl`) — a *format translation*, not a swap
+
+The Xbox `decl` chunk is an array of **12-byte** big-endian elements; the PC
+`decl` is an array of **8-byte** `D3DVERTEXELEMENT9` records. A u16/u32 swap
+produces an out-of-range `Type` and the engine raises *"Unsupported data type"*
+(AV). Translate element-by-element instead (`_convert_decl`):
+
+- **Xbox element** (3 × BE u32 `a,b,c`): `a` low-16 = stream offset slot
+  (`index*4 + 8`); `b` byte `(b >> 8) & 0xFF` = **format**; `c` high-byte =
+  `D3DDECLUSAGE`, `c` low-byte = usage index.
+- **PC element** `D3DVERTEXELEMENT9` = `{ u16 Stream, u16 Offset, u8 Type,
+  u8 Method, u8 Usage, u8 UsageIndex }`.
+
+**Format → `D3DDECLTYPE` table** (verified ~99.86% byte-exact against retail
+`vz.wad` oracle pairs):
+
+| Xbox format | PC `Type` | `D3DDECLTYPE` | Size (B) |
+|-------------|-----------|----------------|----------|
+| `0x23` | `15` | `FLOAT16_2` | 4 |
+| `0x21` | `16` | `FLOAT16_4` | 8 |
+| `0x28` | `4`  | `D3DCOLOR`  | 4 |
+| `0x22` | `5`  | `UBYTE4`    | 4 |
+| `0x20` | `8`  | `UBYTE4N`   | 4 |
+
+The PC `Offset` is **cumulative by `D3DDECLTYPE` size** (4/8 above), *not* the
+Xbox slot value. The stream terminates with `D3DDECL_END`: PC `Stream=0x00FF,
+Type=17` → bytes `ff 00 00 00 11 00 00 00`.
+
+**Empty decls = reskins.** A sub-mesh that reuses another mesh's vertex layout
+ships an **END-only** Xbox decl (12 B `00ff0000 ffffffff 00000000`, zero
+elements). This is normal — base-game Mattias has 15 of them. Emit the bare
+**8-byte PC `D3DDECL_END`** (`ff00000011000000`), do **not** treat it as a
+truncation. A genuine truncation (no END marker found) must still **fail loud**
+(`UnhandledByteSwapError`) — END present = intentionally empty; END absent =
+lost geometry. Without this, the 4 reskin DLC characters (mattias_v5, obama,
+sarah, barman) are silently dropped.
+
+### 15.2 `PHY2` collision chunk = `[u32 header][Havok packfile][trailing]`
+
+`PHY2` is **not** a u32 array (it is listed under "verified u32-only layouts" in
+some older notes — that is wrong). It is a three-part structure and a blanket
+u32 sweep corrupts it in two different ways, each a distinct crash. Conversion
+is `_convert_phy2_body` (Python) / `convert_phy2_be_to_le` (Rust):
+
+1. **u32 header** (~48 B before the Havok magic): `[count][asset-hash][flags…]
+   [packfile-size]` — genuine u32 fields, u32-swap.
+2. **Havok 5.5 packfile** (from the 8-byte magic `57 E0 E0 57 10 C0 C0 10`,
+   which is word-palindromic so it survives a swap): convert **section-aware**
+   (`convert_havok_be_to_le`) — swap the header/section-headers/`__classnames__`
+   *signatures* as u32, but leave the `__classnames__` **ASCII strings** and
+   `__types__` raw, and convert `__data__` with per-class field widths from the
+   HK550 registry ([`tools/hk_class_layouts.py`](../tools/hk_class_layouts.py)).
+   The registry covers the **animation** `hka*` classes; **physics** classes
+   (`hkpConvexVerticesShape`, …) are unregistered, so a physics `__data__`
+   degenerates to a u32 sweep + embedded-`layoutRules` repair.
+3. **Trailing engine collision-wrapper** (after the packfile): a quaternion +
+   **intra-chunk u32 self-offsets** + `0xAAAAAAAA`/`0xBBBBBBBB` fills. **All 110
+   DLC `PHY2` chunks carry this.** It is **u32-swapped**; the packfile extent is
+   bounded by `havok_packfile_size` (max section end) so it is not mistaken for
+   packfile body.
+
+**Two crashes this fixed** (both inside the exe's VM-based protection layer, so
+faulting addresses are reused obfuscation gadgets):
+
+| Crash | Cause | Fix |
+|-------|-------|-----|
+| `0x00414B4C` (`mov [eax],edi`, `eax` = ASCII e.g. `"rrAp"`; `lastStatus = STATUS_OBJECT_NAME_NOT_FOUND`) | Blanket u32 swap **scrambled the `__classnames__` strings** → Havok class-by-name lookup fails → derefs scrambled pointer | §15.2 step 2 (section-aware) |
+| `0x0248C13E` (`add [ecx+4],edi`, `ecx` unmapped) | **Trailing left big-endian** → a self-offset `0x000004D8` reads as `0xD8040000` → engine relocator computes `base + 0xD8040000` → AV | §15.2 step 3 (u32-swap trailing) |
+
+> **Remaining gap:** physics `__data__` is still a blind u32 sweep (no physics
+> classes in the registry), so any `u16`/`u8` fields inside `hkp*` objects are
+> mis-swapped. Adding HK550 physics layouts to `hk_class_layouts.py` is the next
+> step if a collision-mesh crash recurs past the trailing fix.

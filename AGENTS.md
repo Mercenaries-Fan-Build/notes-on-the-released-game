@@ -326,6 +326,9 @@ All big-endian → little-endian conversion for DLC porting uses **`tools/ucfx_b
 - **`--permissive`** on `dlc_port.py` / `byteswap_ucfx_block()` enables legacy u32 fallbacks with warnings — **testing only**, never production patch builds.
 - **New formats** — add typed converters; the exception message should include tag, type_hash, and body size. Validate with `tools/audit_dlc_conversion.py` (mismatch count should drop) and `tools/verify_ucfx_endian.py --report-blind-swaps` (fallback exposure should trend to zero).
 - **Deleted blind tools** — `port_xbox_dlc.py` and `dlc_port_x360_to_pc.py` were removed; do not reintroduce tag-scanning `[::-1]` u32 sweeps.
+- **`decl` is a *format translation*, not a swap** — Xbox 12-byte elements → PC 8-byte `D3DVERTEXELEMENT9` (format→`D3DDECLTYPE` table; cumulative offsets). Empty/END-only Xbox decls are **reskins** → emit the bare 8-byte PC `D3DDECL_END` (`ff00000011000000`), don't raise; genuine truncation still raises. See [`format_reference.md` §15.1](format_reference.md).
+- **`PHY2` is a Havok packfile, NOT a u32 array** — `[u32 header][Havok 5.5 packfile][trailing engine collision-wrapper]`. Swap the header u32, convert the packfile **section-aware** (preserve `__classnames__` strings — a blanket swap scrambles them → AV `0x00414B4C`), and **u32-swap the trailing** (all 110 DLC PHY2 chunks have it — left raw its self-offsets relocate to unmapped memory → AV `0x0248C13E`). Mirrored in Rust (`crates/ucfx_byteswap/src/havok.rs`), parity-tested. See [`format_reference.md` §15.2](format_reference.md).
+- **Rust converter parity** — `tools/ucfx_be_to_le.py` is the reference; the Rust backend (default build path) must match it byte-for-byte. Add a fixture + parity test under `crates/ucfx_byteswap/tests/fixtures/` for any new typed converter (note `*.bin` is gitignored — `git add -f`).
 
 ---
 
