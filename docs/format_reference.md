@@ -664,7 +664,18 @@ faulting addresses are reused obfuscation gadgets):
 | `0x00414B4C` (`mov [eax],edi`, `eax` = ASCII e.g. `"rrAp"`; `lastStatus = STATUS_OBJECT_NAME_NOT_FOUND`) | Blanket u32 swap **scrambled the `__classnames__` strings** → Havok class-by-name lookup fails → derefs scrambled pointer | §15.2 step 2 (section-aware) |
 | `0x0248C13E` (`add [ecx+4],edi`, `ecx` unmapped) | **Trailing left big-endian** → a self-offset `0x000004D8` reads as `0xD8040000` → engine relocator computes `base + 0xD8040000` → AV | §15.2 step 3 (u32-swap trailing) |
 
-> **Remaining gap:** physics `__data__` is still a blind u32 sweep (no physics
-> classes in the registry), so any `u16`/`u8` fields inside `hkp*` objects are
-> mis-swapped. Adding HK550 physics layouts to `hk_class_layouts.py` is the next
-> step if a collision-mesh crash recurs past the trailing fix.
+**Animation `data` (type `0x18166555`)** is the same Havok 5.5 packfile (magic at
++0, no header). Both converters route it through `convert_havok_be_to_le` — the
+registry's `hka*` classes give correct per-field widths (u16 bone-indices, u8
+compressed bitstream buffers). A blanket u32 sweep instead scrambles the
+classname strings AND half-swaps those u16/u8 fields → a mis-swapped u16 count
+over-allocates → **heap corruption** surfacing later at an innocent allocation
+(observed: allocator free-list AV `0x0084DD5B`). The Rust backend was missing
+this routing (Python had it) until it was wired — all 114 DLC animgroup blocks
+were scrambled in the build before the fix.
+
+> **Remaining gap:** **physics** `__data__` (PHY2) is still a blind u32 sweep
+> (no `hkp*` classes in the registry), so any `u16`/`u8` fields inside `hkp*`
+> objects are mis-swapped. Animation is now class-aware in both converters;
+> adding HK550 physics layouts to `hk_class_layouts.py` is the next step if a
+> collision-mesh crash recurs.
