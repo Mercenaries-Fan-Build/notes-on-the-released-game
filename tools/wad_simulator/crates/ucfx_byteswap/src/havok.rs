@@ -111,6 +111,13 @@ const HKA_ANIMATION_BINDING_ARRAYS: &[(&str, ArrayInfo)] = &[
     ("floatTrackToFloatSlotIndices", ArrayInfo { ptr_off: None, count_off: None, elem_size: 2, elem_swap: U16 }),
 ];
 
+// hkpMoppCode (physics): 48-byte struct + inline u8 MOPP bytecode buffer at +48.
+// The m_data buffer is a u8 ARRAY — must NOT be u32-swapped (a blind sweep reverses
+// every 4 bytes → the whole MOPP collision tree is scrambled).
+const HKP_MOPP_CODE_ARRAYS: &[(&str, ArrayInfo)] = &[
+    ("m_data", ArrayInfo { ptr_off: Some(32), count_off: Some(36), elem_size: 1, elem_swap: U8W }),
+];
+
 fn lookup_class(name: &str) -> Option<ClassLayout> {
     let layout = match name {
         "hkRootLevelContainer" => ClassLayout { size: 12, swap: SwapSpec::AllU32, arrays: &[] },
@@ -126,6 +133,8 @@ fn lookup_class(name: &str) -> Option<ClassLayout> {
         "hkaAnnotationTrack" => ClassLayout { size: 12, swap: SwapSpec::Fields(HKA_ANNOTATION_TRACK_SWAP), arrays: &[] },
         "hkaAnnotation" => ClassLayout { size: 8, swap: SwapSpec::Fields(HKA_ANNOTATION_SWAP), arrays: &[] },
         "hkaBone" => ClassLayout { size: 8, swap: SwapSpec::Fields(HKA_BONE_SWAP), arrays: &[] },
+        // physics (PHY2 collision packfiles)
+        "hkpMoppCode" => ClassLayout { size: 48, swap: SwapSpec::AllU32, arrays: HKP_MOPP_CODE_ARRAYS },
         _ => return None,
     };
     Some(layout)
