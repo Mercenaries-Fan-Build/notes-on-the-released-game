@@ -1,4 +1,5 @@
 mod convert;
+mod havok;
 mod report;
 mod validate;
 

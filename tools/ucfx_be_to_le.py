@@ -881,6 +881,29 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     return bytes(out)
 
 
+def _convert_phy2_body(be: bytes, *, permissive: bool = False, stats: dict | None = None) -> bytes:
+    """Convert a PHY2 mesh chunk: u32 header prefix + embedded Havok packfile.
+
+    PHY2 is a Havok 5.5 collision packfile, NOT a u32 array. A blanket u32 swap
+    scrambles its ASCII ``__classnames__`` strings; the Havok loader then fails its
+    by-name class lookup (STATUS_OBJECT_NAME_NOT_FOUND) and dereferences scrambled
+    data → access violation (mercenaries2.exe 0x00414B4C). Swap the u32 header
+    fields (count, asset-hash, sizes), then convert the embedded packfile
+    section-aware. Falls back to a plain u32 sweep when no packfile is embedded.
+    """
+    mg = be.find(_HAVOK_MAGIC)
+    if mg < 0:
+        return _convert_u32_array(be)
+    out = bytearray()
+    n = mg // 4
+    for i in range(n):
+        out += be[i * 4:i * 4 + 4][::-1]
+    if n * 4 < mg:
+        out += be[n * 4:mg]  # ragged tail (rare)
+    out += _convert_havok_be_to_le(be[mg:], permissive=permissive, stats=stats)
+    return bytes(out)
+
+
 # ── Lua 5.1 bytecode converter ────────────────────────────────────────
 
 def _convert_binn_pre_luaq(data: bytearray, luaq_off: int) -> None:
@@ -2582,9 +2605,13 @@ def _convert_body(
     if tag in ("watr", "tree", "UNIQ"):
         return _convert_u32_array(body_be)
 
+    # ── PHY2: Havok collision packfile (u32 header + embedded packfile) ──
+    if tag == "PHY2":
+        return _convert_phy2_body(body_be, permissive=permissive, stats=stats)
+
     # ── Mesh structure tags with verified u32-only layouts ──
     if tag in ("PRMG", "GEOM", "POFF", "STAT", "SWIT",
-               "NODE", "CEXE", "PHY2", "COMP", "TINY",
+               "NODE", "CEXE", "COMP", "TINY",
                "SCRB", "INST", "PTCH", "PTMS", "BSHP", "VALU"):
         return _convert_u32_array(body_be)
 

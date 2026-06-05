@@ -4,6 +4,7 @@ use mercs2_formats::schema::{ComponentSchema, SchemaFieldType};
 use mercs2_formats::tags::ChunkTag;
 use mercs2_formats::types;
 
+use crate::havok;
 use crate::report::SchemaCoverageReport;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
@@ -1059,6 +1060,26 @@ fn convert_generic_bodies(
                     ChunkTag::Unknown(b) if b == *b"EMTR" => {
                         // EMTR: 2-byte emitter count (genuine u16).
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b) if b == *b"PHY2" => {
+                        // PHY2 is a Havok 5.5 collision packfile (u32 header +
+                        // embedded packfile), NOT a u32 array. A blanket u32 swap
+                        // scrambles the ASCII __classnames__ strings; the Havok
+                        // loader then fails its by-name class lookup
+                        // (STATUS_OBJECT_NAME_NOT_FOUND) and dereferences scrambled
+                        // data → AV at mercenaries2.exe 0x00414B4C. Convert
+                        // section-aware (see havok::convert_phy2_be_to_le).
+                        let body = data_area[body_local_start..body_local_end].to_vec();
+                        let conv = havok::convert_phy2_be_to_le(&body)
+                            .map_err(|e| format!("PHY2 Havok convert (entry {entry_idx}): {e}"))?;
+                        if conv.len() != body.len() {
+                            return Err(format!(
+                                "PHY2 Havok convert changed size {} -> {} (entry {entry_idx})",
+                                body.len(),
+                                conv.len()
+                            ));
+                        }
+                        data_area[body_local_start..body_local_end].copy_from_slice(&conv);
                     }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
