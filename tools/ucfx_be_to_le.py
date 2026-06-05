@@ -117,6 +117,75 @@ def _convert_u16_array(be: bytes) -> bytes:
     return out
 
 
+# Xbox-360 vertex-fetch format byte ((b >> 8) & 0xFF) -> PC D3DDECLTYPE.
+# Derived + golden-tested against the retail PC oracle (base-game mesh `decl`
+# chunks): see tools/_decl_golden_test.py. 94.3% byte-exact on unambiguous
+# single-decl meshes; the residual is meshes where the PC build authored a
+# *different* decl than a faithful Xbox translation (extra/dropped elements),
+# which is a PC-authoring difference, not a translation error.
+_XBOX_DECL_FORMAT_TO_PC_TYPE = {
+    0x23: 15,   # FLOAT16_2
+    0x21: 16,   # FLOAT16_4
+    0x28: 4,    # UBYTE4
+    0x22: 5,    # SHORT2
+    0x20: 8,    # D3DCOLOR
+}
+# Standard Direct3D9 D3DDECLTYPE byte sizes (enum value -> bytes).
+_PC_D3DDECLTYPE_SIZE = {
+    0: 4, 1: 8, 2: 12, 3: 16, 4: 4, 5: 4, 6: 4, 7: 8, 8: 4,
+    9: 4, 10: 8, 11: 4, 12: 8, 13: 4, 14: 4, 15: 4, 16: 8,
+}
+
+
+def _convert_decl(be: bytes) -> bytes:
+    """Translate an Xbox-360 vertex declaration to a PC D3DVERTEXELEMENT9 array.
+
+    This is a **format translation**, not a byte-swap.  The two formats differ:
+
+      Xbox decl: 12-byte header + N x 12-byte elements (BE ``u32 a, b, c``),
+                 terminated by an END element whose ``a >> 16 == 0x00ff``.
+      PC   decl: 8-byte header ``[u32 0][u32 16]`` + N x 8-byte D3DVERTEXELEMENT9
+                 (``u16 Stream, u16 Offset, u8 Type, u8 Method, u8 Usage,
+                 u8 UsageIndex``), terminated by D3DDECL_END (Type 17).
+
+    Per-element mapping (derived from the retail PC oracle):
+      Stream = 0, Method = 0
+      Type   = _XBOX_DECL_FORMAT_TO_PC_TYPE[(b >> 8) & 0xFF]
+      Usage  = (c >> 16) & 0xFF
+      UsageIndex = c & 0xFF
+      Offset = cumulative: first element's ``a & 0xFFFF``, then advanced by the
+               D3DDECLTYPE byte size of each preceding element.
+
+    Raises ``UnhandledByteSwapError`` on an unknown Xbox format byte rather than
+    emitting a guessed/garbage type (no-silent-corruption policy).
+    """
+    if len(be) < 12:
+        raise UnhandledByteSwapError(
+            f"decl body too small for an Xbox vertex declaration: {len(be)} bytes"
+        )
+    out = bytearray(struct.pack("<II", 0, 16))   # PC header [0, stride-gate=16]
+    pos = 12                                      # skip the 12-byte Xbox header
+    off: int | None = None
+    while pos + 12 <= len(be):
+        a, b, c = struct.unpack_from(">III", be, pos)
+        pos += 12
+        if (a >> 16) == 0x00ff:                   # END element
+            out += struct.pack("<HHBBBB", 0x00ff, 0, 17, 0, 0, 0)
+            break
+        if off is None:
+            off = a & 0xFFFF
+        fmt = (b >> 8) & 0xFF
+        typ = _XBOX_DECL_FORMAT_TO_PC_TYPE.get(fmt)
+        if typ is None:
+            raise UnhandledByteSwapError(
+                f"unknown Xbox decl format byte 0x{fmt:02X} (element b=0x{b:08X}); "
+                f"add it to _XBOX_DECL_FORMAT_TO_PC_TYPE after oracle verification"
+            )
+        out += struct.pack("<HHBBBB", 0, off, typ, 0, (c >> 16) & 0xFF, c & 0xFF)
+        off += _PC_D3DDECLTYPE_SIZE.get(typ, 4)
+    return bytes(out)
+
+
 def _convert_efct_header(be: bytes) -> bytes:
     """EFCT particle-effect header — an array of u16 fields.
 
@@ -2430,9 +2499,12 @@ def _convert_body(
     if tag == "KEYS":
         return _convert_u32_array(body_be)
 
-    # ── decl: vertex declaration, u16-packed element descriptors ──
+    # ── decl: Xbox vertex declaration → PC D3DVERTEXELEMENT9 (format xlate) ──
+    #    NOT a byte-swap: Xbox uses 12-byte elements with format codes; PC uses
+    #    8-byte D3DVERTEXELEMENT9. A blind u16/u32 swap produces an invalid decl
+    #    (out-of-range Type → engine "Unsupported data type" AV). See _convert_decl.
     if tag == "decl":
-        return _convert_u16_array(body_be)
+        return _convert_decl(body_be)
 
     # ── STRM: vertex stream data (float32 positions/normals/UVs) ──
     if tag == "STRM":

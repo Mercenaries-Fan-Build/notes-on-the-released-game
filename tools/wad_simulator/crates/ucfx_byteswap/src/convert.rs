@@ -273,6 +273,13 @@ fn convert_container(
         apply_texture_untile(&mut out, &descriptors, data_area_off, desc_table_end);
     }
 
+    // Xbox 360 mesh vertex declarations: translate each `decl` chunk from the
+    // 12-byte Xbox element format to the 8-byte PC D3DVERTEXELEMENT9 array (a
+    // shrink + container reframe). No-op when the container has no `decl`.
+    if is_be {
+        apply_decl_translate(&mut out, &descriptors, data_area_off, desc_table_end)?;
+    }
+
     Ok(out)
 }
 
@@ -1015,8 +1022,15 @@ fn convert_generic_bodies(
                         // DXT compressed pixel data — leave as-is.
                         // Proper texture BODY conversion (untiling) is Phase 3+.
                     }
-                    ChunkTag::Decl | ChunkTag::Schm | ChunkTag::Flgs => {
+                    ChunkTag::Schm | ChunkTag::Flgs => {
                         swap_u32_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Decl => {
+                        // Leave raw BE here; translated + reframed afterwards by
+                        // apply_decl_translate. The Xbox `decl` is a *format
+                        // translation* (12B elements -> 8B D3DVERTEXELEMENT9), not
+                        // a byte-swap — a blind u16/u32 swap yields an invalid decl
+                        // (out-of-range Type -> engine "Unsupported data type" AV).
                     }
                     ChunkTag::Chdr => {
                         convert_chdr_body_inplace(
@@ -1616,6 +1630,146 @@ fn apply_texture_untile(
     true
 }
 
+/// Xbox-360 vertex-fetch format byte (`(b >> 8) & 0xFF`) -> PC D3DDECLTYPE.
+/// Derived + golden-tested against the retail PC oracle
+/// (`tools/_decl_golden_test.py`).
+fn xbox_decl_format_to_pc_type(fmt: u8) -> Option<u8> {
+    match fmt {
+        0x23 => Some(15), // FLOAT16_2
+        0x21 => Some(16), // FLOAT16_4
+        0x28 => Some(4),  // UBYTE4
+        0x22 => Some(5),  // SHORT2
+        0x20 => Some(8),  // D3DCOLOR
+        _ => None,
+    }
+}
+
+/// Standard Direct3D9 D3DDECLTYPE byte sizes (enum value -> bytes).
+fn pc_d3ddecltype_size(t: u8) -> u16 {
+    match t {
+        1 | 7 | 10 | 12 | 16 => 8,
+        2 => 12,
+        3 => 16,
+        _ => 4,
+    }
+}
+
+/// Translate an Xbox-360 vertex declaration (`decl` chunk) to a PC
+/// `D3DVERTEXELEMENT9` array. This is a *format translation*, not a byte-swap:
+///   Xbox: 12B header + N×12B elements (BE `u32 a, b, c`); END has `a>>16==0x00ff`.
+///   PC:   8B header `[0, 16]` + N×8B (`u16 Stream, u16 Offset, u8 Type, u8
+///         Method, u8 Usage, u8 UsageIndex`); END = D3DDECL_END (Type 17).
+/// Mirrors `tools/ucfx_be_to_le._convert_decl` (verified byte-exact vs retail).
+/// Errors on an unknown Xbox format byte rather than emitting a guessed type.
+fn convert_decl(be: &[u8]) -> Result<Vec<u8>, String> {
+    if be.len() < 12 {
+        return Err(format!("decl body too small for a vertex declaration ({} bytes)", be.len()));
+    }
+    let mut out = Vec::with_capacity(be.len());
+    out.extend_from_slice(&0u32.to_le_bytes()); // PC header word 0
+    out.extend_from_slice(&16u32.to_le_bytes()); // PC header stride-gate = 16
+    let mut pos = 12usize; // skip the 12-byte Xbox header
+    let mut off: Option<u16> = None;
+    while pos + 12 <= be.len() {
+        let a = read_u32_be(be, pos);
+        let b = read_u32_be(be, pos + 4);
+        let c = read_u32_be(be, pos + 8);
+        pos += 12;
+        if (a >> 16) == 0x00ff {
+            // PC D3DDECL_END: Stream=0x00ff, Offset=0, Type=17 (UNUSED)
+            out.extend_from_slice(&0x00ffu16.to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&[17, 0, 0, 0]);
+            break;
+        }
+        let cur_off = off.unwrap_or((a & 0xffff) as u16);
+        let fmt = ((b >> 8) & 0xff) as u8;
+        let typ = xbox_decl_format_to_pc_type(fmt).ok_or_else(|| {
+            format!("unknown Xbox decl format byte 0x{:02X} (element b=0x{:08X})", fmt, b)
+        })?;
+        out.extend_from_slice(&0u16.to_le_bytes()); // Stream
+        out.extend_from_slice(&cur_off.to_le_bytes()); // Offset
+        out.extend_from_slice(&[
+            typ,                      // Type
+            0,                        // Method
+            ((c >> 16) & 0xff) as u8, // Usage
+            (c & 0xff) as u8,         // UsageIndex
+        ]);
+        off = Some(cur_off + pc_d3ddecltype_size(typ));
+    }
+    Ok(out)
+}
+
+/// Reframe a mesh container in `out`: translate every `decl` chunk from the
+/// Xbox 12-byte-element format to the PC 8-byte `D3DVERTEXELEMENT9` array (a
+/// shrink), splicing the shorter body in and shifting the offsets of all later
+/// chunks. Generalizes `apply_texture_untile`'s non-trailing-shrink technique to
+/// multiple decls. The generic body pass leaves `decl` bodies as raw BE.
+fn apply_decl_translate(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) -> Result<(), String> {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+
+    let mut decl_idxs: Vec<usize> = descriptors
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.tag == ChunkTag::Decl && d.row_u0 != 0xFFFFFFFF && d.body_size > 0)
+        .map(|(i, _)| i)
+        .collect();
+    if decl_idxs.is_empty() {
+        return Ok(());
+    }
+    // Process left-to-right; shrinks only decrease later offsets (order stable).
+    decl_idxs.sort_by_key(|&i| descriptors[i].row_u0);
+
+    for &idx in &decl_idxs {
+        let row_field = 20 + idx * 20 + 4;
+        let size_field = 20 + idx * 20 + 8;
+        // Read the *current* offset/size from the out descriptor table (earlier
+        // decls may already have shifted this one).
+        let row_u0 = u32::from_le_bytes(out[row_field..row_field + 4].try_into().unwrap());
+        let body_size =
+            u32::from_le_bytes(out[size_field..size_field + 4].try_into().unwrap()) as usize;
+        let abs = data_start + row_u0 as usize;
+        if abs + body_size > out.len() {
+            return Err(format!(
+                "decl body [{}..{}] exceeds container ({})",
+                abs, abs + body_size, out.len()
+            ));
+        }
+        let be_body = out[abs..abs + body_size].to_vec();
+        let new_body = convert_decl(&be_body)?;
+        if new_body.len() > body_size {
+            return Err(format!("decl translation grew {} -> {}", body_size, new_body.len()));
+        }
+        let shrink = body_size - new_body.len();
+        // Splice the shorter body in place.
+        let tail = out[abs + body_size..].to_vec();
+        out.truncate(abs);
+        out.extend_from_slice(&new_body);
+        out.extend_from_slice(&tail);
+        // Patch this decl's body_size descriptor field.
+        out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
+        // Shift the offset of every chunk whose body starts after this one.
+        if shrink > 0 {
+            for j in 0..descriptors.len() {
+                if j == idx {
+                    continue;
+                }
+                let rf = 20 + j * 20 + 4;
+                let ru0 = u32::from_le_bytes(out[rf..rf + 4].try_into().unwrap());
+                if ru0 != 0xFFFFFFFF && (data_start + ru0 as usize) > abs {
+                    out[rf..rf + 4].copy_from_slice(&(ru0 - shrink as u32).to_le_bytes());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Convert an `enum` body in-place from BE to LE.
 ///
 /// Layout (verified from base game):
@@ -1946,11 +2100,50 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_chdr_body_inplace, convert_efct_header_inplace,
+        convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
         convert_hibernation_data_inplace, convert_keyed_group_records_inplace,
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
     };
+
+    #[test]
+    fn decl_translate_matches_retail() {
+        // REAL base-game Xbox 360 mesh `decl` (blocks/vz/c30001_p000_q3.block),
+        // big-endian source as extracted from xbox-vz.wad:
+        let be: [u8; 60] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x1a, 0x23, 0x60, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x08, 0x00, 0x2c, 0x23, 0x5f, 0x00, 0x05, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x0c, 0x00, 0x2a, 0x21, 0x90, 0x00, 0x03, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x10, 0x00, 0x1a, 0x21, 0x87, 0x00, 0x06, 0x00, 0x00,
+            0x00, 0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+        ];
+        // Byte-exact retail PC decl (pc-game vz.wad) it must reproduce: header
+        // [0, 16] + 3 D3DVERTEXELEMENT9 (Off 8/12/20, Type 15/16/16, Use 5/3/6)
+        // + D3DDECL_END. Offsets are cumulative by D3DDECLTYPE size, NOT the Xbox
+        // slot value (which is index*4+8).
+        let pc: [u8; 40] = [
+            0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x08, 0x00, 0x0f, 0x00, 0x05, 0x00,
+            0x00, 0x00, 0x0c, 0x00, 0x10, 0x00, 0x03, 0x00,
+            0x00, 0x00, 0x14, 0x00, 0x10, 0x00, 0x06, 0x00,
+            0xff, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00,
+        ];
+        assert_eq!(convert_decl(&be).unwrap(), pc, "Xbox->PC decl must match retail");
+
+        // A blind u32 swap (the old behaviour) does NOT reproduce retail.
+        let mut blind = be;
+        for ch in blind.chunks_exact_mut(4) {
+            ch.reverse();
+        }
+        assert_ne!(&blind[..], &pc[..]);
+
+        // Unknown format byte must error, never silently corrupt.
+        let bad: [u8; 24] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x1a, 0x23, 0x60, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x08, 0x00, 0x99, 0x99, 0x99, 0x00, 0x05, 0x00, 0x00,
+        ];
+        assert!(convert_decl(&bad).is_err(), "unknown format byte must error");
+    }
 
     #[test]
     fn efct_header_u16_swap_preserves_count_gate() {
