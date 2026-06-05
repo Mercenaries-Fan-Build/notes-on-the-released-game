@@ -1091,6 +1091,26 @@ fn convert_generic_bodies(
                         }
                         data_area[body_local_start..body_local_end].copy_from_slice(&conv);
                     }
+                    ChunkTag::Data if type_hash == types::TYPE_HASH_ANIMATION => {
+                        // Animation `data` is a Havok 5.5 packfile (magic at +0).
+                        // A blanket u32 sweep scrambles its __classnames__ strings
+                        // AND half-swaps the u16 bone-indices / u8 compressed
+                        // bitstream buffers in __data__ → wrong counts → over-alloc
+                        // → heap corruption that surfaces later (e.g. the allocator
+                        // free-list AV 0x0084DD5B). Convert class-aware, matching
+                        // Python's `data`+_TYPE_ANIMATION dispatch.
+                        let body = data_area[body_local_start..body_local_end].to_vec();
+                        let conv = havok::convert_havok_be_to_le(&body)
+                            .map_err(|e| format!("animation Havok convert (entry {entry_idx}): {e}"))?;
+                        if conv.len() != body.len() {
+                            return Err(format!(
+                                "animation Havok convert changed size {} -> {} (entry {entry_idx})",
+                                body.len(),
+                                conv.len()
+                            ));
+                        }
+                        data_area[body_local_start..body_local_end].copy_from_slice(&conv);
+                    }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
                             let type_name = types::type_name_from_hash(type_hash);
