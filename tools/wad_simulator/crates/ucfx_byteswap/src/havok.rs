@@ -118,6 +118,13 @@ const HKP_MOPP_CODE_ARRAYS: &[(&str, ArrayInfo)] = &[
     ("m_data", ArrayInfo { ptr_off: Some(32), count_off: Some(36), elem_size: 1, elem_swap: U8W }),
 ];
 
+// WpMeshShape16 (physics): Pandemic custom 16-bit-indexed collision mesh.
+// Two u16 index arrays (a blind u32 sweep transposes each pair → wrong triangles).
+const WP_MESH_SHAPE16_ARRAYS: &[(&str, ArrayInfo)] = &[
+    ("indices_b", ArrayInfo { ptr_off: Some(80), count_off: Some(84), elem_size: 2, elem_swap: U16 }),
+    ("indices_c", ArrayInfo { ptr_off: Some(88), count_off: Some(92), elem_size: 2, elem_swap: U16 }),
+];
+
 fn lookup_class(name: &str) -> Option<ClassLayout> {
     let layout = match name {
         "hkRootLevelContainer" => ClassLayout { size: 12, swap: SwapSpec::AllU32, arrays: &[] },
@@ -135,6 +142,7 @@ fn lookup_class(name: &str) -> Option<ClassLayout> {
         "hkaBone" => ClassLayout { size: 8, swap: SwapSpec::Fields(HKA_BONE_SWAP), arrays: &[] },
         // physics (PHY2 collision packfiles)
         "hkpMoppCode" => ClassLayout { size: 48, swap: SwapSpec::AllU32, arrays: HKP_MOPP_CODE_ARRAYS },
+        "WpMeshShape16" => ClassLayout { size: 8, swap: SwapSpec::AllU32, arrays: WP_MESH_SHAPE16_ARRAYS },
         _ => return None,
     };
     Some(layout)
