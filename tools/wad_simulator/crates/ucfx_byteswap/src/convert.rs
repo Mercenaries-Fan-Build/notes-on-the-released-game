@@ -1034,9 +1034,19 @@ fn convert_generic_bodies(
                         // (out-of-range Type -> engine "Unsupported data type" AV).
                     }
                     ChunkTag::Chdr => {
-                        convert_chdr_body_inplace(
-                            &mut data_area[body_local_start..body_local_end],
-                        );
+                        if type_hash == types::TYPE_HASH_MODEL {
+                            // Mesh CHDR is {u32 property_hash, u32 count} — a
+                            // compiled-expression header (CHDR+CEXE behaviour-tree
+                            // records parsed by engine 0x004CF340). The placement
+                            // {u16,u16,u32} swap half-swaps the hash
+                            // (0x9DA97065 -> 0x70659DA9) → parser finds no match →
+                            // NULL write at world load (0x004CF58B). Full u32 swap.
+                            swap_u32_array(&mut data_area[body_local_start..body_local_end]);
+                        } else {
+                            convert_chdr_body_inplace(
+                                &mut data_area[body_local_start..body_local_end],
+                            );
+                        }
                     }
                     ChunkTag::Deps => {
                         // DEPS format: [u8 count][u32 hash × count]
@@ -2360,6 +2370,37 @@ mod tests {
         let buggy = [0x38u8, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
         assert_eq!(u16::from_le_bytes([buggy[2], buggy[3]]), 0x0000);
         assert_ne!(&data[..], &buggy[..]);
+    }
+
+    #[test]
+    fn mesh_chdr_full_u32_swap_preserves_property_hash() {
+        // A CHDR inside a MESH (type 0x5B724250) is {u32 property_hash, u32 count}
+        // — a CHDR+CEXE compiled-expression header, NOT the placement {u16,u16,u32}.
+        // The engine parser 0x004CF340 matches the hash against fixed constants;
+        // the placement swap half-swaps it → unrecognized → NULL write @0x004CF58B.
+        // BE source: hash 0x9DA97065, count 7.
+        let be = [0x9Du8, 0xA9, 0x70, 0x65, 0x00, 0x00, 0x00, 0x07];
+
+        // The mesh path (type == TYPE_HASH_MODEL) does a full u32 swap → the hash
+        // is preserved exactly, so the engine recognizes it.
+        let mut good = be;
+        super::swap_u32_array(&mut good);
+        assert_eq!(
+            u32::from_le_bytes([good[0], good[1], good[2], good[3]]),
+            0x9DA9_7065,
+            "mesh CHDR hash must survive intact (engine-recognized)"
+        );
+        assert_eq!(u32::from_le_bytes([good[4], good[5], good[6], good[7]]), 7);
+
+        // The placement path WOULD half-swap the hash into the crashing value.
+        let mut bad = be;
+        convert_chdr_body_inplace(&mut bad);
+        assert_eq!(
+            u32::from_le_bytes([bad[0], bad[1], bad[2], bad[3]]),
+            0x7065_9DA9,
+            "placement {{u16,u16,u32}} swap half-swaps the hash (the bug)"
+        );
+        assert_ne!(&good[..], &bad[..]);
     }
 
     #[test]

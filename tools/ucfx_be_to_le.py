@@ -1813,7 +1813,24 @@ def _convert_chdr_body(
     :func:`_swap_chdr_header`).  A whole-``u32`` swap of those 8 bytes was the
     root cause of the DLC spatial-hash save-load crash, so the header is swapped
     per-field in *every* branch; only the treatment of bytes beyond +8 differs.
+
+    **Exception — mesh CHDR.**  Inside a MESH (``type_hash`` ``_TYPE_MESH_B`` =
+    ``0x5B724250``) the CHDR is a different layout: ``{ u32 property_hash ;
+    u32 count }`` — a compiled-expression header (the repeating ``CHDR + CEXE``
+    behaviour-tree records parsed by engine ``0x004CF340``).  That parser matches
+    the hash against fixed constants (``0x9DA97065``, ``0xDB41017D``,
+    ``0x57B5E35A``); the ``{u16,u16,u32}`` swap *half-swaps* it
+    (``0x9DA97065`` → ``0x70659DA9``) so no branch matches, leaving the
+    destination pointer NULL → NULL write at world load (mercenaries2.exe
+    ``0x004CF58B``).  Swap the whole mesh CHDR body as ``u32``.
     """
+    if type_hash == _TYPE_MESH_B:
+        if len(body_be) % 4 != 0:
+            raise UnhandledByteSwapError(
+                f"mesh CHDR body has unexpected size {len(body_be)} bytes "
+                f"(not a multiple of 4); type_hash=0x{type_hash:08X}"
+            )
+        return _convert_u32_array(body_be)
     if len(body_be) <= 16:
         if len(body_be) not in (0, 8, 12, 16) and len(body_be) % 4 != 0:
             raise UnhandledByteSwapError(
