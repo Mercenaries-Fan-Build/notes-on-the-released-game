@@ -163,14 +163,24 @@ def _convert_decl(be: bytes) -> bytes:
         raise UnhandledByteSwapError(
             f"decl body too small for an Xbox vertex declaration: {len(be)} bytes"
         )
+    # Empty declaration: a sub-mesh with no vertex format of its own — the Xbox
+    # source ships just the END element (12B `00ff0000 ffffffff 00000000`), no
+    # header. This is normal for reskins (which reuse an existing mesh's vertex
+    # layout — base-game Mattias has 15 such decls). Retail PC ships the bare
+    # 8-byte D3DDECL_END; emit that rather than treating it as a truncation.
+    if (struct.unpack_from(">I", be, 0)[0] >> 16) == 0x00FF:
+        return struct.pack("<HHBBBB", 0x00FF, 0, 17, 0, 0, 0)
     out = bytearray(struct.pack("<II", 0, 16))   # PC header [0, stride-gate=16]
     pos = 12                                      # skip the 12-byte Xbox header
     off: int | None = None
+    n_elems = 0
+    saw_end = False
     while pos + 12 <= len(be):
         a, b, c = struct.unpack_from(">III", be, pos)
         pos += 12
         if (a >> 16) == 0x00ff:                   # END element
             out += struct.pack("<HHBBBB", 0x00ff, 0, 17, 0, 0, 0)
+            saw_end = True
             break
         if off is None:
             off = a & 0xFFFF
@@ -183,6 +193,17 @@ def _convert_decl(be: bytes) -> bytes:
             )
         out += struct.pack("<HHBBBB", 0, off, typ, 0, (c >> 16) & 0xFF, c & 0xFF)
         off += _PC_D3DDECLTYPE_SIZE.get(typ, 4)
+        n_elems += 1
+    # Fail loud rather than silently emit a geometry-less decl: a header-only or
+    # unterminated declaration means the source was truncated/empty (e.g. the
+    # skinned-mesh decl-truncation), and a 0-element decl would silently drop the
+    # mesh's geometry. Surface it instead of shipping a broken model.
+    if n_elems == 0 or not saw_end:
+        raise UnhandledByteSwapError(
+            f"decl translation produced {n_elems} vertex element(s), END={saw_end}, "
+            f"from a {len(be)}-byte source — the vertex declaration is truncated or "
+            f"empty; refusing to emit a geometry-less decl (would silently drop the mesh)"
+        )
     return bytes(out)
 
 

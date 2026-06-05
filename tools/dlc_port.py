@@ -558,7 +558,16 @@ def _build_block_hash_map(
                 blk.compressed_data, 0, len(blk.compressed_data),
             )
             entries = parse_block_entries(decomp)
-        except Exception:
+        except Exception as e:
+            # Fail loud: a block we cannot re-read is silently denied ownership of
+            # its own content, which causes _validate_aset_against_content to remap
+            # its ASET rows away and drop the block. Surface it instead.
+            print(
+                f"    [hash-map] WARNING: block {blk_idx} "
+                f"({getattr(blk, 'path_string', '?')}) not credited with its content "
+                f"— decompress/parse failed: {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
             continue
         for sub_idx, entry in enumerate(entries):
             h = entry.get("hash")
@@ -1172,10 +1181,38 @@ def port_x360_dlc(
             protected_hashes=bootstrap_hashes,
             verbose=verbose,
         )
-        if blocks_dropped:
-            converted = [blk for blk in converted if blk.aset_entries]
+        # Drop a block ONLY when it has neither an ASET row nor real UCFX content.
+        # Streaming-mip / LOD blocks carry real content but no ASET row (the asset
+        # is registered once at the resident P000 position; its higher-mip / lower-
+        # LOD data lives in position-named blocks the engine loads by path). The old
+        # `[blk for blk in converted if blk.aset_entries]` silently cut ~1,137 such
+        # blocks — the DLC's distance LODs and streamed mips across all content.
+        # The ghost-ASET *entries* (false ownership) are already stripped above; we
+        # do NOT also delete the content blocks themselves.
+        def _block_has_content(blk: "PatchBlock") -> bool:
+            try:
+                decomp = decompress_sges_block(
+                    blk.compressed_data, 0, len(blk.compressed_data))
+                return any(e.get("hash") for e in parse_block_entries(decomp))
+            except Exception:
+                return True  # never drop on uncertainty — preserve content
+        before_drop = len(converted)
+        dropped_empty: list[str] = []
+        kept_blocks: list = []
+        for blk in converted:
+            if blk.aset_entries or _block_has_content(blk):
+                kept_blocks.append(blk)
+            else:
+                dropped_empty.append(blk.path_string)
+        converted = kept_blocks
+        actually_dropped = before_drop - len(converted)
+        content_no_aset = sum(1 for blk in converted if not blk.aset_entries)
         print(f"\n  ASET validation: {kept} kept, {remapped} remapped, "
-              f"{removed} removed ({blocks_dropped} empty blocks dropped)")
+              f"{removed} ghost-entries removed, {blocks_dropped} blocks emptied; "
+              f"dropped {actually_dropped} truly-empty blocks; KEPT {content_no_aset} "
+              f"content-bearing ASET-less blocks (streaming-mip/LOD preserved)")
+        if dropped_empty:
+            print(f"    sample truly-empty dropped: {dropped_empty[:6]}")
     else:
         print("\n  ASET validation: skipped (--no-aset-validation)")
 

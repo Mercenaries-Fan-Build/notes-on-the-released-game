@@ -1665,11 +1665,20 @@ fn convert_decl(be: &[u8]) -> Result<Vec<u8>, String> {
     if be.len() < 12 {
         return Err(format!("decl body too small for a vertex declaration ({} bytes)", be.len()));
     }
+    // Empty declaration: a sub-mesh with no vertex format of its own — the Xbox
+    // source ships just the END element (12B `00ff0000 ffffffff 00000000`), no
+    // header. Normal for reskins that reuse an existing mesh's vertex layout
+    // (base-game Mattias has 15). Retail PC ships the bare 8-byte D3DDECL_END.
+    if (read_u32_be(be, 0) >> 16) == 0x00ff {
+        return Ok(vec![0xff, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00]);
+    }
     let mut out = Vec::with_capacity(be.len());
     out.extend_from_slice(&0u32.to_le_bytes()); // PC header word 0
     out.extend_from_slice(&16u32.to_le_bytes()); // PC header stride-gate = 16
     let mut pos = 12usize; // skip the 12-byte Xbox header
     let mut off: Option<u16> = None;
+    let mut n_elems = 0usize;
+    let mut saw_end = false;
     while pos + 12 <= be.len() {
         let a = read_u32_be(be, pos);
         let b = read_u32_be(be, pos + 4);
@@ -1680,6 +1689,7 @@ fn convert_decl(be: &[u8]) -> Result<Vec<u8>, String> {
             out.extend_from_slice(&0x00ffu16.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(&[17, 0, 0, 0]);
+            saw_end = true;
             break;
         }
         let cur_off = off.unwrap_or((a & 0xffff) as u16);
@@ -1696,6 +1706,18 @@ fn convert_decl(be: &[u8]) -> Result<Vec<u8>, String> {
             (c & 0xff) as u8,         // UsageIndex
         ]);
         off = Some(cur_off + pc_d3ddecltype_size(typ));
+        n_elems += 1;
+    }
+    // Fail loud rather than silently emit a geometry-less decl: a header-only or
+    // unterminated declaration means the source was truncated/empty, and a
+    // 0-element decl would silently drop the mesh's geometry.
+    if n_elems == 0 || !saw_end {
+        return Err(format!(
+            "decl translation produced {} vertex element(s), END={}, from a {}-byte \
+             source - the vertex declaration is truncated or empty; refusing to emit a \
+             geometry-less decl (would silently drop the mesh)",
+            n_elems, saw_end, be.len()
+        ));
     }
     Ok(out)
 }
@@ -2143,6 +2165,31 @@ mod tests {
             0x00, 0x00, 0x00, 0x08, 0x00, 0x99, 0x99, 0x99, 0x00, 0x05, 0x00, 0x00,
         ];
         assert!(convert_decl(&bad).is_err(), "unknown format byte must error");
+
+        // Header-only / truncated decl must FAIL LOUD, not emit a geometry-less
+        // decl that silently drops the mesh (the skinned-mesh truncation case).
+        let hdr_only = [0u8; 12];
+        assert!(convert_decl(&hdr_only).is_err(), "header-only decl must error");
+        // Elements but no END terminator (truncated tail) must also error.
+        let no_end: [u8; 24] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x1a, 0x23, 0x60, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x08, 0x00, 0x2c, 0x23, 0x5f, 0x00, 0x05, 0x00, 0x00,
+        ];
+        assert!(convert_decl(&no_end).is_err(), "unterminated decl must error");
+
+        // Empty declaration (reskin sub-mesh, no own vertex format): the Xbox
+        // source is just the END element (12B), no header. It must NOT error —
+        // it maps to retail's bare 8-byte D3DDECL_END, exactly as base-game
+        // Mattias's 15 empty decls do. Distinct from a truncation (above): the
+        // END marker is present, so geometry is intentionally absent, not lost.
+        let empty: [u8; 12] = [
+            0x00, 0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+        ];
+        assert_eq!(
+            convert_decl(&empty).unwrap(),
+            [0xff, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00],
+            "empty Xbox decl must map to retail's bare PC D3DDECL_END"
+        );
     }
 
     #[test]
