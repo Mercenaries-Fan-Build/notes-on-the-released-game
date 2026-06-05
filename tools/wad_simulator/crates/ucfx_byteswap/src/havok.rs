@@ -435,6 +435,25 @@ fn fix_embedded_layoutrules(be: &[u8], out: &mut [u8], start: usize, end: usize)
     }
 }
 
+/// Total size of the Havok packfile at the start of `be` (max section end),
+/// so a containing chunk's trailing data can be handled separately. The three
+/// 48-byte section headers each carry 7 u32 (`[abs, lf, gf, vf, exp, imp, end]`).
+fn havok_packfile_size(be: &[u8]) -> Option<usize> {
+    let ver = find_sub(be, HAVOK_VER).or_else(|| find_sub(be, HAVOK_DASH))?;
+    let cn = find_sub_from(be, CLASSNAMES, ver)?;
+    let mut total = 0usize;
+    for i in 0..3 {
+        let so = cn + i * SECTION_HDR_SIZE;
+        if so + SECTION_HDR_SIZE > be.len() {
+            return None;
+        }
+        let abs = read_u32_be(be, so + 20) as usize; // field 0
+        let end = read_u32_be(be, so + 20 + 6 * 4) as usize; // field 6
+        total = total.max(abs + end);
+    }
+    Some(total)
+}
+
 /// Structurally convert a Havok 5.5 packfile from BE to LE.
 pub fn convert_havok_be_to_le(be: &[u8]) -> Result<Vec<u8>, String> {
     if be.len() < 64 {
@@ -567,8 +586,24 @@ pub fn convert_phy2_be_to_le(be: &[u8]) -> Result<Vec<u8>, String> {
             if off < magic_off {
                 out.extend_from_slice(&be[off..magic_off]); // ragged tail (rare)
             }
-            let packfile = convert_havok_be_to_le(&be[magic_off..])?;
+            // Bound the embedded packfile; a PHY2 chunk can carry engine
+            // collision-wrapper data AFTER it that needs its own u32 swap.
+            let rest = &be[magic_off..];
+            let pf_size = havok_packfile_size(rest).unwrap_or(rest.len()).min(rest.len());
+            let packfile = convert_havok_be_to_le(&rest[..pf_size])?;
             out.extend_from_slice(&packfile);
+            // Trailing engine struct (hkpShape wrapper / collision metadata):
+            // u32 offsets + f32 — a u32 sweep. Left raw it stays big-endian and
+            // its self-offsets (e.g. 0x000004D8) read as 0xD8040000 → the engine
+            // relocator computes base + 0xD8040000 → AV at 0x0248C13E.
+            let mut t = pf_size;
+            while t + 4 <= rest.len() {
+                out.extend_from_slice(&[rest[t + 3], rest[t + 2], rest[t + 1], rest[t]]);
+                t += 4;
+            }
+            if t < rest.len() {
+                out.extend_from_slice(&rest[t..]); // ragged tail
+            }
             Ok(out)
         }
         None => {
@@ -616,6 +651,27 @@ mod tests {
         let got = convert_havok_be_to_le(be).expect("anim convert");
         assert_eq!(got.len(), expected.len(), "anim output size must match");
         assert_eq!(&got, expected, "anim Rust output must equal Python output");
+    }
+
+    /// A PHY2 chunk with engine collision-wrapper data AFTER the packfile:
+    /// the packfile must be bounded (havok_packfile_size) and the trailing
+    /// u32-swapped, so a BE self-offset 0xD8040000 becomes 0x000004D8 instead
+    /// of relocating to an unmapped address (AV at 0x0248C13E).
+    #[test]
+    fn phy2_trailing_after_packfile_is_u32_swapped() {
+        let pf_be = include_bytes!("../tests/fixtures/anim_ks750_be.bin");
+        let pf_le = include_bytes!("../tests/fixtures/anim_ks750_le.bin");
+        assert_eq!(havok_packfile_size(pf_be), Some(pf_be.len()), "packfile bound");
+
+        let mut be = vec![0x00, 0x00, 0x00, 0x39, 0x12, 0x34, 0x56, 0x78]; // u32 header
+        be.extend_from_slice(pf_be);
+        be.extend_from_slice(&[0xD8, 0x04, 0x00, 0x00, 0xAA, 0xAA, 0xAA, 0xAA]); // BE trailing
+
+        let mut want = vec![0x39, 0x00, 0x00, 0x00, 0x78, 0x56, 0x34, 0x12]; // header swapped
+        want.extend_from_slice(pf_le);
+        want.extend_from_slice(&[0x00, 0x00, 0x04, 0xD8, 0xAA, 0xAA, 0xAA, 0xAA]); // trailing swapped
+
+        assert_eq!(convert_phy2_be_to_le(&be).unwrap(), want);
     }
 
     /// A PHY2 body with no embedded packfile falls back to a plain u32 sweep.

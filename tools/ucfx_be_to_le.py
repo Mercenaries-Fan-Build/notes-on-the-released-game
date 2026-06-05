@@ -881,15 +881,44 @@ def _convert_havok_be_to_le(be: bytes, *, permissive: bool = False, stats: dict 
     return bytes(out)
 
 
+def _havok_packfile_size(be: bytes) -> int | None:
+    """Total size of the Havok packfile at the start of *be* (max section end).
+
+    Lets a containing chunk separate the packfile from any trailing data. The
+    three 48-byte section headers each carry 7 u32 ``[abs, lf, gf, vf, exp, imp, end]``.
+    """
+    ver = be.find(_HAVOK_VER)
+    if ver < 0:
+        ver = be.find(b"Havok-")
+    if ver < 0:
+        return None
+    cn = be.find(b"__classnames__", ver)
+    if cn < 0:
+        return None
+    total = 0
+    for i in range(3):
+        so = cn + i * _SECTION_HDR_SIZE
+        if so + _SECTION_HDR_SIZE > len(be):
+            return None
+        abs_off = struct.unpack_from(">I", be, so + 20)[0]
+        end = struct.unpack_from(">I", be, so + 20 + 6 * 4)[0]
+        total = max(total, abs_off + end)
+    return total
+
+
 def _convert_phy2_body(be: bytes, *, permissive: bool = False, stats: dict | None = None) -> bytes:
-    """Convert a PHY2 mesh chunk: u32 header prefix + embedded Havok packfile.
+    """Convert a PHY2 mesh chunk: u32 header + embedded Havok packfile + trailing.
 
     PHY2 is a Havok 5.5 collision packfile, NOT a u32 array. A blanket u32 swap
     scrambles its ASCII ``__classnames__`` strings; the Havok loader then fails its
     by-name class lookup (STATUS_OBJECT_NAME_NOT_FOUND) and dereferences scrambled
     data → access violation (mercenaries2.exe 0x00414B4C). Swap the u32 header
-    fields (count, asset-hash, sizes), then convert the embedded packfile
-    section-aware. Falls back to a plain u32 sweep when no packfile is embedded.
+    fields (count, asset-hash, sizes), convert the embedded packfile section-aware,
+    then u32-swap any trailing engine collision-wrapper struct (hkpShape wrapper /
+    metadata appended after the packfile) — left raw, its big-endian self-offsets
+    (e.g. 0x000004D8) read as 0xD8040000 and the engine relocator computes
+    base + 0xD8040000 → AV at 0x0248C13E. Falls back to a plain u32 sweep when no
+    packfile is embedded.
     """
     mg = be.find(_HAVOK_MAGIC)
     if mg < 0:
@@ -900,7 +929,17 @@ def _convert_phy2_body(be: bytes, *, permissive: bool = False, stats: dict | Non
         out += be[i * 4:i * 4 + 4][::-1]
     if n * 4 < mg:
         out += be[n * 4:mg]  # ragged tail (rare)
-    out += _convert_havok_be_to_le(be[mg:], permissive=permissive, stats=stats)
+    rest = be[mg:]
+    pf_size = _havok_packfile_size(rest)
+    if pf_size is None or pf_size > len(rest):
+        pf_size = len(rest)
+    out += _convert_havok_be_to_le(rest[:pf_size], permissive=permissive, stats=stats)
+    trailing = rest[pf_size:]
+    m = len(trailing) // 4
+    for i in range(m):
+        out += trailing[i * 4:i * 4 + 4][::-1]
+    if m * 4 < len(trailing):
+        out += trailing[m * 4:]  # ragged tail
     return bytes(out)
 
 
