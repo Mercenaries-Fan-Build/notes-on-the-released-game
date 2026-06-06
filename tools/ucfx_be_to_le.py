@@ -1863,22 +1863,35 @@ def _convert_chdr_body(
 def _convert_ecs_info(be: bytes) -> bytes:
     """Convert ecs_node 'info' body from BE to LE.
 
-    Structure (verified from base game):
-      [null-terminated ASCII name] [u32 name_hash] [u32 a] [u32 b] [u32 c]
-    Total size = len(name) + 1 + 16.
-    Only the four u32 fields need byte-swapping.
+    Two on-disk shapes (mirrors Rust ``convert_info_body_inplace`` in convert.rs):
+      - ASCII/named:  ``[null-terminated ASCII name][u32 hash][u32 a][u32 b][u32 c]`` —
+        swap only the trailing u32 fields; leave the name string bytes untouched.
+      - Compact binary (no name, e.g. ``[u32 comp_hash][u32][u32][u32]``) — swap all u32s.
+
+    Discriminator: a valid leading name is non-empty AND decodes as UTF-8 before the
+    first NUL. A 4-byte BE component hash routinely contains a 0x00 byte (e.g.
+    ``1D E5 C8 24`` -> "Name"), so "has a NUL" alone is NOT enough — the historical bug
+    read that inner NUL as a name terminator and bailed (``u32_start+16 > len`` ->
+    ``return be``), shipping the body big-endian. The engine then read a byte-reversed
+    component hash (failed lookup -> null pool slot) and huge LE field values.
     """
     nul = be.find(b"\x00")
-    if nul < 0:
-        return be
-    u32_start = nul + 1
-    if u32_start + 16 > len(be):
-        return be
-    out = bytearray(be)
-    for off in range(u32_start, u32_start + 16, 4):
-        v = struct.unpack_from(">I", be, off)[0]
-        struct.pack_into("<I", out, off, v)
-    return bytes(out)
+    named = False
+    if nul > 0:
+        try:
+            be[:nul].decode("utf-8")
+            named = True
+        except UnicodeDecodeError:
+            named = False
+    if named:
+        u32_start = nul + 1
+        out = bytearray(be)
+        for off in range(u32_start, len(be) - (len(be) - u32_start) % 4, 4):
+            v = struct.unpack_from(">I", be, off)[0]
+            struct.pack_into("<I", out, off, v)
+        return bytes(out)
+    # Compact binary (no leading name): every dword is a u32 to swap.
+    return _convert_u32_array(be)
 
 
 def _convert_enum_body(be: bytes) -> bytes:

@@ -336,6 +336,34 @@ fn body_range(container: &[u8], row_u0: u32, body_size: u32, data_area_off: usiz
 
 /// Convert bodies for ECS (layer / ECS_NODE) containers.
 /// Identifies COMP triplets (info/schm/data) and applies schema-driven swap.
+/// Convert an ECS `info` descriptor body from BE to LE, in place.
+///
+/// Two on-disk shapes (see `extract_comp_name`):
+///   - ASCII/named: `[name\0][u32 hash][u32 a][u32 b][u32 c]` — swap only the trailing
+///     u32 fields, leave the name string bytes untouched.
+///   - Compact binary (no name, e.g. `[u32 comp_hash][u32][u32][u32]`) — swap all u32s.
+///
+/// Discriminator: a valid leading name is non-empty AND decodes as UTF-8 before the first
+/// NUL. A 4-byte BE component hash regularly contains a 0x00 byte (e.g. `1D E5 C8 24` ->
+/// "Name") so "has a NUL" is NOT enough; the bytes before it must also be valid text.
+/// Mirrors `_convert_ecs_info` in tools/ucfx_be_to_le.py.
+fn convert_info_body_inplace(info_body: &mut [u8]) {
+    let nul_pos = info_body.iter().position(|&b| b == 0);
+    match nul_pos {
+        Some(np) if np > 0 && std::str::from_utf8(&info_body[..np]).is_ok() => {
+            let u32_start = np + 1;
+            let n_u32 = (info_body.len() - u32_start) / 4;
+            for fi in 0..n_u32 {
+                swap_u32(info_body, u32_start + fi * 4);
+            }
+        }
+        _ => {
+            // Compact binary (no leading name): every dword is a u32 to swap.
+            swap_u32_array(info_body);
+        }
+    }
+}
+
 fn convert_ecs_bodies(
     out: &mut Vec<u8>,
     container: &[u8],
@@ -440,23 +468,7 @@ fn convert_ecs_bodies(
                     let body_local_start = start - data_start;
                     let body_local_end = end - data_start;
                     if body_local_end <= data_area.len() {
-                        let info_body = &mut data_area[body_local_start..body_local_end];
-                        let nul_pos = info_body.iter().position(|&b| b == 0);
-                        match nul_pos {
-                            Some(np) if np > 0 && String::from_utf8(info_body[..np].to_vec()).is_ok() => {
-                                // ASCII format: swap u32 fields after the null-terminated name
-                                let u32_start = np + 1;
-                                let remaining = info_body.len() - u32_start;
-                                let n_u32 = remaining / 4;
-                                for fi in 0..n_u32 {
-                                    swap_u32(info_body, u32_start + fi * 4);
-                                }
-                            }
-                            _ => {
-                                // Compact binary format: swap all as u32 array
-                                swap_u32_array(info_body);
-                            }
-                        }
+                        convert_info_body_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
                 }
             }
@@ -500,6 +512,10 @@ fn convert_ecs_bodies(
                             convert_chdr_body_inplace(
                                 &mut data_area[body_local_start..body_local_end],
                             );
+                        } else if desc.tag == ChunkTag::Info {
+                            // Standalone `info` (outside a COMP group): same named/compact
+                            // rules as the COMP-group path.
+                            convert_info_body_inplace(&mut data_area[body_local_start..body_local_end]);
                         } else if desc.tag.is_native_be() {
                             // No swap
                         } else {
@@ -1015,6 +1031,11 @@ fn convert_generic_bodies(
                     }
                     ChunkTag::Ibuf => {
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Info => {
+                        // Lowercase `info` in a non-ECS container: named/compact ECS info
+                        // body (the generic u32 fallback corrupts named `info`).
+                        convert_info_body_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
                     ChunkTag::InfoUpper if is_texture => {
                         convert_texture_info(&mut data_area[body_local_start..body_local_end]);
@@ -2174,10 +2195,55 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 mod tests {
     use super::{
         convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
-        convert_hibernation_data_inplace, convert_keyed_group_records_inplace,
+        convert_hibernation_data_inplace, convert_info_body_inplace,
+        convert_keyed_group_records_inplace,
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
     };
+
+    #[test]
+    fn info_compact_swaps_all_u32s() {
+        // Real BE compact `info` from xbox-vz.wad: [u32 comp_hash][u32 a][u32 b][u32 c].
+        // The hash 0x1DE5C824 ("Name") is byte-reversed on disk as 1D E5 C8 24, and
+        // fields a/b are small big-endian values (a=91, b=3). A 0x00 falls at offset 4,
+        // so a naive "first NUL => name" parser leaves it un-swapped (the historical bug).
+        let mut body = [
+            0xfb, 0x31, 0xf1, 0xef, 0x00, 0x00, 0x00, 0x5b,
+            0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00,
+        ];
+        convert_info_body_inplace(&mut body);
+        assert_eq!(
+            body,
+            [
+                0xef, 0xf1, 0x31, 0xfb, 0x5b, 0x00, 0x00, 0x00,
+                0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ],
+            "compact info must swap every u32 (hash + fields), not bail on the inner NUL"
+        );
+
+        // Value preserved: the converted hash read little-endian equals the source hash
+        // read big-endian (the engine now reads the true hash instead of a byte-reversed one).
+        assert_eq!(u32::from_le_bytes([body[0], body[1], body[2], body[3]]), 0xFB31F1EF);
+    }
+
+    #[test]
+    fn info_named_swaps_only_trailing_u32s() {
+        // ASCII/named form: [name\0][u32 hash][u32 a][u32 b][u32 c]; the name bytes must
+        // be left untouched, only the four trailing u32s swapped.
+        let mut body = Vec::from(&b"Name\x00"[..]);
+        body.extend_from_slice(&0x24c8e51du32.to_be_bytes()); // hash (BE on disk)
+        body.extend_from_slice(&1u32.to_be_bytes());
+        body.extend_from_slice(&101u32.to_be_bytes());
+        body.extend_from_slice(&0u32.to_be_bytes());
+        let mut got = body.clone();
+        convert_info_body_inplace(&mut got);
+        let mut want = Vec::from(&b"Name\x00"[..]);
+        want.extend_from_slice(&0x24c8e51du32.to_le_bytes());
+        want.extend_from_slice(&1u32.to_le_bytes());
+        want.extend_from_slice(&101u32.to_le_bytes());
+        want.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(got, want, "named info must preserve the name and swap only trailing u32s");
+    }
 
     #[test]
     fn decl_translate_matches_retail() {

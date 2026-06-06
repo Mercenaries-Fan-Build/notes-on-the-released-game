@@ -18,6 +18,7 @@ from ucfx_be_to_le import (
     _CompInfo,
     _convert_chdr_body,
     _convert_ecs_comp_data,
+    _convert_ecs_info,
     _convert_efct_header,
     _convert_hibernation_records,
     _convert_keyed_group_records,
@@ -27,6 +28,45 @@ from ucfx_be_to_le import (
     _is_ecs_name_identifier,
     _swap_chdr_header,
 )
+
+
+class EcsInfoConversionTests(unittest.TestCase):
+    """`info` bodies come in named and compact (hash-leading, no name) forms.
+
+    The historical bug: a 4-byte BE component hash routinely contains a 0x00 byte
+    (e.g. 1D E5 C8 24 -> "Name"), and the old converter read that inner NUL as a
+    name terminator, computed u32_start past the body, and bailed -> shipped the
+    body big-endian. The PC engine then read a byte-reversed hash (failed component
+    lookup -> null pool slot, AV 0x004CC064) and huge LE counts (over-alloc, AV
+    0x0084DD5B). These tests lock in the fix and Python/Rust parity.
+    """
+
+    def test_compact_info_swaps_all_u32s(self) -> None:
+        # Real BE compact info from xbox-vz.wad: [u32 hash][u32 a=91][u32 b=3][u32 c=0].
+        be = bytes.fromhex("fb31f1ef0000005b0000000300000000")
+        out = _convert_ecs_info(be)
+        self.assertEqual(out, bytes.fromhex("eff131fb5b00000003000000 00000000".replace(" ", "")))
+        # NOT a no-op (the regression): the body must actually change.
+        self.assertNotEqual(out, be, "compact info must be byte-swapped, not bailed on inner NUL")
+
+    def test_compact_info_hash_reads_as_component(self) -> None:
+        # 1D E5 C8 24 is the "Name" component hash stored byte-reversed on disk.
+        # After conversion the engine must read 0x1DE5C824 (LE), not 0x24C8E51D.
+        be = bytes.fromhex("1de5c824000000010000002f00000000")
+        out = _convert_ecs_info(be)
+        self.assertEqual(struct.unpack_from("<I", out, 0)[0], 0x1DE5C824)
+        self.assertEqual(struct.unpack_from("<I", out, 4)[0], 1)   # field a small, swapped
+        self.assertEqual(struct.unpack_from("<I", out, 8)[0], 47)
+
+    def test_named_info_preserves_name_swaps_trailing(self) -> None:
+        be = b"Name\x00" + struct.pack(">IIII", 0x24C8E51D, 1, 101, 0)
+        out = _convert_ecs_info(be)
+        self.assertEqual(out, b"Name\x00" + struct.pack("<IIII", 0x24C8E51D, 1, 101, 0))
+
+    def test_compact_info_matches_blind_u32_array(self) -> None:
+        # For a no-name body, the correct conversion is exactly _convert_u32_array.
+        be = bytes.fromhex("e18afd6500000053000000510 0000000".replace(" ", ""))
+        self.assertEqual(_convert_ecs_info(be), _convert_u32_array(be))
 
 
 class EcsNameDiscriminatorTests(unittest.TestCase):
