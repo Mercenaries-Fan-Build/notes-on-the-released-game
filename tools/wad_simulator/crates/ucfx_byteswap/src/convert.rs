@@ -1499,7 +1499,18 @@ fn convert_streamed_body(
         }
         TiledBodyKind::TailPage | TiledBodyKind::StreamPage => {
             let body = untile_streaming_page(tiled, fourcc)?;
-            Some((body, mips))
+            // A stream/tail page is PARTIAL data — one resident page, not the full mip chain. The
+            // old `Some((body, mips))` stamped the FULL mip count over that partial body (and
+            // rebuild_texture_info then marks it "fully resident"), so the engine's streamer waits
+            // forever for high-res mip levels whose bytes were never converted -> world-load
+            // streaming livelock (texture 0x5FF5980D, user-diagnosed truncation). Claim only the
+            // mip levels the untiled page actually covers, so the INFO never over-claims (mirrors
+            // the Prefix arm). Under-claiming is safe (fewer mips streamed); over-claiming hangs.
+            let resident = (1..=mips)
+                .rev()
+                .find(|&n| linear_mip_chain_size(width, height, fourcc, n) <= body.len())
+                .unwrap_or(1);
+            Some((body, resident))
         }
     }
 }
