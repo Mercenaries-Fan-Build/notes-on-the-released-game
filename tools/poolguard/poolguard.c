@@ -23,6 +23,16 @@
  * general wild-pointer AV VEH (PG_CATCHALL), and dispense-time validation (block returned below
  * 0x01000000 = garbage handed out directly, e.g. the 0x0042FFFF Pool2 case).
  *
+ * v12 (load-step naming). Live debugging exonerated the converter counts (count1/count3) and the
+ * AC20 wrapper (it delegates to the hooked DCE0+D760), and showed the crash is a stray STORE — a
+ * record-hash u32 written one slot past a 16-byte block — driven by the 0x004Cxxxx world/mesh
+ * loader. The single P-blksz "below P" probe wasn't enough (the overflower kept showing "not in
+ * map" — evicted on hash collision, or not exactly adjacent). v12 adds a lock-free TEMPORAL RING
+ * of every alloc and dumps, on any catch: (1) a full-map NEIGHBORHOOD SCAN that flags whichever
+ * mapped block actually abuts/overlaps P, and (2) the recent alloc TIMELINE. The dominant client
+ * caller VA in the timeline (expected in 0x004Cxxxx) is the load-step to breakpoint next boot,
+ * then single-step to the offending store.
+ *
  * Env: PG_RECORD=0 disables the hooks (VEH-only); PG_CATCHALL=0 disables the general AV dump.
  * Logging is write-through to poolguard.log (survives the hard crash) + mirrored to pmc_log.
  */
@@ -107,6 +117,29 @@ static int AHashGet(DWORD ptr, DWORD *caller, DWORD *size) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Temporal ring (v12). The address-keyed map answers "who allocated THIS address" but loses the
+ * ORDER of allocations and evicts on hash collision. The ring keeps the last RING_SLOTS allocs in
+ * temporal order so the dump can print the load-step sequence right before the corruption — the
+ * loop that allocates+fills blocks in sequence is the one that ran one element long. Lock-free:
+ * a monotone ticket picks the slot; `seq` is stamped LAST so a reader seeing seq==t knows the row
+ * is complete (torn rows are skipped). ~1.3 MB BSS.
+ * ------------------------------------------------------------------ */
+
+#define RING_SLOTS  65536           /* power of two */
+#define RING_MASK   (RING_SLOTS - 1)
+
+typedef struct { volatile LONG seq; DWORD ptr; DWORD size; DWORD caller; DWORD pool; } PgRing;
+static PgRing        g_ring[RING_SLOTS];
+static volatile LONG g_ringTicket = 0;
+
+static void RingPut(DWORD pool, DWORD ptr, DWORD size, DWORD caller) {
+    LONG t = InterlockedIncrement(&g_ringTicket);   /* 1-based, monotone */
+    DWORD i = (DWORD)t & RING_MASK;
+    g_ring[i].ptr = ptr; g_ring[i].size = size; g_ring[i].caller = caller; g_ring[i].pool = pool;
+    g_ring[i].seq = t;                              /* publish last */
+}
+
+/* ------------------------------------------------------------------ *
  * Globals.
  * ------------------------------------------------------------------ */
 
@@ -171,7 +204,11 @@ static BOOL VerifyExeSize(void) {
  * ------------------------------------------------------------------ */
 
 static const char *PoolName(WORD pool) {
-    switch (pool) { case POOL_DCE0: return "FUN_0084DCE0"; case POOL_POOL2: return "FUN_0088CB70"; }
+    switch (pool) {
+        case POOL_DCE0:  return "FUN_0084DCE0";
+        case POOL_POOL2: return "FUN_0088CB70";
+        case POOL_D760:  return "FUN_0084D760";
+    }
     return "?";
 }
 
@@ -201,6 +238,141 @@ static const char *DescribeCaller(DWORD c, char *buf, int n) {
     if (AHashGet(c, &cc, &sz)) { } /* not used; placeholder */
     wsprintfA(buf, "0x%08lX", (unsigned long)c);
     return buf;
+}
+
+/* ------------------------------------------------------------------ *
+ * v12 dump helpers: temporal timeline + full-map neighborhood scan.
+ * ------------------------------------------------------------------ */
+
+/* Print the last `n` allocations in temporal order (oldest first). The dominant client caller VA
+ * in this window — especially one in the 0x004Cxxxx world/mesh loader — is the load-step to set a
+ * breakpoint on next boot, then single-step to the store that runs one element past its buffer. */
+static void DumpRecentTimeline(int n) {
+    LONG head = g_ringTicket, cnt = (head > n) ? n : head, j;
+    Log("--- recent alloc timeline (last %ld of %ld allocs, oldest first) ---", (long)cnt, (long)head);
+    for (j = cnt - 1; j >= 0; j--) {
+        LONG seq = head - j; DWORD i = (DWORD)seq & RING_MASK;
+        if (g_ring[i].seq != seq) continue;                 /* row overwritten since — skip */
+        Log("  #%ld %-12s ptr=0x%08lX size=%lu caller=0x%08lX", (long)seq,
+            PoolName((WORD)g_ring[i].pool), (unsigned long)g_ring[i].ptr,
+            (unsigned long)g_ring[i].size, (unsigned long)g_ring[i].caller);
+    }
+}
+
+/* Scan the WHOLE address map for allocations physically near P (not just P-blksz). Finds the real
+ * overflower regardless of exact adjacency or where its hash slot landed; flags any block that
+ * abuts or overlaps P. More robust than a single P-blksz probe (which misses stray stores and
+ * different-size neighbors). One-shot, off the hot path. */
+static void DumpNeighborhood(DWORD P, DWORD blksz) {
+    DWORD winLo = P - 0x200, winHi = P + ((blksz ? blksz : 0x40) * 2), s;
+    DWORD bestBase = 0, bestEnd = 0, bestSz = 0, bestCaller = 0;   /* closest mapped alloc ending <= P */
+    int hits = 0;
+    (void)blksz;
+    /* v13: the overflower is often a LARGER buffer whose base sits below a tight ±64 window, so its
+     * records overrun upward into the free block P. Two passes: (1) list mapped allocs in a wide
+     * window for context, (2) full-map search for the alloc whose END is closest below P (within
+     * 0x80) — that is the buffer that ran past its tail into P. Names its caller directly. */
+    Log("--- neighborhood scan: window [0x%08lX,0x%08lX) + closest-below-P ---",
+        (unsigned long)winLo, (unsigned long)winHi);
+    for (s = 0; s < AH_SLOTS; s++) {
+        DWORD q = (DWORD)g_ahPtr[s];
+        DWORD qsz, qend, qc;
+        if (!q) continue;
+        qsz = (DWORD)g_ahSize[s]; qend = q + qsz; qc = (DWORD)g_ahCaller[s];
+        if (qend <= P && (P - qend) < 0x80 && qend > bestEnd) {     /* ends just below P */
+            bestEnd = qend; bestBase = q; bestSz = qsz; bestCaller = qc;
+        }
+        if (q >= winLo && q < winHi && q != P) {
+            const char *flag = (q < P && qend > P) ? "  <== OVERLAPS P"
+                             : (qend == P)         ? "  <== abuts P" : "";
+            Log("  blk 0x%08lX reqSize=%lu end=0x%08lX caller=0x%08lX%s", (unsigned long)q,
+                (unsigned long)qsz, (unsigned long)qend, (unsigned long)qc, flag);
+            hits++;
+        }
+    }
+    if (!hits) Log("  (no mapped allocs in window)");
+    if (bestBase)
+        Log(">>> OVERFLOWER (closest mapped alloc ending below P): blk=0x%08lX reqSize=%lu "
+            "end=0x%08lX gap-to-P=%lu caller=0x%08lX  <== cross-ref this caller in Ghidra",
+            (unsigned long)bestBase, (unsigned long)bestSz, (unsigned long)bestEnd,
+            (unsigned long)(P - bestEnd), (unsigned long)bestCaller);
+    else
+        Log(">>> no mapped alloc ends within 0x80 below P — overflower untracked (freed/reused)");
+}
+
+/* v15: search the TEMPORAL RING (65536 deep, vs the address map which evicts on collision) for the
+ * allocation that overran into P. Reports any alloc that CONTAINS P (a large source buffer P falls
+ * inside) and the closest alloc ENDING below P within 64KB (a source whose tail overran upward).
+ * This is what names the overflower when the map has evicted it. One-shot, off the hot path. */
+static void DumpRingClosestBelow(DWORD P) {
+    DWORD i;
+    DWORD cPtr = 0, cSz = 0, cCaller = 0, cPool = 0;          /* alloc containing P */
+    DWORD bEnd = 0, bPtr = 0, bSz = 0, bCaller = 0, bPool = 0; /* closest ending below P */
+    for (i = 0; i < RING_SLOTS; i++) {
+        DWORD q = g_ring[i].ptr, qsz, qend;
+        if (!q || g_ring[i].seq == 0) continue;
+        qsz = g_ring[i].size; qend = q + qsz;
+        if (q <= P && qend > P && q > cPtr) {
+            cPtr = q; cSz = qsz; cCaller = g_ring[i].caller; cPool = g_ring[i].pool;
+        }
+        if (qend <= P && (P - qend) < 0x10000 && qend > bEnd) {
+            bEnd = qend; bPtr = q; bSz = qsz; bCaller = g_ring[i].caller; bPool = g_ring[i].pool;
+        }
+    }
+    if (cPtr)
+        Log("    ring: alloc CONTAINING P = 0x%08lX size=%lu end=0x%08lX caller=0x%08lX %s  <== OVERFLOWER?",
+            (unsigned long)cPtr, (unsigned long)cSz, (unsigned long)(cPtr + cSz),
+            (unsigned long)cCaller, PoolName((WORD)cPool));
+    if (bPtr)
+        Log("    ring: closest below P = 0x%08lX size=%lu end=0x%08lX gap=%lu caller=0x%08lX %s  <== OVERFLOWER?",
+            (unsigned long)bPtr, (unsigned long)bSz, (unsigned long)bEnd,
+            (unsigned long)(P - bEnd), (unsigned long)bCaller, PoolName((WORD)bPool));
+    if (!cPtr && !bPtr) Log("    ring: no alloc within 64KB below/containing P (older than 65536 allocs)");
+}
+
+/* v14: proactive free-list integrity scan — works on ANY crash, not just the dd5b pop. On the
+ * 0x4CC064 boots the corruption is already sitting in a free list (a block's `next` link was
+ * overwritten) but the pop hasn't reached it yet, so the install-pop catch never fires. Walk every
+ * size-class free list; the first node whose link points out of the arena means the PREVIOUS node
+ * is the corrupted block P (P->next = garbage). Then run the overflower scan on P. Bounded + every
+ * link validated in-arena before deref, so walking a bad chain can't fault. One-shot, crash-time. */
+static void DumpFreeListScan(void) {
+    DWORD lo = RD32(VA_ARENA_LO), hi = RD32(VA_ARENA_HI);
+    DWORD tb = RD32(VA_TABLE_BASE_PTR), nc = RD32(VA_NUM_CLASSES), i;
+    int found = 0;
+    if (!lo || hi <= lo || !tb || !nc || nc > 4096) return;
+    Log("--- free-list integrity scan (%lu classes, arena [0x%08lX,0x%08lX)) ---",
+        (unsigned long)nc, (unsigned long)lo, (unsigned long)hi);
+    for (i = 0; i < nc; i++) {
+        DWORD d = tb + i * DESC_STRIDE;
+        DWORD blksz = RD32(d + DESC_BLKSZ_OFF);
+        DWORD node = RD32(d + DESC_HEAD_OFF), prev = 0;
+        int steps;
+        if (node && (node < lo || node >= hi)) {
+            /* head itself is garbage — this is the dd5b case; the block that was popped is gone. */
+            Log("class[%lu] blockSize=%lu: HEAD already garbage 0x%08lX (popped block lost)",
+                (unsigned long)i, (unsigned long)blksz, (unsigned long)node);
+            found++;
+            continue;
+        }
+        for (steps = 0; node && steps < 200000; steps++) {
+            DWORD next;
+            if (IsBadReadPtr((void *)(DWORD_PTR)node, 4)) break;
+            next = RD32(node);
+            if (next != 0 && (next < lo || next >= hi)) {
+                Log("class[%lu] blockSize=%lu CORRUPTED: P=0x%08lX  P->next=0x%08lX (out of arena)",
+                    (unsigned long)i, (unsigned long)blksz, (unsigned long)node, (unsigned long)next);
+                HexDump("P[0..16]", node, 16);
+                DumpNeighborhood(node, blksz);
+                DumpRingClosestBelow(node);
+                found++;
+                break;
+            }
+            prev = node; (void)prev;
+            node = next;
+        }
+    }
+    if (!found) Log("  (no out-of-arena links found — corruption not yet in a free list)");
 }
 
 /* ------------------------------------------------------------------ *
@@ -252,9 +424,15 @@ static void DumpInstallPop(DWORD P, DWORD pCaller, DWORD garbageNext, WORD pool)
                 "(THIS caller wrote one element past its buffer — cross-ref in Ghidra)",
                 (unsigned long)below, (unsigned long)ovrSize, (unsigned long)ovrCaller);
         else
-            Log(">>> OVERFLOWER allocation 0x%08lX not in alloc map (allocated pre-hook or via "
-                "an un-hooked path) — identify it from below[0] header in Ghidra", (unsigned long)below);
+            Log(">>> OVERFLOWER allocation 0x%08lX not in alloc map (evicted, pre-hook, or a stray "
+                "store rather than an adjacent overrun) — see neighborhood + timeline below",
+                (unsigned long)below);
     }
+
+    /* v12: don't trust the P-blksz assumption alone — scan the whole map for the real overflower,
+     * then print the temporal load-step sequence to breakpoint next boot. */
+    DumpNeighborhood(P, blksz);
+    DumpRecentTimeline(64);
     Log("========================================================================");
 }
 
@@ -289,6 +467,52 @@ static void CheckDispenseLow(WORD pool, DWORD ptr, DWORD size, DWORD caller) {
     }
 }
 
+/* v16: deterministic-address CANARY. The corruption writes out-of-arena values to the SAME fixed
+ * addresses every boot (verified across v14/v15). The crash-time ring shows the late crash site,
+ * not the writer. So poll these canaries every 64 allocs; the instant one holds an out-of-arena
+ * value, dump the loading thread's stack + the recent ring RIGHT THERE — within 64 allocs of the
+ * actual texture-record write. That timeline names the writer instead of the downstream victim. */
+static const DWORD g_canaries[] = { 0x1F0749B0, 0x1F0F4EC0, 0x1F0EB640, 0x1F035400, 0x1F101000 };
+static volatile LONG g_canaryDumped = 0;
+static volatile LONG g_allocTick    = 0;
+
+static void DumpCanaryTrip(void *anchor, DWORD ca, DWORD val) {
+    DWORD *sp = (DWORD *)anchor; int i, shown = 0;
+    Log("############# POOLGUARD: CANARY TRIPPED — corruption just appeared #############");
+    Log("canary 0x%08lX = 0x%08lX (out of arena) — dumping the WRITER's live context",
+        (unsigned long)ca, (unsigned long)val);
+    Log("    --- stack walk (loading thread .text return addresses) ---");
+    if (!IsBadReadPtr(sp, 600 * 4))
+        for (i = 0; i < 600 && shown < 40; i++) {
+            DWORD v = sp[i];
+            if (v >= TEXT_START_VA && v < (TEXT_START_VA + TEXT_SIZE)) {
+                Log("    [+0x%03X] 0x%08lX%s", i * 4, (unsigned long)v, IsAllocFrame(v) ? " (alloc)" : "");
+                shown++;
+            }
+        }
+    DumpRecentTimeline(96);
+    DumpFreeListScan();
+    Log("###############################################################################");
+}
+
+static void CheckCanaries(void *anchor) {
+    DWORD lo, hi; int k;
+    if (g_canaryDumped) return;
+    if ((InterlockedIncrement(&g_allocTick) & 0x3F) != 0) return;   /* every 64 allocs */
+    lo = RD32(VA_ARENA_LO); hi = RD32(VA_ARENA_HI);
+    if (!lo || hi <= lo) return;
+    for (k = 0; k < (int)(sizeof(g_canaries) / sizeof(g_canaries[0])); k++) {
+        DWORD ca = g_canaries[k], v;
+        if (IsBadReadPtr((void *)(DWORD_PTR)ca, 4)) continue;       /* not committed yet */
+        v = RD32(ca);
+        if (v != 0 && (v < lo || v >= hi) &&
+            InterlockedCompareExchange(&g_canaryDumped, 1, 0) == 0) {
+            DumpCanaryTrip(anchor, ca, v);
+            return;
+        }
+    }
+}
+
 static void * __fastcall Detour_DCE0(unsigned int sizeHint) {
     int anchor = 0;
     void *r = g_origDCE0(sizeHint);
@@ -296,8 +520,10 @@ static void * __fastcall Detour_DCE0(unsigned int sizeHint) {
     if (p && g_recordEnabled) {
         DWORD caller = ScanClientCaller(&anchor);
         AHashPut(p, caller, sizeHint);
+        RingPut(POOL_DCE0, p, sizeHint, caller);
         CheckInstallPop(p, caller, POOL_DCE0);
         CheckDispenseLow(POOL_DCE0, p, sizeHint, caller);
+        CheckCanaries(&anchor);
     }
     return r;
 }
@@ -309,6 +535,7 @@ static void * __thiscall Detour_Pool2(void *self, int size, int arg2) {
     if (p && g_recordEnabled) {
         DWORD caller = ScanClientCaller(&anchor);
         AHashPut(p, caller, (DWORD)size);
+        RingPut(POOL_POOL2, p, (DWORD)size, caller);
         CheckInstallPop(p, caller, POOL_POOL2);
         CheckDispenseLow(POOL_POOL2, p, (DWORD)size, caller);
     }
@@ -322,8 +549,11 @@ static void * __stdcall Detour_D760(int poolDesc, int size, int rounded) {
     int anchor = 0;
     void *r = g_origD760(poolDesc, size, rounded);
     DWORD p = (DWORD)(DWORD_PTR)r;
-    if (p && p >= POOL_MIN_VALID && g_recordEnabled)
-        AHashPut(p, ScanClientCaller(&anchor), (DWORD)size);
+    if (p && p >= POOL_MIN_VALID && g_recordEnabled) {
+        DWORD caller = ScanClientCaller(&anchor);
+        AHashPut(p, caller, (DWORD)size);
+        RingPut(POOL_D760, p, (DWORD)size, caller);
+    }
     return r;
 }
 
@@ -342,6 +572,8 @@ static void DumpPopFault(CONTEXT *ctx) {
     if (!IsBadReadPtr((void *)(DWORD_PTR)desc, DESC_STRIDE)) blksz = RD32(desc + DESC_BLKSZ_OFF);
     Log("blockSize=%lu  (install-pop catch did not fire — head was already garbage at first sight)",
         (unsigned long)blksz);
+    DumpFreeListScan();
+    DumpRecentTimeline(64);
     Log("============================================================");
 }
 
@@ -388,6 +620,8 @@ static void DumpGeneralAV(EXCEPTION_POINTERS *ep) {
                 shown++;
             }
         }
+    DumpFreeListScan();
+    DumpRecentTimeline(64);
     Log("=====================================================");
 }
 
@@ -449,7 +683,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         g_recordEnabled = !EnvDisabled("PG_RECORD");
         g_catchAll      = !EnvDisabled("PG_CATCHALL");
         Log("============================================");
-        Log("poolguard.asi loaded (PID %lu, exe_verified=%d, record=%d, catchall=%d) [v11]",
+        Log("poolguard.asi loaded (PID %lu, exe_verified=%d, record=%d, catchall=%d) [v16]",
             (unsigned long)GetCurrentProcessId(), g_exeVerified, g_recordEnabled, g_catchAll);
         if (!g_exeVerified) {
             Log("REFUSING to install: EXE size != %d.", EXPECTED_EXE_SIZE);

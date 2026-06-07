@@ -262,18 +262,25 @@ def RegisterSet(register: str, value: str) -> str:
 
 
 @mcp.tool()
-def MemoryRead(addr: str, size: str) -> str:
+def MemoryRead(addr, size) -> str:
     """
     Read memory using enhanced Script API
-    
+
     Parameters:
-        addr: Memory address (in hex format, e.g. "0x1000")
-        size: Number of bytes to read
-    
+        addr: Memory address (hex string "0x1000", decimal, or int)
+        size: Number of bytes to read (hex string "0x10", decimal, or int)
+
     Returns:
         Hexadecimal string representing the memory contents
+
+    Note: the x32dbg plugin's Memory/Read parses `addr` as a HEX string and `size`
+    as a DECIMAL integer. Passing a hex `size` (e.g. "0x10") makes the plugin fail
+    with "Error 500: Failed to read memory". We normalize both here so any sane
+    input works (addr -> 0x-hex string, size -> decimal string).
     """
-    return safe_get("Memory/Read", {"addr": addr, "size": size})
+    addr_s = addr if (isinstance(addr, str) and addr.lower().startswith("0x")) else hex(int(str(addr), 0))
+    size_d = str(int(str(size), 0))
+    return safe_get("Memory/Read", {"addr": addr_s, "size": size_d})
 
 @mcp.tool()
 def MemoryWrite(addr: str, data: str) -> str:
