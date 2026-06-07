@@ -117,6 +117,39 @@ def _convert_u16_array(be: bytes) -> bytes:
     return out
 
 
+def _convert_mtrl_body(be: bytes) -> bytes:
+    """MTRL material body: per-field swap matching engine parser FUN_00858790 @0x00858790.
+
+    On-wire layout (verified from the decompiled read sequence — 26 leading u32/f32, two u16s, then
+    ``count`` u32 hashes, then 2 trailing u32)::
+
+        [u32/f32 x26 =104B] [u16 flags @104] [u16 texture-count @106] [u32 hash xcount @108] [u32 x2 tail]
+
+    The engine reads the count as a **u16** and writes ``count`` 12-byte ``{hash, 0xF011157A, 0}``
+    records into a **FIXED 10-slot** embedded array (material+0xac). A blanket swap transposes that
+    u16 count with its neighbour -> a valid count (<=10) becomes garbage (e.g. 4 -> 0x0400 = 1024) ->
+    the engine overruns the material object into the pool arena -> world-load AV 0x0084DD5B.
+
+    Validate ``len == 116 + count*4`` (count derived from length must equal the on-wire u16 count);
+    on mismatch fall back to a count-preserving u16 swap (``_convert_u16_array`` byte-reverses the u16
+    count correctly at any even offset, so the engine's count stays valid and we never overrun).
+    """
+    HDR = 26 * 4   # 104: leading u32/f32 colour/scalar block
+    TAIL = 2 * 4   # 8: trailing u32 fields after the hash loop
+    n = len(be)
+    if n >= HDR + 4 + TAIL and (n - HDR - 4 - TAIL) % 4 == 0:
+        count_from_len = (n - HDR - 4 - TAIL) // 4
+        count_on_wire = struct.unpack_from(">H", be, HDR + 2)[0]
+        if count_from_len == count_on_wire:
+            out = bytearray()
+            out += _convert_u32_array(be[:HDR])          # u32/f32 colour + scalar block
+            out += be[HDR:HDR + 2][::-1]                 # u16 flags
+            out += be[HDR + 2:HDR + 4][::-1]             # u16 texture count (the overrun trigger)
+            out += _convert_u32_array(be[HDR + 4:])      # count hashes + 2 tail u32 (contiguous u32)
+            return bytes(out)
+    return _convert_u16_array(be)  # layout unconfirmed: count-safe fallback (never overruns)
+
+
 # Xbox-360 vertex-fetch format byte ((b >> 8) & 0xFF) -> PC D3DDECLTYPE.
 # Derived + golden-tested against the retail PC oracle (base-game mesh `decl`
 # chunks): see tools/_decl_golden_test.py. 94.3% byte-exact on unambiguous
@@ -2623,8 +2656,18 @@ def _convert_body(
     if tag == "STRM":
         return _convert_u32_array(body_be)
 
-    # ── Mesh hierarchy/material tags: u16 arrays (indices, slot refs) ──
-    if tag in ("HIER", "MTRL", "SEGM", "PRMT", "BSHI"):
+    # ── MTRL: material — mixed u32/f32 header + u16 flags + u16 texture-count + u32 hash array.
+    #    Engine FUN_00858790 reads the count as a u16 and writes `count` 12-byte {hash,0xF011157A,0}
+    #    records into a FIXED 10-slot embedded array; a blanket swap transposes the u16 count ->
+    #    garbage count -> overrun -> world-load AV 0x0084DD5B. Per-field swap (see _convert_mtrl_body).
+    #    (A blanket u16 swap kept the count right but corrupted the u32/f32 colour block; the Rust
+    #    converter used a blanket u32 swap with NO MTRL arm and scrambled the count — the divergence
+    #    that caused the crash. Both converters now use the per-field path.)
+    if tag == "MTRL":
+        return _convert_mtrl_body(body_be)
+
+    # ── Mesh hierarchy tags: u16 arrays (indices, slot refs) ──
+    if tag in ("HIER", "SEGM", "PRMT", "BSHI"):
         return _convert_u16_array(body_be)
 
     # ── EFCT: effect header — array of u16 fields (magic @ +2, count @ +14).

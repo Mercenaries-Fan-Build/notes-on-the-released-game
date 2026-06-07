@@ -125,7 +125,10 @@ static int AHashGet(DWORD ptr, DWORD *caller, DWORD *size) {
  * is complete (torn rows are skipped). ~1.3 MB BSS.
  * ------------------------------------------------------------------ */
 
-#define RING_SLOTS  65536           /* power of two */
+/* v17: 1<<20 slots (~20 MB BSS) spans the full ~450k-alloc world load with no wraparound, so a
+ * victim block's ENTIRE alloc/free history survives to crash time (the UAF prior-owner lens below
+ * needs the alloc that happened long before the corruption, which the old 64k ring evicted). */
+#define RING_SLOTS  (1 << 20)        /* power of two */
 #define RING_MASK   (RING_SLOTS - 1)
 
 typedef struct { volatile LONG seq; DWORD ptr; DWORD size; DWORD caller; DWORD pool; } PgRing;
@@ -138,6 +141,8 @@ static void RingPut(DWORD pool, DWORD ptr, DWORD size, DWORD caller) {
     g_ring[i].ptr = ptr; g_ring[i].size = size; g_ring[i].caller = caller; g_ring[i].pool = pool;
     g_ring[i].seq = t;                              /* publish last */
 }
+
+static void DumpVictimHistory(DWORD P);             /* v17: defined below; used by free-list scan */
 
 /* ------------------------------------------------------------------ *
  * Globals.
@@ -364,6 +369,7 @@ static void DumpFreeListScan(void) {
                     (unsigned long)i, (unsigned long)blksz, (unsigned long)node, (unsigned long)next);
                 HexDump("P[0..16]", node, 16);
                 DumpNeighborhood(node, blksz);
+                DumpVictimHistory(node);          /* v17: prior-owner (UAF) lens */
                 DumpRingClosestBelow(node);
                 found++;
                 break;
@@ -378,6 +384,35 @@ static void DumpFreeListScan(void) {
 /* ------------------------------------------------------------------ *
  * The install-pop catch + dump.
  * ------------------------------------------------------------------ */
+
+/* v17: UAF prior-owner lens. The overflower scan assumes an ADJACENT buffer overran into P. But
+ * static review of all 27k functions found no count-driven {hash,0xF011157A,0} packer — the write
+ * is a STRAY store through a DANGLING pointer (use-after-free): there is no adjacent overflower, so
+ * that scan reports "untracked". The real culprit is whoever PREVIOUSLY owned P — allocated it,
+ * kept the pointer, freed it, then wrote to it while free. The (now deep) ring holds P's full
+ * allocation history in temporal order; the entry just before the current pop names that owner. */
+static void DumpVictimHistory(DWORD P) {
+    LONG head = g_ringTicket, n = (head < RING_SLOTS) ? head : RING_SLOTS, j;
+    int shown = 0;
+    Log("--- victim P=0x%08lX prior-owner history (UAF lens: who held the ptr after free) ---",
+        (unsigned long)P);
+    for (j = 0; j < n && shown < 12; j++) {            /* newest -> oldest */
+        LONG t = head - j;
+        DWORD i = (DWORD)t & RING_MASK;
+        if (g_ring[i].seq != t || g_ring[i].ptr != P) continue;
+        Log("  [#%ld %s] ptr=0x%08lX size=%lu caller=0x%08lX%s",
+            (long)g_ring[i].seq, PoolName((WORD)g_ring[i].pool),
+            (unsigned long)g_ring[i].ptr, (unsigned long)g_ring[i].size,
+            (unsigned long)g_ring[i].caller,
+            shown == 0 ? "  <- current pop (crash site)"
+          : shown == 1 ? "  <<< PRIOR OWNER (UAF suspect: held ptr after free, wrote the texture record)"
+          : "");
+        shown++;
+    }
+    if (shown <= 1)
+        Log("  (only the current pop in ring -> prior owner older than %d allocs OR a true adjacent "
+            "overrun, not a UAF -- trust the overflower/neighborhood scan instead)", RING_SLOTS);
+}
 
 static void DumpInstallPop(DWORD P, DWORD pCaller, DWORD garbageNext, WORD pool) {
     DWORD lo = RD32(VA_ARENA_LO), hi = RD32(VA_ARENA_HI);
@@ -432,6 +467,7 @@ static void DumpInstallPop(DWORD P, DWORD pCaller, DWORD garbageNext, WORD pool)
     /* v12: don't trust the P-blksz assumption alone — scan the whole map for the real overflower,
      * then print the temporal load-step sequence to breakpoint next boot. */
     DumpNeighborhood(P, blksz);
+    DumpVictimHistory(P);                 /* v17: name P's prior owner (UAF dangling-ptr holder) */
     DumpRecentTimeline(64);
     Log("========================================================================");
 }

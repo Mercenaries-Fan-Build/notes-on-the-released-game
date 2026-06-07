@@ -1030,6 +1030,15 @@ fn convert_generic_bodies(
                         // Mesh draw-call parameter binding: 16-byte records of u16 fields
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
+                    ChunkTag::Mtrl => {
+                        // Material: mixed u32/f32 header + u16 flags + u16 texture-count + u32 hash
+                        // array. A blanket swap transposes the u16 count and the engine overruns its
+                        // fixed 10-slot {hash,0xF011157A,0} record array (FUN_00858790, world-load
+                        // AV 0x0084DD5B). Per-field swap — see convert_mtrl. Previously this tag had
+                        // NO arm and fell through to the generic u32 swap (the divergence from the
+                        // Python converter that caused the crash).
+                        convert_mtrl(&mut data_area[body_local_start..body_local_end]);
+                    }
                     ChunkTag::Enum => {
                         // Enum definitions: mixed strings + u32 fields
                         convert_enum_body_inplace(&mut data_area[body_local_start..body_local_end]);
@@ -2072,6 +2081,40 @@ fn swap_u32_array(data: &mut [u8]) {
     }
 }
 
+/// MTRL material body: per-field byte-swap matching the engine parser `FUN_00858790` @0x00858790.
+///
+/// On-wire layout (verified from the decompiled read sequence — 26 leading u32/f32, two u16s, then
+/// `count` u32 hashes, then 2 trailing u32):
+///   `[u32/f32 × 26 = 104B] [u16 flags @104] [u16 texture-count @106] [u32 hash × count @108] [u32 × 2 tail]`
+///
+/// The engine reads the count as a **u16** and writes `count` 12-byte `{hash, 0xF011157A, 0}`
+/// records into a **FIXED 10-slot** embedded array at `material+0xac`. A blanket u32 swap (the old
+/// Rust fall-through) **transposes that u16 count with its neighbour** — a valid count (≤10) becomes
+/// garbage (e.g. `4 → 0x0400 = 1024`) and the engine overruns the material object into the pool
+/// arena → world-load AV at 0x0084DD5B. (Python's blanket *u16* swap kept the count right but wrecked
+/// the u32/f32 colour block — the opposite error. This per-field swap fixes both.)
+///
+/// The structure is validated against the body length (`count` derived from `len` must equal the
+/// on-wire u16 count). If it does not match (an unexpected material variant), fall back to a
+/// count-preserving u16 swap — `swap_u16_array` still byte-reverses the u16 count correctly at any
+/// even offset, so the engine's count stays valid and we never reintroduce the overrun.
+fn convert_mtrl(body: &mut [u8]) {
+    const HDR: usize = 26 * 4; // 104: leading u32/f32 colour/scalar block
+    const TAIL: usize = 2 * 4; //   8: trailing u32 fields after the hash loop
+    if body.len() >= HDR + 4 + TAIL && (body.len() - HDR - 4 - TAIL) % 4 == 0 {
+        let count_from_len = (body.len() - HDR - 4 - TAIL) / 4;
+        let count_on_wire = u16::from_be_bytes([body[HDR + 2], body[HDR + 3]]) as usize;
+        if count_from_len == count_on_wire {
+            swap_u32_array(&mut body[..HDR]); // u32/f32 colour + scalar block
+            body[HDR..HDR + 2].reverse(); // u16 flags
+            body[HDR + 2..HDR + 4].reverse(); // u16 texture count (the overrun trigger)
+            swap_u32_array(&mut body[HDR + 4..]); // count hashes + 2 tail u32 (contiguous u32 region)
+            return;
+        }
+    }
+    swap_u16_array(body); // layout unconfirmed: count-safe fallback (never overruns)
+}
+
 /// EFCT particle-effect header: an array of u16 fields. Mirrors
 /// `_convert_efct_header` in `tools/ucfx_be_to_le.py`.
 ///
@@ -2201,10 +2244,71 @@ mod tests {
     use super::{
         convert_block, convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
         convert_hibernation_data_inplace, convert_info_body_inplace,
-        convert_keyed_group_records_inplace,
+        convert_keyed_group_records_inplace, convert_mtrl,
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
     };
+
+    // Build a synthetic BE MTRL body: [u32*26][u16 flags][u16 count][u32*count][u32*2 tail].
+    fn make_mtrl_be(flags: u16, count: u16) -> Vec<u8> {
+        let mut be = Vec::new();
+        for i in 0..26u32 {
+            be.extend_from_slice(&(0x01020304u32.wrapping_add(i)).to_be_bytes());
+        }
+        be.extend_from_slice(&flags.to_be_bytes());
+        be.extend_from_slice(&count.to_be_bytes());
+        for i in 0..count as u32 {
+            be.extend_from_slice(&(0xAABBCC00u32 | i).to_be_bytes());
+        }
+        be.extend_from_slice(&0xDEADBEEFu32.to_be_bytes()); // tail 0
+        be.extend_from_slice(&0xCAFEF00Du32.to_be_bytes()); // tail 1
+        assert_eq!(be.len(), 116 + count as usize * 4);
+        be
+    }
+
+    #[test]
+    fn mtrl_u16_count_survives_swap() {
+        let count: u16 = 4;
+        let mut body = make_mtrl_be(0x1234, count);
+        convert_mtrl(&mut body);
+
+        // THE invariant: the u16 texture-count @offset 106 must read back as 4 in LE, NOT transposed.
+        // Transposing it (the old Rust u32 fall-through) makes the engine write `count` 12-byte
+        // {hash,0xF011157A,0} records into a fixed 10-slot array -> overrun -> world-load AV 0x84DD5B.
+        assert_eq!(
+            u16::from_le_bytes([body[106], body[107]]),
+            count,
+            "MTRL u16 texture-count must survive the swap"
+        );
+        // flags u16 @104 survives as a u16
+        assert_eq!(u16::from_le_bytes([body[104], body[105]]), 0x1234);
+        // leading u32/f32 colour was full-width byte-reversed (NOT u16-transposed)
+        assert_eq!(u32::from_le_bytes([body[0], body[1], body[2], body[3]]), 0x01020304);
+        // first hash u32 @108 was full-width byte-reversed
+        assert_eq!(u32::from_le_bytes([body[108], body[109], body[110], body[111]]), 0xAABBCC00);
+        // trailing u32 @ 108+count*4 survived as a u32
+        let t = 108 + count as usize * 4;
+        assert_eq!(u32::from_le_bytes([body[t], body[t + 1], body[t + 2], body[t + 3]]), 0xDEADBEEF);
+    }
+
+    #[test]
+    fn mtrl_count_zero_ok() {
+        let mut body = make_mtrl_be(0x0001, 0); // 116 bytes, no hashes
+        convert_mtrl(&mut body);
+        assert_eq!(u16::from_le_bytes([body[106], body[107]]), 0);
+        assert_eq!(u32::from_le_bytes([body[0], body[1], body[2], body[3]]), 0x01020304);
+    }
+
+    #[test]
+    fn mtrl_unknown_layout_falls_back_count_safe() {
+        // A body that does NOT satisfy len == 116 + count*4 -> count-safe u16 fallback.
+        let mut body = vec![0u8; 50];
+        body[10] = 0xAB;
+        body[11] = 0xCD;
+        convert_mtrl(&mut body);
+        assert_eq!(body[10], 0xCD, "fallback must u16-swap (count-safe at any even offset)");
+        assert_eq!(body[11], 0xAB);
+    }
 
     #[test]
     fn info_compact_swaps_all_u32s() {
