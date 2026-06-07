@@ -59,7 +59,6 @@ pub fn convert_block(
     struct EntryInfo {
         name_hash: u32,
         type_hash: u32,
-        #[allow(dead_code)]
         field_c: u32,
         chunk_size: u32,
     }
@@ -132,7 +131,13 @@ pub fn convert_block(
     }
 
     // Pass 2: Compute correct chunk_sizes (UCFX + 8 for CSUM trailer).
-    // field_c is always 0 on both platforms — engine walks sequentially, no offset lookup.
+    // field_c is a per-entry offset/cookie. It IS 0 in retail base-game blocks, but the DLC's
+    // multi-LOD combined-texture blocks carry distinct nonzero field_c per entry (0x60D7,
+    // 0x60DA, …) that the engine uses to locate each entry. Zeroing it (the old behaviour)
+    // makes the loader mislocate the texture-component object pointer, so it lands mid-record
+    // array → ECS component-table holds a record-interior pointer → wild vcall at world load
+    // (FUN_007E0420 / grid-pop 0x4CC064). Preserve+byteswap the source value; swapping 0 is a
+    // no-op, so this is safe for base-game blocks too. (Matches Python _serialize_entry_table_le.)
     let pc_chunk_sizes: Vec<u32> = converted_containers.iter()
         .map(|c| (c.len() as u32) + 8)
         .collect();
@@ -145,7 +150,7 @@ pub fn convert_block(
     for (ei, entry) in entries.iter().enumerate() {
         output.extend_from_slice(&entry.name_hash.to_le_bytes());
         output.extend_from_slice(&entry.type_hash.to_le_bytes());
-        output.extend_from_slice(&0u32.to_le_bytes());
+        output.extend_from_slice(&entry.field_c.to_le_bytes());
         output.extend_from_slice(&pc_chunk_sizes[ei].to_le_bytes());
     }
 
@@ -2194,7 +2199,7 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
+        convert_block, convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
         convert_hibernation_data_inplace, convert_info_body_inplace,
         convert_keyed_group_records_inplace,
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
@@ -2243,6 +2248,63 @@ mod tests {
         want.extend_from_slice(&101u32.to_le_bytes());
         want.extend_from_slice(&0u32.to_le_bytes());
         assert_eq!(got, want, "named info must preserve the name and swap only trailing u32s");
+    }
+
+    #[test]
+    fn entry_table_preserves_field_c() {
+        // The block-level entry table is 16-byte rows {name_hash, type_hash, field_c, chunk_size}.
+        // The DLC's multi-LOD combined-texture blocks carry a NONZERO per-entry field_c (an
+        // offset the loader uses to locate each texture, e.g. 0x60D7). The old converter
+        // hard-zeroed it (`&0u32.to_le_bytes()`), which mislocated the texture-component object
+        // pointer → ECS component-table held a record-interior pointer → world-load crash
+        // (FUN_007E0420 wild vcall / grid-pop 0x4CC064). field_c must be preserved+byteswapped.
+        fn be32(v: u32) -> [u8; 4] {
+            v.to_be_bytes()
+        }
+        // Minimal BE container: XFCU header with n_desc=0, plus an 8-byte CSUM trailer.
+        let mut container = Vec::new();
+        container.extend_from_slice(b"XFCU"); // BE magic
+        container.extend_from_slice(&be32(20)); // data_area_off = 20 (after header)
+        container.extend_from_slice(&be32(0)); // unk_08
+        container.extend_from_slice(&be32(0)); // unk_0c
+        container.extend_from_slice(&be32(0)); // n_desc = 0
+        container.extend_from_slice(b"CSUM"); // CSUM trailer (stripped before convert)
+        container.extend_from_slice(&0u32.to_le_bytes());
+        let chunk_size = container.len() as u32;
+
+        let name_hash = 0xAABBCCDDu32;
+        let type_hash = 0x12345678u32; // generic (not texture/ECS) → trivial convert
+        let field_c = 0x000060D7u32; // the load-bearing nonzero value
+
+        let mut block = Vec::new();
+        block.extend_from_slice(&be32(1)); // entry_count = 1
+        block.extend_from_slice(&be32(name_hash));
+        block.extend_from_slice(&be32(type_hash));
+        block.extend_from_slice(&be32(field_c));
+        block.extend_from_slice(&be32(chunk_size));
+        block.extend_from_slice(&container);
+
+        let out = convert_block(&block, false, None).expect("convert_block must succeed");
+
+        // LE entry table row 0: [0..4]=count, [4..8]=name, [8..12]=type, [12..16]=field_c.
+        assert_eq!(
+            u32::from_le_bytes([out[12], out[13], out[14], out[15]]),
+            field_c,
+            "entry-table field_c must be preserved, not zeroed"
+        );
+        assert_eq!(u32::from_le_bytes([out[4], out[5], out[6], out[7]]), name_hash);
+        assert_eq!(u32::from_le_bytes([out[8], out[9], out[10], out[11]]), type_hash);
+
+        // Regression guard: a zero field_c (the old bug) would have failed the assert above.
+        // Also confirm base-game blocks (field_c == 0) stay 0 — swapping 0 is a no-op.
+        let mut block0 = block.clone();
+        block0[12..16].copy_from_slice(&be32(0)); // field_c = 0
+        let out0 = convert_block(&block0, false, None).expect("convert_block must succeed");
+        assert_eq!(
+            u32::from_le_bytes([out0[12], out0[13], out0[14], out0[15]]),
+            0,
+            "base-game field_c==0 must remain 0"
+        );
     }
 
     #[test]
