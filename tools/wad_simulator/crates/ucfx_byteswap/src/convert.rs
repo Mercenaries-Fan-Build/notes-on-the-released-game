@@ -1473,6 +1473,10 @@ fn untile_tail_page(
 /// (linear_body, mips_for_info, streamed_mip_count). `streamed` is 0 for
 /// fully-resident bodies (Full/Prefix/Single) and the top-mip stream count for
 /// stream/tail pages, which drives the INFO streaming-residency descriptor.
+///
+/// Superseded by `synthesize_resident_chain` (full-dimension fully-resident
+/// synthesis); retained for reference / the streamed-descriptor path.
+#[allow(dead_code)]
 fn convert_streamed_body(
     tiled: &[u8],
     width: usize,
@@ -1583,6 +1587,82 @@ fn untile_dxt_body(tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], 
                 }
             }
         }
+    }
+    Some(out)
+}
+
+/// Nearest-neighbour scale a DXT surface at *block* granularity (each 4x4 DXT
+/// block is copied whole, so no decode/recompress is needed and the result is a
+/// valid DXT surface). Works in either direction (up- or down-scale).
+fn scale_dxt_blocks(
+    src: &[u8], src_wb: usize, src_hb: usize, dst_wb: usize, dst_hb: usize, texel_pitch: usize,
+) -> Vec<u8> {
+    let mut out = vec![0u8; dst_wb * dst_hb * texel_pitch];
+    if src_wb == 0 || src_hb == 0 {
+        return out;
+    }
+    for dy in 0..dst_hb {
+        let sy = (dy * src_hb / dst_hb).min(src_hb - 1);
+        for dx in 0..dst_wb {
+            let sx = (dx * src_wb / dst_wb).min(src_wb - 1);
+            let s = (sy * src_wb + sx) * texel_pitch;
+            let d = (dy * dst_wb + dx) * texel_pitch;
+            if s + texel_pitch <= src.len() && d + texel_pitch <= out.len() {
+                out[d..d + texel_pitch].copy_from_slice(&src[s..s + texel_pitch]);
+            }
+        }
+    }
+    out
+}
+
+/// Recover the largest decodable DXT surface from a (possibly partial/stub)
+/// tiled Xbox body. The body always begins with its largest contained mip, so
+/// we iterate levels from largest to smallest and untile the first whose tiled
+/// own-surface fits. Returns (linear blocks, width_blocks, height_blocks).
+fn recover_best_surface(
+    tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], mips: usize,
+) -> Option<(Vec<u8>, usize, usize)> {
+    let (block_px, texel_pitch, log_bpb) = dxt_format(fourcc)?;
+    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
+    for m in 0..n.max(1) {
+        let wpx = (width >> m).max(1);
+        let hpx = (height >> m).max(1);
+        let wb = ((wpx + block_px - 1) / block_px).max(1);
+        let hb = ((hpx + block_px - 1) / block_px).max(1);
+        let (awb, ahb) = if wpx.min(hpx) >= 32 {
+            ((wb + 31) & !31, (hb + 31) & !31)
+        } else {
+            (32, 32)
+        };
+        let need = awb * ahb * texel_pitch;
+        if tiled.len() >= need {
+            let mut lin = untile_surface(&tiled[..need], awb, ahb, texel_pitch, log_bpb);
+            swap16_blocks(&mut lin);
+            return Some((crop_blocks(&lin, awb, wb, hb, texel_pitch), wb, hb));
+        }
+    }
+    None
+}
+
+/// Build a COMPLETE PC-linear DXT mip chain at the ORIGINAL (width,height,mips)
+/// from a partial/stub tiled body: recover the best available surface and
+/// block-nearest scale it into every mip level. The chain is exactly
+/// `linear_mip_chain_size(width,height,fourcc,mips)` bytes — fully resident, so
+/// the engine reads it and is done (no over-read, no streaming wait). Detail
+/// below the recovered surface's resolution is interpolated, not original.
+fn synthesize_resident_chain(
+    tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], mips: usize,
+) -> Option<Vec<u8>> {
+    let (block_px, texel_pitch, _) = dxt_format(fourcc)?;
+    let (src, src_wb, src_hb) = recover_best_surface(tiled, width, height, fourcc, mips)?;
+    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
+    let mut out = Vec::with_capacity(linear_mip_chain_size(width, height, fourcc, n));
+    for l in 0..n.max(1) {
+        let wpx = (width >> l).max(1);
+        let hpx = (height >> l).max(1);
+        let wb = ((wpx + block_px - 1) / block_px).max(1);
+        let hb = ((hpx + block_px - 1) / block_px).max(1);
+        out.extend_from_slice(&scale_dxt_blocks(&src, src_wb, src_hb, wb, hb, texel_pitch));
     }
     Some(out)
 }
@@ -1726,50 +1806,38 @@ fn apply_texture_untile(
         mips = tex_mip_levels(width, height);
     }
 
-    let (pc_body, arm_mips, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
+    // Build a COMPLETE, fully-resident PC mip chain at the texture's ORIGINAL
+    // dimensions. The previous pass instead REDUCED the dimensions to fit a
+    // partial Xbox stub body; that made each texture internally consistent but
+    // desynced it from the layer/material data that references it at full size,
+    // so the texture's streaming node never reached ready-state 4 -> world-load
+    // livelock (dlc01_dlccon002_roads). Now we keep (width,height,mips) and, for
+    // a partial/stub body, synthesize the missing mips by block-nearest scaling
+    // the best surface recovered from the stub: full-size + complete + resident,
+    // so references stay valid, there is no over-read (BUFFER_TOO_SMALL) and no
+    // streaming wait. Synthesized mips are lower-detail, not pixel-accurate.
+    let tlinear = linear_mip_chain_size(width, height, &fourcc, mips);
+    let (pc_body, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
         let body = &descriptors[body_idx];
         let body_abs = data_start + body.row_u0 as usize;
         if body_abs + body.body_size as usize > out.len() {
             return false;
         }
-        let tiled = &out[body_abs..body_abs + body.body_size as usize];
-        match convert_streamed_body(tiled, width, height, &fourcc, mips) {
-            Some((b, mf, _st)) => (Some(b), mf, Some(body_idx), Some(body_abs)),
+        let tiled = out[body_abs..body_abs + body.body_size as usize].to_vec();
+        let complete = match classify_tiled_body(width, height, &fourcc, mips, tiled.len()) {
+            Some(TiledBodyKind::Full) => untile_dxt_body(&tiled, width, height, &fourcc, mips),
+            _ => synthesize_resident_chain(&tiled, width, height, &fourcc, mips),
+        };
+        match complete {
+            Some(b) => (Some(b), Some(body_idx), Some(body_abs)),
             None => return false,
         }
     } else {
-        (None, mips, None, None)
+        (None, None, None)
     };
 
-    // Make the texture SELF-CONSISTENT and fully-resident. The engine must be able to
-    // read exactly the bytes present: if INFO claims more than the body holds it
-    // over-reads (BUFFER_TOO_SMALL), and if it claims a partial streaming residency it
-    // waits forever for mips that aren't in the WAD (livelock). PC's streaming-residency
-    // descriptor is build-authored metadata absent from the Xbox source, so we never
-    // emit one. Full textures keep their dimensions; a partial/stub body is presented at
-    // the largest mip level whose FULL chain fits the converted body — a smaller but
-    // complete, loadable texture (lower-res, no streaming wait).
-    let _ = arm_mips; // (per-arm mip count superseded by the consistency pass below)
-    let (tw, th, tmips, tlinear): (usize, usize, usize, usize) = match pc_body {
-        Some(ref b) => {
-            let blen = b.len();
-            let mut l = 0usize;
-            loop {
-                let lw = (width >> l).max(1);
-                let lh = (height >> l).max(1);
-                let m = if mips > l { mips - l } else { 1 };
-                let chain = linear_mip_chain_size(lw, lh, &fourcc, m);
-                if chain <= blen || (lw == 1 && lh == 1) {
-                    break (lw, lh, m, chain);
-                }
-                l += 1;
-            }
-        }
-        None => (width, height, mips, linear_mip_chain_size(width, height, &fourcc, mips)),
-    };
-    let mut pc_info = rebuild_texture_info(&xi, &fourcc, tmips, tlinear as u32, 0);
-    pc_info[0..2].copy_from_slice(&(tw as u16).to_le_bytes());
-    pc_info[2..4].copy_from_slice(&(th as u16).to_le_bytes());
+    // INFO at ORIGINAL dimensions, fully resident (streamed = 0 -> 00..00 FF FF).
+    let pc_info = rebuild_texture_info(&xi, &fourcc, mips, tlinear as u32, 0);
     out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
 
     let mut body_abs_val = body_abs_val;
@@ -1801,15 +1869,14 @@ fn apply_texture_untile(
     }
 
     if let (Some(body_idx), Some(body_abs_val)) = (body_idx, body_abs_val) {
-        if let Some(untiled) = pc_body {
-            // Emit exactly the bytes the (possibly reduced) INFO claims, so the body
-            // length and INFO mip chain agree — the engine reads them and is done.
-            let n = tlinear.min(untiled.len());
+        if let Some(mut untiled) = pc_body {
+            // Body length == INFO mip chain at full dimensions: pad short, trim long.
+            untiled.resize(tlinear, 0);
             let body_size_field = 20 + body_idx * 20 + 8;
             out[body_size_field..body_size_field + 4]
-                .copy_from_slice(&(n as u32).to_le_bytes());
+                .copy_from_slice(&(tlinear as u32).to_le_bytes());
             out.truncate(body_abs_val);
-            out.extend_from_slice(&untiled[..n]);
+            out.extend_from_slice(&untiled);
         }
     }
 
