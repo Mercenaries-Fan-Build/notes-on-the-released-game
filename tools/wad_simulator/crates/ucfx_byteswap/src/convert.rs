@@ -1587,19 +1587,33 @@ fn untile_dxt_body(tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], 
     Some(out)
 }
 
-/// Max pixel dimension at/below which a mip stays resident; above it the mip is
-/// streamed. Cracked from retail vz.wad: DXT1 keeps mips <= 64px, DXT5/DXT3 keep
-/// mips <= 32px (tools/audit_texture_mips.py, 48/48 dimension groups).
-fn stream_cutoff(fourcc: &[u8; 4]) -> usize {
-    if fourcc == b"DXT1" { 64 } else { 32 }
+/// Resident-page byte threshold: a mip whose linear size is <= this stays in the
+/// resident tail; larger mips stream. Cracked from retail vz.wad — 2048 bytes
+/// (a 64x64 DXT1 / 64x32 DXT5 mip) reproduces 99.8% of all retail streaming
+/// descriptors across both formats and every aspect ratio (the rare misses are
+/// nearly-fully-resident variants). tools/audit_texture_mips.py.
+const RESIDENT_MIP_BYTES: usize = 2048;
+
+/// Linear (PC, untiled) byte size of a single DXT mip level.
+fn mip_linear_size(width: usize, height: usize, fourcc: &[u8; 4], level: usize) -> usize {
+    let (block_px, texel_pitch, _) = match dxt_format(fourcc) {
+        Some(f) => f,
+        None => return 0,
+    };
+    let w = (width >> level).max(1);
+    let h = (height >> level).max(1);
+    let wb = (w + block_px - 1) / block_px;
+    let hb = (h + block_px - 1) / block_px;
+    wb * hb * texel_pitch
 }
 
 /// Number of top mip levels that are STREAMED (not in the resident tail): levels
-/// whose largest pixel dimension exceeds the format's resident cutoff.
+/// whose linear byte size exceeds the resident-page threshold. Format- and
+/// aspect-correct (the earlier pixel-dimension cutoff was a square-only
+/// coincidence and mis-counted non-square DXT5).
 fn streamed_mip_count(width: usize, height: usize, fourcc: &[u8; 4], total_mips: usize) -> usize {
-    let cutoff = stream_cutoff(fourcc);
     (0..total_mips)
-        .filter(|&i| (width >> i).max(1).max((height >> i).max(1)) > cutoff)
+        .filter(|&i| mip_linear_size(width, height, fourcc, i) > RESIDENT_MIP_BYTES)
         .count()
 }
 
@@ -1712,7 +1726,7 @@ fn apply_texture_untile(
         mips = tex_mip_levels(width, height);
     }
 
-    let (pc_body, mips_field, streamed, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
+    let (pc_body, arm_mips, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
         let body = &descriptors[body_idx];
         let body_abs = data_start + body.row_u0 as usize;
         if body_abs + body.body_size as usize > out.len() {
@@ -1720,24 +1734,34 @@ fn apply_texture_untile(
         }
         let tiled = &out[body_abs..body_abs + body.body_size as usize];
         match convert_streamed_body(tiled, width, height, &fourcc, mips) {
-            Some((b, mf, st)) => (Some(b), mf, st, Some(body_idx), Some(body_abs)),
+            Some((b, mf, _st)) => (Some(b), mf, Some(body_idx), Some(body_abs)),
             None => return false,
         }
     } else {
-        (None, mips, 0, None, None)
+        (None, mips, None, None)
     };
 
-    // Streaming textures (streamed > 0) claim the FULL linear chain so the engine
-    // allocates the whole texture and streams the top mips into it; the body holds
-    // only the resident tail. Fully-resident textures keep linear_total == body len.
-    let linear_total = if streamed > 0 {
-        linear_mip_chain_size(width, height, &fourcc, mips_field) as u32
-    } else {
-        pc_body
-            .as_ref()
-            .map(|b| b.len() as u32)
-            .unwrap_or_else(|| linear_mip_chain_size(width, height, &fourcc, mips_field) as u32)
-    };
+    // Decide streaming residency uniformly for ALL body kinds. The per-arm streamed
+    // count only covered stream/tail pages, leaving non-square textures (routed
+    // through the Prefix/Single arms) with the wrong fully-resident sentinel and
+    // still hanging the streamer. A texture streams when its converted body is
+    // shorter than the full claimed mip chain; then claim the full mip count and
+    // the streaming-residency descriptor so the engine streams the missing top mips
+    // instead of treating the partial body as complete (the livelock root cause).
+    let full_chain = linear_mip_chain_size(width, height, &fourcc, mips) as u32;
+    let body_len = pc_body.as_ref().map(|b| b.len() as u32).unwrap_or(0);
+    let cutoff_streamed = streamed_mip_count(width, height, &fourcc, mips);
+    let (mips_field, streamed, linear_total) =
+        if body_len > 0 && body_len < full_chain && cutoff_streamed > 0 {
+            (mips, cutoff_streamed, full_chain)
+        } else {
+            let lt = if body_len > 0 {
+                body_len
+            } else {
+                linear_mip_chain_size(width, height, &fourcc, arm_mips) as u32
+            };
+            (arm_mips, 0, lt)
+        };
     let pc_info = rebuild_texture_info(&xi, &fourcc, mips_field, linear_total, streamed);
     out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
 
@@ -2343,6 +2367,11 @@ mod tests {
         assert_eq!(super::streamed_mip_count(256, 256, b"DXT1", 7), 2);
         assert_eq!(super::streamed_mip_count(64, 64, b"DXT1", 5), 0); // fully resident
         assert_eq!(super::streamed_mip_count(1024, 512, b"DXT1", 8), 4);
+        // Non-square DXT5 — these failed under the old pixel-dimension cutoff.
+        assert_eq!(super::streamed_mip_count(1024, 512, b"DXT5", 8), 4);
+        assert_eq!(super::streamed_mip_count(512, 256, b"DXT5", 7), 3);
+        assert_eq!(super::streamed_mip_count(256, 512, b"DXT5", 7), 3);
+        assert_eq!(super::streamed_mip_count(64, 64, b"DXT5", 5), 1); // DXT5 64x64 streams mip0
     }
 
     // Build a synthetic BE MTRL body: [u32*26][u16 flags][u16 count][u32*count][u32*2 tail].
