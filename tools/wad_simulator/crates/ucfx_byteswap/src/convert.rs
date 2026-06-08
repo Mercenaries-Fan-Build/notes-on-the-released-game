@@ -1470,47 +1470,48 @@ fn untile_tail_page(
 }
 
 /// Convert a streamed/partial tiled BODY to PC-linear bytes. Returns
-/// (linear_body, resident_mips_for_info).
+/// (linear_body, mips_for_info, streamed_mip_count). `streamed` is 0 for
+/// fully-resident bodies (Full/Prefix/Single) and the top-mip stream count for
+/// stream/tail pages, which drives the INFO streaming-residency descriptor.
 fn convert_streamed_body(
     tiled: &[u8],
     width: usize,
     height: usize,
     fourcc: &[u8; 4],
     mips: usize,
-) -> Option<(Vec<u8>, usize)> {
+) -> Option<(Vec<u8>, usize, usize)> {
     let kind = classify_tiled_body(width, height, fourcc, mips, tiled.len())?;
     match kind {
         TiledBodyKind::Full => {
             let body = untile_dxt_body(tiled, width, height, fourcc, mips)?;
-            Some((body, mips))
+            Some((body, mips, 0))
         }
         TiledBodyKind::Prefix(n) => {
             let body = untile_dxt_body(tiled, width, height, fourcc, n)?;
-            Some((body, n))
+            Some((body, n, 0))
         }
         TiledBodyKind::Single(m) => {
             let wpx = (width >> m).max(1);
             let hpx = (height >> m).max(1);
             let body = untile_own_surface(tiled, wpx, hpx, fourcc)?;
-            Some((body, 1))
+            Some((body, 1, 0))
         }
         TiledBodyKind::TailPage if fourcc == b"DXT5" && tiled.len() == 32 * 32 * 16 => {
-            untile_tail_page(tiled, width, height, fourcc, mips)
+            let (body, resident) = untile_tail_page(tiled, width, height, fourcc, mips)?;
+            // Resident tail covers `resident` bottom mips; the rest stream.
+            Some((body, mips, mips.saturating_sub(resident)))
         }
         TiledBodyKind::TailPage | TiledBodyKind::StreamPage => {
+            // A stream/tail page is the resident bottom-mip tail; the top mips are
+            // streamed. Claim the FULL mip count and stamp the streaming-residency
+            // descriptor (cracked from retail, see `streaming_descriptor`) so the
+            // engine streams the missing top mips. The old code instead clamped the
+            // mip count and left the fully-resident sentinel, so the engine treated
+            // the partial body as complete and the streamer hung forever -> world-load
+            // livelock (texture set 0x5FF5980D / dlc01_dlccon002_roads).
             let body = untile_streaming_page(tiled, fourcc)?;
-            // A stream/tail page is PARTIAL data — one resident page, not the full mip chain. The
-            // old `Some((body, mips))` stamped the FULL mip count over that partial body (and
-            // rebuild_texture_info then marks it "fully resident"), so the engine's streamer waits
-            // forever for high-res mip levels whose bytes were never converted -> world-load
-            // streaming livelock (texture 0x5FF5980D, user-diagnosed truncation). Claim only the
-            // mip levels the untiled page actually covers, so the INFO never over-claims (mirrors
-            // the Prefix arm). Under-claiming is safe (fewer mips streamed); over-claiming hangs.
-            let resident = (1..=mips)
-                .rev()
-                .find(|&n| linear_mip_chain_size(width, height, fourcc, n) <= body.len())
-                .unwrap_or(1);
-            Some((body, resident))
+            let streamed = streamed_mip_count(width, height, fourcc, mips);
+            Some((body, mips, streamed))
         }
     }
 }
@@ -1586,9 +1587,51 @@ fn untile_dxt_body(tiled: &[u8], width: usize, height: usize, fourcc: &[u8; 4], 
     Some(out)
 }
 
+/// Max pixel dimension at/below which a mip stays resident; above it the mip is
+/// streamed. Cracked from retail vz.wad: DXT1 keeps mips <= 64px, DXT5/DXT3 keep
+/// mips <= 32px (tools/audit_texture_mips.py, 48/48 dimension groups).
+fn stream_cutoff(fourcc: &[u8; 4]) -> usize {
+    if fourcc == b"DXT1" { 64 } else { 32 }
+}
+
+/// Number of top mip levels that are STREAMED (not in the resident tail): levels
+/// whose largest pixel dimension exceeds the format's resident cutoff.
+fn streamed_mip_count(width: usize, height: usize, fourcc: &[u8; 4], total_mips: usize) -> usize {
+    let cutoff = stream_cutoff(fourcc);
+    (0..total_mips)
+        .filter(|&i| (width >> i).max(1).max((height >> i).max(1)) > cutoff)
+        .count()
+}
+
+/// PC texture INFO streaming-residency descriptor (INFO bytes [26:34]).
+///
+/// Cracked from retail vz.wad ground truth — reproduces all 48 dimension groups
+/// exactly (tools/audit_texture_mips.py). For `streamed` top mip levels the four
+/// little-endian u16 words are:
+///   w0 = if streamed >= 3 { 1 } else { 0 }
+///   w2 = 1 << (streamed - 1)
+///   w1 = w2 - (if streamed >= 3 { 2 } else { 1 })
+///   w3 = min(width, height) / 2 - (1 << streamed)
+/// A fully-resident texture (streamed == 0) gets the sentinel 00 00 00 00 00 00 FF FF.
+fn streaming_descriptor(width: usize, height: usize, streamed: usize) -> [u8; 8] {
+    if streamed == 0 {
+        return [0, 0, 0, 0, 0, 0, 0xFF, 0xFF];
+    }
+    let w2 = 1u16 << (streamed - 1);
+    let w1 = w2.saturating_sub(if streamed >= 3 { 2 } else { 1 });
+    let w0 = if streamed >= 3 { 1u16 } else { 0 };
+    let w3 = (((width.min(height) / 2) as i64) - (1i64 << streamed)).max(0) as u16;
+    let mut d = [0u8; 8];
+    d[0..2].copy_from_slice(&w0.to_le_bytes());
+    d[2..4].copy_from_slice(&w1.to_le_bytes());
+    d[4..6].copy_from_slice(&w2.to_le_bytes());
+    d[6..8].copy_from_slice(&w3.to_le_bytes());
+    d
+}
+
 /// Rebuild a 34-byte PC texture INFO from the basic-swapped ("rust xi") INFO.
 /// Mirrors `xbox_texture_codec.rebuild_texture_info`.
-fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], mips: usize, linear_total: u32) -> [u8; 34] {
+fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], mips: usize, linear_total: u32, streamed: usize) -> [u8; 34] {
     let mut out = [0u8; 34];
     out[0..4].copy_from_slice(&xi[0..4]);
     // transpose [4:6]<->[6:8]
@@ -1606,9 +1649,14 @@ fn rebuild_texture_info(xi: &[u8], fourcc: &[u8; 4], mips: usize, linear_total: 
     out[20] = xi[19];
     out[21] = xi[18];
     out[22..26].copy_from_slice(&linear_total.to_le_bytes());
-    // [26:32] zero; [32:34] fully-resident streaming sentinel.
-    out[32] = 0xFF;
-    out[33] = 0xFF;
+    // Streaming-residency descriptor [26:34], cracked from retail ground truth.
+    // streamed == 0 yields the fully-resident 00..00 FF FF sentinel (small/whole
+    // textures, unchanged); streamed > 0 tells the engine which top mips to stream
+    // so it does not treat a partial resident body as fully present (the old blanket
+    // sentinel was the world-load streaming-livelock root cause).
+    let dw = read_u16_le(xi, 0) as usize;
+    let dh = read_u16_le(xi, 2) as usize;
+    out[26..34].copy_from_slice(&streaming_descriptor(dw, dh, streamed));
     out
 }
 
@@ -1664,7 +1712,7 @@ fn apply_texture_untile(
         mips = tex_mip_levels(width, height);
     }
 
-    let (pc_body, resident_mips, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
+    let (pc_body, mips_field, streamed, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
         let body = &descriptors[body_idx];
         let body_abs = data_start + body.row_u0 as usize;
         if body_abs + body.body_size as usize > out.len() {
@@ -1672,18 +1720,25 @@ fn apply_texture_untile(
         }
         let tiled = &out[body_abs..body_abs + body.body_size as usize];
         match convert_streamed_body(tiled, width, height, &fourcc, mips) {
-            Some((b, rm)) => (Some(b), rm, Some(body_idx), Some(body_abs)),
+            Some((b, mf, st)) => (Some(b), mf, st, Some(body_idx), Some(body_abs)),
             None => return false,
         }
     } else {
-        (None, mips, None, None)
+        (None, mips, 0, None, None)
     };
 
-    let linear_total = pc_body
-        .as_ref()
-        .map(|b| b.len() as u32)
-        .unwrap_or_else(|| linear_mip_chain_size(width, height, &fourcc, resident_mips) as u32);
-    let pc_info = rebuild_texture_info(&xi, &fourcc, resident_mips, linear_total);
+    // Streaming textures (streamed > 0) claim the FULL linear chain so the engine
+    // allocates the whole texture and streams the top mips into it; the body holds
+    // only the resident tail. Fully-resident textures keep linear_total == body len.
+    let linear_total = if streamed > 0 {
+        linear_mip_chain_size(width, height, &fourcc, mips_field) as u32
+    } else {
+        pc_body
+            .as_ref()
+            .map(|b| b.len() as u32)
+            .unwrap_or_else(|| linear_mip_chain_size(width, height, &fourcc, mips_field) as u32)
+    };
+    let pc_info = rebuild_texture_info(&xi, &fourcc, mips_field, linear_total, streamed);
     out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
 
     let mut body_abs_val = body_abs_val;
@@ -2259,6 +2314,36 @@ mod tests {
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
     };
+
+    // Streaming-residency descriptor cracked from retail vz.wad (48/48 dims match,
+    // tools/audit_texture_mips.py). Each value below is verbatim retail ground truth.
+    #[test]
+    fn streaming_descriptor_matches_retail() {
+        let cases: &[((usize, usize, usize), [u8; 8])] = &[
+            ((1024, 1024, 4), [0x01, 0x00, 0x06, 0x00, 0x08, 0x00, 0xf0, 0x01]),
+            ((1024, 1024, 5), [0x01, 0x00, 0x0e, 0x00, 0x10, 0x00, 0xe0, 0x01]),
+            ((2048, 2048, 5), [0x01, 0x00, 0x0e, 0x00, 0x10, 0x00, 0xe0, 0x03]),
+            ((1024, 512, 4), [0x01, 0x00, 0x06, 0x00, 0x08, 0x00, 0xf0, 0x00]),
+            ((512, 512, 3), [0x01, 0x00, 0x02, 0x00, 0x04, 0x00, 0xf8, 0x00]),
+            ((512, 256, 3), [0x01, 0x00, 0x02, 0x00, 0x04, 0x00, 0x78, 0x00]),
+            ((256, 256, 2), [0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x7c, 0x00]),
+            ((128, 128, 1), [0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x3e, 0x00]),
+            ((64, 64, 0), [0, 0, 0, 0, 0, 0, 0xff, 0xff]),
+        ];
+        for &((w, h, s), expect) in cases {
+            assert_eq!(super::streaming_descriptor(w, h, s), expect, "w={w} h={h} streamed={s}");
+        }
+    }
+
+    #[test]
+    fn streamed_mip_count_cutoff() {
+        assert_eq!(super::streamed_mip_count(1024, 1024, b"DXT1", 9), 4);
+        assert_eq!(super::streamed_mip_count(1024, 1024, b"DXT5", 9), 5);
+        assert_eq!(super::streamed_mip_count(512, 512, b"DXT1", 8), 3);
+        assert_eq!(super::streamed_mip_count(256, 256, b"DXT1", 7), 2);
+        assert_eq!(super::streamed_mip_count(64, 64, b"DXT1", 5), 0); // fully resident
+        assert_eq!(super::streamed_mip_count(1024, 512, b"DXT1", 8), 4);
+    }
 
     // Build a synthetic BE MTRL body: [u32*26][u16 flags][u16 count][u32*count][u32*2 tail].
     fn make_mtrl_be(flags: u16, count: u16) -> Vec<u8> {
