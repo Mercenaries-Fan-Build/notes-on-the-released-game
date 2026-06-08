@@ -1741,28 +1741,35 @@ fn apply_texture_untile(
         (None, mips, None, None)
     };
 
-    // Decide streaming residency uniformly for ALL body kinds. The per-arm streamed
-    // count only covered stream/tail pages, leaving non-square textures (routed
-    // through the Prefix/Single arms) with the wrong fully-resident sentinel and
-    // still hanging the streamer. A texture streams when its converted body is
-    // shorter than the full claimed mip chain; then claim the full mip count and
-    // the streaming-residency descriptor so the engine streams the missing top mips
-    // instead of treating the partial body as complete (the livelock root cause).
-    let full_chain = linear_mip_chain_size(width, height, &fourcc, mips) as u32;
-    let body_len = pc_body.as_ref().map(|b| b.len() as u32).unwrap_or(0);
-    let cutoff_streamed = streamed_mip_count(width, height, &fourcc, mips);
-    let (mips_field, streamed, linear_total) =
-        if body_len > 0 && body_len < full_chain && cutoff_streamed > 0 {
-            (mips, cutoff_streamed, full_chain)
-        } else {
-            let lt = if body_len > 0 {
-                body_len
-            } else {
-                linear_mip_chain_size(width, height, &fourcc, arm_mips) as u32
-            };
-            (arm_mips, 0, lt)
-        };
-    let pc_info = rebuild_texture_info(&xi, &fourcc, mips_field, linear_total, streamed);
+    // Make the texture SELF-CONSISTENT and fully-resident. The engine must be able to
+    // read exactly the bytes present: if INFO claims more than the body holds it
+    // over-reads (BUFFER_TOO_SMALL), and if it claims a partial streaming residency it
+    // waits forever for mips that aren't in the WAD (livelock). PC's streaming-residency
+    // descriptor is build-authored metadata absent from the Xbox source, so we never
+    // emit one. Full textures keep their dimensions; a partial/stub body is presented at
+    // the largest mip level whose FULL chain fits the converted body — a smaller but
+    // complete, loadable texture (lower-res, no streaming wait).
+    let _ = arm_mips; // (per-arm mip count superseded by the consistency pass below)
+    let (tw, th, tmips, tlinear): (usize, usize, usize, usize) = match pc_body {
+        Some(ref b) => {
+            let blen = b.len();
+            let mut l = 0usize;
+            loop {
+                let lw = (width >> l).max(1);
+                let lh = (height >> l).max(1);
+                let m = if mips > l { mips - l } else { 1 };
+                let chain = linear_mip_chain_size(lw, lh, &fourcc, m);
+                if chain <= blen || (lw == 1 && lh == 1) {
+                    break (lw, lh, m, chain);
+                }
+                l += 1;
+            }
+        }
+        None => (width, height, mips, linear_mip_chain_size(width, height, &fourcc, mips)),
+    };
+    let mut pc_info = rebuild_texture_info(&xi, &fourcc, tmips, tlinear as u32, 0);
+    pc_info[0..2].copy_from_slice(&(tw as u16).to_le_bytes());
+    pc_info[2..4].copy_from_slice(&(th as u16).to_le_bytes());
     out[info_abs..info_abs + 34].copy_from_slice(&pc_info);
 
     let mut body_abs_val = body_abs_val;
@@ -1795,11 +1802,14 @@ fn apply_texture_untile(
 
     if let (Some(body_idx), Some(body_abs_val)) = (body_idx, body_abs_val) {
         if let Some(untiled) = pc_body {
+            // Emit exactly the bytes the (possibly reduced) INFO claims, so the body
+            // length and INFO mip chain agree — the engine reads them and is done.
+            let n = tlinear.min(untiled.len());
             let body_size_field = 20 + body_idx * 20 + 8;
             out[body_size_field..body_size_field + 4]
-                .copy_from_slice(&(untiled.len() as u32).to_le_bytes());
+                .copy_from_slice(&(n as u32).to_le_bytes());
             out.truncate(body_abs_val);
-            out.extend_from_slice(&untiled);
+            out.extend_from_slice(&untiled[..n]);
         }
     }
 
