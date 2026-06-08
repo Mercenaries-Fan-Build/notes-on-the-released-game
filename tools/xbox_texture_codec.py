@@ -87,6 +87,14 @@ def mip_levels(width_px: int, height_px: int) -> int:
     return max(width_px, height_px).bit_length()
 
 
+def dxt_mip_count(width_px: int, height_px: int) -> int:
+    """PC DXT mip-chain length: levels down to the 4x4 DXT block minimum, governed
+    by the SMALLER dimension. Retail vz.wad convention (verified vs base vz.wad:
+    64x64->5, 256->7, 512->8, 1024->9, 512x256->7), NOT the full chain to 1x1
+    (``mip_levels`` overshoots by 2). Mirrors Rust convert.rs ``dxt_mip_count``."""
+    return max(1, min(width_px, height_px).bit_length() - 2)
+
+
 def linear_mip_chain_size(width_px: int, height_px: int, fourcc: bytes,
                           mips: int) -> int:
     """Total bytes of a PC-linear DXT mip chain (no tile padding)."""
@@ -368,8 +376,9 @@ def convert_streamed_texture(
     # synthesize any missing mips from the best recovered surface so the engine's
     # surface count, the INFO mip count and the body agree. This MUST stay in
     # lockstep with Rust convert.rs `apply_texture_untile` (the two diverging is
-    # exactly what caused the roads-layer livelock).
-    mips = mip_levels(width, height)
+    # exactly what caused the roads-layer livelock). Down to the 4x4 DXT minimum
+    # (base vz.wad convention), NOT to 1x1.
+    mips = dxt_mip_count(width, height)
     linear = linear_mip_chain_size(width, height, fourcc, mips)
 
     if body is None or len(body) == 0:

@@ -1256,6 +1256,17 @@ fn tex_mip_levels(width: usize, height: usize) -> usize {
     (32 - m.leading_zeros()) as usize
 }
 
+/// PC DXT mip-chain length: levels down to the 4x4 DXT block minimum, governed
+/// by the SMALLER dimension. This is the retail vz.wad convention (verified
+/// against base vz.wad: 64x64->5, 256->7, 512->8, 1024->9, 512x256->7), NOT the
+/// full chain to 1x1 (`tex_mip_levels`, which overshoots by 2 — the engine never
+/// instantiates the sub-4x4 levels, so claiming them mismatches its surface
+/// count). A reduced count (DLC stub's 3) undershoots -> BUFFER_TOO_SMALL.
+fn dxt_mip_count(width: usize, height: usize) -> usize {
+    let m = width.min(height).max(1) as u32;
+    ((32 - m.leading_zeros()) as usize).saturating_sub(2).max(1)
+}
+
 /// XGAddress2DTiledOffset returning a *block* index (gildor/Noesis form).
 fn tiled_block_index(x: usize, y: usize, width_blocks: usize, log_bpb: usize) -> usize {
     let aligned_w = (width_blocks + 31) & !31;
@@ -1566,9 +1577,10 @@ fn apply_texture_untile(
     // mip surfaces (+ 0xABABABAB overrun) while its header claimed 3, so the engine
     // read past the body -> STATUS_BUFFER_TOO_SMALL -> the page never reached ready
     // state 4 -> world-load livelock (dlc01_dlccon002_roads). DLC stub textures carry
-    // a reduced count; honoring it under-claims and hangs. Build + claim the full
-    // chain so the engine's surface count, the INFO mip count and the body agree.
-    let mips = tex_mip_levels(width, height);
+    // a reduced count; honoring it under-claims and hangs. Claim the retail PC chain
+    // (down to the 4x4 DXT minimum, governed by the smaller dim — base vz.wad's
+    // convention) so the engine's surface count, the INFO mip count and the body agree.
+    let mips = dxt_mip_count(width, height);
 
     // Build a COMPLETE, fully-resident PC mip chain at the texture's ORIGINAL
     // dimensions. An earlier pass REDUCED the dimensions to fit a partial Xbox stub
