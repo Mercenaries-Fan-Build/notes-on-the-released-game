@@ -1557,24 +1557,28 @@ fn apply_texture_untile(
     };
     let width = read_u16_le(&xi, 0);
     let height = read_u16_le(&xi, 2);
-    let mut mips = read_u16_le(&xi, 4);
     if width == 0 || height == 0 {
         return false;
     }
-    if mips == 0 {
-        mips = tex_mip_levels(width, height);
-    }
+    // Claim the STANDARD full mip chain (down to 1x1), NOT the Xbox-authored count.
+    // Live x32dbg proved the engine instantiates the full chain from the texture's
+    // dimensions regardless of the header's mip field: a 64x64 DXT1 had 5 populated
+    // mip surfaces (+ 0xABABABAB overrun) while its header claimed 3, so the engine
+    // read past the body -> STATUS_BUFFER_TOO_SMALL -> the page never reached ready
+    // state 4 -> world-load livelock (dlc01_dlccon002_roads). DLC stub textures carry
+    // a reduced count; honoring it under-claims and hangs. Build + claim the full
+    // chain so the engine's surface count, the INFO mip count and the body agree.
+    let mips = tex_mip_levels(width, height);
 
     // Build a COMPLETE, fully-resident PC mip chain at the texture's ORIGINAL
-    // dimensions. The previous pass instead REDUCED the dimensions to fit a
-    // partial Xbox stub body; that made each texture internally consistent but
-    // desynced it from the layer/material data that references it at full size,
-    // so the texture's streaming node never reached ready-state 4 -> world-load
-    // livelock (dlc01_dlccon002_roads). Now we keep (width,height,mips) and, for
-    // a partial/stub body, synthesize the missing mips by block-nearest scaling
-    // the best surface recovered from the stub: full-size + complete + resident,
-    // so references stay valid, there is no over-read (BUFFER_TOO_SMALL) and no
-    // streaming wait. Synthesized mips are lower-detail, not pixel-accurate.
+    // dimensions. An earlier pass REDUCED the dimensions to fit a partial Xbox stub
+    // body; that made each texture internally consistent but desynced it from the
+    // layer/material data that references it at full size, so its streaming node
+    // never reached ready-state 4. Now we keep (width,height) + the full mip count
+    // and, for a partial/stub body, synthesize the missing mips by block-nearest
+    // scaling the best surface recovered from the stub: full-size + complete +
+    // resident, so references stay valid, there is no over-read (BUFFER_TOO_SMALL)
+    // and no streaming wait. Synthesized mips are lower-detail, not pixel-accurate.
     let tlinear = linear_mip_chain_size(width, height, &fourcc, mips);
     let (pc_body, body_idx, body_abs_val) = if let Some(body_idx) = body_idx {
         let body = &descriptors[body_idx];
