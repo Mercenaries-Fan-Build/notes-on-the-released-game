@@ -298,10 +298,18 @@ int InstallCompatHooks(void) {
     int i;
 
     HookDef hooks[] = {
+        /* The HashTableLookup detour (0x8242B0) is OFF by default: it faults the
+         * EARLY-INIT path at 0x45b1d2 — a registry lookup (0x0084D760) routes
+         * through the hooked hash table during startup, before any world load,
+         * and the detour breaks it (reproduced again on a cross-machine build).
+         * The other two detours boot clean. Opt in with -DPMC_ENABLE_HASH_HOOK
+         * only for hash-miss diagnostics. (All compat off: -DPMC_NO_COMPAT_HOOKS.) */
+#ifdef PMC_ENABLE_HASH_HOOK
         { ADDR_HASH_TABLE_LOOKUP,
           (LPVOID)Detour_HashTableLookup,
           (LPVOID*)&g_origHashTableLookup,
           "HashTableLookup" },
+#endif
 
         { ADDR_GET_CHUNK_DATA_READER,
           (LPVOID)Detour_GetChunkDataReader,

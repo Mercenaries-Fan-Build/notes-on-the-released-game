@@ -63,7 +63,11 @@ static CRITICAL_SECTION g_logLock;
 
 static volatile LONG g_logPending = 0;
 volatile LONG g_logDropped = 0;
-#define LOG_FLUSH_THRESHOLD 64
+/* Flush every line: a buffered tail is lost on a hard crash, and the missing
+ * lines previously made an end-of-load fault (STATE_WAITFORSTREAMING) look like
+ * an early-init one. fflush per line is cheap for a debug logger and keeps the
+ * crash-time tail truthful. Raise this only if log volume becomes a hot path. */
+#define LOG_FLUSH_THRESHOLD 1
 
 static void InitLogFile(void) {
     char exe_dir[MAX_PATH];
