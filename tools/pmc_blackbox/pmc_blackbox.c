@@ -330,17 +330,23 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
          * Build with -DPMC_NO_COMPAT_HOOKS for a vanilla control run (DLL present,
          * SecuROM spoof + console + ASI loader active, but no engine detours). */
 #ifdef PMC_NO_COMPAT_HOOKS
-        pmc_log("[compat] engine detours DISABLED at build time (vanilla control)");
+        pmc_log("compat", "engine detours DISABLED at build time (vanilla control)");
 #else
         InstallCompatHooks();
 #endif
 
         /* Native Lua message capture — patch the game's print/Debug.Printf
          * func-pointer slots so every Lua-level log line (incl. the "global
-         * start" world-load marker) is recorded to pmc_blackbox.log. Must run
-         * before LoadASIPlugins so pmc_bb claims the slots first; a later
-         * dlc_enable.asi sees a non-stub pointer and cleanly skips. */
+         * start" world-load marker) is recorded to pmc_blackbox.log.
+         *
+         * ON by default — pmc_bb is the self-contained capture, replacing the
+         * dlc_enable god-object. Opt out only for a control run with
+         * -DPMC_DISABLE_LUA_LOG_HOOK. See [[pmc-bb-native-lua-logging]]. */
+#ifndef PMC_DISABLE_LUA_LOG_HOOK
         InstallLuaLogHook();
+#else
+        pmc_log("blackbox", "Lua log hook: DISABLED at build time (control run)");
+#endif
 
         /* Fix underground spawn — early write + deferred watchdog thread.
          * Game init zeroes this flag; the watchdog re-applies it. */

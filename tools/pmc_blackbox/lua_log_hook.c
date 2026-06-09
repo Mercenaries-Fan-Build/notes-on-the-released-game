@@ -1,30 +1,47 @@
 /**
- * lua_log_hook.c — native capture of the game's Lua print/Debug.Printf stream.
+ * lua_log_hook.c — native capture of the game's stripped-out logging stream.
  *
- * Ported from tools/dlc_enable_asi/dlc_enable.c (Hook_LogPrintf + the Lua-stack
- * readers + the luaL_Reg func-pointer patch), reduced to LOGGING ONLY. All the
- * bootstrap / net-hook / arena / streaming-fix machinery is intentionally left
- * in dlc_enable; pmc_bb just observes and records, matching its diagnostic role.
+ * Lua-stack readers + Hook_LogPrintf ported from tools/dlc_enable_asi (logging
+ * only — no bootstrap/net/arena machinery; pmc_bb just observes and records).
+ * The INSTALL mechanism differs and is the whole point: instead of patching the
+ * .rdata print/Debug.Printf func-pointer slots (which tripped SecuROM anti-
+ * tamper and crashed early init before our hook ever ran — confirmed live), we
+ * MinHook the shared no-op stub's CODE at 0x006D5640. ~700 stripped log fns
+ * funnel through that stub, so one .text detour captures them all, leaves the
+ * registration tables untouched, and is tolerated by SecuROM (compat_hooks
+ * proves .text MinHook is fine).
  *
- * Addresses are HARDCODED for the cracked retail EXE (53,482,288 bytes), the
- * same binary every other VA in pmc_bb targets. The Lua C API here is Lua 5.1.2
- * 32-bit (float numbers); the print func pointers ship pointing at the shared
- * stub 0x006D5640 (33 C0 C3 = xor eax,eax; ret).
+ * Addresses are HARDCODED for the cracked retail EXE (53,482,288 bytes). The
+ * Lua C API here is Lua 5.1.2 32-bit (float numbers). The stub is 33 C0 C3
+ * (xor eax,eax; ret) + 13 bytes 0xCC padding, so MinHook's 5-byte jmp fits with
+ * zero collateral.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
 
 #include "lua_log_hook.h"
+#include "MinHook.h"
 
-/* pmc_log is exported from pmc_blackbox.c (same DLL). */
+/* pmc_log / pmc_log_flush are exported from pmc_blackbox.c (same DLL). */
 extern void pmc_log(const char *source, const char *fmt, ...);
+extern void pmc_log_flush(void);
 
-/* --- Verified VAs (cross-referenced with dlc_enable.c) --- */
-#define VA_DEBUG_TABLE            0x00B98828
-#define VA_DEBUG_PRINTF_FUNC_PTR  (VA_DEBUG_TABLE + 4) /* Debug.Printf luaL_Reg func ptr */
-#define VA_BASE_PRINT_FUNC_PTR    0x00B9251C           /* luaopen_base "print" func ptr   */
-#define VA_PRINT_STUB             0x006D5640           /* xor eax,eax; ret                */
+/* --- Hook target ---
+ *
+ * 0x006D5640 is the SHARED no-op stub (33 C0 C3 = xor eax,eax; ret) that the
+ * production build redirected ~all stripped debug/log functions to (print,
+ * Debug.Printf, and ~700 other subsystem log fns all point here). We MinHook
+ * the stub's CODE rather than the .rdata func-ptr slots: SecuROM tolerates
+ * .text MinHook detours (compat_hooks proves it) but anti-tampers .rdata
+ * writes (a slot patch crashed early init before our hook ever ran). Hooking
+ * here captures EVERY funneled subsystem at one site, leaves the registration
+ * tables pristine, and is "earlier in the stack" than the Lua binding.
+ *
+ * Layout verified live: 33 C0 C3 then 13x 0xCC padding (0x006D5643..4F), next
+ * function at 0x006D5650 — so MinHook's 5-byte jmp lands entirely in stub+pad,
+ * zero collateral. */
+#define VA_PRINT_STUB  0x006D5640
 
 /* --- Lua 5.1.2 (32-bit, float number) layout --- */
 typedef void  lua_State;
@@ -221,13 +238,25 @@ static void MaybeTagMilestone(const char *msg) {
 /* --- The bridge: game's print()/Debug.Printf → pmc_log --- */
 
 static int Hook_LogPrintf(lua_State *L) {
+    static volatile LONG s_firstCall = 0;
     LuaTValue *top = NULL, *base = NULL;
     int nargs = 0;
     char buf[2048];
     int pos = 0;
     int i;
 
-    if (!L) return 0;
+    /* Cheap pre-filter: the shared stub is called by ~700 funcs, most NOT Lua
+     * C functions. A lua_State* is a heap pointer — aligned and not tiny. Reject
+     * implausible args before any VirtualQuery so non-Lua callers cost ~nothing.
+     * This replicates the stub's behaviour (return 0) for everyone else. */
+    if ((ULONG_PTR)L < 0x10000 || ((ULONG_PTR)L & 3)) return 0;
+
+    /* Crash-survivable proof the hook is actually entered (flushed once). */
+    if (InterlockedCompareExchange(&s_firstCall, 1, 0) == 0) {
+        pmc_log("lualog", "first stripped-log call intercepted — hook live (arg=0x%08X)",
+                (unsigned)(DWORD_PTR)L);
+        pmc_log_flush();
+    }
     if (!ResolvePrintStack(L, &top, &base, &nargs) || nargs < 1) return 0;
 
     /* Re-entrancy guard: a logged line must never trigger another logged line. */
@@ -294,67 +323,51 @@ static int Hook_LogPrintf(lua_State *L) {
     return 0; /* print/Debug.Printf push no results */
 }
 
-/* --- Installation --- */
+/* --- Installation: MinHook the shared stub (NO .rdata writes) ---
+ *
+ * We detour the stub's CODE at 0x006D5640. Registration tables stay pristine,
+ * so SecuROM anti-tamper isn't tripped (a .rdata slot patch crashed early init
+ * before our hook ran; a .text MinHook is tolerated — compat_hooks proves it).
+ * Hook_LogPrintf is reached via MinHook's jmp with the caller's cdecl frame,
+ * so its first param L == the stub's first stack arg ([esp+4]); for Lua print
+ * callers that's the lua_State*, for everything else the pre-filter rejects it
+ * and we return 0 exactly like the original no-op. We never call the original
+ * (it only did `xor eax,eax; ret`), so the trampoline goes unused. */
 
-static BOOL VerifyRegPointsAtStub(DWORD reg_func_ptr_va) {
-    DWORD func_va;
-    BYTE *code;
-
-    if (!PtrReadable((void *)reg_func_ptr_va, sizeof(DWORD))) return FALSE;
-    func_va = *(DWORD *)reg_func_ptr_va;
-    if (func_va != VA_PRINT_STUB) return FALSE;
-    code = (BYTE *)func_va;
-    if (!PtrReadable(code, 3)) return FALSE;
-    return code[0] == 0x33 && code[1] == 0xC0 && code[2] == 0xC3;
-}
-
-static BOOL PatchLuaRegFuncPtr(DWORD reg_func_ptr_va, lua_CFunction new_func,
-                              DWORD *out_old_func) {
-    DWORD *site;
-    DWORD old_prot;
-
-    if (!new_func || !reg_func_ptr_va) return FALSE;
-    site = (DWORD *)reg_func_ptr_va;
-    if (!PtrReadable(site, sizeof(DWORD))) return FALSE;
-    if (out_old_func) *out_old_func = *site;
-
-    if (!VirtualProtect(site, sizeof(DWORD), PAGE_READWRITE, &old_prot)) {
-        pmc_log("lualog", "ERROR: VirtualProtect failed for reg 0x%08X (err=%lu)",
-                reg_func_ptr_va, (unsigned long)GetLastError());
-        return FALSE;
-    }
-    *site = (DWORD)new_func;
-    VirtualProtect(site, sizeof(DWORD), old_prot, &old_prot);
-    return TRUE;
-}
+static lua_CFunction g_origStub = NULL;  /* MinHook trampoline (unused no-op) */
 
 int InstallLuaLogHook(void) {
-    int patched = 0;
-    DWORD old_func = 0;
+    MH_STATUS st;
 
-    if (VerifyRegPointsAtStub(VA_DEBUG_PRINTF_FUNC_PTR)) {
-        if (PatchLuaRegFuncPtr(VA_DEBUG_PRINTF_FUNC_PTR, Hook_LogPrintf, &old_func)) {
-            patched++;
-            pmc_log("lualog", "Debug.Printf captured (reg 0x%08X: 0x%08X -> Hook_LogPrintf)",
-                    VA_DEBUG_PRINTF_FUNC_PTR, old_func);
-        }
-    } else {
-        pmc_log("lualog", "Debug.Printf reg 0x%08X not at stub — skip (already hooked?)",
-                VA_DEBUG_PRINTF_FUNC_PTR);
+    /* Already initialized by InstallCompatHooks; init defensively for the
+     * PMC_NO_COMPAT_HOOKS control build. */
+    st = MH_Initialize();
+    if (st != MH_OK && st != MH_ERROR_ALREADY_INITIALIZED) {
+        pmc_log("lualog", "MH_Initialize failed: %s", MH_StatusToString(st));
+        pmc_log_flush();
+        return 0;
     }
 
-    if (VerifyRegPointsAtStub(VA_BASE_PRINT_FUNC_PTR)) {
-        if (PatchLuaRegFuncPtr(VA_BASE_PRINT_FUNC_PTR, Hook_LogPrintf, &old_func)) {
-            patched++;
-            pmc_log("lualog", "print() captured (reg 0x%08X: 0x%08X -> Hook_LogPrintf)",
-                    VA_BASE_PRINT_FUNC_PTR, old_func);
-        }
-    } else {
-        pmc_log("lualog", "print() reg 0x%08X not at stub — skip (already hooked?)",
-                VA_BASE_PRINT_FUNC_PTR);
+    st = MH_CreateHook((LPVOID)VA_PRINT_STUB, (LPVOID)Hook_LogPrintf,
+                       (LPVOID *)&g_origStub);
+    if (st != MH_OK) {
+        pmc_log("lualog", "MH_CreateHook(0x%08X) failed: %s",
+                VA_PRINT_STUB, MH_StatusToString(st));
+        pmc_log_flush();
+        return 0;
     }
 
-    pmc_log("lualog", "Lua message capture installed (%d/2 slots). Watch source [lua]/[world].",
-            patched);
-    return patched;
+    st = MH_EnableHook((LPVOID)VA_PRINT_STUB);
+    if (st != MH_OK) {
+        pmc_log("lualog", "MH_EnableHook(0x%08X) failed: %s",
+                VA_PRINT_STUB, MH_StatusToString(st));
+        pmc_log_flush();
+        return 0;
+    }
+
+    pmc_log("lualog", "Stripped-log capture installed: MinHook @0x%08X (shared "
+            "print/Debug.Printf/subsystem stub). Watch sources [lua]/[world].",
+            VA_PRINT_STUB);
+    pmc_log_flush();  /* crash-survivable: this line on disk == install completed */
+    return 1;
 }

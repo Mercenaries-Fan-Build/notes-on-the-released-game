@@ -1,23 +1,24 @@
 /**
- * lua_log_hook.h — native capture of the game's Lua print/Debug.Printf stream
+ * lua_log_hook.h — native capture of the game's stripped-out logging stream
  *
- * Patches the game's `print` and `Debug.Printf` luaL_Reg func-pointer slots
- * (which ship pointing at the stubbed-out print routine 0x006D5640) so the
- * engine registers our bridge instead. Every Lua-level message the game emits
- * — including world-load milestones like "global start" — is then routed to
- * pmc_log() and lands in pmc_blackbox.log natively, with no separate ASI.
+ * The production build redirected ~all of its debug/log functions (Lua `print`,
+ * `Debug.Printf`, and ~700 subsystem loggers) to a single shared no-op stub at
+ * 0x006D5640. We MinHook that stub's CODE so every funneled message is routed
+ * to pmc_log() and lands in pmc_blackbox.log natively, with no separate ASI.
  *
- * This makes the call/message logging that used to live in dlc_enable.asi a
- * built-in feature of pmc_bb.
+ * Hooking the .text stub (not the .rdata func-pointer slots) is what makes this
+ * safe on the SecuROM-protected EXE: register tables stay pristine (anti-tamper
+ * not tripped) and .text MinHook detours are tolerated, as compat_hooks proves.
+ * This makes the logging that used to live in dlc_enable.asi a built-in feature
+ * of pmc_bb, and an essential debugging layer for everything that funnels there.
  */
 #pragma once
 
 /**
- * Patch the Lua print / Debug.Printf func-pointer slots to our logging bridge.
- * Call once from DllMain AFTER InitDebugConsole() (needs pmc_log) and BEFORE
- * LoadASIPlugins() (so pmc_bb claims the slots first; a later dlc_enable.asi
- * sees a non-stub pointer and cleanly skips, avoiding a double hook).
+ * Install the MinHook detour on the shared stripped-log stub (0x006D5640).
+ * Call once from DllMain AFTER InstallCompatHooks() (MinHook init + pmc_log)
+ * and BEFORE LoadASIPlugins(). No .rdata writes.
  *
- * Returns the number of slots successfully patched (0-2).
+ * Returns 1 on success, 0 on failure (logged).
  */
 int InstallLuaLogHook(void);
