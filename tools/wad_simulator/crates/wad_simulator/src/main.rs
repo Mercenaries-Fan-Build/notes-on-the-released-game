@@ -181,6 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             asset_limit: cli.asset_limit,
             progress_interval: cli.progress_interval,
             jobs: cli.jobs,
+            rainbow: rainbow.as_ref(),
         };
         match simulate::run_simulate_with_options(base, patch, opts) {
             Ok(report) => {

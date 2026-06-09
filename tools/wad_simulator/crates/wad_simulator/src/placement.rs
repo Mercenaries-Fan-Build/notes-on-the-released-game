@@ -36,6 +36,8 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     let mut flgs_placements_validated = 0usize;
     let mut structural_violations = 0u32;
     let mut ecs_float_violations = 0usize;
+    // Advisory (NON-fatal): flgs uses a heuristic 42-byte stride guess.
+    let mut position_advisory = 0usize;
 
     if let Some(results) = validate_transform_components(container, label) {
         for r in results {
@@ -64,6 +66,9 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     if let Some(ref flgs) = flgs_body {
         let flgs_result = validate_flgs_placements(flgs, label);
         flgs_placements_validated += flgs_result.records_checked;
+        // flgs violations are advisory (heuristic stride); the simulate.rs matcher
+        // only counts `Transform[...]` strings toward fatal position_violations.
+        position_advisory += flgs_result.issues.len();
         issues.extend(flgs_result.issues);
     }
 
@@ -74,6 +79,7 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
         flgs_placements_validated,
         structural_violations,
         ecs_float_violations,
+        position_advisory,
         ..Default::default()
     }
 }

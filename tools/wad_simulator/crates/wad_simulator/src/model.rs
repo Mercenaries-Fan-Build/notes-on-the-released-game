@@ -13,9 +13,14 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     let mut issues = Vec::new();
     let mut meshes_validated = 0usize;
     let mut xref_hashes = Vec::new();
-    let mut vertex_violations = 0usize;
     let mut bounds_violations = 0usize;
     let mut structural_violations = 0u32;
+    // Advisory (NON-fatal): heuristic checks with unverified offsets/strides that
+    // false-positive on WADs that load fine in-game. Reported but excluded from
+    // the verdict (mirrors ecs_float_violations).
+    let mut vertex_advisory = 0usize;
+    let mut bounds_advisory = 0usize;
+    let mut structural_advisory = 0u32;
 
     if let Some(geom) = extract_chunk_body(container, b"GEOM") {
         if geom.len() >= 8 {
@@ -33,7 +38,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     let sampled_positions: Vec<[f32; 3]>;
     {
         let (found, vv, vc, positions, strm_issues) = validate_strm_vertices(container, label);
-        vertex_violations += vv;
+        vertex_advisory += vv;
         strm_vertex_count = vc;
         sampled_positions = positions;
         issues.extend(strm_issues);
@@ -76,7 +81,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
                         issues.push(format!(
                             "{label}: IBUF max index {max_idx} >= STRM vertex_count {vert_count}"
                         ));
-                        structural_violations += 1;
+                        structural_advisory += 1;
                     }
                 }
             }
@@ -147,7 +152,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
                             "{label}: BNDS envelope does not contain {oob_count}/{} sampled vertices",
                             sampled_positions.len()
                         ));
-                        structural_violations += 1;
+                        structural_advisory += 1;
                     }
                 }
             }
@@ -163,7 +168,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
                     "{label}: HIER body len {} not a multiple of 176",
                     hier.len()
                 ));
-                bounds_violations += 1;
+                bounds_advisory += 1;
             } else {
                 let node_count = hier.len() / 176;
                 let mut hier_ok = true;
@@ -206,7 +211,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
                     }
                 }
                 if !hier_ok {
-                    bounds_violations += 1;
+                    bounds_advisory += 1;
                 }
             }
             meshes_validated += 1;
@@ -216,7 +221,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     // PRMG INFO validation (container-based)
     {
         let (prmg_v, prmg_issues) = validate_prmg_info(container, label);
-        bounds_violations += prmg_v;
+        bounds_advisory += prmg_v;
         issues.extend(prmg_issues);
     }
 
@@ -253,9 +258,11 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         issues,
         xref_hashes,
         meshes_validated,
-        vertex_violations,
         bounds_violations,
         structural_violations,
+        vertex_advisory,
+        bounds_advisory,
+        structural_advisory,
         ..Default::default()
     }
 }

@@ -17,6 +17,19 @@ pub struct ConsumeResult {
     /// components. Catches byte-swap defects the name-matched Transform heuristic
     /// misses (the spatial-hash garbage-cell-index source).
     pub ecs_float_violations: usize,
+    // --- Advisory (NON-fatal) counters ---
+    // These come from HEURISTIC checks whose offset/stride interpretations are not
+    // verified against engine behavior; they fire heavily on WADs that load fine
+    // in-game (false positives). Reported for differential analysis but EXCLUDED
+    // from the verdict, mirroring `ecs_float_violations`.
+    /// STRM vertex NaN/Inf (decl-stride guessing, not engine-verified).
+    pub vertex_advisory: usize,
+    /// HIER 176-byte node + PRMG 60-byte INFO bbox checks (unverified offsets).
+    pub bounds_advisory: usize,
+    /// IBUF-vs-heuristic-vertex-count + BNDS-envelope-vs-sampled-vertices.
+    pub structural_advisory: u32,
+    /// flgs placement records (42-byte stride guess).
+    pub position_advisory: usize,
 }
 
 pub trait AssetConsumer {

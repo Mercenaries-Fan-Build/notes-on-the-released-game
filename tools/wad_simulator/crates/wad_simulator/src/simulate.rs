@@ -20,19 +20,20 @@ use crate::model::consume_model;
 use crate::resident::{consume_fxdict, consume_watermap};
 use crate::overlay::{overlay_stats, ResolvedAset, VirtualDisk};
 use crate::placement::consume_layer;
+use crate::names::RainbowTable;
 use crate::progress::{log, log_every};
 use crate::pws::audit_audios_dir;
 use crate::script::consume_script;
-use crate::texture::consume_texture;
+use crate::texture::{consume_texture, texture_buffer_too_small};
 use mercs2_formats::safe_slice::SafeSlice;
 use mercs2_formats::types::{
-    type_hash_for_type_id, type_name, TYPE_HASH_FX_DICTIONARY, TYPE_HASH_WATERMAP,
-    TYPE_ID_ANIMATION, TYPE_ID_FX_DICTIONARY, TYPE_ID_LAYER, TYPE_ID_LOWRES_TERRAIN,
-    TYPE_ID_MATERIAL_PARAMS, TYPE_ID_MODEL, TYPE_ID_SCRIPT, TYPE_ID_TERRAIN_MESH,
-    TYPE_ID_TEXTURE, TYPE_ID_WORLD_ENTITY_DATA,
+    type_hash_for_type_id, type_name, TYPE_HASH_FX_DICTIONARY, TYPE_HASH_TEXTURE,
+    TYPE_HASH_WATERMAP, TYPE_ID_ANIMATION, TYPE_ID_FX_DICTIONARY, TYPE_ID_LAYER,
+    TYPE_ID_LOWRES_TERRAIN, TYPE_ID_MATERIAL_PARAMS, TYPE_ID_MODEL, TYPE_ID_SCRIPT,
+    TYPE_ID_TERRAIN_MESH, TYPE_ID_TEXTURE, TYPE_ID_WORLD_ENTITY_DATA,
 };
 use mercs2_formats::ucfx::{
-    extract_data_chunk, get_container_by_type_hash, ParsedBlock,
+    extract_chunk_body, extract_data_chunk, get_container_by_type_hash, ParsedBlock,
 };
 
 #[derive(Debug, Default, Clone, serde::Serialize)]
@@ -67,6 +68,17 @@ pub struct SimulateReport {
     pub bounds_violations: usize,
     pub structural_violations: u32,
     pub ecs_float_violations: usize,
+    /// FATAL — engine-accurate streaming buffer-too-small: a texture sub-resource
+    /// whose BODY is shorter than the DXT mip chain the engine instantiates from
+    /// the dimensions. This is the world-load livelock signal.
+    pub texture_buffer_too_small: usize,
+    /// Headline messages for `texture_buffer_too_small` (printed untruncated).
+    pub texture_buffer_issues: Vec<String>,
+    // --- Advisory (NON-fatal) — heuristic checks, excluded from the verdict ---
+    pub vertex_advisory: usize,
+    pub bounds_advisory: usize,
+    pub structural_advisory: u32,
+    pub position_advisory: usize,
 }
 
 pub struct SimulateOptions<'a> {
@@ -82,6 +94,8 @@ pub struct SimulateOptions<'a> {
     pub progress_interval: usize,
     /// Parallel threads for block prefetch (0 = auto).
     pub jobs: usize,
+    /// Rainbow table for naming texture sub-resources in the buffer sweep.
+    pub rainbow: Option<&'a RainbowTable>,
 }
 
 impl Default for SimulateOptions<'_> {
@@ -94,6 +108,7 @@ impl Default for SimulateOptions<'_> {
             asset_limit: 0,
             progress_interval: 100,
             jobs: 0,
+            rainbow: None,
         }
     }
 }
@@ -145,6 +160,9 @@ pub fn run_simulate_with_options(
     let all_entries: Vec<_> = vd.resolved.values().cloned().collect();
     let mut wavebanks: HashMap<u32, LoadedWavebank> = HashMap::new();
     let mut xref_targets: HashSet<u32> = HashSet::new();
+    // Texture sub-resources dispatched in Pass 1, keyed (block, name_hash), so the
+    // post-pass full-block texture sweep doesn't re-report them.
+    let mut dispatched_textures: HashSet<(BlockKey, u32)> = HashSet::new();
     let loaded_hashes: HashSet<u32> = vd.resolved.keys().copied().collect();
 
     let progress_every = opts.progress_interval.max(1);
@@ -215,18 +233,32 @@ pub fn run_simulate_with_options(
         report.bounds_violations += result.bounds_violations;
         report.structural_violations += result.structural_violations;
         report.ecs_float_violations += result.ecs_float_violations;
+        report.vertex_advisory += result.vertex_advisory;
+        report.bounds_advisory += result.bounds_advisory;
+        report.structural_advisory += result.structural_advisory;
+        report.position_advisory += result.position_advisory;
         for h in &result.xref_hashes {
             xref_targets.insert(*h);
         }
         for iss in &result.issues {
-            if iss.contains("position NaN/Inf")
-                || iss.contains("position out of world bounds")
-                || iss.contains("quaternion NaN/Inf")
-                || iss.contains("quaternion not unit")
+            // FATAL position violations come only from the verified 42-byte
+            // Transform check (strings formatted `Transform[{i}] ...`). flgs
+            // (heuristic stride) and ECS-schema position strings are advisory
+            // (counted into position_advisory / ecs_float_violations).
+            if iss.contains("Transform[")
+                && (iss.contains("position NaN/Inf")
+                    || iss.contains("position out of world bounds")
+                    || iss.contains("quaternion NaN/Inf")
+                    || iss.contains("quaternion not unit"))
             {
                 report.position_violations += 1;
             }
             report.ucfx_issues.push(format!("{}: {iss}", label));
+        }
+        if entry.type_id == TYPE_ID_TEXTURE {
+            if let Some(bk) = block_key_for_entry(entry, base_wad, patch_wad) {
+                dispatched_textures.insert((bk, entry.asset_hash));
+            }
         }
         report.total_assets_consumed += 1;
         asset_processed += 1;
@@ -242,6 +274,17 @@ pub fn run_simulate_with_options(
             "  Pass 1 complete: {asset_processed} assets, {} blocks in cache",
             parsed_cache.blocks.len()
         ));
+        // Texture buffer-too-small sweep: validate EVERY texture sub-resource in
+        // every parsed block's entry table — including ones with no ASET entry,
+        // which Pass 1 never dispatches. This is the world-load livelock site.
+        log("  Texture sweep: scanning all parsed-block texture sub-resources for buffer-too-small...");
+        sweep_texture_buffers(&parsed_cache, &dispatched_textures, opts.rainbow, &mut report);
+        if report.texture_buffer_too_small > 0 {
+            log(format!(
+                "  Texture sweep: {} BUFFER_TOO_SMALL texture(s) found",
+                report.texture_buffer_too_small
+            ));
+        }
     }
 
     // Pass 2: audio (wavebank then soundbank)
@@ -400,6 +443,64 @@ pub fn run_simulate_with_options(
     }
 
     Ok(report)
+}
+
+/// Engine-accurate buffer-too-small sweep over EVERY parsed block.
+///
+/// The engine's per-sub-resource create (worker thread) instantiates the full DXT
+/// mip chain from the texture's DIMENSIONS (`dxt_mip_count` down to 4x4) and reads
+/// that many bytes from BODY; a BODY shorter than that chain over-reads →
+/// `STATUS_BUFFER_TOO_SMALL` → the `STATE_WAITFORSTREAMING` world-load livelock.
+/// Pass 1 only dispatches ASET-referenced containers, so a texture that is its own
+/// entry-table row but has no ASET entry (incl. the converter's Python-path
+/// ECS-layer-embedded textures) is never checked. This walks every block's entry
+/// table and validates each `TYPE_HASH_TEXTURE` sub-resource, deduping against the
+/// ones Pass 1 already covered.
+fn sweep_texture_buffers(
+    parsed_cache: &ParsedBlockCache,
+    dispatched: &HashSet<(BlockKey, u32)>,
+    rainbow: Option<&RainbowTable>,
+    report: &mut SimulateReport,
+) {
+    for (key, parsed) in &parsed_cache.blocks {
+        for (i, entry) in parsed.entries.iter().enumerate() {
+            if entry.type_hash != TYPE_HASH_TEXTURE {
+                continue;
+            }
+            if dispatched.contains(&(key.clone(), entry.name_hash)) {
+                continue; // already validated by Pass 1's consume_texture
+            }
+            let Some(container) = parsed.containers.get(i) else {
+                continue;
+            };
+            let Some(info) = extract_chunk_body(container, b"INFO") else {
+                continue;
+            };
+            // Same body precedence as consume_texture (texture.rs).
+            let Some(body) = extract_chunk_body(container, b"BODY")
+                .or_else(|| extract_chunk_body(container, b"DXT1"))
+                .or_else(|| extract_chunk_body(container, b"data"))
+            else {
+                continue;
+            };
+            let label = match rainbow.and_then(|rt| rt.resolve(entry.name_hash)) {
+                Some(name) => format!(
+                    "texture 0x{:08X} ({name}) [block {} entry {i}]",
+                    entry.name_hash, key.block_idx
+                ),
+                None => format!(
+                    "texture 0x{:08X} [block {} entry {i}]",
+                    entry.name_hash, key.block_idx
+                ),
+            };
+            if let Some(msg) = texture_buffer_too_small(&info, body.len(), &label) {
+                report.texture_buffer_too_small += 1;
+                report
+                    .texture_buffer_issues
+                    .push(format!("BUFFER_TOO_SMALL: {msg}"));
+            }
+        }
+    }
 }
 
 /// Entries whose blocks we prefetch before consumption passes.
@@ -602,6 +703,18 @@ pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::na
             report.ecs_float_violations.to_string().yellow()
         );
     }
+    // Heuristic checks (unverified offsets/strides) — advisory, excluded from the
+    // verdict. They false-positive on WADs that load fine in-game.
+    for (name, n) in [
+        ("Vertex (advisory, heuristic)    ", report.vertex_advisory),
+        ("Bounds (advisory, heuristic)    ", report.bounds_advisory),
+        ("Structural (advisory, heuristic)", report.structural_advisory as usize),
+        ("flgs pos (advisory, heuristic)  ", report.position_advisory),
+    ] {
+        if n > 0 {
+            println!("  {name}: {}  (not fatal)", n.to_string().yellow());
+        }
+    }
     println!();
 
     if !report.assets_by_type.is_empty() {
@@ -623,6 +736,7 @@ pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::na
     let xref_fatal = report.has_base_wad && !report.unresolved_hashes.is_empty();
     let has_issues = !report.access_violations.is_empty()
         || !report.decode_errors.is_empty()
+        || report.texture_buffer_too_small > 0
         || report.position_violations > 0
         || report.vertex_violations > 0
         || report.bounds_violations > 0
@@ -704,6 +818,19 @@ pub fn print_simulate_report(report: &SimulateReport, rainbow: Option<&crate::na
         println!();
     }
 
+    if report.texture_buffer_too_small > 0 {
+        println!(
+            "  {} {} texture sub-resource(s) — the world-load streaming livelock",
+            "BUFFER_TOO_SMALL:".red().bold(),
+            report.texture_buffer_too_small
+        );
+        // Headline — print every one untruncated; this is the fix target.
+        for m in &report.texture_buffer_issues {
+            println!("    {}", m.red());
+        }
+        println!();
+    }
+
     if !report.ucfx_issues.is_empty() {
         println!(
             "  {} {}",
@@ -743,6 +870,7 @@ pub fn simulate_exit_code(report: &SimulateReport) -> i32 {
     let xref_fatal = report.has_base_wad && !report.unresolved_hashes.is_empty();
     if report.access_violations.is_empty()
         && report.decode_errors.is_empty()
+        && report.texture_buffer_too_small == 0
         && report.position_violations == 0
         && report.vertex_violations == 0
         && report.bounds_violations == 0
