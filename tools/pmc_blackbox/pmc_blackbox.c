@@ -39,6 +39,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "compat_hooks.h"
+#include "lua_log_hook.h"
 
 #define PMC_BLACKBOX_VERSION "3.0.0"
 #define SECUROM_XOR_KEY 0x19EA3FD3
@@ -333,6 +334,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 #else
         InstallCompatHooks();
 #endif
+
+        /* Native Lua message capture — patch the game's print/Debug.Printf
+         * func-pointer slots so every Lua-level log line (incl. the "global
+         * start" world-load marker) is recorded to pmc_blackbox.log. Must run
+         * before LoadASIPlugins so pmc_bb claims the slots first; a later
+         * dlc_enable.asi sees a non-stub pointer and cleanly skips. */
+        InstallLuaLogHook();
 
         /* Fix underground spawn — early write + deferred watchdog thread.
          * Game init zeroes this flag; the watchdog re-applies it. */
