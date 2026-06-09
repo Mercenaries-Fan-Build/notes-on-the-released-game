@@ -2,6 +2,7 @@
 
 use crate::consume::ConsumeResult;
 use mercs2_formats::ffcs::read_u32_le;
+use mercs2_formats::texsize::{dxt_format, dxt_mip_count, linear_mip_chain_size};
 use mercs2_formats::ucfx::extract_chunk_body;
 
 fn read_u16_le(data: &[u8], off: usize) -> u16 {
@@ -54,6 +55,33 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
                             issues.push(format!(
                                 "{label}: texture BODY len {} < expected base mip {exp} ({}x{})",
                                 b.len(), width, height
+                            ));
+                            structural_violations += 1;
+                        }
+                    }
+
+                    // Buffer-too-small / streaming-livelock check (dlc01_dlccon002 roads RCA,
+                    // now the dlc01_dlccon003_spawns class). Live x32dbg proved the engine
+                    // instantiates the FULL DXT mip chain from the texture's DIMENSIONS
+                    // (dxt_mip_count, down to the 4x4 minimum) regardless of the header mip
+                    // field, then reads that many bytes out of BODY. A BODY shorter than that
+                    // chain makes the streaming worker over-read -> STATUS_BUFFER_TOO_SMALL
+                    // (0xC0000023) -> the page never reaches ready state 4 -> world-load
+                    // livelock. A correctly converted texture has BODY == this chain (convert.rs
+                    // apply_texture_untile builds exactly that via the SAME texsize helpers), so
+                    // a shorter BODY is a converter coverage gap on this asset's code path.
+                    let mut fcc = [0u8; 4];
+                    fcc.copy_from_slice(&info[14..18]);
+                    if dxt_format(&fcc).is_some() {
+                        let engine_mips = dxt_mip_count(width as usize, height as usize);
+                        let engine_chain =
+                            linear_mip_chain_size(width as usize, height as usize, &fcc, engine_mips);
+                        if b.len() < engine_chain {
+                            issues.push(format!(
+                                "{label}: texture BODY len {} < engine mip-chain {engine_chain} \
+                                 ({}x{} {} {engine_mips}mip) — engine over-reads → \
+                                 STATUS_BUFFER_TOO_SMALL (streaming livelock)",
+                                b.len(), width, height, String::from_utf8_lossy(&fcc)
                             ));
                             structural_violations += 1;
                         }

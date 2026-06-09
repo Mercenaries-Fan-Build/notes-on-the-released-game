@@ -2,6 +2,7 @@ use mercs2_formats::crc32::crc32_mercs2;
 use mercs2_formats::ffcs::read_u32_be;
 use mercs2_formats::schema::{ComponentSchema, SchemaFieldType};
 use mercs2_formats::tags::ChunkTag;
+use mercs2_formats::texsize::{dxt_format, dxt_mip_count, linear_mip_chain_size, tex_mip_levels};
 use mercs2_formats::types;
 
 use crate::havok;
@@ -1226,15 +1227,6 @@ fn convert_texture_info(body: &mut [u8]) {
 // metadata (see .cursor/notes/rosetta_oracle_baseline.md).
 
 /// (block_px, texel_pitch, log2(bytes_per_block)) for a DXT FourCC.
-fn dxt_format(fourcc: &[u8; 4]) -> Option<(usize, usize, usize)> {
-    match fourcc {
-        b"DXT1" => Some((4, 8, 3)),
-        b"DXT3" => Some((4, 16, 4)),
-        b"DXT5" => Some((4, 16, 4)),
-        _ => None,
-    }
-}
-
 /// Xbox D3D format word low byte (INFO[17]) -> PC FourCC.
 fn fourcc_from_format_byte(b: u8) -> Option<[u8; 4]> {
     match b {
@@ -1248,23 +1240,6 @@ fn fourcc_from_format_byte(b: u8) -> Option<[u8; 4]> {
 #[inline]
 fn read_u16_le(d: &[u8], off: usize) -> usize {
     u16::from_le_bytes([d[off], d[off + 1]]) as usize
-}
-
-/// Number of mip levels in a full chain down to 1x1.
-fn tex_mip_levels(width: usize, height: usize) -> usize {
-    let m = width.max(height).max(1) as u32;
-    (32 - m.leading_zeros()) as usize
-}
-
-/// PC DXT mip-chain length: levels down to the 4x4 DXT block minimum, governed
-/// by the SMALLER dimension. This is the retail vz.wad convention (verified
-/// against base vz.wad: 64x64->5, 256->7, 512->8, 1024->9, 512x256->7), NOT the
-/// full chain to 1x1 (`tex_mip_levels`, which overshoots by 2 — the engine never
-/// instantiates the sub-4x4 levels, so claiming them mismatches its surface
-/// count). A reduced count (DLC stub's 3) undershoots -> BUFFER_TOO_SMALL.
-fn dxt_mip_count(width: usize, height: usize) -> usize {
-    let m = width.min(height).max(1) as u32;
-    ((32 - m.leading_zeros()) as usize).saturating_sub(2).max(1)
 }
 
 /// XGAddress2DTiledOffset returning a *block* index (gildor/Noesis form).
@@ -1325,21 +1300,6 @@ fn crop_blocks(linear: &[u8], aligned_wb: usize, wb: usize, hb: usize, texel_pit
         out[d..d + wb * texel_pitch].copy_from_slice(&linear[s..s + wb * texel_pitch]);
     }
     out
-}
-
-/// Total bytes of a PC-linear DXT mip chain (no tile padding).
-fn linear_mip_chain_size(width: usize, height: usize, fourcc: &[u8; 4], mips: usize) -> usize {
-    let (block_px, texel_pitch, _) = dxt_format(fourcc).unwrap();
-    let n = if mips > 0 { mips } else { tex_mip_levels(width, height) };
-    let mut total = 0;
-    for m in 0..n {
-        let wpx = (width >> m).max(1);
-        let hpx = (height >> m).max(1);
-        let wb = ((wpx + block_px - 1) / block_px).max(1);
-        let hb = ((hpx + block_px - 1) / block_px).max(1);
-        total += wb * hb * texel_pitch;
-    }
-    total
 }
 
 fn untile_own_surface(tiled: &[u8], width_px: usize, height_px: usize, fourcc: &[u8; 4]) -> Option<Vec<u8>> {

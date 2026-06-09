@@ -5,6 +5,7 @@ pub mod safe_slice;
 pub mod schema;
 pub mod sges;
 pub mod tags;
+pub mod texsize;
 pub mod types;
 pub mod ucfx;
 pub mod world;
