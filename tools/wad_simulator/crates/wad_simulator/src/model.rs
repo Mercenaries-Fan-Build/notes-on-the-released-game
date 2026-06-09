@@ -241,6 +241,13 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         }
     }
 
+    // Buffer-too-small: a texture EMBEDDED in this model container (uppercase
+    // INFO/BODY) never gets its own consume_texture dispatch, so check it here.
+    let (tex_issues, tex_violations) =
+        crate::texture::check_embedded_texture_buffers(container, label);
+    structural_violations += tex_violations;
+    issues.extend(tex_issues);
+
     ConsumeResult {
         consumed: true,
         issues,

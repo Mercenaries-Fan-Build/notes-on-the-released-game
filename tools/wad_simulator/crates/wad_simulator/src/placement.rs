@@ -54,6 +54,13 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     // P2-10: ECS string component printable ASCII check
     structural_violations += validate_string_components(container, label, &mut issues);
 
+    // Buffer-too-small: a texture EMBEDDED in this layer container (uppercase
+    // INFO/BODY) never gets its own consume_texture dispatch, so check it here.
+    let (tex_issues, tex_violations) =
+        crate::texture::check_embedded_texture_buffers(container, label);
+    structural_violations += tex_violations;
+    issues.extend(tex_issues);
+
     if let Some(ref flgs) = flgs_body {
         let flgs_result = validate_flgs_placements(flgs, label);
         flgs_placements_validated += flgs_result.records_checked;
