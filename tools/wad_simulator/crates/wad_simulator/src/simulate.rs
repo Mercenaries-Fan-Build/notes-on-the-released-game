@@ -237,6 +237,12 @@ pub fn run_simulate_with_options(
         report.bounds_advisory += result.bounds_advisory;
         report.structural_advisory += result.structural_advisory;
         report.position_advisory += result.position_advisory;
+        // Buffer-too-small from consume_texture (ASET) + check_embedded_texture_buffers
+        // (layer/model embedded) → the headline counter, same as the block sweep.
+        for m in &result.texture_buffer_issues {
+            report.texture_buffer_too_small += 1;
+            report.texture_buffer_issues.push(format!("BUFFER_TOO_SMALL: {m}"));
+        }
         for h in &result.xref_hashes {
             xref_targets.insert(*h);
         }

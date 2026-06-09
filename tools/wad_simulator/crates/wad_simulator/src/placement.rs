@@ -58,10 +58,9 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
 
     // Buffer-too-small: a texture EMBEDDED in this layer container (uppercase
     // INFO/BODY) never gets its own consume_texture dispatch, so check it here.
-    let (tex_issues, tex_violations) =
+    // Headline signal — routed to texture_buffer_issues, NOT structural_violations.
+    let (texture_buffer_issues, _) =
         crate::texture::check_embedded_texture_buffers(container, label);
-    structural_violations += tex_violations;
-    issues.extend(tex_issues);
 
     if let Some(ref flgs) = flgs_body {
         let flgs_result = validate_flgs_placements(flgs, label);
@@ -79,6 +78,7 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
         flgs_placements_validated,
         structural_violations,
         ecs_float_violations,
+        texture_buffer_issues,
         position_advisory,
         ..Default::default()
     }

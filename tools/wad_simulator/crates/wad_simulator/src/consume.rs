@@ -17,6 +17,10 @@ pub struct ConsumeResult {
     /// components. Catches byte-swap defects the name-matched Transform heuristic
     /// misses (the spatial-hash garbage-cell-index source).
     pub ecs_float_violations: usize,
+    /// FATAL — engine-accurate texture buffer-too-small messages (BODY shorter
+    /// than the dimension-derived DXT mip chain). Aggregated into the report's
+    /// headline `texture_buffer_too_small` count, NOT into `structural_violations`.
+    pub texture_buffer_issues: Vec<String>,
     // --- Advisory (NON-fatal) counters ---
     // These come from HEURISTIC checks whose offset/stride interpretations are not
     // verified against engine behavior; they fire heavily on WADs that load fine

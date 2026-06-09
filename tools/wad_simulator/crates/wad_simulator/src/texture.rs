@@ -13,6 +13,7 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
     let mut issues = Vec::new();
     let mut textures_validated = 0usize;
     let mut structural_violations = 0u32;
+    let mut texture_buffer_issues: Vec<String> = Vec::new();
 
     let body = extract_chunk_body(container, b"BODY")
         .or_else(|| extract_chunk_body(container, b"DXT1"))
@@ -60,10 +61,10 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
                         }
                     }
 
-                    // Buffer-too-small / streaming-livelock check (see texture_buffer_too_small).
+                    // Buffer-too-small / streaming-livelock check — headline signal,
+                    // routed to texture_buffer_issues (NOT structural_violations).
                     if let Some(msg) = texture_buffer_too_small(&info, b.len(), label) {
-                        issues.push(msg);
-                        structural_violations += 1;
+                        texture_buffer_issues.push(msg);
                     }
                 }
             }
@@ -75,6 +76,7 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
         issues,
         textures_validated,
         structural_violations,
+        texture_buffer_issues,
         ..Default::default()
     }
 }
