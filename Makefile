@@ -682,7 +682,7 @@ wad-simulator:
 	  --wad "$(SIM_WAD)" \
 	  $(if $(wildcard $(RAINBOW_TABLE)),--rainbow-table "$(RAINBOW_TABLE)",) \
 	  $(if $(wildcard $(SIM_AUDIOS_DIR)),--audios-dir "$(SIM_AUDIOS_DIR)",) \
-	  $(if $(SOURCE_WAD),--base-wad "$(SOURCE_WAD)",)
+	  $(if $(SOURCE_WAD),--base-wad "$(SOURCE_WAD)" --base-wad-dir "$(dir $(SOURCE_WAD))",)
 
 # Rosetta oracle: convert every Xbox base-game entry through the production
 # converter and diff byte-for-byte against the PC vz.wad ground truth (keyed by

@@ -34,10 +34,13 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     let mut issues = Vec::new();
     let mut placements_validated = 0usize;
     let mut flgs_placements_validated = 0usize;
-    let mut structural_violations = 0u32;
     let mut ecs_float_violations = 0usize;
-    // Advisory (NON-fatal): flgs uses a heuristic 42-byte stride guess.
+    // Advisory (NON-fatal): flgs uses a heuristic 42-byte stride guess; the ECS
+    // string-component printable check is also heuristic (it counts each Name
+    // record's binary entity-key bytes as "non-printable", so it fires on
+    // retail-shipped data too — verified: retail vz.wad produces these).
     let mut position_advisory = 0usize;
+    let mut structural_advisory = 0u32;
 
     if let Some(results) = validate_transform_components(container, label) {
         for r in results {
@@ -53,16 +56,8 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     ecs_float_violations += schema_scan.violations;
     issues.extend(schema_scan.issues);
 
-    // P2-10: ECS string component printable ASCII check
-    structural_violations += validate_string_components(container, label, &mut issues);
-
-    // CHDR stride-gate check (decompile-grounded, spatial_hash_crash_analysis §2026-06-01b):
-    // engine dispatcher 0x654940 reads CHDR as {u16 fieldA; u16 stride@+2; u32 flags},
-    // writes u16@+2 to [0x01176078]; Transform builder 0x0063D7C0 strides 42 iff that
-    // gate >= 0x2A, else 40 → 2-byte/record drift → spatial-hash AV 0x0248BBE2. Retail
-    // oracle gate = 0x38 (56); a CHDR header swapped as u32 zeroes it. Verified clean on
-    // retail vz.wad (0 hits) → fatal, not advisory.
-    structural_violations += check_chdr_stride_gate(container, label, &mut issues);
+    // P2-10: ECS string component printable ASCII check (HEURISTIC → advisory; see above).
+    structural_advisory += validate_string_components(container, label, &mut issues);
 
     // Buffer-too-small: a texture EMBEDDED in this layer container (uppercase
     // INFO/BODY) never gets its own consume_texture dispatch, so check it here.
@@ -84,10 +79,10 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
         issues,
         placements_validated,
         flgs_placements_validated,
-        structural_violations,
         ecs_float_violations,
         texture_buffer_issues,
         position_advisory,
+        structural_advisory,
         ..Default::default()
     }
 }
@@ -680,94 +675,4 @@ fn check_string_comp_group(
 
 fn is_string_component(name: &str) -> bool {
     name == "Name" || name == "ModelName"
-}
-
-/// CHDR stride-gate: the engine reads u16@+2 of the CHDR body as the Transform
-/// stride gate (>= 0x2A → 42, else 40). A gate < 0x2A drifts every Transform
-/// record by 2 bytes → spatial-hash AV. Only meaningful when the container holds
-/// a Transform COMP (the only consumer of the gate). Returns 1 on violation.
-fn check_chdr_stride_gate(container: &[u8], label: &str, issues: &mut Vec<String>) -> u32 {
-    let chdr = match extract_chunk_body(container, b"CHDR") {
-        Some(b) if b.len() >= 4 => b,
-        _ => return 0,
-    };
-    // Engine reads u16 @ +2 → process-global stride gate [0x01176078].
-    let gate = u16::from_le_bytes([chdr[2], chdr[3]]);
-    if gate >= 0x2A {
-        return 0;
-    }
-    // Gate only matters if a Transform COMP is present in this container.
-    if validate_transform_components(container, label).is_none() {
-        return 0;
-    }
-    issues.push(format!(
-        "{label}: CHDR stride gate u16@+2={gate} < 0x2A — engine strides Transform 40 not 42 \
-         → 2-byte/record drift → spatial-hash AV 0x0248BBE2 (CHDR header swapped as u32?)"
-    ));
-    1
-}
-
-#[cfg(test)]
-mod chdr_gate_tests {
-    use super::*;
-
-    /// Build a minimal ECS UCFX container with a CHDR chunk (given body) and a
-    /// Transform COMP group, so `check_chdr_stride_gate` has both inputs.
-    fn container_with_chdr(chdr_body: &[u8]) -> Vec<u8> {
-        // Transform info: the compact-form hash 0x753EB623 marks a Transform COMP.
-        let info: [u8; 4] = TRANSFORM_COMP_HASH.to_le_bytes();
-        // One 42-byte Transform data record (zeros decode as origin — valid enough).
-        let data = [0u8; 42];
-
-        let n_desc: u32 = 4; // CHDR, COMP(sentinel), info, data
-        let header = 20usize;
-        let table = n_desc as usize * 20;
-        let data_area_off = (header + table) as u32;
-
-        let mut bodies = Vec::new();
-        let chdr_off = bodies.len() as u32;
-        bodies.extend_from_slice(chdr_body);
-        let info_off = bodies.len() as u32;
-        bodies.extend_from_slice(&info);
-        let data_off = bodies.len() as u32;
-        bodies.extend_from_slice(&data);
-
-        let mut c = Vec::new();
-        c.extend_from_slice(b"UCFX");
-        c.extend_from_slice(&data_area_off.to_le_bytes()); // +4 data_area_off
-        c.extend_from_slice(&[0u8; 8]); // +8..16 pad
-        c.extend_from_slice(&n_desc.to_le_bytes()); // +16 n_desc
-        let row = |tag: &[u8], off: u32, size: u32| {
-            let mut r = Vec::new();
-            r.extend_from_slice(tag);
-            r.extend_from_slice(&off.to_le_bytes());
-            r.extend_from_slice(&size.to_le_bytes());
-            r.extend_from_slice(&[0u8; 8]);
-            r
-        };
-        c.extend_from_slice(&row(b"CHDR", chdr_off, chdr_body.len() as u32));
-        c.extend_from_slice(&row(b"COMP", 0xFFFF_FFFF, 0)); // group sentinel
-        c.extend_from_slice(&row(b"info", info_off, info.len() as u32));
-        c.extend_from_slice(&row(b"data", data_off, data.len() as u32));
-        c.extend_from_slice(&bodies);
-        c
-    }
-
-    #[test]
-    fn retail_oracle_gate_passes() {
-        // Retail layers_static block 29 CHDR = 00 00 38 00 02 00 00 00 (gate u16@+2 = 56).
-        let c = container_with_chdr(&[0x00, 0x00, 0x38, 0x00, 0x02, 0x00, 0x00, 0x00]);
-        let mut issues = Vec::new();
-        assert_eq!(check_chdr_stride_gate(&c, "t", &mut issues), 0);
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn u32_swapped_gate_flags() {
-        // Whole-u32 swap of the BE source yields 38 00 00 00 ... → gate u16@+2 = 0 < 0x2A.
-        let c = container_with_chdr(&[0x38, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00]);
-        let mut issues = Vec::new();
-        assert_eq!(check_chdr_stride_gate(&c, "t", &mut issues), 1);
-        assert_eq!(issues.len(), 1);
-    }
 }

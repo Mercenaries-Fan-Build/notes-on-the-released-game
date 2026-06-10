@@ -14,7 +14,6 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     let mut meshes_validated = 0usize;
     let mut xref_hashes = Vec::new();
     let mut bounds_violations = 0usize;
-    let mut structural_violations = 0u32;
     // Advisory (NON-fatal): heuristic checks with unverified offsets/strides that
     // false-positive on WADs that load fine in-game. Reported but excluded from
     // the verdict (mirrors ecs_float_violations).
@@ -246,15 +245,17 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         }
     }
 
+    // Skin-container and DEPS checks are heuristic (unverified offsets); they
+    // fire on retail-shipped models too, so they are advisory, not fatal.
     for skin_msg in validate_skin_containers(container) {
         issues.push(format!("{label}: {skin_msg}"));
-        structural_violations += 1;
+        structural_advisory += 1;
     }
 
     if let Some(deps) = extract_chunk_body(container, b"DEPS") {
         if let Some(msg) = mercs2_formats::chunk_validate::validate_deps_body(&deps) {
             issues.push(format!("{label}: {msg}"));
-            structural_violations += 1;
+            structural_advisory += 1;
         }
     }
 
@@ -270,7 +271,6 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         xref_hashes,
         meshes_validated,
         bounds_violations,
-        structural_violations,
         texture_buffer_issues,
         vertex_advisory,
         bounds_advisory,
