@@ -280,6 +280,13 @@ fn convert_container(
         apply_texture_untile(&mut out, &descriptors, data_area_off, desc_table_end);
     }
 
+    // Xbox 360 wavebanks: transcode embedded audio clips (Xbox-ADPCM nibble-swap /
+    // XMA via ffmpeg → PC IMA) and reframe the container (the audio body resizes).
+    // The generic pass left the `data` chunk raw BE for this.
+    if is_be && type_hash == types::TYPE_HASH_WAVEBANK {
+        apply_wavebank_transcode(&mut out, &descriptors, data_area_off, desc_table_end)?;
+    }
+
     // Xbox 360 mesh vertex declarations: translate each `decl` chunk from the
     // 12-byte Xbox element format to the 8-byte PC D3DVERTEXELEMENT9 array (a
     // shrink + container reframe). No-op when the container has no `decl`.
@@ -288,6 +295,61 @@ fn convert_container(
     }
 
     Ok(out)
+}
+
+/// Xbox-360 wavebank: transcode the audio `data` chunk (Xbox-ADPCM / XMA → PC IMA)
+/// and reframe the container, mirroring `apply_texture_untile`. The body was left
+/// raw BE by `convert_generic_bodies`' wavebank no-op arm, so the BE record fields
+/// are intact for `audio::convert_wavebank_data`.
+fn apply_wavebank_transcode(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) -> Result<(), String> {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+    let Some(data_idx) = descriptors
+        .iter()
+        .position(|d| d.tag == ChunkTag::Data && d.row_u0 != 0xFFFF_FFFF && d.body_size > 0)
+    else {
+        return Ok(());
+    };
+    let d = &descriptors[data_idx];
+    let body_abs = data_start + d.row_u0 as usize;
+    let old_end = body_abs + d.body_size as usize;
+    if old_end > out.len() {
+        return Ok(());
+    }
+    let body_be = out[body_abs..old_end].to_vec();
+    let new_body = crate::audio::convert_wavebank_data(&body_be)
+        .map_err(|e| format!("wavebank transcode: {e}"))?;
+
+    // Update this chunk's body_size field (descriptor row layout: tag@0, row_u0@+4,
+    // body_size@+8; rows start at +20, stride 20 — same as apply_texture_untile).
+    let size_field = 20 + data_idx * 20 + 8;
+    out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
+
+    // Splice the new body in place of the old.
+    let tail = out[old_end..].to_vec();
+    out.truncate(body_abs);
+    out.extend_from_slice(&new_body);
+    out.extend_from_slice(&tail);
+
+    // Shift any chunk that sat after the wavebank body by the size delta.
+    let delta = new_body.len() as i64 - d.body_size as i64;
+    if delta != 0 {
+        for (i, dd) in descriptors.iter().enumerate() {
+            if i == data_idx || dd.row_u0 == 0xFFFF_FFFF {
+                continue;
+            }
+            if data_start + dd.row_u0 as usize >= old_end {
+                let row_field = 20 + i * 20 + 4;
+                let new_u0 = (dd.row_u0 as i64 + delta) as u32;
+                out[row_field..row_field + 4].copy_from_slice(&new_u0.to_le_bytes());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 8-byte Havok 5.5 packfile magic (`57 E0 E0 57 10 C0 C0 10`). Palindromic per
@@ -1146,6 +1208,13 @@ fn convert_generic_bodies(
                             ));
                         }
                         data_area[body_local_start..body_local_end].copy_from_slice(&conv);
+                    }
+                    ChunkTag::Data if type_hash == types::TYPE_HASH_WAVEBANK => {
+                        // Wavebank `data` is the audio body. Leave it RAW BE here; it
+                        // is transcoded (Xbox-ADPCM nibble-swap / XMA via ffmpeg → PC
+                        // IMA) and the container reframed by apply_wavebank_transcode
+                        // afterward — the body resizes, so it can't be an in-place swap
+                        // (mirrors the texture BODY path left raw for apply_texture_untile).
                     }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
