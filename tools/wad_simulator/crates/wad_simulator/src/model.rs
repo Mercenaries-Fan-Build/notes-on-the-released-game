@@ -232,6 +232,27 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         // nothing. The engine writes into a fixed 10-slot array, so cap the count at 10.
         if mtrl.len() >= 108 {
             let count = (read_u16_le(&mtrl, 106) as usize).min(10);
+            if std::env::var("MTRL_DEBUG").is_ok() {
+                let raw_count = read_u16_le(&mtrl, 106);
+                eprintln!(
+                    "[MTRL/model] {label}: len={} flags@104=0x{:04X} raw_count@106={} (cap {}) off0=0x{:08X}",
+                    mtrl.len(),
+                    read_u16_le(&mtrl, 104),
+                    raw_count,
+                    count,
+                    read_u32_le(&mtrl, 0),
+                );
+                let hi = mtrl.len().min(160);
+                let hex: String = mtrl[96..hi]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        if (96 + i) % 4 == 0 { format!(" |{:3}| {:02x}", 96 + i, b) }
+                        else { format!("{:02x}", b) }
+                    })
+                    .collect();
+                eprintln!("    bytes[96..{hi}]:{hex}");
+            }
             for i in 0..count {
                 let off = 108 + i * 4;
                 if off + 4 > mtrl.len() {
@@ -239,6 +260,9 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
                 }
                 let tex_hash = read_u32_le(&mtrl, off);
                 if tex_hash != 0 && tex_hash != 0xFFFF_FFFF {
+                    if std::env::var("MTRL_DEBUG").is_ok() {
+                        eprintln!("    hash[{i}] @+{off} = 0x{tex_hash:08X}");
+                    }
                     xref_hashes.push(tex_hash);
                 }
             }

@@ -1216,6 +1216,17 @@ fn convert_generic_bodies(
                         // afterward — the body resizes, so it can't be an in-place swap
                         // (mirrors the texture BODY path left raw for apply_texture_untile).
                     }
+                    ChunkTag::Data if type_hash == types::TYPE_HASH_PATH => {
+                        // Path `data`: first 8 bytes are 4 u16 count/index fields, the
+                        // rest is a u32/f32 array. Mirrors Python `_TYPE_PATH`:
+                        //   _convert_u16_array(body[:8]) + _convert_u32_array(body[8:]).
+                        // A blanket u32 swap transposes the leading u16 pair (path data
+                        // corruption); these path entries always rode the Python route
+                        // (bundled in dlc01 level blocks) so the bug was never exercised.
+                        let split = (body_local_start + 8).min(body_local_end);
+                        swap_u16_array(&mut data_area[body_local_start..split]);
+                        swap_u32_array(&mut data_area[split..body_local_end]);
+                    }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
                             let type_name = types::type_name_from_hash(type_hash);
@@ -1784,9 +1795,18 @@ fn convert_decl(be: &[u8]) -> Result<Vec<u8>, String> {
 
 /// Reframe a mesh container in `out`: translate every `decl` chunk from the
 /// Xbox 12-byte-element format to the PC 8-byte `D3DVERTEXELEMENT9` array (a
-/// shrink), splicing the shorter body in and shifting the offsets of all later
-/// chunks. Generalizes `apply_texture_untile`'s non-trailing-shrink technique to
-/// multiple decls. The generic body pass leaves `decl` bodies as raw BE.
+/// shrink). The generic body pass leaves `decl` bodies as raw BE.
+///
+/// SIZE-PRESERVING, matching the Python reference (`_convert_container`, which
+/// keeps every chunk's original `row_u0` and zero-fills the freed bytes — see
+/// `tools/ucfx_be_to_le.py`): the translated (shorter) body is written in place,
+/// the remainder of the original decl span is zero-padded, only the decl's
+/// `body_size` field is updated, and NO later offsets shift. This keeps the
+/// following `data`/`IBUF` vertex/index chunks at their original (16-aligned)
+/// offsets — the engine reads via the descriptor table, and the GPU buffers
+/// require that alignment. The previous compaction (splice + shift later
+/// offsets) misaligned every chunk after the decl and diverged from both Python
+/// and the retail PC layout.
 fn apply_decl_translate(
     out: &mut Vec<u8>,
     descriptors: &[Descriptor],
@@ -1795,27 +1815,13 @@ fn apply_decl_translate(
 ) -> Result<(), String> {
     let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
 
-    let mut decl_idxs: Vec<usize> = descriptors
-        .iter()
-        .enumerate()
-        .filter(|(_, d)| d.tag == ChunkTag::Decl && d.row_u0 != 0xFFFFFFFF && d.body_size > 0)
-        .map(|(i, _)| i)
-        .collect();
-    if decl_idxs.is_empty() {
-        return Ok(());
-    }
-    // Process left-to-right; shrinks only decrease later offsets (order stable).
-    decl_idxs.sort_by_key(|&i| descriptors[i].row_u0);
-
-    for &idx in &decl_idxs {
-        let row_field = 20 + idx * 20 + 4;
+    for (idx, d) in descriptors.iter().enumerate() {
+        if d.tag != ChunkTag::Decl || d.row_u0 == 0xFFFFFFFF || d.body_size == 0 {
+            continue;
+        }
         let size_field = 20 + idx * 20 + 8;
-        // Read the *current* offset/size from the out descriptor table (earlier
-        // decls may already have shifted this one).
-        let row_u0 = u32::from_le_bytes(out[row_field..row_field + 4].try_into().unwrap());
-        let body_size =
-            u32::from_le_bytes(out[size_field..size_field + 4].try_into().unwrap()) as usize;
-        let abs = data_start + row_u0 as usize;
+        let body_size = d.body_size as usize;
+        let abs = data_start + d.row_u0 as usize;
         if abs + body_size > out.len() {
             return Err(format!(
                 "decl body [{}..{}] exceeds container ({})",
@@ -1827,27 +1833,13 @@ fn apply_decl_translate(
         if new_body.len() > body_size {
             return Err(format!("decl translation grew {} -> {}", body_size, new_body.len()));
         }
-        let shrink = body_size - new_body.len();
-        // Splice the shorter body in place.
-        let tail = out[abs + body_size..].to_vec();
-        out.truncate(abs);
-        out.extend_from_slice(&new_body);
-        out.extend_from_slice(&tail);
-        // Patch this decl's body_size descriptor field.
-        out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
-        // Shift the offset of every chunk whose body starts after this one.
-        if shrink > 0 {
-            for j in 0..descriptors.len() {
-                if j == idx {
-                    continue;
-                }
-                let rf = 20 + j * 20 + 4;
-                let ru0 = u32::from_le_bytes(out[rf..rf + 4].try_into().unwrap());
-                if ru0 != 0xFFFFFFFF && (data_start + ru0 as usize) > abs {
-                    out[rf..rf + 4].copy_from_slice(&(ru0 - shrink as u32).to_le_bytes());
-                }
-            }
+        // Write the shorter body in place, zero-pad the freed tail of the span,
+        // keep every other offset (and the container length) unchanged.
+        out[abs..abs + new_body.len()].copy_from_slice(&new_body);
+        for b in &mut out[abs + new_body.len()..abs + body_size] {
+            *b = 0;
         }
+        out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
     }
     Ok(())
 }

@@ -21,6 +21,15 @@ pub fn consume_material(container: &[u8], _data_body: Option<&[u8]>, label: &str
             structural_advisory += 1;
         } else {
             let shader_hash = read_u32_le(&mtrl, 0);
+            if std::env::var("MTRL_DEBUG").is_ok() {
+                eprintln!(
+                    "[MTRL/material] {label}: len={} shader_hash@+0=0x{shader_hash:08X} \
+                     count@106={} (+108=0x{:08X})",
+                    mtrl.len(),
+                    if mtrl.len() >= 108 { u16::from_le_bytes([mtrl[106], mtrl[107]]) } else { 0 },
+                    if mtrl.len() >= 112 { read_u32_le(&mtrl, 108) } else { 0 },
+                );
+            }
             if shader_hash != 0 && shader_hash != 0xFFFF_FFFF {
                 xref_hashes.push(shader_hash);
             }
