@@ -1,3 +1,4 @@
+mod audio;
 mod convert;
 mod havok;
 mod report;

@@ -173,7 +173,9 @@ pub fn run_simulate_with_options(
 
     let all_entries: Vec<_> = vd.resolved.values().cloned().collect();
     let mut wavebanks: HashMap<u32, LoadedWavebank> = HashMap::new();
-    let mut xref_targets: HashSet<u32> = HashSet::new();
+    // xref hash → label of the first asset (model/material block) that referenced it,
+    // so an unresolved ref names the source block/model instead of a bare hash.
+    let mut xref_sources: HashMap<u32, String> = HashMap::new();
     // Texture sub-resources dispatched in Pass 1, keyed (block, name_hash), so the
     // post-pass full-block texture sweep doesn't re-report them.
     let mut dispatched_textures: HashSet<(BlockKey, u32)> = HashSet::new();
@@ -271,7 +273,7 @@ pub fn run_simulate_with_options(
             report.texture_buffer_issues.push(format!("BUFFER_TOO_SMALL: {m}"));
         }
         for h in &result.xref_hashes {
-            xref_targets.insert(*h);
+            xref_sources.entry(*h).or_insert_with(|| label.clone());
         }
         for iss in &result.issues {
             // FATAL position violations come only from the verified 42-byte
@@ -451,10 +453,10 @@ pub fn run_simulate_with_options(
     }
 
     // Pass 3: cross-reference resolution (placement/model/texture refs → ASET)
-    if !xref_targets.is_empty() {
+    if !xref_sources.is_empty() {
         log(format!(
             "  Pass 3: checking {} cross-references...",
-            xref_targets.len()
+            xref_sources.len()
         ));
     }
     // The engine resolves a ref to ANY loaded resource, not just top-level ASET
@@ -467,16 +469,18 @@ pub fn run_simulate_with_options(
         .values()
         .flat_map(|p| p.entries.iter().map(|e| e.name_hash))
         .collect();
-    for h in &xref_targets {
+    for (h, source) in &xref_sources {
         report.xref_checks += 1;
         if !loaded_hashes.contains(h)
             && !aux_aset_hashes.contains(h)
             && !block_internal_hashes.contains(h)
         {
             report.xref_unresolved += 1;
+            // Name the referencing model/block so a corrupt MTRL hash array is
+            // traceable to its source (the {source} is the asset's "block[N] hash=…").
             report
                 .unresolved_hashes
-                .push(format!("0x{h:08X} (xref)"));
+                .push(format!("0x{h:08X} (xref from {source})"));
         }
     }
 
