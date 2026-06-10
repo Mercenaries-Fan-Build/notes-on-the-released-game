@@ -2282,6 +2282,22 @@ def _convert_wavebank_data(body_be: bytes) -> bytes:
         pc_fmt = bytearray(rec["fmt_bytes"])
         if i in codec_rewrite_indices and pc_fmt[2] in (_XBOX_ADPCM_CODEC, 0x01, 0x69):
             pc_fmt[2] = _PC_IMA_ADPCM_CODEC
+        # Fail loudly: any clip still carrying an Xbox-only codec after the
+        # conversion attempt is NOT PC-decodable and would fault audio decode
+        # in-game (the wad_simulator flags these as codec-0x01/XMA decode errors).
+        # The port must transcode the clip or surface the gap — never silently
+        # ship an Xbox codec on a PC build.
+        if pc_fmt[2] in (_XBOX_ADPCM_CODEC, 0x01, 0x69):
+            codec_name = {0x01: "XMA", _XBOX_ADPCM_CODEC: "Xbox-ADPCM", 0x69: "0x69"}.get(
+                pc_fmt[2], f"0x{pc_fmt[2]:02X}"
+            )
+            raise UnhandledByteSwapError(
+                f"[Hatch 3] wavebank clip[{i}] hash=0x{rec['clip_hash']:08X} retains "
+                f"Xbox codec {codec_name} (0x{pc_fmt[2]:02X}) after conversion "
+                f"(data_size={rec['data_size']}, populated={'yes' if i in codec_rewrite_indices else 'no'}) "
+                f"— not PC-decodable. The converter must transcode this clip; emitting "
+                f"it would fail audio decode in-game."
+            )
         out += bytes(pc_fmt)
         out += struct.pack("<I", rec["sample_rate"])
 

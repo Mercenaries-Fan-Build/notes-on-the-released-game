@@ -667,12 +667,12 @@ build-ucfx-byteswap:
 #   make wad-simulator SOURCE_WAD=game-files/vz.wad   # add base overlay
 # Tip: pipe through grep for just the streaming-livelock hits:
 #   make wad-simulator 2>&1 | grep -i buffer_too_small
-SIM_WAD ?= $(OUTPUT)/data/vz-patch.wad
+SIM_WAD=$(OUTPUT)/data/vz-patch.wad
 SOURCE_WAD=$(REPO_ROOT)/game-files/pc-game-vz.wad
-RAINBOW_TABLE ?= $(REPO_ROOT)/tools/rainbow_table.json
+RAINBOW_TABLE=$(REPO_ROOT)/tools/rainbow_table.json
 # External streaming audio dir fed to the simulator (--audios-dir). Default: the
 # converted audio produced by the pipeline. Passed only when it exists.
-SIM_AUDIOS_DIR ?= $(OUTPUT)/data/Audios
+SIM_AUDIOS_DIR=$(OUTPUT)/data/Audios
 wad-simulator:
 	@echo "Building wad_simulator (cargo, platform-agnostic)..."
 	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p wad_simulator

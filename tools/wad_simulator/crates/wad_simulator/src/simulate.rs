@@ -96,6 +96,10 @@ pub struct SimulateOptions<'a> {
     pub jobs: usize,
     /// Rainbow table for naming texture sub-resources in the buffer sweep.
     pub rainbow: Option<&'a RainbowTable>,
+    /// Sibling base WADs (English/shell/Loading/…) whose ASET hashes resolve
+    /// cross-references, so refs into other WADs don't false-report as unresolved.
+    /// Their assets are NOT consumed — only their ASET hash set is loaded.
+    pub aux_wads: Vec<std::path::PathBuf>,
 }
 
 impl Default for SimulateOptions<'_> {
@@ -109,8 +113,18 @@ impl Default for SimulateOptions<'_> {
             progress_interval: 100,
             jobs: 0,
             rainbow: None,
+            aux_wads: Vec::new(),
         }
     }
+}
+
+/// Load only a WAD's ASET asset-hash set (no block decompression) for cross-ref
+/// resolution against sibling base WADs.
+fn load_aux_aset_hashes(path: &Path) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+    let mut f = std::fs::File::open(path)?;
+    let size = f.metadata()?.len();
+    let arch = mercs2_formats::ffcs::load_ffcs_archive(&mut f, size)?;
+    Ok(arch.aset.iter().map(|e| e.asset_hash).collect())
 }
 
 pub fn run_simulate(
@@ -164,6 +178,19 @@ pub fn run_simulate_with_options(
     // post-pass full-block texture sweep doesn't re-report them.
     let mut dispatched_textures: HashSet<(BlockKey, u32)> = HashSet::new();
     let loaded_hashes: HashSet<u32> = vd.resolved.keys().copied().collect();
+
+    // Sibling base WADs (English/shell/Loading) — ASET hashes only, for cross-ref
+    // resolution. A ref into one of these is NOT a fault; the engine loads them too.
+    let mut aux_aset_hashes: HashSet<u32> = HashSet::new();
+    for p in &opts.aux_wads {
+        match load_aux_aset_hashes(p) {
+            Ok(hashes) => {
+                log(format!("  Aux WAD: {} ({} ASET hashes for xref resolution)", p.display(), hashes.len()));
+                aux_aset_hashes.extend(hashes);
+            }
+            Err(e) => log(format!("  Aux WAD: {} — load failed: {e}", p.display())),
+        }
+    }
 
     let progress_every = opts.progress_interval.max(1);
     let non_audio_total = all_entries
@@ -430,9 +457,22 @@ pub fn run_simulate_with_options(
             xref_targets.len()
         ));
     }
+    // The engine resolves a ref to ANY loaded resource, not just top-level ASET
+    // assets: a MTRL/model ref commonly names a texture EMBEDDED in a block's own
+    // entry table (resolved there, not via ASET). So a hash is "present" if it is a
+    // top-level ASET asset (base/patch/aux) OR the name_hash of any parsed block's
+    // entry. Without this the validator false-reports every embedded sub-resource.
+    let block_internal_hashes: HashSet<u32> = parsed_cache
+        .blocks
+        .values()
+        .flat_map(|p| p.entries.iter().map(|e| e.name_hash))
+        .collect();
     for h in &xref_targets {
         report.xref_checks += 1;
-        if !loaded_hashes.contains(h) {
+        if !loaded_hashes.contains(h)
+            && !aux_aset_hashes.contains(h)
+            && !block_internal_hashes.contains(h)
+        {
             report.xref_unresolved += 1;
             report
                 .unresolved_hashes

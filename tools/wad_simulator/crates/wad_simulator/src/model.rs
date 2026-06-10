@@ -226,10 +226,22 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     }
 
     if let Some(mtrl) = extract_chunk_body(container, b"MTRL") {
-        if mtrl.len() >= 4 {
-            let tex_hash = read_u32_le(&mtrl, 0);
-            if tex_hash > 0x1000 && tex_hash != 0xFFFF_FFFF {
-                xref_hashes.push(tex_hash);
+        // MTRL layout (decompile FUN_00858790, spatial/streaming docs):
+        // [u32/f32 × 26 = 104B][u16 flags @104][u16 count @106][u32 hash × count @108][u32×2].
+        // The texture hashes the engine resolves live at +108 (count @106), NOT at +0
+        // (+0 is the first material param). Reading +0 produced garbage that resolved to
+        // nothing. The engine writes into a fixed 10-slot array, so cap the count at 10.
+        if mtrl.len() >= 108 {
+            let count = (read_u16_le(&mtrl, 106) as usize).min(10);
+            for i in 0..count {
+                let off = 108 + i * 4;
+                if off + 4 > mtrl.len() {
+                    break;
+                }
+                let tex_hash = read_u32_le(&mtrl, off);
+                if tex_hash != 0 && tex_hash != 0xFFFF_FFFF {
+                    xref_hashes.push(tex_hash);
+                }
             }
         }
     }
