@@ -43,6 +43,26 @@ pub fn dxt_mip_count(width: usize, height: usize) -> usize {
     ((32 - m.leading_zeros()) as usize).saturating_sub(2).max(1)
 }
 
+/// Whether a PC texture INFO declares the texture FULLY RESIDENT (entire mip
+/// chain inline in BODY) vs STREAMED (only a small resident tail inline, the rest
+/// paged in from the streaming store).
+///
+/// INFO[26:34] is an 8-byte mip-residency / streaming descriptor. When the first
+/// six bytes (INFO[26:32]) are all zero the texture is fully resident — the
+/// trailing u16 is a resident sentinel (`FFFF`) or all-mips mask (`0001`). A
+/// non-zero [26:32] is a partial-residency descriptor: the inline BODY is a
+/// resident tail and a BODY shorter than the full dimension-derived chain is
+/// CORRECT, not a fault — the engine streams the remainder rather than over-reading.
+///
+/// Verified against retail vz.wad (loads in-game): of 13339 textures, all 3776
+/// fully-resident ones have a complete BODY and all 9562 streamed ones have a
+/// short (resident-tail) BODY — zero resident textures have a short body. So the
+/// buffer-too-small check must apply ONLY to fully-resident textures; applying it
+/// to streamed ones false-positives on retail-shipped data.
+pub fn info_is_fully_resident(info: &[u8]) -> bool {
+    info.len() >= 32 && info[26..32].iter().all(|&b| b == 0)
+}
+
 /// Total bytes of a PC-linear DXT mip chain (no tile padding) for `mips` levels.
 /// When `mips == 0`, falls back to the full chain to 1x1. Returns 0 for a
 /// non-DXT FourCC (caller should gate on `dxt_format`).
@@ -83,6 +103,25 @@ mod tests {
         assert_eq!(linear_mip_chain_size(64, 64, b"DXT1", 5), 2728);
         // 32x32 DXT5 = 1360 bytes (mips 32,16,8,4 = 1024+256+64+16).
         assert_eq!(linear_mip_chain_size(32, 32, b"DXT5", dxt_mip_count(32, 32)), 1360);
+    }
+
+    #[test]
+    fn residency_descriptor_classification() {
+        // 34-byte INFO; only [26:32] decides residency.
+        let mut info = [0u8; 34];
+        // Resident sentinel ...FF FF (retail's 18% form + converter output).
+        info[32] = 0xFF;
+        info[33] = 0xFF;
+        assert!(info_is_fully_resident(&info));
+        // Resident all-mips mask form (...01 00).
+        info[32] = 0x00;
+        info[33] = 0x01;
+        assert!(info_is_fully_resident(&info));
+        // Streamed: partial-residency descriptor 01 00 0e 00 10 00 e0 01.
+        info[26..34].copy_from_slice(&[0x01, 0x00, 0x0e, 0x00, 0x10, 0x00, 0xe0, 0x01]);
+        assert!(!info_is_fully_resident(&info));
+        // Too short to carry the descriptor → not resident (caller skips anyway).
+        assert!(!info_is_fully_resident(&[0u8; 20]));
     }
 
     #[test]

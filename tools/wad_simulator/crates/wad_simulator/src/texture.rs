@@ -2,7 +2,7 @@
 
 use crate::consume::ConsumeResult;
 use mercs2_formats::ffcs::read_u32_le;
-use mercs2_formats::texsize::{dxt_format, dxt_mip_count, linear_mip_chain_size};
+use mercs2_formats::texsize::{dxt_format, info_is_fully_resident, linear_mip_chain_size, tex_mip_levels};
 use mercs2_formats::ucfx::extract_chunk_body;
 
 fn read_u16_le(data: &[u8], off: usize) -> u16 {
@@ -38,8 +38,15 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
             let total_size = read_u32_le(&info, 22);
 
             if let Some(ref b) = body {
+                // total_size and base-mip checks assume the whole texture is inline,
+                // which is only true for FULLY-RESIDENT textures. Streamed textures
+                // (partial-residency descriptor) carry total_size = the full chain but
+                // a BODY = just the resident tail, so both checks would false-positive
+                // on them (retail vz.wad ships thousands like this). Gate on residency.
+                let resident = info_is_fully_resident(&info);
+
                 // Primary check: INFO.total_size == BODY.len()
-                if total_size > 0 && total_size as usize != b.len() {
+                if resident && total_size > 0 && total_size as usize != b.len() {
                     issues.push(format!(
                         "{label}: texture INFO total_size={total_size} != BODY len={}",
                         b.len()
@@ -52,7 +59,7 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
                     let fourcc = &info[14..22];
                     let expected_base = compute_base_mip_size(width, height, fourcc);
                     if let Some(exp) = expected_base {
-                        if b.len() < exp {
+                        if resident && b.len() < exp {
                             issues.push(format!(
                                 "{label}: texture BODY len {} < expected base mip {exp} ({}x{})",
                                 b.len(), width, height
@@ -83,16 +90,22 @@ pub fn consume_texture(container: &[u8], _data_body: Option<&[u8]>, label: &str)
 
 /// Core buffer-too-small test for one texture's INFO + BODY length.
 ///
-/// Live x32dbg (dlc01_dlccon002 roads, then dlc01_dlccon003_spawns) proved the
-/// engine instantiates the FULL DXT mip chain from the texture's DIMENSIONS
-/// (`dxt_mip_count`, down to the 4x4 minimum) regardless of the header mip field,
-/// then reads that many bytes out of BODY. A BODY shorter than that chain makes
-/// the streaming worker over-read → `STATUS_BUFFER_TOO_SMALL` (0xC0000023) → the
-/// page never reaches ready state 4 → world-load livelock. A correctly converted
-/// texture has BODY == this chain (`convert.rs::apply_texture_untile` builds
-/// exactly that via the SAME `texsize` helpers), so a shorter BODY is a converter
-/// coverage gap. Gated on a valid DXT FourCC, so it returns `None` (no-op) for
-/// any non-texture INFO chunk (PRMG/fxdict/ECS-component info).
+/// A fully-resident texture must carry, inline in BODY, the mip chain implied by
+/// its CLAIMED mip count (INFO[6]). A shorter BODY makes the engine over-read its
+/// surface array → `STATUS_BUFFER_TOO_SMALL` (0xC0000023) → the page never reaches
+/// ready state 4 → world-load livelock (the dlc01_dlccon002 roads case: a converter
+/// stub whose claimed chain exceeded the bytes present). The converter sizes BODY to
+/// exactly this chain (`convert.rs::apply_texture_untile`, same `texsize` helpers),
+/// so a shorter BODY is a converter coverage gap.
+///
+/// Two gates keep this engine-accurate (verified against retail vz.wad, which loads
+/// in-game): (1) STREAMED textures — partial-residency descriptor, `info_is_fully_resident`
+/// false — legitimately store only a resident tail and page the rest in, so a short
+/// BODY is correct (retail has 9562 such); skip them. (2) Size against the CLAIMED
+/// mip count, NOT the full dimension chain (`dxt_mip_count`): retail ships valid
+/// resident single-mip textures (claimed=1, BODY=one mip) that load fine, so forcing
+/// the full chain false-positives on them. Also gated on a valid DXT FourCC, so it
+/// no-ops on any non-texture INFO chunk (PRMG/fxdict/ECS-component info).
 pub fn texture_buffer_too_small(info: &[u8], body_len: usize, label: &str) -> Option<String> {
     if info.len() < 34 {
         return None;
@@ -105,7 +118,18 @@ pub fn texture_buffer_too_small(info: &[u8], body_len: usize, label: &str) -> Op
     let mut fcc = [0u8; 4];
     fcc.copy_from_slice(&info[14..18]);
     dxt_format(&fcc)?; // not a DXT texture INFO → skip
-    let engine_mips = dxt_mip_count(width as usize, height as usize);
+    // Gate 1: streamed textures store a short resident tail by design — not a fault.
+    if !info_is_fully_resident(info) {
+        return None;
+    }
+    // Gate 2: the engine reads the CLAIMED mip count (INFO[6]); claimed==0 means the
+    // full chain to 1x1 (`tex_mip_levels`).
+    let claimed = read_u16_le(info, 6) as usize;
+    let engine_mips = if claimed > 0 {
+        claimed
+    } else {
+        tex_mip_levels(width as usize, height as usize)
+    };
     let engine_chain = linear_mip_chain_size(width as usize, height as usize, &fcc, engine_mips);
     if body_len < engine_chain {
         Some(format!(
