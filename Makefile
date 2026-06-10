@@ -668,7 +668,11 @@ build-ucfx-byteswap:
 # Tip: pipe through grep for just the streaming-livelock hits:
 #   make wad-simulator 2>&1 | grep -i buffer_too_small
 SIM_WAD ?= $(OUTPUT)/data/vz-patch.wad
+SOURCE_WAD=$(REPO_ROOT)/game-files/pc-game-vz.wad
 RAINBOW_TABLE ?= $(REPO_ROOT)/tools/rainbow_table.json
+# External streaming audio dir fed to the simulator (--audios-dir). Default: the
+# converted audio produced by the pipeline. Passed only when it exists.
+SIM_AUDIOS_DIR ?= $(OUTPUT)/data/Audios
 wad-simulator:
 	@echo "Building wad_simulator (cargo, platform-agnostic)..."
 	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p wad_simulator
@@ -677,6 +681,7 @@ wad-simulator:
 	"$(REPO_ROOT)/tools/wad_simulator/target/release/wad_simulator" \
 	  --wad "$(SIM_WAD)" \
 	  $(if $(wildcard $(RAINBOW_TABLE)),--rainbow-table "$(RAINBOW_TABLE)",) \
+	  $(if $(wildcard $(SIM_AUDIOS_DIR)),--audios-dir "$(SIM_AUDIOS_DIR)",) \
 	  $(if $(SOURCE_WAD),--base-wad "$(SOURCE_WAD)",)
 
 # Rosetta oracle: convert every Xbox base-game entry through the production
