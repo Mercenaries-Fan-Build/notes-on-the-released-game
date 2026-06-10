@@ -6,6 +6,7 @@ use mercs2_formats::texsize::{dxt_format, dxt_mip_count, linear_mip_chain_size, 
 use mercs2_formats::types;
 
 use crate::havok;
+use crate::lua;
 use crate::report::SchemaCoverageReport;
 
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
@@ -294,7 +295,76 @@ fn convert_container(
         apply_decl_translate(&mut out, &descriptors, data_area_off, desc_table_end)?;
     }
 
+    // Xbox 360 Lua bytecode: convert each `BINN` chunk BE→PC LE via the unluac
+    // disassemble→flip-endianness→reassemble round-trip (NOT a byte-swap; see
+    // lua.rs). The generic pass left BINN raw BE. No-op when there is no BINN.
+    if is_be {
+        apply_binn_transcode(&mut out, &descriptors, data_area_off, desc_table_end)?;
+    }
+
     Ok(out)
+}
+
+/// Convert every `BINN` (Lua bytecode) chunk in `out` via the unluac round-trip
+/// (`lua::convert_binn_be_to_le`) and reframe the container if a body resizes.
+/// Mirrors `apply_wavebank_transcode`, generalized to multiple BINN chunks:
+/// offsets/sizes are re-read from the (possibly already-shifted) `out` table.
+fn apply_binn_transcode(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) -> Result<(), String> {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+    let binn_idxs: Vec<usize> = descriptors
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| {
+            matches!(d.tag, ChunkTag::Unknown(b) if b == *b"BINN")
+                && d.row_u0 != 0xFFFF_FFFF
+                && d.body_size > 0
+        })
+        .map(|(i, _)| i)
+        .collect();
+    if binn_idxs.is_empty() {
+        return Ok(());
+    }
+    for idx in binn_idxs {
+        let row_field = 20 + idx * 20 + 4;
+        let size_field = 20 + idx * 20 + 8;
+        // Current offset/size (earlier BINN splices may have shifted this one).
+        let row_u0 = u32::from_le_bytes(out[row_field..row_field + 4].try_into().unwrap()) as usize;
+        let body_size =
+            u32::from_le_bytes(out[size_field..size_field + 4].try_into().unwrap()) as usize;
+        let abs = data_start + row_u0;
+        let old_end = abs + body_size;
+        if old_end > out.len() {
+            return Err(format!("BINN body [{abs}..{old_end}] exceeds container ({})", out.len()));
+        }
+        let be_body = out[abs..old_end].to_vec();
+        let new_body = lua::convert_binn_be_to_le(&be_body)?;
+
+        out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
+        let tail = out[old_end..].to_vec();
+        out.truncate(abs);
+        out.extend_from_slice(&new_body);
+        out.extend_from_slice(&tail);
+
+        let delta = new_body.len() as i64 - body_size as i64;
+        if delta != 0 {
+            for (j, _) in descriptors.iter().enumerate() {
+                if j == idx {
+                    continue;
+                }
+                let rf = 20 + j * 20 + 4;
+                let cur = u32::from_le_bytes(out[rf..rf + 4].try_into().unwrap());
+                if cur != 0xFFFF_FFFF && data_start + cur as usize >= old_end {
+                    out[rf..rf + 4].copy_from_slice(&(((cur as i64) + delta) as u32).to_le_bytes());
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Xbox-360 wavebank: transcode the audio `data` chunk (Xbox-ADPCM / XMA → PC IMA)
@@ -1073,9 +1143,20 @@ fn convert_generic_bodies(
     let mut data_area = container[data_start..].to_vec();
     let is_texture = type_hash == types::TYPE_HASH_TEXTURE;
 
+    let mut ctx = ContainerCtx::None;
     for desc in descriptors {
         if desc.row_u0 == 0xFFFFFFFF {
-            continue; // group sentinel
+            // Group sentinel: open a container context (mirrors _classify_contexts).
+            ctx = match desc.tag {
+                ChunkTag::Strm | ChunkTag::Geom => ContainerCtx::Strm,
+                ChunkTag::Ibuf => ContainerCtx::Ibuf,
+                ChunkTag::Chdr | ChunkTag::Comp | ChunkTag::Stat | ChunkTag::Prmt => {
+                    ContainerCtx::Meta
+                }
+                ChunkTag::Unknown(b) if b == *b"EXEC" => ContainerCtx::Meta,
+                _ => ctx, // unrelated sentinel: keep current
+            };
+            continue;
         }
 
         if let Some((start, end)) = body_range(container, desc.row_u0, desc.body_size, data_area_off) {
@@ -1091,6 +1172,14 @@ fn convert_generic_bodies(
                     }
                     ChunkTag::Prmt => {
                         // Mesh draw-call parameter binding: 16-byte records of u16 fields
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Hier => {
+                        // HIER hierarchy nodes: u16-array swap. Mirrors Python's
+                        // HIER/SEGM/PRMT/BSHI group (`_convert_u16_array`). The generic
+                        // u32 sweep transposes the u16 pairs in these mesh sub-resources
+                        // (they ride inside the always-Python-routed level blocks, so the
+                        // u32 path was never exercised on them).
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
                     ChunkTag::Mtrl => {
@@ -1109,6 +1198,16 @@ fn convert_generic_bodies(
                     ChunkTag::Ibuf => {
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
+                    ChunkTag::Indx => {
+                        // Mesh index buffer (inside GEOM): u16 array. Mirrors Python
+                        // (`tag == "INDX" -> _convert_u16_array`); generic u32 transposes
+                        // the index u16 pairs.
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Info if type_hash == types::TYPE_HASH_ANIMATION => {
+                        // Animation lowercase `info`: u16 array (Python `info`+_TYPE_ANIMATION).
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
                     ChunkTag::Info => {
                         // Lowercase `info` in a non-ECS container: named/compact ECS info
                         // body (the generic u32 fallback corrupts named `info`).
@@ -1116,6 +1215,17 @@ fn convert_generic_bodies(
                     }
                     ChunkTag::InfoUpper if is_texture => {
                         convert_texture_info(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::InfoUpper if type_hash == types::TYPE_HASH_SCRIPT => {
+                        // Script INFO: [u8][u16 name_len@1][u8×2][ASCII name][NUL][u8 cnt]
+                        // [u16 flags@(5+name_len)] — swap only the two u16 fields; leave
+                        // u8/ASCII. Mirrors Python `_convert_script_info`; the generic u32
+                        // sweep scrambles the ASCII script name.
+                        convert_script_info_inplace(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::InfoUpper if type_hash == TYPE_HASH_CFX_PACK => {
+                        // CFX INFO: u32 prefix + zlib stream (copy deflate verbatim).
+                        convert_cfx_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
                     ChunkTag::Body if is_texture => {
                         // DXT compressed pixel data — leave as-is.
@@ -1168,6 +1278,39 @@ fn convert_generic_bodies(
                     ChunkTag::Unknown(b) if b == *b"EMTR" => {
                         // EMTR: 2-byte emitter count (genuine u16).
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b) if b == *b"SEGM" || b == *b"BSHI" => {
+                        // SEGM/BSHI: u16-array swap, same group as HIER/PRMT in Python.
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b) if b == *b"BINN" => {
+                        // Lua bytecode: leave RAW BE here; converted afterward by
+                        // apply_binn_transcode (unluac disassemble→flip-endianness→
+                        // reassemble — NOT a byte-swap; the body may resize). Mirrors
+                        // the wavebank `data` no-op + apply_wavebank_transcode reframe.
+                    }
+                    ChunkTag::Unknown(b) if b == *b"MINF" => {
+                        // MINF: u16 array when u16-aligned (Python line 2724). Leave odd
+                        // bodies to the generic path rather than raising.
+                        let s = &mut data_area[body_local_start..body_local_end];
+                        if s.len() % 2 == 0 {
+                            swap_u16_array(s);
+                        } else {
+                            swap_u32_array(s);
+                        }
+                    }
+                    ChunkTag::Unknown(b) if b == *b"evnt" => {
+                        // evnt: [u32 count][per event: u32 timestamp + 2 NUL-strings].
+                        // Swap count + each timestamp; ASCII strings stay. Mirrors
+                        // Python `_convert_evnt_body`.
+                        convert_evnt_inplace(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b) if b == *b"trnm" => {
+                        // trnm (track-name): [u16 count][u16 pad][u32 hashes...]. Mirrors
+                        // Python `_convert_trnm_body`. A blanket u32 sweep transposes the
+                        // count/pad u16 pair (the residual divergence under many entry
+                        // types whose bodies carry a nested trnm sub-container).
+                        convert_trnm_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
                     ChunkTag::Unknown(b) if b == *b"PHY2" => {
                         // PHY2 is a Havok 5.5 collision packfile (u32 header +
@@ -1226,6 +1369,16 @@ fn convert_generic_bodies(
                         let split = (body_local_start + 8).min(body_local_end);
                         swap_u16_array(&mut data_area[body_local_start..split]);
                         swap_u32_array(&mut data_area[split..body_local_end]);
+                    }
+                    ChunkTag::Data if type_hash == TYPE_HASH_CFX_PACK => {
+                        // CFX data: u32 prefix + zlib stream (copy deflate verbatim).
+                        convert_cfx_inplace(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Data if ctx == ContainerCtx::Ibuf => {
+                        // Index-buffer data under an IBUF group sentinel: u16 array
+                        // (Python `data`+IBUF context). Generic u32 transposes the
+                        // index u16 pairs.
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
                     other_tag => {
                         if let Some(ref mut rpt) = report {
@@ -2099,6 +2252,106 @@ fn convert_mtrl(body: &mut [u8]) {
 /// positions exactly.
 fn convert_efct_header_inplace(data: &mut [u8]) {
     swap_u16_array(data);
+}
+
+/// trnm (track-name) body: `[u16 count][u16 pad][u32 hashes...]`. Mirrors
+/// `tools/ucfx_be_to_le.py::_convert_trnm_body`: swap the u16 count, leave the
+/// 2 padding bytes byte-for-byte, u32-swap the hash array, leave any sub-u32
+/// tail. A blanket u32 sweep would transpose the count/pad u16 pair.
+fn convert_trnm_inplace(body: &mut [u8]) {
+    if body.len() < 4 {
+        swap_u16_array(body);
+        return;
+    }
+    swap_u16(body, 0); // count; body[2..4] padding stays as-is
+    swap_u32_array(&mut body[4..]); // complete u32 hashes; sub-u32 tail untouched
+}
+
+/// CFX pack type_hash (fonts/effects/resident sub-assets: u32 header + zlib).
+const TYPE_HASH_CFX_PACK: u32 = 0xFE0E8320;
+
+/// evnt body: `[u32 count][per event: u32 timestamp][2 × NUL-terminated string]`.
+/// Swap the count and each timestamp; the ASCII strings are endian-neutral.
+/// Mirrors `tools/ucfx_be_to_le.py::_convert_evnt_body`.
+fn convert_evnt_inplace(body: &mut [u8]) {
+    if body.len() < 4 {
+        return;
+    }
+    let count = u32::from_be_bytes([body[0], body[1], body[2], body[3]]);
+    swap_u32(body, 0);
+    let mut pos = 4usize;
+    for _ in 0..count {
+        if pos + 4 > body.len() {
+            break;
+        }
+        swap_u32(body, pos);
+        pos += 4;
+        for _ in 0..2 {
+            while pos < body.len() && body[pos] != 0 {
+                pos += 1;
+            }
+            if pos < body.len() {
+                pos += 1; // skip the NUL
+            }
+        }
+    }
+}
+
+/// Container context for chunk dispatch, mirroring Python `_classify_contexts`.
+/// A group-sentinel descriptor (row_u0 == 0xFFFFFFFF) opens a context that the
+/// following chunks inherit until the next container sentinel. The key use:
+/// `data` under `IBUF` is a u16 index buffer, under `STRM`/elsewhere it is u32.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContainerCtx {
+    None,
+    Strm,
+    Ibuf,
+    Meta,
+}
+
+/// Script INFO body: `[u8][u16 name_len @1][u8×2][ASCII name][NUL][u8 cnt][u16
+/// flags @ 5+name_len]`. Swap ONLY the two u16 fields; u8 and ASCII are
+/// endian-neutral. Mirrors `tools/ucfx_be_to_le.py::_convert_script_info`.
+fn convert_script_info_inplace(body: &mut [u8]) {
+    if body.len() < 4 {
+        return;
+    }
+    let name_len = u16::from_be_bytes([body[1], body[2]]) as usize; // BE = true length
+    swap_u16(body, 1); // name_len -> LE
+    let flags_off = 5 + name_len;
+    if flags_off + 2 <= body.len() {
+        swap_u16(body, flags_off); // flags
+    }
+}
+
+/// First offset of a zlib wrapper (`0x78` + valid CMF byte) in a CFX payload.
+fn find_zlib_offset(data: &[u8]) -> Option<usize> {
+    const CMFS: [u8; 8] = [0x01, 0x5E, 0x9C, 0xDA, 0x20, 0x7D, 0xBB, 0xFB];
+    if data.len() < 2 {
+        return None;
+    }
+    for i in 0..data.len() - 1 {
+        if data[i] == 0x78 && CMFS.contains(&data[i + 1]) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// CFX + zlib body: u32-swap the aligned prefix before the zlib stream, copy the
+/// unaligned prefix remainder and the deflate stream verbatim (it's
+/// endian-neutral). Mirrors `_convert_cfx_compressed_data`. Falls back to a u32
+/// sweep if no zlib stream is found (rather than raising).
+fn convert_cfx_inplace(body: &mut [u8]) {
+    match find_zlib_offset(body) {
+        Some(zoff) => {
+            let prefix_end = zoff - (zoff % 4);
+            swap_u32_array(&mut body[..prefix_end]);
+            // body[prefix_end..zoff] (sub-u32 prefix tail) and body[zoff..] (zlib)
+            // are left byte-for-byte.
+        }
+        None => swap_u32_array(body),
+    }
 }
 
 /// Swap the CHDR header as `{ u16 @+0 ; u16 @+2 ; u32 @+4 }`.

@@ -1,6 +1,7 @@
 mod audio;
 mod convert;
 mod havok;
+mod lua;
 mod report;
 mod validate;
 
