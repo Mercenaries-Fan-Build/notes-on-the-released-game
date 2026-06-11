@@ -9,6 +9,19 @@ use crate::havok;
 use crate::lua;
 use crate::report::SchemaCoverageReport;
 
+/// When `true`, the per-block / per-entry diagnostics below are suppressed.
+/// The in-process `dlc_port` driver sets this (it converts thousands of blocks);
+/// the CLI leaves it `false` so single-block runs stay verbose.
+pub static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+macro_rules! vlog {
+    ($($arg:tt)*) => {
+        if !$crate::convert::QUIET.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 const TYPE_HASH_ECS_NODE: u32 = types::TYPE_HASH_LAYER; // 0xE6B81A54
 const TYPE_HASH_WORLD_ENTITY: u32 = types::TYPE_HASH_WORLD_ENTITY_DATA; // 0x5647C35D
 const TYPE_HASH_GUIDMAP: u32 = types::TYPE_HASH_GUIDMAP; // 0x140E8728
@@ -56,7 +69,7 @@ pub fn convert_block(
         return Err("Entry table exceeds block size".into());
     }
 
-    eprintln!("  Entry count: {}", entry_count);
+    vlog!("  Entry count: {}", entry_count);
 
     struct EntryInfo {
         name_hash: u32,
@@ -88,12 +101,12 @@ pub fn convert_block(
 
             let container = strip_csum_trailer(&be_data[offset..container_end]);
             let type_name = types::type_name_from_hash(entry.type_hash);
-            eprintln!("  Entry {}: name=0x{:08x} type_hash=0x{:08x} ({}) size={}",
+            vlog!("  Entry {}: name=0x{:08x} type_hash=0x{:08x} ({}) size={}",
                 ei, entry.name_hash, entry.type_hash, type_name, entry.chunk_size);
 
             match walk_container_tags(container, ei) {
                 Ok(()) => {}
-                Err(e) => eprintln!("    [skip] {}", e),
+                Err(e) => vlog!("    [skip] {}", e),
             }
 
             offset = container_end;
@@ -120,7 +133,7 @@ pub fn convert_block(
 
         let container = strip_csum_trailer(&be_data[offset..container_end]);
         let type_name = types::type_name_from_hash(entry.type_hash);
-        eprintln!("  Converting entry {}: type=0x{:08x} ({}) size={} (UCFX={})",
+        vlog!("  Converting entry {}: type=0x{:08x} ({}) size={} (UCFX={})",
             ei, entry.type_hash, type_name, entry.chunk_size, container.len());
 
         let is_ecs = entry.type_hash == TYPE_HASH_ECS_NODE
@@ -164,7 +177,7 @@ pub fn convert_block(
         output.extend_from_slice(&crc.to_le_bytes());
     }
 
-    eprintln!("  Output size: {} bytes", output.len());
+    vlog!("  Output size: {} bytes", output.len());
     Ok(output)
 }
 
@@ -625,7 +638,7 @@ fn convert_ecs_bodies(
                 }
             }
 
-            eprintln!("    COMP group: '{}' (schema: {})",
+            vlog!("    COMP group: '{}' (schema: {})",
                 comp_name_str,
                 if schema.is_some() { "yes" } else { "no" });
         } else {
@@ -1174,14 +1187,14 @@ fn convert_generic_bodies(
                         // Mesh draw-call parameter binding: 16-byte records of u16 fields
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
-                    ChunkTag::Hier => {
-                        // HIER hierarchy nodes: u16-array swap. Mirrors Python's
-                        // HIER/SEGM/PRMT/BSHI group (`_convert_u16_array`). The generic
-                        // u32 sweep transposes the u16 pairs in these mesh sub-resources
-                        // (they ride inside the always-Python-routed level blocks, so the
-                        // u32 path was never exercised on them).
-                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
-                    }
+                    // NOTE: HIER is NOT handled here — it is a 176-byte node array of
+                    // f32 transform matrices + bbox, so it must take the default u32
+                    // swap. Python's `_convert_u16_array` for HIER (line 2686) is a
+                    // latent byte-swap BUG: u16-swapping f32 produces garbage (e.g.
+                    // BE 3F800000=1.0 → u16 803F0000=junk vs u32 0000803F=1.0), which
+                    // the validator flagged as inverted/NaN HIER bboxes. "Byte-match
+                    // Python" is the WRONG bar for HIER — leave it u32. (Same for the
+                    // SEGM/BSHI lumped-in arm, removed below.)
                     ChunkTag::Mtrl => {
                         // Material: mixed u32/f32 header + u16 flags + u16 texture-count + u32 hash
                         // array. A blanket swap transposes the u16 count and the engine overruns its
@@ -1279,10 +1292,10 @@ fn convert_generic_bodies(
                         // EMTR: 2-byte emitter count (genuine u16).
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
-                    ChunkTag::Unknown(b) if b == *b"SEGM" || b == *b"BSHI" => {
-                        // SEGM/BSHI: u16-array swap, same group as HIER/PRMT in Python.
-                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
-                    }
+                    // SEGM/BSHI removed: they were lumped with HIER on the same (now
+                    // disproven) "Python u16 group" reasoning. Default u32 is the
+                    // known-good baseline; re-add a u16 arm only if a chunk is VERIFIED
+                    // to hold u16 data (not f32) against the validator/retail.
                     ChunkTag::Unknown(b) if b == *b"BINN" => {
                         // Lua bytecode: leave RAW BE here; converted afterward by
                         // apply_binn_transcode (unluac disassemble→flip-endianness→
@@ -2016,7 +2029,7 @@ fn convert_enum_body_inplace(data: &mut [u8]) {
 
     let total = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
     swap_u32(data, 0);
-    eprintln!("      enum body: total_enum_count={}", total);
+    vlog!("      enum body: total_enum_count={}", total);
 
     let mut pos = 4usize;
     for _ in 0..total {
@@ -2219,19 +2232,28 @@ fn swap_u32_array(data: &mut [u8]) {
 /// even offset, so the engine's count stays valid and we never reintroduce the overrun.
 fn convert_mtrl(body: &mut [u8]) {
     const HDR: usize = 26 * 4; // 104: leading u32/f32 colour/scalar block
-    const TAIL: usize = 2 * 4; //   8: trailing u32 fields after the hash loop
-    if body.len() >= HDR + 4 + TAIL && (body.len() - HDR - 4 - TAIL) % 4 == 0 {
-        let count_from_len = (body.len() - HDR - 4 - TAIL) / 4;
-        let count_on_wire = u16::from_be_bytes([body[HDR + 2], body[HDR + 3]]) as usize;
-        if count_from_len == count_on_wire {
-            swap_u32_array(&mut body[..HDR]); // u32/f32 colour + scalar block
-            body[HDR..HDR + 2].reverse(); // u16 flags
-            body[HDR + 2..HDR + 4].reverse(); // u16 texture count (the overrun trigger)
-            swap_u32_array(&mut body[HDR + 4..]); // count hashes + 2 tail u32 (contiguous u32 region)
-            return;
-        }
+    // Engine layout (FUN_00858790): [26 u32/f32 params][u16 flags @104][u16 tex
+    // count @106][contiguous u32/f32 region @108...]. That region is the texture
+    // hash array (`count` entries the engine treats as handles) FOLLOWED by
+    // trailing material params — but it is ALL u32/f32 and swaps identically. The
+    // per-field swap (params u32, flags/count u16, rest u32) preserves the count
+    // (it reverses the u16 in place, never transposing it → no 0x84DD5B overrun)
+    // AND swaps the hashes as u32.
+    //
+    // PREVIOUSLY this was gated on `len == 116 + count*4` and otherwise fell back
+    // to swap_u16_array. Real materials carry extra trailing params (e.g. len 240,
+    // count 1, not 120), so the gate FAILED and the fallback u16-swapped the u32
+    // texture HASHES → garbage handles → unresolved texture refs at world load.
+    // Per-field is correct for ANY length; only bodies too short for the layout
+    // fall back to the count-safe u16 swap.
+    if body.len() >= HDR + 4 {
+        swap_u32_array(&mut body[..HDR]); // u32/f32 colour + scalar params
+        body[HDR..HDR + 2].reverse(); // u16 flags
+        body[HDR + 2..HDR + 4].reverse(); // u16 texture count
+        swap_u32_array(&mut body[HDR + 4..]); // hashes + trailing params (all u32/f32)
+    } else {
+        swap_u16_array(body);
     }
-    swap_u16_array(body); // layout unconfirmed: count-safe fallback (never overruns)
 }
 
 /// EFCT particle-effect header: an array of u16 fields. Mirrors
@@ -2438,7 +2460,7 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
         let is_sentinel = row_u0 == 0xFFFFFFFF;
 
         if is_sentinel {
-            eprintln!("    desc[{}]: {} (group marker)", di, tag);
+            vlog!("    desc[{}]: {} (group marker)", di, tag);
         } else {
             let body_off = if data_area_off > 0 {
                 data_area_off + row_u0 as usize
@@ -2447,10 +2469,10 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
             };
 
             if tag.is_native_be() {
-                eprintln!("    desc[{}]: {} @{} size={} [NATIVE BE - NO SWAP]",
+                vlog!("    desc[{}]: {} @{} size={} [NATIVE BE - NO SWAP]",
                     di, tag, body_off, body_size);
             } else {
-                eprintln!("    desc[{}]: {} @{} size={}", di, tag, body_off, body_size);
+                vlog!("    desc[{}]: {} @{} size={}", di, tag, body_off, body_size);
             }
         }
     }

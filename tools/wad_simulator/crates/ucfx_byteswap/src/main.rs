@@ -1,13 +1,8 @@
-mod audio;
-mod convert;
-mod havok;
-mod lua;
-mod report;
-mod validate;
-
 use clap::Parser;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+
+use ucfx_byteswap::{convert, report, validate};
 
 use report::SchemaCoverageReport;
 
