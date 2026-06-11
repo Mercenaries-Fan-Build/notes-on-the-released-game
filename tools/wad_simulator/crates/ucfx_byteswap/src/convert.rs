@@ -1240,6 +1240,29 @@ fn convert_generic_bodies(
                         // CFX INFO: u32 prefix + zlib stream (copy deflate verbatim).
                         convert_cfx_inplace(&mut data_area[body_local_start..body_local_end]);
                     }
+                    ChunkTag::InfoUpper if type_hash == types::TYPE_HASH_STANCE => {
+                        // Stance/named-registry INFO = the dims triple
+                        // [u16 keyDims][u16 totalDims][u16 count]. The generic u32 sweep
+                        // reverses bytes[0:4] (transposing keyDims/totalDims) and LEAVES
+                        // bytes[4:6], so the row count stays big-endian — e.g. BE 1036
+                        // (0x040C) is read as LE 0x0C04 = 3076. The engine then walks 3075
+                        // rows through ~1036 of real data into garbage, blowing past the
+                        // fixed 1024-slot table in FUN_0067cfb0 → world-load livelock
+                        // (@0x67D130). Swap each u16 in place (no transposition).
+                        swap_u16_array(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b)
+                        if b == *b"TYPE" && type_hash == types::TYPE_HASH_STANCE =>
+                    {
+                        // Stance/named-registry TYPE = the dimension-name table:
+                        // totalDims × ([ASCII name]\0 [u16 field]). The generic u32 sweep
+                        // reverses the ASCII in 4-byte groups ("Stance" -> "natS…"),
+                        // scrambling the dimension names. Leave the ASCII + null and swap
+                        // only each trailing u16.
+                        convert_stance_type_names_inplace(
+                            &mut data_area[body_local_start..body_local_end],
+                        );
+                    }
                     ChunkTag::Body if is_texture => {
                         // DXT compressed pixel data — leave as-is.
                         // Proper texture BODY conversion (untiling) is Phase 3+.
@@ -2071,6 +2094,33 @@ fn convert_enum_body_inplace(data: &mut [u8]) {
             swap_u32(data, pos);     // ordinal
             pos += 4;
         }
+    }
+}
+
+/// Convert a stance/named-registry `TYPE` body (the dimension-name table) BE→LE.
+///
+/// Layout (verified against retail vz.wad ActionTable):
+///   repeated for each dimension:
+///     [null-terminated ASCII name]   (e.g. "Stance", "Action", "AimState", …)
+///     [u16 field]                    (a small per-dimension value, =4 in retail)
+///
+/// The ASCII names are endian-neutral; only the trailing u16 is swapped. A blanket
+/// u32 sweep reverses the ASCII in 4-byte groups ("Stance"→"natS…"), scrambling the
+/// dimension names the engine matches against.
+fn convert_stance_type_names_inplace(data: &mut [u8]) {
+    let mut pos = 0usize;
+    while pos < data.len() {
+        // Skip the null-terminated ASCII dimension name.
+        match data[pos..].iter().position(|&b| b == 0) {
+            Some(nul_rel) => pos += nul_rel + 1,
+            None => break,
+        }
+        // Swap the trailing per-dimension u16 field.
+        if pos + 2 > data.len() {
+            break;
+        }
+        swap_u16(data, pos);
+        pos += 2;
     }
 }
 

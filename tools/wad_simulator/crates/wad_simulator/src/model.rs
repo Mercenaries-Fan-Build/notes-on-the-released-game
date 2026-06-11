@@ -20,6 +20,10 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
     let mut vertex_advisory = 0usize;
     let mut bounds_advisory = 0usize;
     let mut structural_advisory = 0u32;
+    // FATAL: counts a converter defect the engine cannot survive (e.g. an MTRL
+    // texture-count that overruns the engine's fixed 10-slot array → heap
+    // corruption / AV 0x0084DD5B). Routed into the verdict.
+    let mut structural_violations = 0u32;
 
     if let Some(geom) = extract_chunk_body(container, b"GEOM") {
         if geom.len() >= 8 {
@@ -231,7 +235,20 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         // (+0 is the first material param). Reading +0 produced garbage that resolved to
         // nothing. The engine writes into a fixed 10-slot array, so cap the count at 10.
         if mtrl.len() >= 108 {
-            let count = (read_u16_le(&mtrl, 106) as usize).min(10);
+            // The engine (FUN_00858790) writes `raw_count` texture records into a
+            // FIXED 10-slot array at material+0xAC. A raw count > 10 overruns it →
+            // heap corruption → world-load AV (0x0084DD5B / downstream 0x004CF58B).
+            // We must FLAG the raw count (fatal); the clamp below is only so our
+            // own xref read stays in-bounds — it must NOT hide the overrun.
+            let raw_count = read_u16_le(&mtrl, 106) as usize;
+            if raw_count > 10 {
+                issues.push(format!(
+                    "{label}: MTRL texture-count {raw_count} > 10 — overruns engine's \
+                     fixed 10-slot array (heap corruption / AV 0x0084DD5B)"
+                ));
+                structural_violations += 1;
+            }
+            let count = raw_count.min(10);
             if std::env::var("MTRL_DEBUG").is_ok() {
                 let raw_count = read_u16_le(&mtrl, 106);
                 eprintln!(
@@ -295,6 +312,7 @@ pub fn consume_model(container: &[u8], _data_body: Option<&[u8]>, label: &str) -
         xref_hashes,
         meshes_validated,
         bounds_violations,
+        structural_violations,
         texture_buffer_issues,
         vertex_advisory,
         bounds_advisory,

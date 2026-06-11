@@ -5,6 +5,7 @@ use std::path::Path;
 
 use colored::*;
 
+use crate::action_table::consume_action_table;
 use crate::animation::consume_animation;
 use crate::blocks::{
     block_key_for_entry, collect_block_keys, merge_block_issues, parse_blocks_parallel,
@@ -30,7 +31,7 @@ use mercs2_formats::types::{
     type_hash_for_type_id, type_name, TYPE_HASH_FX_DICTIONARY, TYPE_HASH_TEXTURE,
     TYPE_HASH_WATERMAP, TYPE_ID_ANIMATION, TYPE_ID_FX_DICTIONARY, TYPE_ID_LAYER,
     TYPE_ID_LOWRES_TERRAIN, TYPE_ID_MATERIAL_PARAMS, TYPE_ID_MODEL, TYPE_ID_SCRIPT,
-    TYPE_ID_TERRAIN_MESH, TYPE_ID_TEXTURE, TYPE_ID_WORLD_ENTITY_DATA,
+    TYPE_ID_TERRAIN_MESH, TYPE_ID_TEXTURE, TYPE_ID_STANCE, TYPE_ID_WORLD_ENTITY_DATA,
 };
 use mercs2_formats::ucfx::{
     extract_chunk_body, extract_data_chunk, get_container_by_type_hash, ParsedBlock,
@@ -251,6 +252,7 @@ pub fn run_simulate_with_options(
         let result = dispatch_consume(
             entry.type_id,
             type_hash,
+            entry.asset_hash,
             &container,
             data_body.as_deref(),
             &label,
@@ -617,6 +619,7 @@ fn resolve_type_hash(parsed: &ParsedBlock, entry: &ResolvedAset) -> u32 {
 fn dispatch_consume(
     type_id: u32,
     type_hash: u32,
+    asset_hash: u32,
     container: &[u8],
     data_body: Option<&[u8]>,
     label: &str,
@@ -634,6 +637,7 @@ fn dispatch_consume(
         TYPE_ID_LAYER => consume_layer(container, data_body, label),
         TYPE_ID_SCRIPT => consume_script(container, data_body, label),
         TYPE_ID_ANIMATION => consume_animation(container, data_body, label),
+        TYPE_ID_STANCE => consume_action_table(asset_hash, container, data_body, label),
         TYPE_ID_MATERIAL_PARAMS => consume_material(container, data_body, label),
         TYPE_ID_FX_DICTIONARY => consume_fxdict(container, data_body, label),
         TYPE_ID_WORLD_ENTITY_DATA => consume_structural(container, data_body, label),

@@ -14,6 +14,9 @@ pub const TYPE_ID_PATH: u32 = 28;
 pub const TYPE_ID_EFFECT: u32 = 29;
 pub const TYPE_ID_STRINGDB: u32 = 7;
 pub const TYPE_ID_LEVEL: u32 = 20;
+/// "stance" / named-registry (ActionTable, VehicleAnimationLookup, Sounds, …);
+/// type_hash 0x207359C7. Processed by FUN_0067cfb0's fixed 1024-slot table.
+pub const TYPE_ID_STANCE: u32 = 11;
 pub const TYPE_ID_MATERIAL_PARAMS: u32 = 14;
 pub const TYPE_ID_MUSIC_STATE_MAP: u32 = 26;
 pub const TYPE_ID_MUSIC_CUE_TABLE: u32 = 4;
@@ -43,6 +46,12 @@ pub const TYPE_HASH_MUSIC_CUE_TABLE: u32 = 0xE8DF4D87;
 pub const TYPE_HASH_ANIM_STATE_MACHINE: u32 = 0xECE70371;
 pub const TYPE_HASH_WORLD_ENTITY_DATA: u32 = 0x5647C35D;
 pub const TYPE_HASH_GUIDMAP: u32 = 0x140E8728;
+/// "stance" / named-registry (ActionTable, VehicleAnimationLookup, Sounds, …).
+/// Its nested UCFX is INFO(dims triple)/TYPE(dim-name strings)/VALU(value rows);
+/// INFO+TYPE need per-field conversion (see convert.rs), not a blanket u32 swap,
+/// or the engine reads a transposed/byteswapped row count and overflows the
+/// 1024-slot table in FUN_0067cfb0 (world-load livelock @0x67D130).
+pub const TYPE_HASH_STANCE: u32 = 0x207359C7;
 pub const TYPE_HASH_FX_DICTIONARY: u32 = 0xFA46D8A8;
 pub const TYPE_HASH_WATERMAP: u32 = 0x4D7D30C4;
 

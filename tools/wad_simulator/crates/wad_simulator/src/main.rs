@@ -1,5 +1,6 @@
 //! Mercenaries 2 WAD engine consumption simulator.
 
+mod action_table;
 mod animation;
 mod aset_validate;
 mod audio;
