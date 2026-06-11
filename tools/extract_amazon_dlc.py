@@ -30,7 +30,7 @@ from x360_dlc_io import (
     parse_be_indx,
     parse_be_pths,
 )
-from ucfx_be_to_le import byteswap_ucfx_block
+from ucfx_byteswap_wrapper import byteswap_block_rust
 from ucfx_mesh_codec import find_all, CONTAINER_SENTINEL, CHUNK_HDR
 
 
@@ -353,9 +353,10 @@ def main() -> int:
             })
             continue
 
-        # Byte-swap BE → LE
+        # Byte-swap BE → LE (Rust converter; stats not reported by the Rust path)
         try:
-            le_data, swap_stats = byteswap_ucfx_block(decompressed)
+            le_data = byteswap_block_rust(decompressed, validate=False)
+            swap_stats = {}
         except Exception as exc:
             print(f"  BYTE-SWAP FAILED: {exc}")
             block_report.append({

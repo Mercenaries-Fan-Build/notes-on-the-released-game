@@ -614,7 +614,14 @@ else
   LUA_PLAT := posix
 endif
 
-build-luac: $(LUAC_NATIVE)
+build-luac:
+	@if [ -f "$(REPO_ROOT)/tools/lua51-mercs2/luac.exe" ]; then \
+	   echo "Using prebuilt luac: tools/lua51-mercs2/luac.exe (skipping rebuild)"; \
+	elif [ -x "$(LUAC_NATIVE)" ]; then \
+	   echo "Using built luac: $(LUAC_NATIVE)"; \
+	else \
+	   "$(MAKE)" "$(LUAC_NATIVE)"; \
+	fi
 
 $(LUAC_NATIVE): $(LUAC_PATCHES)/*.patch
 	@echo "Building native luac (platform: $(LUA_PLAT))..."
@@ -627,7 +634,7 @@ $(LUAC_NATIVE): $(LUAC_PATCHES)/*.patch
 	   patch -d "$(LUAC_BUILD_DIR)" -p1 < "$$p" || exit 1; \
 	 done
 	@echo "  [3/4] Compiling..."
-	@$(MAKE) -C "$(LUAC_BUILD_DIR)" $(LUA_PLAT) 2>&1 | tail -3
+	@"$(MAKE)" -C "$(LUAC_BUILD_DIR)" $(LUA_PLAT) 2>&1 | tail -3
 	@test -f "$(LUAC_NATIVE)" || (echo "  ERROR: build failed" >&2; exit 1)
 	@echo "  [4/4] Verifying bytecode header..."
 	@echo 'print("")' > /tmp/_luac_verify.lua
@@ -712,6 +719,7 @@ dlc-port: build-luac build-ucfx-byteswap
 	  --source-wad "$(SOURCE_WAD)" \
 	  --no-hook \
 	  $(if $(JOBS),--jobs $(JOBS),) \
+	  $(DLC_PORT_FLAGS) \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
 	@echo ""

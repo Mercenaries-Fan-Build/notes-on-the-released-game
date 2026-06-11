@@ -120,30 +120,6 @@ def validate_block_file_rust(path: Path, *, strict: bool = False) -> list[str]:
     return validate_block_rust(path.read_bytes(), strict=strict)
 
 
-def byteswap_block_python(
-    block_data: bytes,
-    *,
-    permissive: bool = False,
-) -> bytes:
-    """Convert BE block to LE using Python ``ucfx_be_to_le`` (ECS-aware)."""
-    from ucfx_be_to_le import byteswap_ucfx_block
-
-    le_data, _stats = byteswap_ucfx_block(block_data, permissive=permissive)
-    return le_data
-
-
-def byteswap_block_ecs_python_fallback(
-    block_data: bytes,
-    *,
-    permissive: bool = False,
-) -> bytes:
-    """Rust byteswap with Python fallback when Rust fails on an ECS-heavy block."""
-    try:
-        return byteswap_block_rust(block_data, validate=False)
-    except (RuntimeError, FileNotFoundError):
-        return byteswap_block_python(block_data, permissive=permissive)
-
-
 def byteswap_block_rust(
     block_data: bytes,
     *,

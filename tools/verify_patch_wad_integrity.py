@@ -35,7 +35,7 @@ from ffcs_patch_wad import PTHS_TRAILER, read_patch_wad  # noqa: E402
 from ffcs_wad import parse_ffcs  # noqa: E402
 from sges_compress import compress_sges  # noqa: E402
 from sges_decompress import decompress_sges_block, parse_sges_header  # noqa: E402
-from ucfx_be_to_le import crc32_mercs2  # noqa: E402
+from mercs2_crc32 import crc32_mercs2  # noqa: E402
 from wad_patcher import get_block_boundaries, parse_block_entries  # noqa: E402
 
 DEFAULT_PATCH_CANDIDATES = [

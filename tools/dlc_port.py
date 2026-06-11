@@ -55,12 +55,7 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
-from ucfx_be_to_le import UnhandledByteSwapError  # noqa: E402
-from ucfx_byteswap_wrapper import (  # noqa: E402
-    byteswap_block_ecs_python_fallback,
-    byteswap_block_python,
-    byteswap_block_rust,
-)
+from ucfx_byteswap_wrapper import byteswap_block_rust  # noqa: E402
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -224,57 +219,11 @@ def _fix_stringdb_descriptors(block_data: bytes) -> bytes:
     return bytes(data)
 
 
-_TYPE_ECS_LAYER = 0xE6B81A54
-_TYPE_WORLD_ENTITY = 0x5647C35D
-_TYPE_GUIDMAP = 0x140E8728
 _TYPE_FOLIAGE = 0x34612F86
 
-_PYTHON_ECS_PATH_MARKERS = ("dlc01_base", "speedcity", "dlccon")
-
-
-def _path_force_python_ecs(path: str) -> bool:
-    """Path substrings that always use Python byteswap (arena / contract layers)."""
-    lower = path.replace("/", "\\").lower()
-    return any(m in lower for m in _PYTHON_ECS_PATH_MARKERS)
-
-
-def _should_use_python_ecs_byteswap(
-    decompressed: bytes,
-    path: str,
-    *,
-    byteswap_python_ecs: bool,
-    byteswap_python_ecs_paths: bool,
-) -> bool:
-    """Rust vs Python ECS byteswap selector for one BE block."""
-    if byteswap_python_ecs:
-        return _block_has_ecs_layer(decompressed)
-    if byteswap_python_ecs_paths:
-        if _path_force_python_ecs(path):
-            return True
-        if _block_has_ecs_layer(decompressed):
-            return True
-    return False
-
-
-def _block_has_ecs_layer(decompressed: bytes) -> bool:
-    """True if the BE block needs Python ECS-aware byteswap (layer / worldentity / guidmap)."""
-    if len(decompressed) < 20:
-        return False
-    try:
-        entry_count = struct.unpack_from(">I", decompressed, 0)[0]
-    except struct.error:
-        return False
-    if entry_count > 50_000:
-        return False
-    header_end = 4 + entry_count * 16
-    if header_end > len(decompressed):
-        return False
-    for i in range(entry_count):
-        off = 4 + i * 16
-        type_hash = struct.unpack_from(">I", decompressed, off + 4)[0]
-        if type_hash in (_TYPE_ECS_LAYER, _TYPE_WORLD_ENTITY, _TYPE_GUIDMAP):
-            return True
-    return False
+# (The former Python ECS-layer byteswap routing — `_should_use_python_ecs_byteswap`,
+# `_path_force_python_ecs`, `_block_has_ecs_layer` — has been removed. Every block
+# now converts through the Rust `ucfx_byteswap` converter.)
 
 
 # ── Parallel block processing ─────────────────────────────────────────
@@ -295,9 +244,6 @@ class _BlockWorkerArgs:
     verbose: bool
     collect_hashes: bool
     permissive: bool = False
-    byteswap_python_ecs: bool = False
-    byteswap_python_ecs_fallback: bool = False
-    byteswap_python_ecs_paths: bool = True
 
 
 @dataclass
@@ -366,25 +312,16 @@ def _process_one_block(args: _BlockWorkerArgs) -> _BlockWorkerResult:
         (dump_dir / f"block_{blk_idx:04d}_be.bin").write_bytes(decompressed)
 
     try:
-        if _should_use_python_ecs_byteswap(
-            decompressed,
-            args.path,
-            byteswap_python_ecs=args.byteswap_python_ecs,
-            byteswap_python_ecs_paths=args.byteswap_python_ecs_paths,
-        ):
-            swapped = byteswap_block_python(decompressed, permissive=args.permissive)
-        elif args.byteswap_python_ecs_fallback and _block_has_ecs_layer(decompressed):
-            swapped = byteswap_block_ecs_python_fallback(
-                decompressed, permissive=args.permissive,
-            )
-        else:
-            swapped = byteswap_block_rust(decompressed)
+        # All blocks convert through the Rust converter (ucfx_byteswap). The
+        # former Python ECS-layer byteswap path has been retired — Rust handles
+        # every block type (incl. ECS-layer, MTRL, and Lua/BINN via unluac).
+        swapped = byteswap_block_rust(decompressed)
         stats: dict = {
             "ucfx_found": 0, "chunks_swapped": 0, "csum_swapped": 0,
             "tags_seen": {}, "errors": [],
             "fallback_u32_count": 0, "fallback_u32_tags": {},
         }
-    except (RuntimeError, FileNotFoundError, UnhandledByteSwapError) as e:
+    except (RuntimeError, FileNotFoundError) as e:
         return _BlockWorkerResult(
             blk_idx=blk_idx,
             skipped=True,
@@ -703,9 +640,6 @@ def port_x360_dlc(
     synth_stringdb_aset: bool = True,
     jobs: int | None = None,
     permissive: bool = False,
-    byteswap_python_ecs: bool = False,
-    byteswap_python_ecs_fallback: bool = False,
-    byteswap_python_ecs_paths: bool = True,
     fail_on_placement_violations: bool = False,
     exclude_blocks: str | None = None,
     no_aset_validation: bool = False,
@@ -724,12 +658,7 @@ def port_x360_dlc(
     """
     print("Xbox 360 DLC -> PC Patch WAD Porter (unified)")
     print("=" * 60)
-    if byteswap_python_ecs:
-        print("  Byte-swap backend: Python (all ECS-layer blocks)")
-    elif byteswap_python_ecs_paths:
-        print("  Byte-swap backend: Rust + Python (layer/path: dlc01_base, speedcity, dlccon)")
-    else:
-        print("  Byte-swap backend: Rust (ucfx_byteswap)")
+    print("  Byte-swap backend: Rust (ucfx_byteswap)")
 
     # Parse BE FFCS
     version, rows = parse_be_ffcs(doh)
@@ -854,9 +783,6 @@ def port_x360_dlc(
             verbose=verbose,
             collect_hashes=collect_hashes,
             permissive=permissive,
-            byteswap_python_ecs=byteswap_python_ecs,
-            byteswap_python_ecs_fallback=byteswap_python_ecs_fallback,
-            byteswap_python_ecs_paths=byteswap_python_ecs_paths,
         ))
 
     all_results: list[_BlockWorkerResult] = list(pre_skipped)
@@ -1888,22 +1814,6 @@ def main() -> int:
                     help="Add dlc01 as entry 115 only — do NOT modify "
                          "wifmissionflow (use ASI to trigger import at runtime)")
     ap.add_argument(
-        "--byteswap-python-ecs",
-        action="store_true",
-        help="Use Python ucfx_be_to_le for blocks with layer/world-entity UCFX (debug parity)",
-    )
-    ap.add_argument(
-        "--byteswap-python-ecs-fallback",
-        action="store_true",
-        help="Try Rust byteswap first; on failure use Python for ECS blocks only",
-    )
-    ap.add_argument(
-        "--no-byteswap-python-ecs-paths",
-        action="store_true",
-        help="Disable default Python byteswap for layer blocks and paths "
-             "dlc01_base/speedcity/dlccon (Rust-only for those)",
-    )
-    ap.add_argument(
         "--fail-on-placement-violations",
         action="store_true",
         help="After build, scan patch for Transform/flgs float violations and exit 1",
@@ -2005,9 +1915,6 @@ def main() -> int:
         synth_stringdb_aset=not args.no_synth_stringdb_aset,
         jobs=args.jobs,
         permissive=args.permissive,
-        byteswap_python_ecs=args.byteswap_python_ecs,
-        byteswap_python_ecs_fallback=args.byteswap_python_ecs_fallback,
-        byteswap_python_ecs_paths=not args.no_byteswap_python_ecs_paths,
         fail_on_placement_violations=args.fail_on_placement_violations,
         exclude_blocks=args.exclude_blocks,
         no_aset_validation=args.no_aset_validation,

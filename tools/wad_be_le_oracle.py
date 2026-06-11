@@ -59,7 +59,22 @@ from x360_dlc_io import (  # noqa: E402
     parse_be_indx,
     parse_be_pths,
 )
-from ucfx_be_to_le import _parse_entry_table_be  # noqa: E402
+
+
+def _parse_entry_table_be(be: bytes) -> list[tuple[int, int, int, int]]:
+    """BE block entry table: [u32 count][N x (hash, type_hash, offset, size)].
+
+    Inlined here so the oracle no longer depends on the retired Python converter.
+    """
+    count = struct.unpack_from(">I", be, 0)[0]
+    entries = []
+    for i in range(count):
+        off = 4 + i * 16
+        if off + 16 > len(be):
+            break
+        h, t, o, s = struct.unpack_from(">IIII", be, off)
+        entries.append((h, t, o, s))
+    return entries
 
 DEFAULT_XBOX_WAD = Path("game-files/xbox-vz.wad")
 DEFAULT_PC_WAD = Path("game-files/vz.wad")
@@ -178,9 +193,7 @@ def _decompress_be_block(mm: mmap.mmap, offset: int, size: int) -> bytes | None:
 
 
 def _convert(be_block: bytes, converter: str) -> bytes:
-    if converter == "python":
-        from ucfx_byteswap_wrapper import byteswap_block_python
-        return byteswap_block_python(be_block)
+    # Rust-only: the Python byte-swap converter has been retired.
     from ucfx_byteswap_wrapper import byteswap_block_rust
     return byteswap_block_rust(be_block, validate=False)
 
@@ -251,13 +264,11 @@ def run_oracle(args: argparse.Namespace) -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.converter == "rust":
-        from ucfx_byteswap_wrapper import rust_binary_available
-        if not rust_binary_available():
-            print("WARNING: rust ucfx_byteswap binary not found -- falling back "
-                  "to --converter python (build: make build-ucfx-byteswap)",
-                  file=sys.stderr)
-            _CONVERTER = args.converter = "python"
+    from ucfx_byteswap_wrapper import rust_binary_available
+    if not rust_binary_available():
+        print("ERROR: rust ucfx_byteswap binary not found "
+              "(build: make build-ucfx-byteswap)", file=sys.stderr)
+        return 1
 
     t0 = time.time()
     print(f"[1/3] Indexing PC ground truth: {args.pc_wad}")
@@ -508,7 +519,8 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--xbox-wad", type=Path, default=DEFAULT_XBOX_WAD)
     ap.add_argument("--pc-wad", type=Path, default=DEFAULT_PC_WAD)
-    ap.add_argument("--converter", choices=("rust", "python"), default="rust")
+    ap.add_argument("--converter", choices=("rust",), default="rust",
+                    help="(Python converter retired; rust only)")
     ap.add_argument("--type", default=None,
                     help="restrict comparison/extract to one type_hash (0xF011157A)")
     ap.add_argument("--jobs", type=int, default=1,
