@@ -23,7 +23,7 @@ MINHOOK_INC  = $(MINHOOK_ROOT)/include
 MINHOOK_SRC  = $(MINHOOK_ROOT)/src
 
 # --- Source files ---
-SRCS_BB     = pmc_blackbox.c lua_log_hook.c compat_patches.gen.c
+SRCS_BB     = pmc_blackbox.c lua_log_hook.c stream_probe.c crash_handler.c compat_patches.gen.c
 SRCS_MH     = $(MINHOOK_SRC)/hook.c \
               $(MINHOOK_SRC)/buffer.c \
               $(MINHOOK_SRC)/trampoline.c \

@@ -39,6 +39,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include "lua_log_hook.h"
+#include "stream_probe.h"
+#include "crash_handler.h"
 
 #define PMC_BLACKBOX_VERSION "3.0.0"
 #define SECUROM_XOR_KEY 0x19EA3FD3
@@ -395,6 +397,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
 
+        /* Crash handler — install FIRST so any later fault (init, world-load
+         * spawn, streaming) is recorded with its EIP + registers before the
+         * process dies. The retail EXE otherwise vanishes silently on a fault. */
+#ifndef PMC_DISABLE_CRASH_HANDLER
+        InstallCrashHandler();
+#endif
+
         /* NOTE: the former compat_hooks.c engine detours (hash-lookup 0x8242B0,
          * GetChunkDataReader 0x464780, vertex-decl clamp 0x74D6D0) have been REMOVED.
          * They were live MinHook detours that ran our code on hot, multi-threaded
@@ -425,6 +434,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         InstallLuaLogHook();
 #else
         pmc_log("blackbox", "Lua log hook: DISABLED at build time (control run)");
+#endif
+
+        /* Streaming-stall probe — names the resources that wedge the world-load
+         * streaming queue (logs each stuck node once; safe at any call rate).
+         * Opt out with -DPMC_DISABLE_STREAM_PROBE. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_STREAM_PROBE
+        InstallStreamProbe();
 #endif
 
         /* Fix underground spawn — early write + deferred watchdog thread.
