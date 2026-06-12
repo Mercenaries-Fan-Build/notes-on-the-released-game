@@ -415,24 +415,33 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
         _ => return (true, 0, None, Vec::new(), Vec::new()),
     };
 
-    let stride = read_u32_le(decl, 4) as usize;
-    if stride < 8 || stride > 256 {
+    // Derive the per-vertex stride and position format from the PC vertex
+    // declaration (D3DVERTEXELEMENT9 array), matching the converter's translation
+    // (apply_strm_vertex_fix). FLOAT16/SHORT positions have 2-byte components;
+    // decoding them as FLOAT32 (the previous assumption) yields garbage "NaN" — a
+    // false positive now that the converter byte-correctly translates half-float
+    // terrain vertices. We decode the position the same way the engine reads it.
+    let (stride, decl_all_u16) = decl_vertex_format(decl);
+    if stride < 6 || stride > 256 {
         return (
             true,
             0,
             None,
             Vec::new(),
             vec![format!(
-                "{label}: STRM decl stride {stride} out of range [8, 256]"
+                "{label}: STRM decl stride {stride} out of range [6, 256]"
             )],
         );
     }
 
-    if stride < 12 {
-        let vertex_count = data.len() / stride;
-        return (true, 0, Some(vertex_count), Vec::new(), Vec::new());
-    }
-
+    // Match the converter's data-driven decision (apply_strm_vertex_fix): a vertex
+    // buffer is FLOAT16 only when the decl is pure-f16/short AND the FLOAT32 view of
+    // the position is garbage. The STRM `decl` child can list only a trailing u16
+    // element while the buffer is genuinely FLOAT32 (sane f32 view) — the converter
+    // leaves those as f32, so the validator must read them as f32 too, else it would
+    // re-introduce false NaN on meshes the converter correctly did not touch.
+    let pos_is_f16 = decl_all_u16 && (stride < 12 || !float3_view_is_sane(data, stride));
+    let pos_bytes = if pos_is_f16 { 6 } else { 12 };
     let vertex_count = data.len() / stride;
     let check_count = vertex_count.min(128);
     let mut violations = 0usize;
@@ -441,12 +450,22 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
 
     for vi in 0..check_count {
         let off = vi * stride;
-        if off + 12 > data.len() {
+        if off + pos_bytes > data.len() {
             break;
         }
-        let vx = read_f32_le(data, off);
-        let vy = read_f32_le(data, off + 4);
-        let vz = read_f32_le(data, off + 8);
+        let (vx, vy, vz) = if pos_is_f16 {
+            (
+                read_f16_le(data, off),
+                read_f16_le(data, off + 2),
+                read_f16_le(data, off + 4),
+            )
+        } else {
+            (
+                read_f32_le(data, off),
+                read_f32_le(data, off + 4),
+                read_f32_le(data, off + 8),
+            )
+        };
 
         if !vx.is_finite() || !vy.is_finite() || !vz.is_finite() {
             violations += 1;
@@ -461,6 +480,97 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
     }
 
     (true, violations, Some(vertex_count), positions, issues)
+}
+
+/// Per-vertex stride + whether the position element is FLOAT16, parsed from the PC
+/// D3DVERTEXELEMENT9 declaration (8-byte header + 8-byte elements + END). The
+/// position is treated as FLOAT16 when every listed element is a 2-byte
+/// (SHORT/FLOAT16) type — the same gate the converter's `apply_strm_vertex_fix`
+/// uses; otherwise FLOAT32. The STRM `decl` child can list only the trailing
+/// element, so the stride is the max element end (not a header field).
+fn decl_vertex_format(decl: &[u8]) -> (usize, bool) {
+    let mut p = 8usize; // skip the 8-byte PC decl header
+    let mut stride = 0usize;
+    let mut n = 0usize;
+    let mut all_u16 = true;
+    while p + 8 <= decl.len() {
+        let stream = u16::from_le_bytes([decl[p], decl[p + 1]]);
+        let typ = decl[p + 4];
+        if stream == 0x00ff || typ == 17 {
+            break;
+        }
+        let offset = u16::from_le_bytes([decl[p + 2], decl[p + 3]]) as usize;
+        let sz = pc_decltype_size(typ);
+        if offset + sz > stride {
+            stride = offset + sz;
+        }
+        if !matches!(typ, 6 | 7 | 9 | 10 | 11 | 12 | 15 | 16) {
+            all_u16 = false;
+        }
+        n += 1;
+        p += 8;
+    }
+    (stride, n > 0 && all_u16)
+}
+
+/// Whether the FLOAT32 view of the position (offset 0, 3 components) is a sane
+/// in-world float3 across the sampled vertices — mirrors the converter's safety net.
+/// Used to distinguish a genuine FLOAT32 buffer (whose incomplete decl happens to
+/// list only a u16 element) from a scrambled-then-corrected half-float buffer.
+fn float3_view_is_sane(data: &[u8], stride: usize) -> bool {
+    let n = data.len() / stride;
+    let sample = n.min(16);
+    if sample == 0 {
+        return false;
+    }
+    let sane = |f: f32| f == 0.0 || (f.is_finite() && f.abs() >= 1e-3 && f.abs() <= 1e6);
+    for v in 0..sample {
+        let o = v * stride;
+        if o + 12 > data.len() {
+            return false;
+        }
+        if !(sane(read_f32_le(data, o))
+            && sane(read_f32_le(data, o + 4))
+            && sane(read_f32_le(data, o + 8)))
+        {
+            return false;
+        }
+    }
+    true
+}
+
+/// PC D3DDECLTYPE byte sizes (mirrors the converter's `pc_d3ddecltype_size`).
+fn pc_decltype_size(t: u8) -> usize {
+    match t {
+        1 | 7 | 10 | 12 | 16 => 8,
+        2 => 12,
+        3 => 16,
+        _ => 4,
+    }
+}
+
+/// Decode a little-endian IEEE-754 half-float (FLOAT16) to f32.
+fn read_f16_le(d: &[u8], off: usize) -> f32 {
+    let h = u16::from_le_bytes([d[off], d[off + 1]]);
+    let sign = (h >> 15) & 1;
+    let exp = (h >> 10) & 0x1f;
+    let frac = (h & 0x3ff) as u32;
+    let val = if exp == 0 {
+        (frac as f32 / 1024.0) * 2f32.powi(-14)
+    } else if exp == 0x1f {
+        if frac == 0 {
+            f32::INFINITY
+        } else {
+            f32::NAN
+        }
+    } else {
+        (1.0 + frac as f32 / 1024.0) * 2f32.powi(exp as i32 - 15)
+    };
+    if sign == 1 {
+        -val
+    } else {
+        val
+    }
 }
 
 /// Validate PRMG INFO sub-descriptors (60-byte bounding records).

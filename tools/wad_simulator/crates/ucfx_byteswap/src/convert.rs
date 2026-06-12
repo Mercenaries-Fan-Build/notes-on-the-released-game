@@ -306,6 +306,12 @@ fn convert_container(
     // shrink + container reframe). No-op when the container has no `decl`.
     if is_be {
         apply_decl_translate(&mut out, &descriptors, data_area_off, desc_table_end)?;
+        // Mesh STRM vertex buffers: re-correct FLOAT16/SHORT vertex components that
+        // the generic u32 sweep scrambled (see apply_strm_vertex_fix). Must run after
+        // apply_decl_translate so the PC D3DVERTEXELEMENT9 decl is available. Without
+        // this, half-float terrain vertices come out spatially transposed -> invalid
+        // world coordinates -> world-load streaming stall when the geometry is placed.
+        apply_strm_vertex_fix(&mut out, &descriptors, data_area_off, desc_table_end);
     }
 
     // Xbox 360 Lua bytecode: convert each `BINN` chunk BE→PC LE via the unluac
@@ -2031,6 +2037,146 @@ fn apply_decl_translate(
         out[size_field..size_field + 4].copy_from_slice(&(new_body.len() as u32).to_le_bytes());
     }
     Ok(())
+}
+
+/// Per-element component size for a PC D3DDECLTYPE: 4 = FLOAT32/D3DCOLOR
+/// (u32-swap), 2 = SHORT/FLOAT16/normalized-short (u16-swap), 1 = UBYTE (no swap).
+fn decl_type_component_size(t: u8) -> u8 {
+    match t {
+        6 | 7 | 9 | 10 | 11 | 12 | 15 | 16 => 2, // SHORT2/4, *N shorts, FLOAT16_2/4
+        5 | 8 => 1,                              // UBYTE4, UBYTE4N
+        _ => 4,                                  // FLOAT1-4, D3DCOLOR, UDEC3/DEC3N, unknown
+    }
+}
+
+/// Re-correct STRM vertex buffers whose FLOAT16/SHORT components were scrambled
+/// by the generic body pass's blanket u32 swap.
+///
+/// The generic pass byte-swaps a mesh's `data` (vertex) chunk in 4-byte groups —
+/// correct for FLOAT32 elements, but FLOAT16/SHORT elements are 2-byte components,
+/// so a u32 swap *transposes each adjacent pair*: a terrain FLOAT16_4 position
+/// (X,Y,Z,W) comes out (Y,X,W,Z). At format level that's a valid (huge/denormal)
+/// f32 — which is why the validator/docs call it "non-fatal" — but the engine now
+/// places this geometry in the world, so the scrambled coordinates break in-world
+/// placement (the world-load streaming stall). Where a STRM group's vertex
+/// declaration is pure-f16/short, we re-correct every 4-byte group by swapping its
+/// two u16 halves, which *exactly undoes* the wrong u32 swap. FLOAT32 vertex decls
+/// are left untouched (their u32 swap was already correct), so f32 meshes — the
+/// large majority — are unaffected.
+///
+/// Runs AFTER `apply_decl_translate` so the decl is the translated PC
+/// D3DVERTEXELEMENT9 array. Mesh-only by construction (no STRM group elsewhere).
+/// NOTE: the STRM `decl` child can list only the trailing element, so we key off
+/// the per-vertex stride (max element end) and treat the whole stride as f16 —
+/// safe because the gate requires *every listed element* to be a u16 type.
+fn apply_strm_vertex_fix(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+    let mut i = 0;
+    while i < descriptors.len() {
+        if descriptors[i].tag != ChunkTag::Strm || descriptors[i].row_u0 != 0xFFFFFFFF {
+            i += 1;
+            continue;
+        }
+        // Collect the decl + data children of this STRM group (until the next sentinel).
+        let mut decl: Option<(usize, usize)> = None;
+        let mut data: Option<(usize, usize)> = None;
+        let mut j = i + 1;
+        while j < descriptors.len() {
+            let cd = &descriptors[j];
+            if cd.row_u0 == 0xFFFFFFFF {
+                break;
+            }
+            let start = data_start + cd.row_u0 as usize;
+            let size = cd.body_size as usize;
+            if start + size <= out.len() {
+                match cd.tag {
+                    ChunkTag::Decl => decl = Some((start, size)),
+                    ChunkTag::Data => data = Some((start, size)),
+                    _ => {}
+                }
+            }
+            j += 1;
+        }
+        i = j;
+
+        let (ds, dl, vs, vl) = match (decl, data) {
+            (Some((ds, dl)), Some((vs, vl))) => (ds, dl, vs, vl),
+            _ => continue,
+        };
+        if dl < 16 {
+            continue;
+        }
+        // Parse the PC decl: stride (max element end) + whether every element is u16-type.
+        let decl_bytes = &out[ds..ds + dl];
+        let mut p = 8usize; // skip the 8-byte PC decl header
+        let mut stride = 0usize;
+        let mut n_elems = 0usize;
+        let mut all_u16 = true;
+        while p + 8 <= decl_bytes.len() {
+            let stream = u16::from_le_bytes([decl_bytes[p], decl_bytes[p + 1]]);
+            let typ = decl_bytes[p + 4];
+            if stream == 0x00ff || typ == 17 {
+                break;
+            }
+            let offset = u16::from_le_bytes([decl_bytes[p + 2], decl_bytes[p + 3]]) as usize;
+            let end = offset + pc_d3ddecltype_size(typ) as usize;
+            if end > stride {
+                stride = end;
+            }
+            if decl_type_component_size(typ) != 2 {
+                all_u16 = false;
+            }
+            n_elems += 1;
+            p += 8;
+        }
+        if n_elems == 0 || !all_u16 || stride < 4 || stride % 4 != 0 || vl < stride {
+            continue;
+        }
+        let n_verts = vl / stride;
+
+        // Data-driven SAFETY NET. The generic pass already u32-swapped this buffer.
+        // The STRM `decl` child can list only a trailing u16 element while the
+        // (unlisted) position element is FLOAT32 — and applying the f16 correction
+        // to a genuine f32 vertex buffer CORRUPTS it (early world-load crash). So
+        // only re-correct when the current FLOAT32 view of the position is garbage
+        // (= scrambled half-floats). If every sampled vertex reads as a sane,
+        // in-world float3, the vertices are genuinely FLOAT32 and we leave them.
+        if stride >= 12 {
+            let sane = |f: f32| f == 0.0 || (f.is_finite() && (1e-3..=1e6).contains(&f.abs()));
+            let sample = n_verts.min(16);
+            let mut all_f32_sane = sample > 0;
+            for v in 0..sample {
+                let o = vs + v * stride;
+                let fx = f32::from_le_bytes([out[o], out[o + 1], out[o + 2], out[o + 3]]);
+                let fy = f32::from_le_bytes([out[o + 4], out[o + 5], out[o + 6], out[o + 7]]);
+                let fz = f32::from_le_bytes([out[o + 8], out[o + 9], out[o + 10], out[o + 11]]);
+                if !(sane(fx) && sane(fy) && sane(fz)) {
+                    all_f32_sane = false;
+                    break;
+                }
+            }
+            if all_f32_sane {
+                continue; // genuine FLOAT32 vertices — do not touch
+            }
+        }
+
+        // u16-correct every 4-byte group across each vertex stride (undo the wrong u32 swap).
+        for v in 0..n_verts {
+            let vb = vs + v * stride;
+            let mut g = 0usize;
+            while g + 4 <= stride {
+                let o = vb + g;
+                out.swap(o, o + 2);
+                out.swap(o + 1, o + 3);
+                g += 4;
+            }
+        }
+    }
 }
 
 /// Convert an `enum` body in-place from BE to LE.
