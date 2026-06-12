@@ -43,7 +43,7 @@ all: mingw
 
 mingw: $(SRCS_BB) $(DEF)
 	$(CC_MINGW) $(CFLAGS) -o $(TARGET) $(SRCS_ALL) $(DEF) $(LDFLAGS)
-	-$(STRIP_MINGW) $(TARGET)   # leading '-': strip is optional (some boxes have it unprefixed/absent)
+	-$(STRIP_MINGW) $(TARGET) 2>/dev/null || strip $(TARGET)   # prefixed strip, else unprefixed; leading '-': optional
 	@echo "Built: $(TARGET) ($$(wc -c < $(TARGET)) bytes)"
 	@echo "Place next to Mercenaries2.exe (no separate MinHook DLL needed)"
 

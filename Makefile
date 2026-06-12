@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-compat cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -1073,24 +1073,28 @@ validate-probe-results:
 # ---- PMC Blackbox (SecuROM spoof + debug console + ASI loader) ----
 # Output: pmc_bb.dll — game's import table must reference this name.
 
-# Default = the PROVEN compat-OFF build (vanilla): the engine compat detours
-# reintroduce the early-init 0x45b1d2 crash, while compat-off boots clean and
-# reaches the real (streaming) blocker. Use `make pmc-blackbox-compat` to build
-# WITH the (surgically reduced) detours for debugging.
+# There is now ONE build. The engine compat DETOURS (compat_hooks.c / MinHook)
+# were removed — they reintroduced the early-init 0x45b1d2 crash. pmc_bb applies
+# only the in-memory compat PATCHES (compat_patches.gen.c via VirtualProtect:
+# anim-table 1024->4096 expansion + DLC guards) — no exe edit, no engine hooks.
+# `make pmc-blackbox-nopatch` builds a control DLL with the patches compiled out
+# (-DPMC_NO_RUNTIME_PATCH) to A/B whether a runtime patch is responsible.
 pmc-blackbox:
-	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" vanilla
-	@mkdir -p "$(OUTPUT)/dlls"
-	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
-	@echo ""
-	@echo "Built compat-OFF (vanilla). Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
-	@echo "         (game import table must reference pmc_bb.dll)"
-
-pmc-blackbox-compat:
 	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
 	@mkdir -p "$(OUTPUT)/dlls"
 	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
 	@echo ""
-	@echo "Built WITH compat detours (hash-lookup hook off). Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
+	@echo "Built pmc_bb.dll (compat PATCHES in-memory, no engine hooks)."
+	@echo "Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
+	@echo "         (game import table must reference pmc_bb.dll)"
+
+pmc-blackbox-nopatch:
+	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw EXTRA_CFLAGS=-DPMC_NO_RUNTIME_PATCH
+	@mkdir -p "$(OUTPUT)/dlls"
+	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
+	@echo ""
+	@echo "Built CONTROL pmc_bb.dll (compat patches DISABLED, -DPMC_NO_RUNTIME_PATCH)."
+	@echo "Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
 
 # ---- Ghidra Annotation (Mercs 1 → Mercs 2 cross-reference) ----
 
