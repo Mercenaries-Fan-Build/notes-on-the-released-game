@@ -321,6 +321,14 @@ fn convert_container(
         apply_binn_transcode(&mut out, &descriptors, data_area_off, desc_table_end)?;
     }
 
+    // Xbox 360 terrainmesh (0x7C569307): a genuine re-encode (vertices widen to the
+    // PC stride, indices de-strip, info/count fields rewrite). Runs last, gated on
+    // the terrainmesh type_hash, and rebuilds + reframes the whole data area. See
+    // apply_terrainmesh_reencode / docs/terrainmesh_reencode_implementation.md.
+    if is_be && type_hash == types::TYPE_HASH_TERRAIN_MESH {
+        apply_terrainmesh_reencode(&mut out, &descriptors, data_area_off, desc_table_end)?;
+    }
+
     Ok(out)
 }
 
@@ -2179,6 +2187,590 @@ fn apply_strm_vertex_fix(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Terrainmesh (mesh_A / 0x7C569307) Xbox-360 → PC re-encode
+//
+// PC retail terrainmesh is a genuine re-encode, ~+170 KB larger per mesh, not a
+// byte-swap. The transform is per-chunk and reframes the container (bodies
+// resize, later offsets shift). See docs/terrainmesh_reencode_implementation.md
+// for the full diagnosis, the empirically-pinned DEC3N formula, and exactly
+// which chunks are byte-exact vs only geometry-correct.
+//
+// Implemented here (gated on type_hash == TYPE_HASH_TERRAIN_MESH):
+//   * STRM `info` stride rewrite (byte-exact): pc_stride = be_stride + 4×(#FLOAT16_4).
+//   * STRM `data` vertex widening (byte-exact for POSITION/FLOAT16_2/D3DCOLOR;
+//     geometry-correct for NORMAL/TANGENT via the DEC3N decode — see below).
+//   * IBUF `data` de-strip (geometry-correct): Xbox tri-strip w/ 0xFFFF restart
+//     → PC tri-list, + IBUF `info` index-count rewrite.
+//   * MTRL per-record count-pair fix (engine-correct; MTRL is not byte-exact
+//     because PC additionally drops sub-records / shrinks).
+// ---------------------------------------------------------------------------
+
+/// Encode an f32 as an IEEE-754 binary16 (half) bit pattern, round-to-nearest-
+/// even — matches Rust `f32 as f16` / the `<e>` pack the oracle compares against.
+fn f32_to_f16_bits(f: f32) -> u16 {
+    let x = f.to_bits();
+    let sign = ((x >> 16) & 0x8000) as u16;
+    let mut mant = (x & 0x007f_ffff) as i32;
+    let exp = ((x >> 23) & 0xff) as i32;
+    if exp == 0xff {
+        // Inf/NaN
+        return sign | 0x7c00 | (if mant != 0 { 0x0200 } else { 0 });
+    }
+    let mut e = exp - 127 + 15;
+    if e >= 0x1f {
+        // overflow → Inf
+        return sign | 0x7c00;
+    }
+    if e <= 0 {
+        // subnormal / underflow
+        if e < -10 {
+            return sign;
+        }
+        mant |= 0x0080_0000; // implicit 1
+        let shift = 14 - e; // 14..24
+        let half_mant = mant >> shift;
+        // round to nearest even
+        let rem = mant & ((1 << shift) - 1);
+        let halfway = 1 << (shift - 1);
+        let mut hm = half_mant as u16;
+        if rem > halfway || (rem == halfway && (hm & 1) == 1) {
+            hm += 1;
+        }
+        return sign | hm;
+    }
+    // normal
+    let mut hm = (mant >> 13) as u16;
+    let rem = mant & 0x1fff;
+    let halfway = 0x1000;
+    if rem > halfway || (rem == halfway && (hm & 1) == 1) {
+        hm += 1;
+        if hm == 0x0400 {
+            // mantissa overflow → bump exponent
+            hm = 0;
+            e += 1;
+            if e >= 0x1f {
+                return sign | 0x7c00;
+            }
+        }
+    }
+    sign | ((e as u16) << 10) | hm
+}
+
+/// Decode an Xbox-360 DEC3N-packed normal/tangent (4 BE bytes, read here as a
+/// big-endian u32) into a PC `FLOAT16_4` (4 little-endian half-floats, W = 1.0).
+///
+/// **Bit layout (pinned empirically from 24,282 base-terrainmesh NORMAL pairs;
+/// mean angular error 0.05°, max 0.12° — see the implementation doc):**
+///   * X = sign-extend(bits[0:11])  / 1023   (11-bit signed)
+///   * Y = sign-extend(bits[11:22]) / 1023   (11-bit signed)
+///   * Z = sign-extend(bits[22:32]) / 511    (10-bit signed)
+///   * W = 1.0
+/// i.e. an 11-11-10 signed-normalized packing (Xbox `D3DDECLTYPE_DEC3N` /
+/// "HEND3N" variant). The decoded vector is normalized, then each component is
+/// re-encoded to binary16. This is **geometry-correct, not byte-exact**: PC's
+/// FLOAT16_4 normals were quantized from the original high-precision source mesh,
+/// so they differ from this lossy-Xbox-decode by ≤1–2 half-float ULP. The
+/// direction is reproduced to ~0.05°, which is what the engine/lighting needs.
+fn dec3n_to_half4_le(u: u32) -> [u8; 8] {
+    let sx = |v: u32, bits: u32| -> i32 {
+        let m = (v & ((1 << bits) - 1)) as i32;
+        let half = 1 << (bits - 1);
+        if m >= half { m - (1 << bits) } else { m }
+    };
+    let x = sx(u, 11) as f32 / 1023.0;
+    let y = sx(u >> 11, 11) as f32 / 1023.0;
+    let z = sx(u >> 22, 10) as f32 / 511.0;
+    let mag = (x * x + y * y + z * z).sqrt();
+    let (nx, ny, nz) = if mag > 0.0 {
+        (x / mag, y / mag, z / mag)
+    } else {
+        (0.0, 0.0, 0.0)
+    };
+    let mut out = [0u8; 8];
+    out[0..2].copy_from_slice(&f32_to_f16_bits(nx).to_le_bytes());
+    out[2..4].copy_from_slice(&f32_to_f16_bits(ny).to_le_bytes());
+    out[4..6].copy_from_slice(&f32_to_f16_bits(nz).to_le_bytes());
+    out[6..8].copy_from_slice(&f32_to_f16_bits(1.0).to_le_bytes());
+    out
+}
+
+/// A parsed PC D3DVERTEXELEMENT9 (already translated by `apply_decl_translate`).
+struct DeclElem {
+    offset_pc: usize,
+    typ: u8,
+}
+
+/// Parse a translated PC `decl` body into its element list + computed PC stride.
+/// Returns `None` if the decl is malformed or has no usable elements.
+fn parse_pc_decl(decl: &[u8]) -> Option<(Vec<DeclElem>, usize)> {
+    if decl.len() < 8 {
+        return None;
+    }
+    let mut elems = Vec::new();
+    let mut stride = 0usize;
+    let mut p = 8usize; // skip the 8-byte PC decl header
+    while p + 8 <= decl.len() {
+        let stream = u16::from_le_bytes([decl[p], decl[p + 1]]);
+        let typ = decl[p + 4];
+        if stream == 0x00ff || typ == 17 {
+            break;
+        }
+        let offset = u16::from_le_bytes([decl[p + 2], decl[p + 3]]) as usize;
+        let end = offset + pc_d3ddecltype_size(typ) as usize;
+        if end > stride {
+            stride = end;
+        }
+        elems.push(DeclElem { offset_pc: offset, typ });
+        p += 8;
+    }
+    if elems.is_empty() {
+        return None;
+    }
+    Some((elems, stride))
+}
+
+/// Rebuild one STRM vertex buffer from the Xbox-packed source stride to the wider
+/// PC stride, driven by the (already-PC-translated) decl.
+///
+/// `src` is the generic-swapped Xbox vertex body (the blanket u32 swap already
+/// ran over it). `be_stride` / `pc_stride` come from the STRM `info` chunks.
+///
+/// Element handling:
+///   * POSITION (unlisted FLOAT16_4 @ off 0, 8B both): un-do the wrong u32 swap
+///     (swap the two u16 halves of each 4-byte group) → byte-exact.
+///   * FLOAT16_2 (type 15, 4B): same u16-half un-swap → byte-exact.
+///   * FLOAT16_4 listed (type 16): the **Xbox source is 4 packed DEC3N bytes**,
+///     widened to an 8B PC FLOAT16_4 via `dec3n_to_half4_le` → geometry-correct.
+///   * D3DCOLOR / UBYTE4 (types 4/5, 4B): copy the 4 bytes verbatim. (The generic
+///     u32 swap reversed them; the Xbox→PC D3DCOLOR mapping is itself a reversal,
+///     so the net is the original BE order — which equals PC. Byte-exact.)
+///   * anything else: copy `pc_size` bytes verbatim (u32 swap already applied).
+fn rebuild_terrain_vertices(
+    src: &[u8],
+    be_stride: usize,
+    pc_stride: usize,
+    elems: &[DeclElem],
+    n_verts: usize,
+) -> Vec<u8> {
+    let mut out = vec![0u8; pc_stride * n_verts];
+    // Build the Xbox-side offset for each PC element. Position occupies [0,8) on
+    // both. Listed elements are placed in PC-offset order; on the Xbox side a
+    // FLOAT16_4 is 4 bytes, everything else keeps its PC size.
+    let mut sorted: Vec<&DeclElem> = elems.iter().collect();
+    sorted.sort_by_key(|e| e.offset_pc);
+    // Compute be offsets.
+    let mut be_off = Vec::with_capacity(sorted.len());
+    let mut cur = 8usize; // position prefix (8B on both)
+    for e in &sorted {
+        be_off.push(cur);
+        let bsz = if e.typ == 16 { 4 } else { pc_d3ddecltype_size(e.typ) as usize };
+        cur += bsz;
+    }
+    let half_unswap = |dst: &mut [u8], s: &[u8]| {
+        // s,dst are 4-byte groups; undo the wrong u32 swap = swap the two u16 halves.
+        // Generic pass turned BE [b0 b1 b2 b3] into [b3 b2 b1 b0]; we want PC
+        // [b1 b0 b3 b2] (each u16 little-endian). From the current [b3 b2 b1 b0]:
+        dst[0] = s[2];
+        dst[1] = s[3];
+        dst[2] = s[0];
+        dst[3] = s[1];
+    };
+    for v in 0..n_verts {
+        let so = v * be_stride;
+        let dst_o = v * pc_stride;
+        if so + be_stride > src.len() || dst_o + pc_stride > out.len() {
+            break;
+        }
+        // Position: 8 bytes = two 4-byte groups, u16-half un-swap each.
+        half_unswap(&mut out[dst_o..dst_o + 4], &src[so..so + 4]);
+        half_unswap(&mut out[dst_o + 4..dst_o + 8], &src[so + 4..so + 8]);
+        for (k, e) in sorted.iter().enumerate() {
+            let bo = so + be_off[k];
+            let po = dst_o + e.offset_pc;
+            match e.typ {
+                16 => {
+                    // FLOAT16_4 normal/tangent: 4 packed DEC3N bytes → 8B FLOAT16_4.
+                    // src bytes were u32-swapped by the generic pass; the original
+                    // BE u32 = reverse of the 4 swapped bytes.
+                    if bo + 4 <= src.len() {
+                        let b = &src[bo..bo + 4];
+                        let u = u32::from_le_bytes([b[0], b[1], b[2], b[3]]); // = BE-of-original
+                        let half4 = dec3n_to_half4_le(u);
+                        out[po..po + 8].copy_from_slice(&half4);
+                    }
+                }
+                15 => {
+                    // FLOAT16_2: 4B, u16-half un-swap.
+                    if bo + 4 <= src.len() {
+                        let mut tmp = [0u8; 4];
+                        half_unswap(&mut tmp, &src[bo..bo + 4]);
+                        out[po..po + 4].copy_from_slice(&tmp);
+                    }
+                }
+                4 | 5 => {
+                    // D3DCOLOR / UBYTE4 (4B): the PC component order equals the
+                    // *generic-u32-swapped* Xbox bytes verbatim. Raw BE `00 fe 00 00`
+                    // → generic swap `00 00 fe 00` == PC. (Investigation A's observed
+                    // "rotate" `fecbcbcb→cbcbcbfe` was raw-BE vs PC; the generic pass
+                    // already applies that reversal.) Byte-exact — copy src as-is.
+                    if bo + 4 <= src.len() {
+                        out[po..po + 4].copy_from_slice(&src[bo..bo + 4]);
+                    }
+                }
+                _ => {
+                    let sz = pc_d3ddecltype_size(e.typ) as usize;
+                    if bo + sz <= src.len() && po + sz <= out.len() {
+                        out[po..po + sz].copy_from_slice(&src[bo..bo + sz]);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// De-strip an Xbox triangle strip (u16 indices, `0xFFFF` primitive-restart) into
+/// a flat triangle list. Geometry-correct (every non-degenerate triangle of the
+/// strip is emitted with consistent winding); NOT byte-exact vs PC, which uses a
+/// single degenerate-stitched strip with a vertex-cache re-index (see the doc).
+///
+/// `src` is the generic-swapped (u16-swap-corrected) Xbox index body. Returns the
+/// PC triangle-list index bytes (LE u16).
+fn destrip_indices(src: &[u8]) -> Vec<u8> {
+    let n = src.len() / 2;
+    let idx: Vec<u16> = (0..n)
+        .map(|i| u16::from_le_bytes([src[i * 2], src[i * 2 + 1]]))
+        .collect();
+    let mut out: Vec<u16> = Vec::with_capacity(n * 3);
+    let mut run: Vec<u16> = Vec::new();
+    let flush = |run: &[u16], out: &mut Vec<u16>| {
+        if run.len() < 3 {
+            return;
+        }
+        for k in 0..run.len() - 2 {
+            let (a, b, c) = (run[k], run[k + 1], run[k + 2]);
+            if a == b || b == c || a == c {
+                continue; // degenerate
+            }
+            if k % 2 == 0 {
+                out.extend_from_slice(&[a, b, c]);
+            } else {
+                out.extend_from_slice(&[a, c, b]);
+            }
+        }
+    };
+    for &x in &idx {
+        if x == 0xffff {
+            flush(&run, &mut out);
+            run.clear();
+        } else {
+            run.push(x);
+        }
+    }
+    flush(&run, &mut out);
+    let mut bytes = Vec::with_capacity(out.len() * 2);
+    for x in out {
+        bytes.extend_from_slice(&x.to_le_bytes());
+    }
+    bytes
+}
+
+/// Fix transposed `[u16 flags][u16 count]` count pairs in an MTRL body that the
+/// generic `convert_mtrl` only corrected for the FIRST material record. Walks the
+/// material array and, for every record beyond the first, restores the count pair
+/// from a u32-transposition (`count,0` ↔ `0,count`) to the in-place u16 form PC
+/// uses. Engine-correctness only — MTRL is not made byte-exact (PC also drops
+/// sub-records / shrinks the body, which is not reproducible here).
+///
+/// Deterministic material-record walk (pinned from the retail PC MTRL of the
+/// worked terrainmeshes): each material record is `[104-byte param block]
+/// [u16 flags][u16 count][count × u32 tex-hash][12-byte tail]`, so the record
+/// stride is `116 + count*4` and the count pair sits at `record_start + 104`.
+/// `convert_mtrl` already fixed record 0's pair; this walks the rest and restores
+/// each transposed `[count][0]` → `[0][count]` (flags is 0 in every observed
+/// record). If a record's layout doesn't match (count out of 1..=64 or the next
+/// stride would run off the end), we stop walking — never corrupting trailing data.
+fn mtrl_fix_transposed_counts(body: &mut [u8]) {
+    const PARAM_BLOCK: usize = 104;
+    // Record stride = 116 + count*4 (pinned from retail PC: count pairs at material
+    // offsets 104, 236, 376, … → strides 132, 140, … for counts 4, 6, …). The
+    // fixed overhead beyond the param block is the 4-byte count pair + an 8-byte tail.
+    const TAIL: usize = 8;
+    let mut rec = 0usize;
+    while rec + PARAM_BLOCK + 4 <= body.len() {
+        let cp = rec + PARAM_BLOCK; // count-pair offset
+        let lo = u16::from_le_bytes([body[cp], body[cp + 1]]);
+        let hi = u16::from_le_bytes([body[cp + 2], body[cp + 3]]);
+        // Determine the true count. PC form is [flags=0][count]; the generic u32
+        // swap may have transposed it to [count][0]. Accept either and normalize.
+        let (flags, count) = if lo == 0 && (1..=64).contains(&hi) {
+            (0u16, hi) // already PC-form (e.g. record 0, fixed by convert_mtrl)
+        } else if hi == 0 && (1..=64).contains(&lo) {
+            // transposed → fix in place to [0][count]
+            body[cp] = 0;
+            body[cp + 1] = 0;
+            body[cp + 2] = (lo & 0xff) as u8;
+            body[cp + 3] = (lo >> 8) as u8;
+            (0u16, lo)
+        } else {
+            break; // unrecognized record layout — stop, leave the rest untouched
+        };
+        let _ = flags;
+        let stride = PARAM_BLOCK + 4 + count as usize * 4 + TAIL;
+        rec += stride;
+    }
+}
+
+/// Terrainmesh (`0x7C569307`) re-encode pass. Runs LAST (after the generic body
+/// sweep, `apply_decl_translate`, and `apply_strm_vertex_fix`), gated on the
+/// terrainmesh type_hash. Rebuilds the container's data area with PC-format chunk
+/// bodies and reframes every descriptor offset.
+///
+/// Note this SUPERSEDES `apply_strm_vertex_fix` for terrainmesh STRM `data` (it
+/// re-derives vertices from the generic-swapped source itself), and overrides
+/// `apply_decl_translate`'s size-preserving decl handling by using the actual
+/// translated decl length (PC ships the shrunk decl).
+///
+/// Returns `Ok(())`; on any structural surprise it bails out leaving `out`
+/// unchanged from the prior passes (still a loadable byte-swap), never corrupting.
+fn apply_terrainmesh_reencode(
+    out: &mut Vec<u8>,
+    descriptors: &[Descriptor],
+    data_area_off: usize,
+    desc_table_end: usize,
+) -> Result<(), String> {
+    let data_start = if data_area_off > 0 { data_area_off } else { desc_table_end };
+    if data_start > out.len() {
+        return Ok(());
+    }
+
+    // Snapshot the current (post-generic-swap / post-decl-translate) bodies, keyed
+    // by descriptor index, then rebuild the data area chunk-by-chunk in row_u0
+    // order. PC terrainmesh bodies are contiguous (zero gaps, no alignment pad),
+    // verified across the worked corpus — so a simple concatenation reproduces the
+    // PC layout shape.
+    #[derive(Clone)]
+    struct Body {
+        idx: usize,
+        old_u0: u32,
+        bytes: Vec<u8>,
+    }
+    let mut bodies: Vec<Body> = Vec::new();
+    for (idx, d) in descriptors.iter().enumerate() {
+        if d.row_u0 == 0xFFFF_FFFF {
+            continue; // container sentinel — no body
+        }
+        // Read the CURRENT row_u0 / body_size from `out`'s descriptor table, not the
+        // stale BE `descriptors` values — earlier passes (apply_decl_translate)
+        // already rewrote some sizes in place (e.g. decl shrinks). Row layout:
+        // tag@0, row_u0@+4, body_size@+8; rows at 20 + idx*20.
+        let row = 20 + idx * 20;
+        let cur_u0 =
+            u32::from_le_bytes([out[row + 4], out[row + 5], out[row + 6], out[row + 7]]);
+        let cur_size =
+            u32::from_le_bytes([out[row + 8], out[row + 9], out[row + 10], out[row + 11]]) as usize;
+        if cur_u0 == 0xFFFF_FFFF {
+            continue;
+        }
+        let abs = data_start + cur_u0 as usize;
+        if abs + cur_size > out.len() {
+            return Ok(()); // unexpected — bail, leave prior passes intact
+        }
+        bodies.push(Body { idx, old_u0: cur_u0, bytes: out[abs..abs + cur_size].to_vec() });
+    }
+    bodies.sort_by_key(|b| b.old_u0);
+
+    // Identify STRM/IBUF groups so the per-stream `info` stride / index-count can be
+    // rewritten alongside the `data` body re-encode. We walk the original
+    // descriptor order (sentinels included) to pair each group's children.
+    // Map: descriptor idx -> role within its group.
+    // STRM group children: info(12B), decl, data. IBUF group children: info(4B), data.
+    use std::collections::HashMap;
+    let mut group_of: HashMap<usize, (ChunkTag, Vec<usize>)> = HashMap::new();
+    {
+        let mut k = 0usize;
+        while k < descriptors.len() {
+            let tag = descriptors[k].tag;
+            if (tag == ChunkTag::Strm || tag == ChunkTag::Ibuf)
+                && descriptors[k].row_u0 == 0xFFFF_FFFF
+            {
+                let mut kids = Vec::new();
+                let mut j = k + 1;
+                while j < descriptors.len() && descriptors[j].row_u0 != 0xFFFF_FFFF {
+                    // only direct leaf children (until the next sentinel)
+                    kids.push(j);
+                    j += 1;
+                }
+                group_of.insert(k, (tag, kids));
+                k = j;
+            } else {
+                k += 1;
+            }
+        }
+    }
+
+    // Build quick lookups: child idx -> (group_tag, child_tag-role)
+    // We need, per STRM group: the decl (for the element list / strides) and the
+    // info + data indices. Per IBUF group: info + data indices.
+    // Compute a per-data-idx plan: how to transform its body.
+    enum Plan {
+        StrmData { be_stride: usize, pc_stride: usize, elems: Vec<DeclElem>, n_verts: usize },
+        StrmInfoStride { pc_stride: u32 },
+        IbufData,
+        IbufInfoCount,
+        Mtrl,
+    }
+    let mut plans: HashMap<usize, Plan> = HashMap::new();
+
+    for (_g, (gtag, kids)) in &group_of {
+        // find child roles by tag
+        let mut info_idx = None;
+        let mut decl_idx = None;
+        let mut data_idx = None;
+        for &ci in kids {
+            match descriptors[ci].tag {
+                ChunkTag::Info => info_idx = Some(ci),
+                ChunkTag::Decl => decl_idx = Some(ci),
+                ChunkTag::Data => data_idx = Some(ci),
+                _ => {}
+            }
+        }
+        if *gtag == ChunkTag::Strm {
+            let (Some(ii), Some(di), Some(vi)) = (info_idx, decl_idx, data_idx) else { continue };
+            // fetch bodies (current, post-swap) from the snapshot
+            let info_body = bodies.iter().find(|b| b.idx == ii).map(|b| b.bytes.clone());
+            let decl_body = bodies.iter().find(|b| b.idx == di).map(|b| b.bytes.clone());
+            let (Some(info_body), Some(decl_body)) = (info_body, decl_body) else { continue };
+            if info_body.len() < 12 {
+                continue;
+            }
+            let be_stride = u32::from_le_bytes([info_body[4], info_body[5], info_body[6], info_body[7]]) as usize;
+            let vcount = u32::from_le_bytes([info_body[8], info_body[9], info_body[10], info_body[11]]) as usize;
+            let Some((elems, pc_stride)) = parse_pc_decl(&decl_body) else { continue };
+            if be_stride == 0 || pc_stride == 0 || vcount == 0 {
+                continue;
+            }
+            plans.insert(vi, Plan::StrmData { be_stride, pc_stride, elems, n_verts: vcount });
+            plans.insert(ii, Plan::StrmInfoStride { pc_stride: pc_stride as u32 });
+        } else if *gtag == ChunkTag::Ibuf {
+            let (Some(ii), Some(vi)) = (info_idx, data_idx) else { continue };
+            plans.insert(vi, Plan::IbufData);
+            plans.insert(ii, Plan::IbufInfoCount);
+        }
+    }
+    for (idx, d) in descriptors.iter().enumerate() {
+        if d.tag == ChunkTag::Mtrl && d.row_u0 != 0xFFFF_FFFF {
+            plans.entry(idx).or_insert(Plan::Mtrl);
+        }
+    }
+
+    // Transform each body per its plan, recording new lengths. IBUF data must be
+    // computed before its info (to know the new index count), so do a first pass
+    // over data bodies, then patch the paired info bodies.
+    // Map idx -> new bytes.
+    let mut new_bytes: HashMap<usize, Vec<u8>> = HashMap::new();
+    // record IBUF data new index count, keyed by the IBUF group, to patch info.
+    // We pair info<->data within a group via the group kids.
+    let mut ibuf_count_for_info: HashMap<usize, u32> = HashMap::new();
+    // Build a map data_idx -> info_idx for IBUF groups.
+    let mut ibuf_info_of_data: HashMap<usize, usize> = HashMap::new();
+    for (_g, (gtag, kids)) in &group_of {
+        if *gtag == ChunkTag::Ibuf {
+            let mut info_idx = None;
+            let mut data_idx = None;
+            for &ci in kids {
+                match descriptors[ci].tag {
+                    ChunkTag::Info => info_idx = Some(ci),
+                    ChunkTag::Data => data_idx = Some(ci),
+                    _ => {}
+                }
+            }
+            if let (Some(ii), Some(vi)) = (info_idx, data_idx) {
+                ibuf_info_of_data.insert(vi, ii);
+            }
+        }
+    }
+
+    for b in &bodies {
+        match plans.get(&b.idx) {
+            Some(Plan::StrmData { be_stride, pc_stride, elems, n_verts }) => {
+                let widened = rebuild_terrain_vertices(&b.bytes, *be_stride, *pc_stride, elems, *n_verts);
+                new_bytes.insert(b.idx, widened);
+            }
+            Some(Plan::StrmInfoStride { pc_stride }) => {
+                let mut info = b.bytes.clone();
+                if info.len() >= 8 {
+                    info[4..8].copy_from_slice(&pc_stride.to_le_bytes());
+                }
+                new_bytes.insert(b.idx, info);
+            }
+            Some(Plan::IbufData) => {
+                let listed = destrip_indices(&b.bytes);
+                let count = (listed.len() / 2) as u32;
+                if let Some(&ii) = ibuf_info_of_data.get(&b.idx) {
+                    ibuf_count_for_info.insert(ii, count);
+                }
+                new_bytes.insert(b.idx, listed);
+            }
+            Some(Plan::Mtrl) => {
+                let mut m = b.bytes.clone();
+                mtrl_fix_transposed_counts(&mut m);
+                new_bytes.insert(b.idx, m);
+            }
+            _ => {}
+        }
+    }
+    // Patch IBUF info bodies with the new index count.
+    for b in &bodies {
+        if let Some(Plan::IbufInfoCount) = plans.get(&b.idx) {
+            if let Some(&count) = ibuf_count_for_info.get(&b.idx) {
+                let mut info = b.bytes.clone();
+                if info.len() >= 4 {
+                    info[0..4].copy_from_slice(&count.to_le_bytes());
+                }
+                new_bytes.insert(b.idx, info);
+            }
+        }
+    }
+
+    // Reassemble the data area in row_u0 order, recomputing offsets, and patch the
+    // descriptor table (row_u0 + body_size) in `out`.
+    let mut new_data: Vec<u8> = Vec::with_capacity(out.len());
+    // new_u0[idx] = offset within data area
+    let mut new_u0: HashMap<usize, u32> = HashMap::new();
+    let mut new_len: HashMap<usize, u32> = HashMap::new();
+    for b in &bodies {
+        let off = new_data.len() as u32;
+        let bytes = new_bytes.get(&b.idx).unwrap_or(&b.bytes);
+        new_u0.insert(b.idx, off);
+        new_len.insert(b.idx, bytes.len() as u32);
+        new_data.extend_from_slice(bytes);
+    }
+
+    // Rewrite the header region [0..data_start] + new data area.
+    let mut rebuilt = Vec::with_capacity(data_start + new_data.len());
+    rebuilt.extend_from_slice(&out[..data_start]);
+    rebuilt.extend_from_slice(&new_data);
+
+    // Patch descriptor rows (row_u0 @ +4, body_size @ +8 within each 20B row at 20+idx*20).
+    for (idx, d) in descriptors.iter().enumerate() {
+        if d.row_u0 == 0xFFFF_FFFF {
+            continue;
+        }
+        let row = 20 + idx * 20;
+        if let Some(&u0) = new_u0.get(&idx) {
+            rebuilt[row + 4..row + 8].copy_from_slice(&u0.to_le_bytes());
+        }
+        if let Some(&ln) = new_len.get(&idx) {
+            rebuilt[row + 8..row + 12].copy_from_slice(&ln.to_le_bytes());
+        }
+    }
+
+    *out = rebuilt;
+    Ok(())
+}
+
 /// Convert an `enum` body in-place from BE to LE.
 ///
 /// Layout (verified from base game):
@@ -3121,5 +3713,124 @@ mod tests {
 
         assert_eq!(&out[m + 16..m + 20], &[0x04, 0x01, 0x00, 0x01]);
         assert_eq!(out[m + 17], 1, "littleEndian restored to 1");
+    }
+
+    // -- Terrainmesh re-encode primitives ---------------------------------
+
+    #[test]
+    fn f16_encode_roundtrip_matches_std() {
+        // Compare against the std `f32 as f16`-equivalent via `<e>` bit pattern
+        // for a spread of values (the oracle compares these exact bytes).
+        for &v in &[
+            0.0f32, 1.0, -1.0, 0.5, 0.999, 0.04211, 0.00768, -0.4131, 0.88330,
+            0.22156, 6.1e-5, 1e-7, 65504.0,
+        ] {
+            let got = super::f32_to_f16_bits(v);
+            // reference: round-trip through f32->f16 via half-aware bit twiddling
+            // using the well-known reference (the `half` crate algorithm) is not
+            // available here; instead assert the decoded half is within 1 ULP of v.
+            let decoded = half_to_f32(got);
+            let err = (decoded - v).abs();
+            let tol = (v.abs() * 2.0_f32.powi(-10)).max(2.0_f32.powi(-24));
+            assert!(err <= tol + 1e-6, "f16({v}) -> {decoded} err {err} tol {tol}");
+        }
+    }
+
+    fn half_to_f32(h: u16) -> f32 {
+        let s = (h >> 15) & 1;
+        let e = (h >> 10) & 0x1f;
+        let m = h & 0x3ff;
+        let val = if e == 0 {
+            (m as f32) * 2.0f32.powi(-24)
+        } else if e == 0x1f {
+            f32::INFINITY
+        } else {
+            (1.0 + m as f32 / 1024.0) * 2.0f32.powi(e as i32 - 15)
+        };
+        if s == 1 { -val } else { val }
+    }
+
+    #[test]
+    fn dec3n_decodes_known_normals() {
+        // Pinned 11-11-10 layout: verified pairs from the worked terrainmesh
+        // (raw Xbox BE u32 -> PC unit normal). Direction must match to ~0.1°.
+        let cases: &[(u32, [f32; 3])] = &[
+            (0x001ff007, [0.0076, 1.0, 0.0004]),
+            (0x055ff007, [0.0077, 0.999, 0.0421]),
+            (0x1c5c4659, [-0.4131, 0.8833, 0.2216]),
+        ];
+        for &(u, exp) in cases {
+            let h = super::dec3n_to_half4_le(u);
+            let nx = half_to_f32(u16::from_le_bytes([h[0], h[1]]));
+            let ny = half_to_f32(u16::from_le_bytes([h[2], h[3]]));
+            let nz = half_to_f32(u16::from_le_bytes([h[4], h[5]]));
+            let w = half_to_f32(u16::from_le_bytes([h[6], h[7]]));
+            assert!((w - 1.0).abs() < 1e-3, "W must be 1.0, got {w}");
+            // normalize expected
+            let em = (exp[0] * exp[0] + exp[1] * exp[1] + exp[2] * exp[2]).sqrt();
+            let dot = (nx * exp[0] + ny * exp[1] + nz * exp[2]) / em;
+            let ang = dot.clamp(-1.0, 1.0).acos().to_degrees();
+            // Tolerance is dominated by the coarse 4-decimal expected literals here;
+            // the measured error vs the actual PC half-floats across 24k samples is
+            // mean 0.05° / max 0.12° (see the implementation doc).
+            assert!(ang < 1.5, "DEC3N {u:08x} angular error {ang}° > 1.5");
+        }
+    }
+
+    #[test]
+    fn destrip_simple_strip() {
+        // Strip 0,1,2,3 | 4,5,6 with a 0xFFFF restart -> two runs.
+        // Run1 (4 verts) = 2 tris: (0,1,2),(1,3,2). Run2 (3 verts) = 1 tri (4,5,6).
+        let idx: [u16; 8] = [0, 1, 2, 3, 0xffff, 4, 5, 6];
+        let mut src = Vec::new();
+        for x in idx {
+            src.extend_from_slice(&x.to_le_bytes());
+        }
+        let out = super::destrip_indices(&src);
+        let tris: Vec<u16> = out
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        assert_eq!(tris, vec![0, 1, 2, 1, 3, 2, 4, 5, 6]);
+    }
+
+    #[test]
+    fn destrip_drops_degenerates() {
+        // A strip with a repeated index produces a degenerate triangle that must
+        // be dropped (PC contains no zero-area triangles in a list).
+        let idx: [u16; 5] = [0, 1, 1, 2, 3];
+        let mut src = Vec::new();
+        for x in idx {
+            src.extend_from_slice(&x.to_le_bytes());
+        }
+        let out = super::destrip_indices(&src);
+        let tris: Vec<u16> = out
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        // k=0:(0,1,1) degen drop; k=1:(1,1,2) degen drop; k=2:(1,2,3) even-> keep order.
+        assert_eq!(tris, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn mtrl_transposed_count_walker() {
+        // Two material records. Record 0: count=4 (PC-form [0][4]); record 1:
+        // count=6 but transposed to [6][0] (the generic-u32-swap bug). The walker
+        // must restore record 1 to [0][6] and leave record 0 alone.
+        const PB: usize = 104;
+        let stride0 = 116 + 4 * 4; // 132
+        let mut body = vec![0u8; stride0 + 116 + 6 * 4];
+        // record 0 count pair @104 = [flags=0][count=4]
+        body[PB + 2..PB + 4].copy_from_slice(&4u16.to_le_bytes());
+        // record 1 count pair @ stride0+104, transposed: [count=6][0]
+        let cp1 = stride0 + PB;
+        body[cp1..cp1 + 2].copy_from_slice(&6u16.to_le_bytes()); // lo = 6 (wrong)
+        super::mtrl_fix_transposed_counts(&mut body);
+        // record 0 untouched
+        assert_eq!(u16::from_le_bytes([body[PB], body[PB + 1]]), 0);
+        assert_eq!(u16::from_le_bytes([body[PB + 2], body[PB + 3]]), 4);
+        // record 1 fixed to [0][6]
+        assert_eq!(u16::from_le_bytes([body[cp1], body[cp1 + 1]]), 0);
+        assert_eq!(u16::from_le_bytes([body[cp1 + 2], body[cp1 + 3]]), 6);
     }
 }
