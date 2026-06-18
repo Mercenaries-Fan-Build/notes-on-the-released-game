@@ -55,10 +55,21 @@ typedef struct { DWORD value; DWORD tt; } LuaTValue;
 #define LUA_STATE_OFF_STACK       0x20
 #define CALLINFO_OFF_BASE         0x00
 #define CALLINFO_OFF_FUNC         0x04
+#define CALLINFO_OFF_SAVEDPC      0x0C
+#define CALLINFO_SIZE             0x18   /* {base,func,top,savedpc,nresults,tailcalls} */
+/* LClosure: ClosureHeader(0x10){next,tt,marked,isC,nupvalues,gclist,env}, then Proto* */
+#define LCLOSURE_OFF_ISC          0x06
+#define LCLOSURE_OFF_PROTO        0x10
+/* Proto: CommonHeader(0x08), k, code, p, lineinfo, locvars, upvalues, source, ... */
+#define PROTO_OFF_CODE            0x0C
+#define PROTO_OFF_LINEINFO        0x14
+#define PROTO_OFF_SOURCE          0x20
+#define PROTO_OFF_SIZELINEINFO    0x30
 
 #define LUA_TBOOLEAN  1
 #define LUA_TNUMBER   3
 #define LUA_TSTRING   4
+#define LUA_TFUNCTION 6
 
 #define HOOK_PRINT_MAX_ARGS         32
 #define HOOK_PRINT_MAX_STACK_SLOTS  10000
@@ -216,6 +227,11 @@ static BOOL ContainsCI(const char *hay, const char *needle) {
     return FALSE;
 }
 
+/* Set once the vz level masterscript begins — arms the stream_probe wedge detector
+ * (defined there) so it only watches for a no-progress hang during the world load,
+ * not at the idle main menu. */
+extern volatile long g_pmc_world_loading;
+
 static void MaybeTagMilestone(const char *msg) {
     static const char *const kMilestones[] = {
         "global start",
@@ -227,12 +243,81 @@ static void MaybeTagMilestone(const char *msg) {
         "masterscript",
     };
     int i;
+    if (ContainsCI(msg, "Loading vz level")) g_pmc_world_loading = 1;
+    if (ContainsCI(msg, "GlobalExit"))       g_pmc_world_loading = 0; /* load done — disarm */
     for (i = 0; i < (int)(sizeof(kMilestones) / sizeof(kMilestones[0])); i++) {
         if (ContainsCI(msg, kMilestones[i])) {
             pmc_log("world", ">>> %s", msg);
             return;
         }
     }
+}
+
+/* --- Caller location: turn a bare "true"/"0"/"table:0x.." into "@script:line" ---
+ *
+ * The print value alone is context-free. Walk back from the print C-function's
+ * CallInfo (L->ci) to the first Lua frame that called it, then read its Proto's
+ * source name + the line for the active pc. Every deref is bounds-checked via the
+ * same safe readers — a malformed frame yields "" (fall back to the bare value),
+ * never a fault. Called inside the re-entrancy guard; reads memory only. */
+static int ResolveCallerLoc(lua_State *L, char *out, int out_max) {
+    BYTE *Lp = (BYTE *)L;
+    BYTE *ci, *caller;
+    int depth;
+
+    out[0] = '\0';
+    if (out_max < 16) return 0;
+    if (!PtrReadable(Lp + LUA_STATE_OFF_CI, sizeof(void *))) return 0;
+    ci = *(BYTE **)(Lp + LUA_STATE_OFF_CI);
+    if (!ci) return 0;
+
+    /* Walk back over any intermediate C frames (print binding, helpers) to the
+     * first Lua closure — that's the script site that emitted the value. */
+    caller = ci;
+    for (depth = 0; depth < 4; depth++) {
+        LuaTValue *func_tv;
+        DWORD cl, p, code, lineinfo, source;
+        DWORD savedpc;
+        int sizeli, pcidx, line, n;
+        char src[256];
+        int slen;
+        const char *name;
+
+        caller -= CALLINFO_SIZE;
+        if (!PtrReadable(caller, CALLINFO_SIZE)) return 0;
+        func_tv = *(LuaTValue **)(caller + CALLINFO_OFF_FUNC);
+        if (!PtrReadable(func_tv, sizeof(LuaTValue))) return 0;
+        if (func_tv->tt != LUA_TFUNCTION) return 0;        /* not a function frame */
+
+        cl = func_tv->value;                               /* Closure* */
+        if (!PtrReadable((void *)cl, LCLOSURE_OFF_PROTO + 4)) return 0;
+        if (*(BYTE *)(cl + LCLOSURE_OFF_ISC)) continue;    /* C function — go further back */
+
+        p = *(DWORD *)(cl + LCLOSURE_OFF_PROTO);
+        if (!PtrReadable((void *)p, PROTO_OFF_SIZELINEINFO + 4)) return 0;
+        code     = *(DWORD *)(p + PROTO_OFF_CODE);
+        lineinfo = *(DWORD *)(p + PROTO_OFF_LINEINFO);
+        source   = *(DWORD *)(p + PROTO_OFF_SOURCE);
+        sizeli   = *(int  *)(p + PROTO_OFF_SIZELINEINFO);
+        savedpc  = *(DWORD *)(caller + CALLINFO_OFF_SAVEDPC);
+
+        slen = SafeCopyTString(source, src, (int)sizeof(src));
+        if (slen <= 0) return 0;
+        name = src;
+        if (name[0] == '@' || name[0] == '=') name++;      /* strip chunk-name marker */
+
+        line = -1;
+        if (code && lineinfo && savedpc >= code) {
+            pcidx = (int)((savedpc - code) / 4) - 1;        /* Instruction = 4 bytes */
+            if (pcidx >= 0 && pcidx < sizeli &&
+                PtrReadable((void *)(lineinfo + (DWORD)pcidx * 4), 4))
+                line = *(int *)(lineinfo + (DWORD)pcidx * 4);
+        }
+        if (line >= 0) n = wsprintfA(out, "  @%s:%d", name, line);
+        else           n = wsprintfA(out, "  @%s", name);
+        return n;
+    }
+    return 0;
 }
 
 /* --- The bridge: game's print()/Debug.Printf → pmc_log --- */
@@ -315,6 +400,18 @@ static int Hook_LogPrintf(lua_State *L) {
         }
     }
     buf[pos] = '\0';
+
+    /* Append the Lua call site ("@script:line") so bare values are no longer
+     * context-free. Best-effort: skipped silently if the frame doesn't resolve. */
+    {
+        char loc[300];
+        int ll = ResolveCallerLoc(L, loc, (int)sizeof(loc));
+        if (ll > 0 && pos + ll < (int)sizeof(buf) - 1) {
+            memcpy(buf + pos, loc, (size_t)ll);
+            pos += ll;
+            buf[pos] = '\0';
+        }
+    }
 
     pmc_log("lua", "%s", buf);
     MaybeTagMilestone(buf);

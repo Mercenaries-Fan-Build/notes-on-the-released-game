@@ -91,6 +91,66 @@ def _sha1(data: bytes) -> str:
     return hashlib.sha1(data).hexdigest()
 
 
+def _parse_chunks(body: bytes, be: bool = False) -> list[tuple[str, bytes]] | None:
+    """Parse a UCFX container into [(tag, body_bytes)] in descriptor order.
+    Containers / empty bodies yield (tag, b''). 20-byte descriptor rows
+    `{tag, row_u0=body-offset, body_size, u2, u3}` after the magic+header; body at
+    data_start + row_u0. `be=True` parses the big-endian Xbox source (magic
+    `XFCU`, byte-reversed tags, BE u32 fields). Returns None if not a UCFX container."""
+    magic = b"XFCU" if be else b"UCFX"
+    u = body.find(magic)
+    if u < 0:
+        return None
+    fmt = ">II" if be else "<II"
+    rows: list[tuple[bytes, int, int]] = []
+    i = u + 0x14
+    while i + 20 <= len(body):
+        raw = body[i:i + 4]
+        tag = raw[::-1] if be else raw
+        if not all(0x20 <= c < 0x7F for c in tag):
+            break
+        u0, bs = struct.unpack_from(fmt, body, i + 4)
+        rows.append((tag, u0, bs))
+        i += 20
+    data_start = i
+    out: list[tuple[str, bytes]] = []
+    for tag, u0, bs in rows:
+        name = tag.decode("latin1")
+        if u0 == 0xFFFFFFFF or bs == 0 or data_start + u0 + bs > len(body):
+            out.append((name, b""))
+        else:
+            out.append((name, body[data_start + u0:data_start + u0 + bs]))
+    return out
+
+
+def _accumulate_chunk_diff(conv: bytes, pc: bytes, agg: dict) -> None:
+    """Per-chunk diff of one (converted, PC) asset pair, aggregated by tag into
+    `agg[tag] = {total, match, size_eq_diff, size_diff}`. `size_eq_diff` is the
+    swap-bug signature (same length, different bytes); `size_diff` is a genuine
+    re-encode. Structural divergence (differing descriptor count/sequence) is
+    bucketed under sentinel keys so it surfaces too."""
+    cc = _parse_chunks(conv)
+    pp = _parse_chunks(pc)
+    if cc is None or pp is None:
+        agg["__unparsed__"]["total"] += 1
+        return
+    if len(cc) != len(pp):
+        agg["__structural__"]["total"] += 1
+        return
+    for (ct, cb), (pt, pb) in zip(cc, pp):
+        if ct != pt:
+            agg["__tagmismatch__"]["total"] += 1
+            continue
+        a = agg[ct]
+        a["total"] += 1
+        if cb == pb:
+            a["match"] += 1
+        elif len(cb) == len(pb):
+            a["size_eq_diff"] += 1
+        else:
+            a["size_diff"] += 1
+
+
 def _norm(path: str) -> str:
     return path.replace("\\", "/").lower()
 
@@ -296,7 +356,9 @@ def run_oracle(args: argparse.Namespace) -> int:
     print(f"      {num_blocks:,} Xbox blocks")
 
     end_block = min(num_blocks, (args.max_blocks or num_blocks))
-    keep_raw = extract_dir is not None
+    inspect_tags = set(t.strip() for t in args.inspect_tag.split(",")) if args.inspect_tag else set()
+    inspect_samples: dict[str, list[tuple[bytes, bytes, bytes]]] = defaultdict(list)
+    keep_raw = (extract_dir is not None) or bool(inspect_tags)
     tasks: list[tuple[int, int, int, str, bool]] = []
     for blk_idx in range(end_block):
         indx = indx_entries[blk_idx]
@@ -305,6 +367,7 @@ def run_oracle(args: argparse.Namespace) -> int:
 
     by_type: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     totals: dict[str, int] = defaultdict(int)
+    chunk_agg: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     mismatch_samples: list[dict] = []
     xbox_keys: set[Key] = set()
     xbox_key_path: dict[Key, str] = {}
@@ -336,6 +399,20 @@ def run_oracle(args: argparse.Namespace) -> int:
                 continue
             totals["compared"] += 1
             pc_sha, pc_plen = pcblk[key]
+            _need = [t for t in inspect_tags
+                     if len(inspect_samples[t]) < args.inspect_count] if inspect_tags else []
+            if _need and any(t.encode("latin1") in conv for t in _need):
+                pcb = pc.entry_bytes(pnorm, key)
+                beb = res.raw_be.get(key)
+                cc = _parse_chunks(conv)
+                pp = _parse_chunks(pcb) if pcb else None
+                bb = _parse_chunks(beb, be=True) if beb else None
+                if cc and pp:
+                    for ci, (ct, cbody) in enumerate(cc):
+                        if ct in inspect_tags and len(inspect_samples[ct]) < args.inspect_count \
+                                and cbody and ci < len(pp) and pp[ci][0] == ct and cbody != pp[ci][1]:
+                            be_body = bb[ci][1] if (bb and ci < len(bb) and bb[ci][0] == ct) else b""
+                            inspect_samples[ct].append((be_body, cbody, pp[ci][1]))
             conv_payload = _entry_payload(conv)
             if _sha1(conv_payload) == pc_sha:
                 by_type[th]["match"] += 1
@@ -351,6 +428,10 @@ def run_oracle(args: argparse.Namespace) -> int:
                 else:
                     by_type[th]["mismatch_size_diff"] += 1
                     totals["mismatch_size_diff"] += 1
+                if args.chunk_breakdown:
+                    pcb = pc.entry_bytes(pnorm, key)
+                    if pcb:
+                        _accumulate_chunk_diff(conv, pcb, chunk_agg)
                 if len(mismatch_samples) < 60:
                     pc_bytes = pc.entry_bytes(pnorm, key)
                     diff = _diff_bytes(conv, pc_bytes) if (args.show_diffs and pc_bytes) else []
@@ -401,6 +482,10 @@ def run_oracle(args: argparse.Namespace) -> int:
                      xbox_key_path, pc_block_paths, xbox_block_paths,
                      len(pc_keys), len(xbox_keys))
     _print_summary(totals, by_type, len(tasks), time.time() - t0)
+    if args.chunk_breakdown:
+        _print_chunk_breakdown(chunk_agg, out_dir)
+    if inspect_tags:
+        _print_inspect(inspect_samples)
 
     pc.close()
     _XBOX_MM.close()
@@ -425,6 +510,75 @@ def _extract_entry(extract_dir: Path, pnorm: str, key: Key,
         pc_d = extract_dir / "pc" / sub
         pc_d.mkdir(parents=True, exist_ok=True)
         (pc_d / f"{stem}.bin").write_bytes(pc_bytes)
+
+
+def _print_inspect(samples: dict) -> None:
+    """Show BE-source / our-conv / PC bytes per tag so a transposition (swap bug)
+    can be told from a re-encode and the correct per-field rule derived. A swap
+    bug: conv = u32-reverse of BE but PC keeps u16 pairs in place (conv is a
+    transposed PC). A re-encode: conv == size-preserving swap of BE, PC differs
+    structurally."""
+    print("\n" + "=" * 78)
+    print("CHUNK INSPECTION  (BE source -> our conv -> PC truth)")
+    print("=" * 78)
+    for tag, insts in samples.items():
+        print(f"\n--- {tag} ({len(insts)} sample(s)) ---")
+        for n, (be, cv, pc) in enumerate(insts):
+            w = min(0xC0, max(len(cv), len(pc)))
+            print(f"  [{n}] len: be={len(be)} conv={len(cv)} pc={len(pc)}")
+            if be:
+                print(f"      BE  : {be[:w].hex()}")
+            print(f"      conv: {cv[:w].hex()}")
+            print(f"      PC  : {pc[:w].hex()}")
+            # Classify EVERY differing 4-byte group over the full body:
+            #  u16-PAIR  = conv == pc with its two u16 halves swapped (a u16 field
+            #              our u32 default transposed -> the field to fix).
+            #  value-diff = neither (genuine content / re-encode difference).
+            m = min(len(cv), len(pc))
+            transp, valdiff = [], []
+            for k in range(0, m - 3, 4):
+                if cv[k:k + 4] == pc[k:k + 4]:
+                    continue
+                if cv[k:k + 2] == pc[k + 2:k + 4] and cv[k + 2:k + 4] == pc[k:k + 2]:
+                    transp.append(k)
+                else:
+                    valdiff.append(k)
+            if transp:
+                print(f"      u16-PAIR @ (transposed by u32-swap): {[hex(x) for x in transp]}")
+            if valdiff:
+                shown = [hex(x) for x in valdiff[:16]]
+                print(f"      value-diff @ (re-encode/content): {shown}"
+                      f"{' ...(+%d)' % (len(valdiff) - 16) if len(valdiff) > 16 else ''}")
+    print("=" * 78)
+
+
+def _print_chunk_breakdown(chunk_agg: dict, out_dir: Path) -> None:
+    """Rank chunk tags by per-chunk byte mismatch across mismatched assets.
+    `size_eq_diff` (same length, different bytes) is the swap-bug signature — the
+    'grab-first / blanket-swap' anti-pattern transposing per-record fields. A high
+    `size_eq_diff` with low `size_diff` = a converter field/walker bug to fix."""
+    rows = []
+    for tag, c in chunk_agg.items():
+        total = c["total"] or 1
+        rows.append((tag, c["total"], c["match"], c["size_eq_diff"], c["size_diff"]))
+    # rank by swap-bug count (size_eq_diff), then by mismatch rate
+    rows.sort(key=lambda r: (r[3], r[3] / (r[1] or 1)), reverse=True)
+    print("\n" + "=" * 78)
+    print("PER-CHUNK-TAG BREAKDOWN  [size_eq_diff = SWAP BUG | size_diff = re-encode]")
+    print("=" * 78)
+    print(f"  {'tag':<14} {'chunks':>8} {'match':>8} {'SWAPBUG':>8} {'reenc':>8} {'%bug':>6}")
+    print(f"  {'-'*14} {'-'*8} {'-'*8} {'-'*8} {'-'*8} {'-'*6}")
+    for tag, tot, m, seq, sd in rows:
+        if tot == 0:
+            continue
+        pct = 100.0 * seq / tot
+        flag = "  <<< swap bug" if seq > 0 and seq >= sd else ""
+        print(f"  {tag:<14} {tot:>8} {m:>8} {seq:>8} {sd:>8} {pct:>5.1f}%{flag}")
+    print("=" * 78)
+    rep = {tag: dict(c) for tag, c in chunk_agg.items()}
+    (out_dir / "chunk_tag_breakdown.json").write_text(
+        json.dumps(rep, indent=2), encoding="utf-8")
+    print(f"  Full breakdown: {out_dir / 'chunk_tag_breakdown.json'}")
 
 
 def _write_artifacts(out_dir, args, totals, by_type, mismatch_samples,
@@ -528,6 +682,15 @@ def main() -> int:
     ap.add_argument("--extract-dir", default=None,
                     help="materialize mirrored per-entry trees pc/ xbox_le/ xbox_be/")
     ap.add_argument("--show-diffs", action="store_true")
+    ap.add_argument("--chunk-breakdown", action="store_true",
+                    help="per-chunk-tag diff aggregated across all mismatched assets "
+                         "(ranks which array/record chunk types are mis-converted: "
+                         "size-equal-but-different = swap bug, size-different = re-encode)")
+    ap.add_argument("--inspect-tag", default=None,
+                    help="comma-separated chunk tags; print BE-source / our-conv / PC "
+                         "bytes for the first --inspect-count differing instances "
+                         "(to classify swap-bug vs re-encode and derive the fix)")
+    ap.add_argument("--inspect-count", type=int, default=3)
     ap.add_argument("--max-blocks", type=int, default=None)
     ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     args = ap.parse_args()

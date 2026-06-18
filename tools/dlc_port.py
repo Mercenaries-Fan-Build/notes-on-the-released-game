@@ -55,7 +55,10 @@ from ffcs_patch_wad import (  # noqa: E402
     merge_patch_wads,
 )
 from sges_compress import compress_sges  # noqa: E402
-from ucfx_byteswap_wrapper import byteswap_block_rust  # noqa: E402
+from ucfx_byteswap_wrapper import (  # noqa: E402
+    byteswap_block_rust,
+    recompute_block_aset_subs_rust,
+)
 from x360_dlc_io import (  # noqa: E402
     PAGE_SIZE,
     StfsReader,
@@ -418,61 +421,96 @@ def _strip_xbox_sub_entry(u2: int) -> int:
     return (u2 & 0xFFFF0000) | 0xFFFF
 
 
-def _recompute_aset_sub_entries(converted: list[PatchBlock], *, verbose: bool = False) -> tuple[int, int]:
-    """Recompute ASET sub-entry indices from each block's entry table.
+# When True, ASET entries whose Xbox packed field marks them PRIMARY (the high
+# half holds the sub-sentinel 0xFFFF, i.e. "resolve the body by hash") keep
+# low16=0xFFFF instead of being pinned to a physical sub-entry index.  Pinning
+# them to the index redirects the engine to a body-less metadata stub in the
+# DLC block and masks the base game's real body — the root cause of the
+# world-load texture-streaming wedge AND the ECS type-confusion crashes
+# (oracle-validated 2026-06-13: base BE↔LE keeps 99.7% of sub=0xFFFF as 0xFFFF).
+# Flip to False to restore the legacy (broken) recompute for A/B comparison.
+_PRESERVE_PRIMARY_ASET_SUB = True
 
-    For each ASET entry whose ``asset_hash`` appears in its block's entry
-    table, set ``u32_2`` low16 to the matching entry index.  Single-entry
-    blocks or entries where the asset IS the only/first entry keep 0xFFFF.
 
-    Returns (resolved_count, unresolved_count).
+_BASE_ASET_HASHES: "set[int] | None" = None
+
+
+def _base_aset_hashes(source_wad: "Path | None") -> "set[int]":
+    """Asset hashes present in the base game WAD (cached, seek-read).
+
+    Used by the ASET sub recompute to decide whether a body-less DLC stub can
+    resolve its body BY HASH (it exists in base → keep 0xFFFF) or must keep its
+    local BE sub-offset (DLC-new → no base fallback).
     """
-    resolved = 0
-    unresolved = 0
+    global _BASE_ASET_HASHES
+    if _BASE_ASET_HASHES is not None:
+        return _BASE_ASET_HASHES
+    hashes: set[int] = set()
+    if source_wad is not None:
+        try:
+            from ffcs_wad import parse_ffcs
+            arch = parse_ffcs(Path(source_wad))
+            aset = next(c for c in arch.chunks if c.tag == "ASET")
+            with open(source_wad, "rb") as f:
+                f.seek(aset.offset)
+                data = f.read(aset.size)
+            for i in range(len(data) // 16):
+                hashes.add(struct.unpack_from("<I", data, i * 16)[0])
+        except Exception as exc:  # noqa: BLE001
+            print(f"  WARN: base ASET hashes unavailable ({exc}); "
+                  "stub textures will keep BE offset")
+    _BASE_ASET_HASHES = hashes
+    return hashes
 
-    for blk_idx, blk in enumerate(converted):
+
+def _recompute_aset_sub_entries(
+    converted: list[PatchBlock],
+    *,
+    base_hashes: "set[int] | None" = None,
+    verbose: bool = False,
+) -> tuple[int, int]:
+    """Recompute ASET sub-entry ``u32_2`` values via the faithful Rust port.
+
+    The per-block parse + sub recompute lives in
+    tools/wad_simulator/crates/ucfx_byteswap/src/aset.rs
+    (`recompute_block_aset_subs`), invoked via the ucfx_byteswap binary
+    (`--aset-recompute`) — the ASET sub semantics now live in ONE tested place.
+    ``base_hashes`` lets the Rust side apply the base-aware stub rule (in-base
+    stub → 0xFFFF by-hash; DLC-new stub → keep BE sub-offset).
+
+    Returns (indexed_count, kept_ffff_count).
+    """
+    base_hashes = base_hashes or set()
+    indexed = 0
+    kept = 0
+
+    for blk in converted:
         if not blk.aset_entries:
             continue
-
         try:
             decomp = decompress_sges_block(
                 blk.compressed_data, 0, len(blk.compressed_data))
         except Exception:
             continue
 
-        if len(decomp) < 4:
-            continue
-        entry_count = struct.unpack_from("<I", decomp, 0)[0]
-        if entry_count < 1 or entry_count > 50000:
-            continue
-
-        hash_to_index: dict[int, int] = {}
-        for i in range(entry_count):
-            off = 4 + i * 16
-            if off + 16 > len(decomp):
-                break
-            name_hash = struct.unpack_from("<I", decomp, off)[0]
-            if name_hash not in hash_to_index:
-                hash_to_index[name_hash] = i
-
-        if entry_count <= 1:
-            continue
-
-        for entry in blk.aset_entries:
-            ah = entry["asset_hash"]
-            idx = hash_to_index.get(ah)
-            if idx is not None:
-                entry["u32_2"] = idx
-                resolved += 1
+        entries_in = [
+            (e["asset_hash"], e["u32_2"], bool(e.get("_primary")),
+             e["asset_hash"] in base_hashes)
+            for e in blk.aset_entries
+        ]
+        updated = recompute_block_aset_subs_rust(decomp, entries_in)
+        for e, after in zip(blk.aset_entries, updated):
+            e["u32_2"] = after
+            if (after & 0xFFFF) == 0xFFFF:
+                kept += 1
             else:
-                entry["u32_2"] = 0xFFFF
-                unresolved += 1
+                indexed += 1
 
-    if verbose or resolved:
-        print(f"\n  ASET sub-entry recompute: {resolved} resolved, "
-              f"{unresolved} unresolved (kept 0xFFFF)")
+    if verbose or indexed or kept:
+        print(f"\n  ASET sub-entry recompute (rust): {kept} kept-0xFFFF, "
+              f"{indexed} ->index")
 
-    return resolved, unresolved
+    return indexed, kept
 
 
 # ── Content-validated ASET filtering ──────────────────────────────────
@@ -711,6 +749,7 @@ def port_x360_dlc(
                 "u32_1": ae.u1,
                 "u32_2": _strip_xbox_sub_entry(ae.u2),
                 "u32_3": ae.u3,
+                "_primary": True,  # Xbox sub-sentinel 0xFFFF: resolve body by hash
             })
         else:
             real_block_indices.add(ae.block_index)
@@ -944,6 +983,7 @@ def port_x360_dlc(
                     "u32_1": 0xFFFFFFFF,
                     "u32_2": 0xFFFF,
                     "u32_3": STRINGDB_ASET_TYPE_ID,
+                    "_primary": True,  # by-hash lookup (Sys.AddStringDb)
                 })
                 existing_hashes.add(h)
                 stringdb_synth_added += 1
@@ -1143,7 +1183,8 @@ def port_x360_dlc(
         print("\n  ASET validation: skipped (--no-aset-validation)")
 
     # ── Recompute ASET sub-entry indices from block entry tables ─────
-    _recompute_aset_sub_entries(converted, verbose=verbose)
+    _recompute_aset_sub_entries(
+        converted, base_hashes=_base_aset_hashes(source_wad), verbose=verbose)
 
     # Build or merge patch WAD
     if merge_into and merge_into.is_file():

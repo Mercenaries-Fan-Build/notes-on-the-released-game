@@ -40,7 +40,15 @@
 #include <stdarg.h>
 #include "lua_log_hook.h"
 #include "stream_probe.h"
+#include "pool_probe.h"
 #include "crash_handler.h"
+#include "fingerprint.h"
+extern int InstallSegProbe(void);
+extern int InstallPrmgGuard(void);
+extern int InstallPrmgEntityGuard(void);
+extern int InstallPrmgBuildWatch(void);
+extern int InstallCcTracer(void);
+#include "heap_guard.h"
 
 #define PMC_BLACKBOX_VERSION "3.0.0"
 #define SECUROM_XOR_KEY 0x19EA3FD3
@@ -397,6 +405,12 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
 
+        /* Self-attributing fingerprint: hash the mutable game artifacts (exe,
+         * dlls, scripts ASIs, data WADs) on a worker thread and write
+         * [blackbox] BUILD lines, so this run's log is bound to the exact bytes
+         * that produced it (no size/mtime guessing). loadprobe surfaces these. */
+        pmc_start_fingerprint(hinstDLL);
+
         /* Crash handler — install FIRST so any later fault (init, world-load
          * spawn, streaming) is recorded with its EIP + registers before the
          * process dies. The retail EXE otherwise vanishes silently on a fault. */
@@ -441,6 +455,60 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
          * Opt out with -DPMC_DISABLE_STREAM_PROBE. See [[worldload-hang-pending-node-status]]. */
 #ifndef PMC_DISABLE_STREAM_PROBE
         InstallStreamProbe();
+#endif
+
+        /* Render-instance pool drain tracer — poll-only watcher (no detour) on
+         * the 5120-cell pool's free-count. Classifies the world-load 0x4CC064
+         * exhaustion: BURST drain => T1 (converter inflated record count) vs
+         * gradual => T2 (legit budget overflow). Opt out with
+         * -DPMC_DISABLE_POOL_PROBE. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_POOL_PROBE
+        InstallPoolProbe();
+#endif
+
+        /* Render-instance pool overflow FIX — MinHook detour on the pop
+         * FUN_004cc030. The 5120-cell texture-component pool drains by distinct
+         * texture key; the DLC overlay's spawn region exceeds 5120, so the pop
+         * hits the NULL fallback -> 0x4CC064 AV. The detour serves a fresh 0x54
+         * cell past the cap instead of NULL, so the world loads. Opt out with
+         * -DPMC_DISABLE_POOL_OVERFLOW_FIX. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_POOL_OVERFLOW_FIX
+        InstallPoolOverflowFix();
+#endif
+
+        /* Segment-base tracer: FUN_004a9ac0(ESI) vs FUN_004a9da0(EDI) for the
+         * 0x4AB26B terrainmesh segment +4 bug. Logs only base mismatches.
+         * Opt out with -DPMC_DISABLE_SEG_PROBE. See [[worldload-0x4ab26b-segment-pointer]]. */
+#ifndef PMC_DISABLE_SEG_PROBE
+        InstallSegProbe();
+#endif
+
+        /* DIAGNOSTIC RUN: the PRMG element-skip guards are DISABLED so the
+         * 0x47A7C6/0x47AA5C crash fires naturally and the build-watch + crash
+         * handler can prove build-time-garbage vs post-build heap-overwrite.
+         * Static RCA showed the terrain meshes are structurally sound, so a guard
+         * only hides the real (upstream) corruptor. Re-enable by defining
+         * PMC_ENABLE_PRMG_GUARD. See [[worldload-0x47aa5c-prmg-handle-miss]]. */
+#ifdef PMC_ENABLE_PRMG_GUARD
+        InstallPrmgGuard();
+        InstallPrmgEntityGuard();
+#endif
+        /* Non-mutating: validates each built 0xBAB258 element vs the handle table
+         * and snapshots clean ones so the crash handler can name the corruptor. */
+        InstallPrmgBuildWatch();
+        /* Non-mutating: histograms the caller of every texture-component pool
+         * insert (FUN_004cc130) so the 0x4CC064 drain burst can be attributed to
+         * one inflated object vs many (capacity). Dumped by pool_probe at burst. */
+        InstallCcTracer();
+
+        /* Heap-history tracker — detours the hkThreadMemory allocator/free
+         * (0x88CB70/0x88CBD0) and records {op,ptr,size,caller} into a ring so the
+         * crash handler can name the heap corruptor behind the world-load
+         * type-confusion (use-after-free vs overflow + producer). Observation-only
+         * (no heap mutation). Kill switch: env PMC_NO_HEAP_GUARD=1, or build
+         * -DPMC_DISABLE_HEAP_GUARD. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_HEAP_GUARD
+        InstallHeapGuard();
 #endif
 
         /* Fix underground spawn — early write + deferred watchdog thread.

@@ -23,7 +23,11 @@ MINHOOK_INC  = $(MINHOOK_ROOT)/include
 MINHOOK_SRC  = $(MINHOOK_ROOT)/src
 
 # --- Source files ---
-SRCS_BB     = pmc_blackbox.c lua_log_hook.c stream_probe.c crash_handler.c compat_patches.gen.c
+# heap_guard.c is intentionally OMITTED from the default build: its allocator
+# detour (0x88CB70/0x88CBD0) trips Windows Defender (Trojan:Script/Wacatac.C!ml,
+# ML false positive). PMC_DISABLE_HEAP_GUARD (in CFLAGS) compiles out its call.
+# Re-add it (drop the define + restore the source) only with a Defender exclusion.
+SRCS_BB     = pmc_blackbox.c lua_log_hook.c stream_probe.c pool_probe.c crash_handler.c seg_probe.c prmg_guard.c prmg_build_watch.c cc_tracer.c compat_patches.gen.c fingerprint.c
 SRCS_MH     = $(MINHOOK_SRC)/hook.c \
               $(MINHOOK_SRC)/buffer.c \
               $(MINHOOK_SRC)/trampoline.c \
@@ -34,8 +38,8 @@ SRCS_ALL    = $(SRCS_BB) $(SRCS_MH)
 # EXTRA_CFLAGS lets targets inject build-time defines (e.g. -DPMC_NO_RUNTIME_PATCH
 # for a control run with the in-memory compat patches disabled).
 EXTRA_CFLAGS =
-CFLAGS      = -O2 -Wall -Wno-unused-function -I$(MINHOOK_INC) -shared -Wl,--enable-stdcall-fixup $(EXTRA_CFLAGS)
-LDFLAGS     = -lkernel32 -luser32
+CFLAGS      = -O2 -Wall -Wno-unused-function -DPMC_DISABLE_HEAP_GUARD -I$(MINHOOK_INC) -shared -Wl,--enable-stdcall-fixup $(EXTRA_CFLAGS)
+LDFLAGS     = -lkernel32 -luser32 -lbcrypt
 
 .PHONY: all clean mingw msvc help
 

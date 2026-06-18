@@ -437,7 +437,12 @@ fn scan_comp_group_schema(
                         read_f32_le(data, off + 24),
                         read_f32_le(data, off + 28),
                     ) {
-                        if !is_valid_quaternion(qx, qy, qz, qw) {
+                        // An exactly-all-zero quaternion is an empty/unused record
+                        // slot (e.g. PhysicalLink record[0]), not corruption — a
+                        // byte-swap of zeros is still zeros, so it cannot be a swap
+                        // artifact; flagging it was a false positive.
+                        let all_zero = qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 0.0;
+                        if !all_zero && !is_valid_quaternion(qx, qy, qz, qw) {
                             scan.violations += 1;
                             let kind = if !qx.is_finite() || !qy.is_finite() || !qz.is_finite() || !qw.is_finite() {
                                 "quaternion NaN/Inf"
@@ -659,18 +664,40 @@ fn check_string_comp_group(
         return None;
     }
 
-    let non_printable = data
-        .iter()
-        .filter(|&&b| b != 0x00 && !(0x20..=0x7E).contains(&b))
-        .count();
-    if non_printable > 0 {
-        issues.push(format!(
-            "{label}: ECS \"{comp_name}\" has {non_printable} non-printable bytes (byte-swap corruption?)"
-        ));
-        Some(1)
-    } else {
-        None
+    // The old check counted EVERY non-printable byte as "byte-swap corruption?".
+    // That was a false-positive generator, verified two ways: (1) these bodies are
+    // records of [binary entity-key][null-terminated string] ("Name") or pure
+    // (entity-key, name-HASH) pairs with no strings at all ("ModelName") — the keys/
+    // hashes are legitimately non-printable, and the DLC strings decode intact
+    // ("Tank_Ambience", "DLCCon003_Spawner01"…) with sequential keys; (2) printable-
+    // byte COUNTS are invariant under any byte permutation, so a count can never
+    // distinguish swapped from unswapped data in principle. The meaningful check for
+    // "Name": the body must actually contain identifier-like strings — flag only when
+    // a sizeable body has NO printable run of >=4 chars (true garbage). "ModelName"
+    // is a hash payload; there is nothing string-like to validate.
+    if comp_name == "ModelName" {
+        return None;
     }
+    if data.len() >= 16 {
+        let mut run = 0usize;
+        let mut max_run = 0usize;
+        for &b in data {
+            if (0x20..=0x7E).contains(&b) {
+                run += 1;
+                max_run = max_run.max(run);
+            } else {
+                run = 0;
+            }
+        }
+        if max_run < 4 {
+            issues.push(format!(
+                "{label}: ECS \"{comp_name}\" ({len}B) contains no printable string run (>=4 chars) — payload is not name records",
+                len = data.len()
+            ));
+            return Some(1);
+        }
+    }
+    None
 }
 
 fn is_string_component(name: &str) -> bool {

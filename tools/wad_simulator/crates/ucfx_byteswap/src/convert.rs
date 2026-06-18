@@ -1198,17 +1198,64 @@ fn convert_generic_bodies(
                         // String data — no swap
                     }
                     ChunkTag::Prmt => {
-                        // Mesh draw-call parameter binding: 16-byte records of u16 fields
+                        // Mesh draw-call records: 16-byte [u32 material_index]
+                        // [u32 start_index][u16 index_count][u16 base_vertex]
+                        // [u16 max_vertex_index][u16 vertex_span] (PRMT_WALKER).
+                        // Old blanket swap_u16_array transposed the two leading u32s.
+                        // walk_records bails to the count-safe u16 swap on any body
+                        // that isn't a clean 16-byte multiple.
+                        let body = &mut data_area[body_local_start..body_local_end];
+                        if !walk_records(body, &PRMT_WALKER) {
+                            swap_u16_array(body);
+                        }
+                    }
+                    ChunkTag::Trns => {
+                        // TRNS: NUL-terminated ASCII state-name strings ("Complete\0
+                        // Subdued\0Idle\0"...). PC keeps them verbatim; the generic u32
+                        // default reverses each 4-byte group ("Comp"->"pmoC"). No swap.
+                        // (rosetta oracle: TRNS 8744 size-equal diffs -> 0.)
+                    }
+                    ChunkTag::Unknown(b) if b == *b"SEGM" => {
+                        // SEGM: native big-endian records — verified pc == be byte-for-byte
+                        // (BE u32 7 stays `00 00 00 07` in PC, not reversed). The generic
+                        // u32 default wrongly reverses them. No swap. (oracle: 2946 -> 0.)
+                    }
+                    ChunkTag::Unknown(b) if b == *b"INST" || b == *b"BSHI" => {
+                        // INST / BSHI: u16 record / index arrays. PC = per-u16 byte-swap of
+                        // the BE source; the generic u32 default transposes each pair (e.g.
+                        // BSHI {0,1,2,3} -> {1,0,3,2}). (oracle: INST 1020 + BSHI 186 -> 0.)
                         swap_u16_array(&mut data_area[body_local_start..body_local_end]);
                     }
-                    // NOTE: HIER is NOT handled here — it is a 176-byte node array of
-                    // f32 transform matrices + bbox, so it must take the default u32
-                    // swap. Python's `_convert_u16_array` for HIER (line 2686) is a
-                    // latent byte-swap BUG: u16-swapping f32 produces garbage (e.g.
-                    // BE 3F800000=1.0 → u16 803F0000=junk vs u32 0000803F=1.0), which
-                    // the validator flagged as inverted/NaN HIER bboxes. "Byte-match
-                    // Python" is the WRONG bar for HIER — leave it u32. (Same for the
-                    // SEGM/BSHI lumped-in arm, removed below.)
+                    ChunkTag::Hier => {
+                        // HIER: 176-byte (0xb0) node array. Per node: u32 node-hash @0,
+                        // a u16 pair @4/@6 (index + parent, 0xffff = root), then f32
+                        // transform matrix + bbox @8 (reversed as u32 — u16-swapping f32
+                        // = NaN bboxes, the documented hazard). The OLD default u32 swap
+                        // got the f32 right but TRANSPOSED the @4/@6 u16 pair (oracle:
+                        // 2946 size-eq diffs). The per-node walker fixes only that pair.
+                        let body = &mut data_area[body_local_start..body_local_end];
+                        if !convert_hier_inplace(body) {
+                            swap_u32_array(body); // odd length -> prior safe behaviour
+                        }
+                    }
+                    ChunkTag::Unknown(b) if b == *b"TRCK" => {
+                        // TRCK: [u32 hash][u32 hash] then a u16 array (variable length).
+                        convert_trck_inplace(&mut data_area[body_local_start..body_local_end]);
+                    }
+                    ChunkTag::Unknown(b) if b == *b"PTMS" => {
+                        // PTMS: 8-byte records [u32][u16][u16].
+                        let body = &mut data_area[body_local_start..body_local_end];
+                        if !walk_records(body, &PTMS_WALKER) {
+                            swap_u32_array(body);
+                        }
+                    }
+                    ChunkTag::Unknown(b) if b == *b"PTCH" => {
+                        // PTCH: 56-byte records (f32 + u16 pair @0x34).
+                        let body = &mut data_area[body_local_start..body_local_end];
+                        if !convert_ptch_inplace(body) {
+                            swap_u32_array(body);
+                        }
+                    }
                     ChunkTag::Mtrl => {
                         // Material: mixed u32/f32 header + u16 flags + u16 texture-count + u32 hash
                         // array. A blanket swap transposes the u16 count and the engine overruns its
@@ -1340,13 +1387,15 @@ fn convert_generic_bodies(
                         // the wavebank `data` no-op + apply_wavebank_transcode reframe.
                     }
                     ChunkTag::Unknown(b) if b == *b"MINF" => {
-                        // MINF: u16 array when u16-aligned (Python line 2724). Leave odd
-                        // bodies to the generic path rather than raising.
+                        // MINF: [u32 hash][u16] (6 bytes). The old whole-body u16 swap
+                        // transposed the u32 hash (oracle: @0 flagged). u32-swap the hash,
+                        // u16-swap the rest.
                         let s = &mut data_area[body_local_start..body_local_end];
-                        if s.len() % 2 == 0 {
-                            swap_u16_array(s);
+                        if s.len() >= 6 {
+                            swap_u32(s, 0);
+                            swap_u16_array(&mut s[4..]);
                         } else {
-                            swap_u32_array(s);
+                            swap_u16_array(s);
                         }
                     }
                     ChunkTag::Unknown(b) if b == *b"evnt" => {
@@ -1474,6 +1523,220 @@ fn swap_u16_array(data: &mut [u8]) {
         let off = i * 2;
         data[off..off + 2].reverse();
     }
+}
+
+// ---------------------------------------------------------------------------
+//   Field-aware per-record byte-swap walker
+//
+//   Many UCFX chunks are ARRAYS of mixed-width records. A blanket u16/u32 swap
+//   of the whole body transposes the minority field width (the "grab-first /
+//   stamp-the-rest" bug). A `RecordWalker` is a declarative transcription of how
+//   the ENGINE READER consumes a record (the field-by-field width sequence,
+//   stride, and count source — see docs in the per-type specs). `walk_records`
+//   interprets it, swapping each field at its native width. It is non-destructive:
+//   it returns `false` WITHOUT mutating if the body does not match the declared
+//   layout, so the caller can fall back to a count-safe swap (mirrors the
+//   validate-first discipline of `convert_keyed_group_records_inplace`).
+// ---------------------------------------------------------------------------
+
+/// Field width/semantics within a record. F32 reverses identically to U32 (both
+/// a 4-byte reversal) but is kept distinct for self-documentation. U8 = no-op.
+#[derive(Clone, Copy, PartialEq)]
+enum FieldKind {
+    U32,
+    U16,
+    U8,
+    F32,
+}
+
+/// One field of a record layout (offsets are implicit from order).
+struct FieldSpec {
+    width: u8,
+    kind: FieldKind,
+}
+
+/// Where the record count comes from. (Sibling-INFO counts are not needed: the
+/// per-chunk body length recovers the count for fixed-stride record arrays.)
+#[allow(dead_code)]
+enum CountSource {
+    /// count = body_len / stride (records fill the body exactly).
+    BodyLenDivStride,
+    /// a single struct (or a fixed number of records).
+    Fixed(usize),
+    /// a big-endian u16 count at `offset` (read pre-swap), records follow it.
+    U16PrefixAt(usize),
+    /// a big-endian u32 count at `offset` (read pre-swap), records follow it.
+    U32PrefixAt(usize),
+}
+
+/// A declarative per-record field-swap walker (the engine reader's field
+/// sequence). `fields` order == on-wire layout; `stride` = record size.
+struct RecordWalker {
+    fields: &'static [FieldSpec],
+    stride: usize,
+    count: CountSource,
+}
+
+/// Apply a field-aware per-record byte-swap. Returns `false` WITHOUT mutating on
+/// any layout mismatch (caller should fall back to a count-safe swap — never
+/// `swap_u32_array` on a body that may hold a u16 count).
+fn walk_records(data: &mut [u8], w: &RecordWalker) -> bool {
+    if w.stride == 0 {
+        return false;
+    }
+    debug_assert_eq!(
+        w.fields.iter().map(|f| f.width as usize).sum::<usize>(),
+        w.stride,
+        "RecordWalker field widths must sum to stride",
+    );
+    // Resolve the record region [start, start + count*stride) and validate it
+    // fits the body BEFORE mutating anything.
+    let (start, count) = match w.count {
+        CountSource::BodyLenDivStride => {
+            if data.is_empty() || data.len() % w.stride != 0 {
+                return false;
+            }
+            (0usize, data.len() / w.stride)
+        }
+        CountSource::Fixed(n) => match n.checked_mul(w.stride) {
+            Some(sz) if sz <= data.len() => (0usize, n),
+            _ => return false,
+        },
+        CountSource::U16PrefixAt(off) => {
+            if off + 2 > data.len() {
+                return false;
+            }
+            let n = u16::from_be_bytes([data[off], data[off + 1]]) as usize;
+            let body = off + 2;
+            match n.checked_mul(w.stride).map(|sz| body.checked_add(sz)) {
+                Some(Some(end)) if end <= data.len() => (body, n),
+                _ => return false,
+            }
+        }
+        CountSource::U32PrefixAt(off) => {
+            if off + 4 > data.len() {
+                return false;
+            }
+            let n =
+                u32::from_be_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]) as usize;
+            let body = off + 4;
+            match n.checked_mul(w.stride).map(|sz| body.checked_add(sz)) {
+                Some(Some(end)) if end <= data.len() => (body, n),
+                _ => return false,
+            }
+        }
+    };
+    // Swap the prefix count field itself (validated above).
+    match w.count {
+        CountSource::U16PrefixAt(off) => swap_u16(data, off),
+        CountSource::U32PrefixAt(off) => swap_u32(data, off),
+        _ => {}
+    }
+    for ri in 0..count {
+        let mut off = start + ri * w.stride;
+        for f in w.fields {
+            match f.kind {
+                FieldKind::U32 | FieldKind::F32 => data[off..off + 4].reverse(),
+                FieldKind::U16 => data[off..off + 2].reverse(),
+                FieldKind::U8 => {}
+            }
+            off += f.width as usize;
+        }
+    }
+    true
+}
+
+/// PRMT — per-PRMG draw-call records (16 bytes). Field layout from the engine
+/// reader and `tools/ucfx_mesh_codec.py:540`:
+///   u32 material_index, u32 start_index, u16 index_count, u16 base_vertex,
+///   u16 max_vertex_index, u16 vertex_span.
+/// The old `swap_u16_array` transposed the two leading u32s (verified via the
+/// oracle: `00000700` -> `07000000`). NOTE: the trailing u16 counts often differ
+/// from PC by *value* (the IBUF strip->list re-encode), so this fixes the field
+/// FORMAT (the u32 transposition) but `size_eq_diff` may not reach 0 for meshes
+/// whose index buffer PC re-encoded.
+const PRMT_WALKER: RecordWalker = RecordWalker {
+    fields: &[
+        FieldSpec { width: 4, kind: FieldKind::U32 },
+        FieldSpec { width: 4, kind: FieldKind::U32 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+    ],
+    stride: 16,
+    count: CountSource::BodyLenDivStride,
+};
+
+/// PTMS — 8-byte records `[u32][u16][u16]`. The generic u32 default transposes
+/// the @4/@6 u16 pair of each record (verified via the oracle inspector).
+const PTMS_WALKER: RecordWalker = RecordWalker {
+    fields: &[
+        FieldSpec { width: 4, kind: FieldKind::U32 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+        FieldSpec { width: 2, kind: FieldKind::U16 },
+    ],
+    stride: 8,
+    count: CountSource::BodyLenDivStride,
+};
+
+/// TRCK — variable-length: `[u32 hash @0][u32 hash @4]` then a u16 array. NOT
+/// fixed-stride (observed 26 / 34 bytes). The two leading u32 hashes must be
+/// u32-swapped; everything from +8 is u16. (Oracle inspector: only @0/@4 were
+/// transposed — the u16 tail is already correct under a u16 swap.)
+fn convert_trck_inplace(body: &mut [u8]) {
+    if body.len() < 8 {
+        swap_u16_array(body);
+        return;
+    }
+    swap_u32(body, 0);
+    swap_u32(body, 4);
+    swap_u16_array(&mut body[8..]);
+}
+
+/// PTCH — 56-byte (0x38) records: f32 patch/transform data @0..0x34 then a u16
+/// pair @0x34/@0x36. The generic u32 default transposes that trailing u16 pair.
+/// Returns false (no mutation) on a body that isn't a clean 56-byte multiple.
+fn convert_ptch_inplace(body: &mut [u8]) -> bool {
+    const STRIDE: usize = 0x38;
+    if body.is_empty() || body.len() % STRIDE != 0 {
+        return false;
+    }
+    for rec in body.chunks_exact_mut(STRIDE) {
+        let mut o = 0;
+        while o + 4 <= 0x34 {
+            rec[o..o + 4].reverse(); // f32 (reversed as u32)
+            o += 4;
+        }
+        rec[0x34..0x36].reverse(); // u16
+        rec[0x36..0x38].reverse(); // u16
+    }
+    true
+}
+
+/// HIER — 176-byte (0xb0) skeleton/node records. Per node: u32 node-hash @0, u16
+/// @4, u16 @6 (index + parent pair), then f32 transform matrix + bbox @8 (reversed
+/// as u32). 176 = 4 + 2 + 2 + 168(=42×4). A 45-element `FieldSpec` table would be
+/// unwieldy, so this is the hand-written equivalent (the plan's escape hatch).
+/// Returns false (no mutation) on a body that isn't a clean 176-byte multiple.
+fn convert_hier_inplace(body: &mut [u8]) -> bool {
+    const STRIDE: usize = 0xb0;
+    if body.is_empty() || body.len() % STRIDE != 0 {
+        return false;
+    }
+    for rec in body.chunks_exact_mut(STRIDE) {
+        rec[0..4].reverse(); // u32 node hash
+        rec[4..6].reverse(); // u16
+        rec[6..8].reverse(); // u16
+        rec[8..10].reverse(); // u16 (index)
+        rec[10..12].reverse(); // u16 (parent, 0xffff = root)
+        let mut o = 12; // 0xc
+        while o + 4 <= STRIDE {
+            rec[o..o + 4].reverse(); // f32 transform / bbox (reversed as u32)
+            o += 4;
+        }
+    }
+    true
 }
 
 /// Convert a Texture INFO body (34 bytes, mixed u16/u32 fields).
@@ -3018,29 +3281,92 @@ fn swap_u32_array(data: &mut [u8]) {
 /// on-wire u16 count). If it does not match (an unexpected material variant), fall back to a
 /// count-preserving u16 swap — `swap_u16_array` still byte-reverses the u16 count correctly at any
 /// even offset, so the engine's count stays valid and we never reintroduce the overrun.
-fn convert_mtrl(body: &mut [u8]) {
-    const HDR: usize = 26 * 4; // 104: leading u32/f32 colour/scalar block
-    // Engine layout (FUN_00858790): [26 u32/f32 params][u16 flags @104][u16 tex
-    // count @106][contiguous u32/f32 region @108...]. That region is the texture
-    // hash array (`count` entries the engine treats as handles) FOLLOWED by
-    // trailing material params — but it is ALL u32/f32 and swaps identically. The
-    // per-field swap (params u32, flags/count u16, rest u32) preserves the count
-    // (it reverses the u16 in place, never transposing it → no 0x84DD5B overrun)
-    // AND swaps the hashes as u32.
-    //
-    // PREVIOUSLY this was gated on `len == 116 + count*4` and otherwise fell back
-    // to swap_u16_array. Real materials carry extra trailing params (e.g. len 240,
-    // count 1, not 120), so the gate FAILED and the fallback u16-swapped the u32
-    // texture HASHES → garbage handles → unresolved texture refs at world load.
-    // Per-field is correct for ANY length; only bodies too short for the layout
-    // fall back to the count-safe u16 swap.
-    if body.len() >= HDR + 4 {
-        swap_u32_array(&mut body[..HDR]); // u32/f32 colour + scalar params
-        body[HDR..HDR + 2].reverse(); // u16 flags
-        body[HDR + 2..HDR + 4].reverse(); // u16 texture count
-        swap_u32_array(&mut body[HDR + 4..]); // hashes + trailing params (all u32/f32)
+/// 26-dword (104-byte) colour/scalar preamble that precedes each material's flag word.
+const MTRL_PRE: usize = 26 * 4; // 104
+
+/// The BE `count` field of a flag word at `body[at..]` if plausible: `[u16 flags]
+/// [u16 count]` (FUN_00858790 reads count@+2) with `count ∈ 1..=10` (the engine's
+/// fixed 10-slot hash array). In BE that is a zero high byte followed by 1..=10 —
+/// a strong signature texture hashes (large u32) and IEEE-float props rarely hit.
+/// `flags` is unconstrained here: real materials carry flags up to ~0x418.
+fn mtrl_be_count(body: &[u8], at: usize) -> Option<usize> {
+    if at + 4 <= body.len() && body[at + 2] == 0 && (1..=10).contains(&body[at + 3]) {
+        Some(body[at + 3] as usize)
     } else {
+        None
+    }
+}
+
+/// Do the materials tile the body EXACTLY on the standard `116 + count*4` stride,
+/// with a valid `count ∈ 1..=10` flag word at every record's `+104`? This is the only
+/// layout we trust to rewrite as a multi-material array.
+fn mtrl_tiles_standard(body: &[u8]) -> Option<Vec<usize>> {
+    let len = body.len();
+    let mut off = 0usize;
+    let mut flags = Vec::new();
+    while off < len {
+        let f = off + MTRL_PRE;
+        let count = mtrl_be_count(body, f)?; // flag word must be valid here
+        flags.push(f);
+        off += 116 + count * 4;
+        if off > len {
+            return None;
+        }
+    }
+    if off == len && !flags.is_empty() {
+        Some(flags)
+    } else {
+        None
+    }
+}
+
+/// Convert ONLY material[0]'s `[flags|count]` per-field; u32-swap everything else.
+/// This is the pre-2026-06-16 behaviour. The multi-material array walk
+/// (`mtrl_convert_array`) is RETAINED below but currently UNUSED while we bisect a
+/// world-load HANG regression: correctly converting `material[1..]` (vs leaving them
+/// transposed, as this single-material path does) changed engine behaviour into the
+/// hang — i.e. the transposed materials[1..] were accidentally MASKING a deeper bug.
+/// Reverted to restore the known-good load; re-enable per-block once the masked issue
+/// (streaming/texture dependency exposed by the real material refs) is understood.
+fn convert_mtrl(body: &mut [u8]) {
+    let len = body.len();
+    if len < MTRL_PRE + 4 {
         swap_u16_array(body);
+        return;
+    }
+    swap_u32_array(&mut body[..MTRL_PRE]); // 26-dword colour/scalar preamble
+    body[MTRL_PRE..MTRL_PRE + 2].reverse(); // u16 flags @104
+    body[MTRL_PRE + 2..MTRL_PRE + 4].reverse(); // u16 count @106 (in place — no transpose)
+    swap_u32_array(&mut body[MTRL_PRE + 4..]); // hashes + trailing (material[1..] left as-is)
+}
+
+/// Multi-material array walk (the 0x61981F c4land fix). PARKED — see `convert_mtrl`.
+/// Only safe for bodies that tile exactly on the standard `116 + count*4` stride.
+#[allow(dead_code)]
+fn mtrl_convert_array(body: &mut [u8]) {
+    let len = body.len();
+    if len < MTRL_PRE + 4 {
+        swap_u16_array(body);
+        return;
+    }
+    let flag_offs = match mtrl_tiles_standard(body) {
+        Some(f) => f,
+        None => {
+            swap_u32_array(&mut body[..MTRL_PRE]);
+            body[MTRL_PRE..MTRL_PRE + 2].reverse();
+            body[MTRL_PRE + 2..MTRL_PRE + 4].reverse();
+            swap_u32_array(&mut body[MTRL_PRE + 4..]);
+            return;
+        }
+    };
+    for i in 0..flag_offs.len() {
+        let f = flag_offs[i];
+        let pre_start = f - MTRL_PRE;
+        let region_end = if i + 1 < flag_offs.len() { flag_offs[i + 1] - MTRL_PRE } else { len };
+        swap_u32_array(&mut body[pre_start..f]);
+        body[f..f + 2].reverse();
+        body[f + 2..f + 4].reverse();
+        swap_u32_array(&mut body[f + 4..region_end]);
     }
 }
 
@@ -3153,14 +3479,37 @@ fn find_zlib_offset(data: &[u8]) -> Option<usize> {
 /// endian-neutral). Mirrors `_convert_cfx_compressed_data`. Falls back to a u32
 /// sweep if no zlib stream is found (rather than raising).
 fn convert_cfx_inplace(body: &mut [u8]) {
-    match find_zlib_offset(body) {
-        Some(zoff) => {
-            let prefix_end = zoff - (zoff % 4);
+    // The Scaleform `.gfx`/SWF payload is a platform-independent LITTLE-ENDIAN
+    // file (magic CFX/CWS = zlib-compressed, GFX/FWS = raw; the 3-byte magic is
+    // followed by a u8 version + LE u32 FileLength). It is BYTE-IDENTICAL on
+    // Xbox and PC — verified: the Minimap (0x71A70B2A) inner blob is equal in
+    // xbox-vz.wad and retail vz.wad, header included. So it must be copied
+    // VERBATIM; only an engine prefix BEFORE the Scaleform magic (if any) is
+    // byte-swapped. The previous logic swapped everything before the zlib
+    // stream, which includes the `CFX\x08` magic+length header -> "\x08XFC" +
+    // a transposed length, breaking the GFx loader (the Map/Minimap HUD
+    // type-confusion world-load crash). See memory scaleformgfx-cfx-blind-swap.
+    const MAGICS: [&[u8; 3]; 4] = [b"CFX", b"CWS", b"GFX", b"FWS"];
+    let scan = body.len().min(64);
+    let magic_off = (0..scan.saturating_sub(3))
+        .find(|&i| MAGICS.iter().any(|m| &body[i..i + 3] == &m[..]));
+    match magic_off {
+        Some(p) => {
+            // Swap only the engine prefix preceding the `.gfx` magic (4-aligned);
+            // copy the Scaleform file (magic onward) byte-for-byte. For these HUD
+            // assets the magic is at offset 0, so the whole body is verbatim.
+            let prefix_end = p - (p % 4);
             swap_u32_array(&mut body[..prefix_end]);
-            // body[prefix_end..zoff] (sub-u32 prefix tail) and body[zoff..] (zlib)
-            // are left byte-for-byte.
         }
-        None => swap_u32_array(body),
+        // No recognizable Scaleform magic: keep the prior conservative behavior
+        // (swap the u32 prefix before the zlib stream; leave the deflate verbatim).
+        None => match find_zlib_offset(body) {
+            Some(zoff) => {
+                let prefix_end = zoff - (zoff % 4);
+                swap_u32_array(&mut body[..prefix_end]);
+            }
+            None => swap_u32_array(body),
+        },
     }
 }
 
@@ -3271,8 +3620,8 @@ fn walk_container_tags(container: &[u8], entry_idx: usize) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_block, convert_chdr_body_inplace, convert_decl, convert_efct_header_inplace,
-        convert_hibernation_data_inplace, convert_info_body_inplace,
+        convert_block, convert_cfx_inplace, convert_chdr_body_inplace, convert_decl,
+        convert_efct_header_inplace, convert_hibernation_data_inplace, convert_info_body_inplace,
         convert_keyed_group_records_inplace, convert_mtrl,
         fix_embedded_havok_layoutrules, is_ecs_name_identifier,
         HAVOK_PACKFILE_MAGIC,
@@ -3326,6 +3675,41 @@ mod tests {
         convert_mtrl(&mut body);
         assert_eq!(u16::from_le_bytes([body[106], body[107]]), 0);
         assert_eq!(u32::from_le_bytes([body[0], body[1], body[2], body[3]]), 0x01020304);
+    }
+
+    #[test]
+    fn cfx_payload_copied_verbatim() {
+        // Scaleform .gfx (CFX = zlib) is a platform-independent LITTLE-ENDIAN
+        // file: convert_cfx_inplace must copy it byte-for-byte and NOT swap the
+        // "CFX\x08" + LE-length header. The old code swapped it -> "\x08XFC",
+        // truncating/breaking the Map/Minimap HUD (world-load type-confusion).
+        // Oracle: the Minimap inner blob is byte-identical in xbox-vz.wad and
+        // retail vz.wad, header included.
+        let mut body = vec![
+            b'C', b'F', b'X', 0x08, 0x01, 0xab, 0x00, 0x00, // CFX, ver, LE len=0xab01
+            0x78, 0xda, 0xcc, 0xb8, 0x05, 0x58, // zlib deflate stream
+        ];
+        let orig = body.clone();
+        convert_cfx_inplace(&mut body);
+        assert_eq!(body, orig, "CFX .gfx body must be copied verbatim (no header swap)");
+    }
+
+    #[test]
+    fn cfx_engine_prefix_swapped_payload_verbatim() {
+        // If an engine u32 prefix precedes the Scaleform magic, swap ONLY that
+        // prefix; the .gfx (magic onward) stays verbatim.
+        let mut body = vec![
+            0x01, 0x02, 0x03, 0x04, // 4-byte BE engine prefix -> swapped
+            b'C', b'F', b'X', 0x08, 0x01, 0xab, 0x00, 0x00, 0x78, 0xda, 0xcc,
+        ];
+        convert_cfx_inplace(&mut body);
+        assert_eq!(&body[0..4], &[0x04, 0x03, 0x02, 0x01], "engine prefix swapped");
+        assert_eq!(
+            &body[4..12],
+            &[b'C', b'F', b'X', 0x08, 0x01, 0xab, 0x00, 0x00],
+            "CFX header verbatim"
+        );
+        assert_eq!(&body[12..], &[0x78, 0xda, 0xcc], "zlib verbatim");
     }
 
     #[test]
@@ -3832,5 +4216,95 @@ mod tests {
         // record 1 fixed to [0][6]
         assert_eq!(u16::from_le_bytes([body[cp1], body[cp1 + 1]]), 0);
         assert_eq!(u16::from_le_bytes([body[cp1 + 2], body[cp1 + 3]]), 6);
+    }
+
+    #[test]
+    fn prmt_walker_swaps_u32_then_u16_per_record() {
+        // One 16-byte BE PRMT record: material_index=0x00000007, start_index=0x10,
+        // index_count=0x0203, base=0x0405, max=0x0607, span=0x0809.
+        let mut be = Vec::new();
+        be.extend_from_slice(&0x00000007u32.to_be_bytes());
+        be.extend_from_slice(&0x00000010u32.to_be_bytes());
+        be.extend_from_slice(&0x0203u16.to_be_bytes());
+        be.extend_from_slice(&0x0405u16.to_be_bytes());
+        be.extend_from_slice(&0x0607u16.to_be_bytes());
+        be.extend_from_slice(&0x0809u16.to_be_bytes());
+        let mut out = be.clone();
+        assert!(super::walk_records(&mut out, &super::PRMT_WALKER));
+        // u32s reversed as u32 (NOT u16-transposed: old bug gave 00 00 07 00).
+        assert_eq!(&out[0..4], &[0x07, 0x00, 0x00, 0x00]);
+        assert_eq!(&out[4..8], &[0x10, 0x00, 0x00, 0x00]);
+        // u16s reversed per-u16.
+        assert_eq!(u16::from_le_bytes([out[8], out[9]]), 0x0203);
+        assert_eq!(u16::from_le_bytes([out[10], out[11]]), 0x0405);
+        assert_eq!(u16::from_le_bytes([out[14], out[15]]), 0x0809);
+    }
+
+    #[test]
+    fn walk_records_bails_on_bad_length() {
+        // 15 bytes is not a clean 16-byte multiple -> false, no mutation.
+        let mut body = vec![0xAAu8; 15];
+        let snapshot = body.clone();
+        assert!(!super::walk_records(&mut body, &super::PRMT_WALKER));
+        assert_eq!(body, snapshot);
+    }
+
+    #[test]
+    fn convert_mtrl_walks_three_material_array() {
+        // Reproduces model 0x849972EE (global_weapon_c4land_projectile): a 372-byte
+        // MTRL with 3 materials (counts 1/3/2, strides 120/128) — the layout that
+        // crashed when only material[0] was repaired. Build the BE source, convert,
+        // assert every material's count + flags survive AND hashes/preamble u32-swap.
+        const PB: usize = 104;
+        let mut be = vec![0u8; 372];
+        // preamble dword 0 (BE) -> must u32-swap
+        be[0..4].copy_from_slice(&0x11223344u32.to_be_bytes());
+        // material[0] @104: flags=0x0080 count=1, one hash, float props
+        be[PB..PB + 2].copy_from_slice(&0x0080u16.to_be_bytes());
+        be[PB + 2..PB + 4].copy_from_slice(&1u16.to_be_bytes());
+        be[PB + 4..PB + 8].copy_from_slice(&0xAABBCCDDu32.to_be_bytes()); // hash
+        be[PB + 8..PB + 12].copy_from_slice(&1.0f32.to_be_bytes()); // a prop (must not match a flag word)
+        // material[1] @224: flags=0x0080 count=3, three hashes
+        let m1 = 224;
+        be[m1..m1 + 2].copy_from_slice(&0x0080u16.to_be_bytes());
+        be[m1 + 2..m1 + 4].copy_from_slice(&3u16.to_be_bytes());
+        be[m1 + 4..m1 + 8].copy_from_slice(&0x0D4FA498u32.to_be_bytes());
+        // material[2] @352: flags=0 count=2, two hashes
+        let m2 = 352;
+        be[m2..m2 + 2].copy_from_slice(&0x0000u16.to_be_bytes());
+        be[m2 + 2..m2 + 4].copy_from_slice(&2u16.to_be_bytes());
+
+        // The multi-material array walk is PARKED in convert_mtrl (single-material) while we
+        // bisect the world-load hang regression; test the parked walker directly.
+        super::mtrl_convert_array(&mut be);
+
+        // preamble dword 0 u32-swapped
+        assert_eq!(&be[0..4], &[0x44, 0x33, 0x22, 0x11]);
+        // material[0]: flags@104=0x0080, count@106=1, hash u32-swapped
+        assert_eq!(u16::from_le_bytes([be[PB], be[PB + 1]]), 0x0080);
+        assert_eq!(u16::from_le_bytes([be[PB + 2], be[PB + 3]]), 1);
+        assert_eq!(&be[PB + 4..PB + 8], &[0xDD, 0xCC, 0xBB, 0xAA]);
+        // material[1]: flags=0x0080, count=3 (NOT 0x80=128) — the bug this fixes
+        assert_eq!(u16::from_le_bytes([be[m1], be[m1 + 1]]), 0x0080);
+        assert_eq!(u16::from_le_bytes([be[m1 + 2], be[m1 + 3]]), 3);
+        assert_eq!(&be[m1 + 4..m1 + 8], &[0x98, 0xA4, 0x4F, 0x0D]);
+        // material[2]: flags=0, count=2
+        assert_eq!(u16::from_le_bytes([be[m2], be[m2 + 1]]), 0x0000);
+        assert_eq!(u16::from_le_bytes([be[m2 + 2], be[m2 + 3]]), 2);
+    }
+
+    #[test]
+    fn convert_mtrl_single_material_no_regression() {
+        // One material (count=1) + float props: behaves exactly as the old per-field
+        // path — flags/count in place, preamble + hash + props u32-swapped.
+        const PB: usize = 104;
+        let mut be = vec![0u8; PB + 4 + 4 + 16];
+        be[PB..PB + 2].copy_from_slice(&0x0001u16.to_be_bytes()); // flags
+        be[PB + 2..PB + 4].copy_from_slice(&1u16.to_be_bytes()); // count
+        be[PB + 4..PB + 8].copy_from_slice(&0x01020304u32.to_be_bytes()); // hash
+        super::convert_mtrl(&mut be);
+        assert_eq!(u16::from_le_bytes([be[PB], be[PB + 1]]), 0x0001);
+        assert_eq!(u16::from_le_bytes([be[PB + 2], be[PB + 3]]), 1);
+        assert_eq!(&be[PB + 4..PB + 8], &[0x04, 0x03, 0x02, 0x01]);
     }
 }

@@ -84,6 +84,9 @@ def script_aset_entry(asset_hash: int) -> dict:
         "u32_1": 0xFFFFFFFF,
         "u32_2": 0xFFFF,
         "u32_3": SCRIPT_ASET_TYPE_ID,
+        # Primary / resolve-by-hash: low16 must stay 0xFFFF; the ASET sub-entry
+        # recompute keys on this flag to avoid pinning it to a physical index.
+        "_primary": True,
     }
 
 
@@ -625,15 +628,40 @@ def cmd_patch_script(
             print(f"  New bytecode: {new_bytecode_len:,} bytes")
             print(f"  Size delta:   {size_delta:+,} bytes")
 
-            pre_luaq = bytes(modified[:old_luaq_abs])
-            post_entry = bytes(modified[entry_end:])
-            csum_trailer = bytes(modified[entry_end:entry_end + 8])
+            post_entry = bytes(modified[entry_end + 8:])  # after CSUM trailer
 
-            new_ucfx_body = pre_luaq[entry_start:] + new_bytecode
-            new_chunk = bytes(modified[entry_start:entry_start + 0]) \
-                if False else pre_luaq[entry_start:old_luaq_abs] + new_bytecode
-            new_chunk_with_csum = new_chunk + CSUM_TAG + b"\x00\x00\x00\x00"
-            new_chunk_size = len(new_chunk_with_csum)
+            # LUAQ_SIG ("LuaQ") matches AFTER the 0x1B Lua signature byte; cut at
+            # the 0x1B so we don't keep the old one and prepend the new bytecode's
+            # 0x1B (which produced a corrupt double-0x1B header).
+            luaq_start = old_luaq_abs
+            if luaq_start > entry_start and modified[luaq_start - 1] == 0x1B:
+                luaq_start -= 1
+            old_bytecode_len = entry_end - luaq_start
+            size_delta = new_bytecode_len - old_bytecode_len
+
+            new_chunk = bytearray(modified[entry_start:luaq_start]) + new_bytecode
+
+            # The preserved header region still describes the OLD body length.
+            # Patch every size field that the engine reads, or it over-reads the
+            # BINN body past the container (world-load buffer overflow). The UCFX
+            # header data_area_size is at +8; walk the descriptor table for the
+            # BINN size field and the INFO body's bytecode-length u32.
+            data_offset = struct.unpack_from("<I", new_chunk, 4)[0]
+            old_data_area = struct.unpack_from("<I", new_chunk, 8)[0]
+            struct.pack_into("<I", new_chunk, 8, old_data_area + size_delta)
+            n_desc = struct.unpack_from("<I", new_chunk, 16)[0]
+            for d in range(n_desc):
+                doff = 20 + d * 20
+                tag = bytes(new_chunk[doff:doff + 4])
+                body_off = struct.unpack_from("<I", new_chunk, doff + 4)[0]
+                if tag == BINN_TAG:
+                    struct.pack_into("<I", new_chunk, doff + 8, new_bytecode_len)
+                elif tag == b"INFO":
+                    struct.pack_into("<I", new_chunk, data_offset + body_off,
+                                     new_bytecode_len)
+
+            new_chunk = bytes(new_chunk)
+            new_chunk_size = len(new_chunk) + 8  # +8 for CSUM tag + value
 
             rebuilt = bytearray(modified[:entry_start])
             rebuilt.extend(new_chunk)

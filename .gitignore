@@ -72,3 +72,13 @@ tools/ghidra_12.1_PUBLIC/
 tools/jdk21/
 msvc/
 downloads/
+tools/unrar
+tools/lua51-mercs2
+tools/lua_enum_asi
+tools/ffmpeg
+tools/external/
+*session*.md
+*investigation*.md
+build/
+# agent worktrees are embedded git repos — never commit them
+.claude/worktrees/

@@ -393,6 +393,7 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
 
     let mut decl_body: Option<&[u8]> = None;
     let mut data_body: Option<&[u8]> = None;
+    let mut info_body: Option<&[u8]> = None;
 
     for child in &children {
         match &child.tag {
@@ -401,6 +402,9 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
             }
             b"data" => {
                 data_body = Some(&container[child.body_start..child.body_start + child.body_size])
+            }
+            b"info" => {
+                info_body = Some(&container[child.body_start..child.body_start + child.body_size])
             }
             _ => {}
         }
@@ -415,13 +419,22 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
         _ => return (true, 0, None, Vec::new(), Vec::new()),
     };
 
-    // Derive the per-vertex stride and position format from the PC vertex
-    // declaration (D3DVERTEXELEMENT9 array), matching the converter's translation
-    // (apply_strm_vertex_fix). FLOAT16/SHORT positions have 2-byte components;
-    // decoding them as FLOAT32 (the previous assumption) yields garbage "NaN" — a
-    // false positive now that the converter byte-correctly translates half-float
-    // terrain vertices. We decode the position the same way the engine reads it.
-    let (stride, decl_all_u16) = decl_vertex_format(decl);
+    // The AUTHORITATIVE per-vertex stride is the STRM `info` chunk's stride field
+    // ({u32 _, u32 stride, u32 count} — stride@+4), NOT the decl-derived extent.
+    // Retail PC decls legitimately contain FLOAT16_4 elements whose declared
+    // offset+size overruns the packed vertex stride (e.g. a normal at offset 12
+    // declared FLOAT16_4 (8B) → extent 20 over a 16-byte vertex): the engine binds
+    // the stream at the info stride and lets the final element's read overlap.
+    // Deriving the stride from the decl over-reads by +4B/vertex and reported
+    // thousands of FALSE NaN — the vertex data itself is correct (0 NaN at the info
+    // stride). Prefer the info-chunk stride; fall back to the decl extent only when
+    // the info chunk is absent/implausible.
+    let (decl_stride, decl_all_u16, decl_first_off) = decl_vertex_format(decl);
+    let info_stride = info_body
+        .filter(|b| b.len() >= 12)
+        .map(|b| read_u32_le(b, 4) as usize)
+        .filter(|&s| (6..=256).contains(&s));
+    let stride = info_stride.unwrap_or(decl_stride);
     if stride < 6 || stride > 256 {
         return (
             true,
@@ -434,13 +447,19 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
         );
     }
 
-    // Match the converter's data-driven decision (apply_strm_vertex_fix): a vertex
-    // buffer is FLOAT16 only when the decl is pure-f16/short AND the FLOAT32 view of
-    // the position is garbage. The STRM `decl` child can list only a trailing u16
-    // element while the buffer is genuinely FLOAT32 (sane f32 view) — the converter
-    // leaves those as f32, so the validator must read them as f32 too, else it would
-    // re-introduce false NaN on meshes the converter correctly did not touch.
-    let pos_is_f16 = decl_all_u16 && (stride < 12 || !float3_view_is_sane(data, stride));
+    // Decide the position format (FLOAT16 vs FLOAT32) from the position SIZE: the
+    // position occupies offset 0 .. the first listed element's offset. 8 bytes ⟹
+    // FLOAT16_4 (f16); 12 bytes ⟹ FLOAT3 (f32). This structural signal is reliable;
+    // the alternatives are not: gating on "all listed elements are u16" misclassifies
+    // a FLOAT16 position when the mesh also lists a FLOAT32 element, and sampling the
+    // f32 view misclassifies an f16 mesh whose first vertices happen to read as a sane
+    // float3. Reading f16 bytes as f32 produces ~1e10 garbage (the 0.00786/denormal
+    // signature), so getting this right is what keeps the bounded check honest.
+    let pos_is_f16 = match decl_first_off {
+        Some(0) => decl_all_u16, // position is the first listed element: trust its kind
+        Some(off) => off <= 8,   // implicit position spanning `off` bytes (8=F16_4, 12=FLOAT3)
+        None => stride < 12 || !float3_view_is_sane(data, stride), // no elements: data heuristic
+    };
     let pos_bytes = if pos_is_f16 { 6 } else { 12 };
     let vertex_count = data.len() / stride;
     let check_count = vertex_count.min(128);
@@ -467,11 +486,21 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
             )
         };
 
-        if !vx.is_finite() || !vy.is_finite() || !vz.is_finite() {
+        // Position sanity is not just finiteness (NaN/Inf) but a plausible
+        // mesh-local coordinate magnitude. Measured ground truth: across all 5260
+        // DLC meshes / 2,106,274 vertices the max |component| is 249.125 (mesh-local
+        // — meshes are placed in the world via transforms), while the stride-misread
+        // corruption this guards against decodes to >=1e11. The 1e6 bound is ~4000x
+        // the real maximum yet far below any corruption, so finite-but-absurd values
+        // are caught and real data is never flagged. (FLOAT16 positions are <=65504
+        // by construction; the bound chiefly matters for the FLOAT32-position path.)
+        const MAX_VERTEX_COORD: f32 = 1.0e6;
+        let in_range = |f: f32| f.is_finite() && f.abs() <= MAX_VERTEX_COORD;
+        if !in_range(vx) || !in_range(vy) || !in_range(vz) {
             violations += 1;
             if issues.len() < 5 {
                 issues.push(format!(
-                    "{label}: STRM vertex[{vi}] NaN/Inf: ({vx}, {vy}, {vz})"
+                    "{label}: STRM vertex[{vi}] NaN/Inf/out-of-range (|coord|>1e6): ({vx}, {vy}, {vz})"
                 ));
             }
         } else {
@@ -488,11 +517,12 @@ fn validate_strm_vertices(container: &[u8], label: &str) -> (bool, usize, Option
 /// (SHORT/FLOAT16) type — the same gate the converter's `apply_strm_vertex_fix`
 /// uses; otherwise FLOAT32. The STRM `decl` child can list only the trailing
 /// element, so the stride is the max element end (not a header field).
-fn decl_vertex_format(decl: &[u8]) -> (usize, bool) {
+fn decl_vertex_format(decl: &[u8]) -> (usize, bool, Option<usize>) {
     let mut p = 8usize; // skip the 8-byte PC decl header
     let mut stride = 0usize;
     let mut n = 0usize;
     let mut all_u16 = true;
+    let mut first_off: Option<usize> = None;
     while p + 8 <= decl.len() {
         let stream = u16::from_le_bytes([decl[p], decl[p + 1]]);
         let typ = decl[p + 4];
@@ -500,6 +530,9 @@ fn decl_vertex_format(decl: &[u8]) -> (usize, bool) {
             break;
         }
         let offset = u16::from_le_bytes([decl[p + 2], decl[p + 3]]) as usize;
+        if first_off.is_none() {
+            first_off = Some(offset);
+        }
         let sz = pc_decltype_size(typ);
         if offset + sz > stride {
             stride = offset + sz;
@@ -510,7 +543,7 @@ fn decl_vertex_format(decl: &[u8]) -> (usize, bool) {
         n += 1;
         p += 8;
     }
-    (stride, n > 0 && all_u16)
+    (stride, n > 0 && all_u16, first_off)
 }
 
 /// Whether the FLOAT32 view of the position (offset 0, 3 components) is a sane
