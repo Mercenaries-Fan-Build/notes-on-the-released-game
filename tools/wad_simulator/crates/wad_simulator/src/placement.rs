@@ -34,8 +34,13 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     let mut issues = Vec::new();
     let mut placements_validated = 0usize;
     let mut flgs_placements_validated = 0usize;
-    let mut structural_violations = 0u32;
     let mut ecs_float_violations = 0usize;
+    // Advisory (NON-fatal): flgs uses a heuristic 42-byte stride guess; the ECS
+    // string-component printable check is also heuristic (it counts each Name
+    // record's binary entity-key bytes as "non-printable", so it fires on
+    // retail-shipped data too — verified: retail vz.wad produces these).
+    let mut position_advisory = 0usize;
+    let mut structural_advisory = 0u32;
 
     if let Some(results) = validate_transform_components(container, label) {
         for r in results {
@@ -51,12 +56,21 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
     ecs_float_violations += schema_scan.violations;
     issues.extend(schema_scan.issues);
 
-    // P2-10: ECS string component printable ASCII check
-    structural_violations += validate_string_components(container, label, &mut issues);
+    // P2-10: ECS string component printable ASCII check (HEURISTIC → advisory; see above).
+    structural_advisory += validate_string_components(container, label, &mut issues);
+
+    // Buffer-too-small: a texture EMBEDDED in this layer container (uppercase
+    // INFO/BODY) never gets its own consume_texture dispatch, so check it here.
+    // Headline signal — routed to texture_buffer_issues, NOT structural_violations.
+    let (texture_buffer_issues, _) =
+        crate::texture::check_embedded_texture_buffers(container, label);
 
     if let Some(ref flgs) = flgs_body {
         let flgs_result = validate_flgs_placements(flgs, label);
         flgs_placements_validated += flgs_result.records_checked;
+        // flgs violations are advisory (heuristic stride); the simulate.rs matcher
+        // only counts `Transform[...]` strings toward fatal position_violations.
+        position_advisory += flgs_result.issues.len();
         issues.extend(flgs_result.issues);
     }
 
@@ -65,8 +79,10 @@ pub fn consume_layer(container: &[u8], data_body: Option<&[u8]>, label: &str) ->
         issues,
         placements_validated,
         flgs_placements_validated,
-        structural_violations,
         ecs_float_violations,
+        texture_buffer_issues,
+        position_advisory,
+        structural_advisory,
         ..Default::default()
     }
 }
@@ -421,7 +437,12 @@ fn scan_comp_group_schema(
                         read_f32_le(data, off + 24),
                         read_f32_le(data, off + 28),
                     ) {
-                        if !is_valid_quaternion(qx, qy, qz, qw) {
+                        // An exactly-all-zero quaternion is an empty/unused record
+                        // slot (e.g. PhysicalLink record[0]), not corruption — a
+                        // byte-swap of zeros is still zeros, so it cannot be a swap
+                        // artifact; flagging it was a false positive.
+                        let all_zero = qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 0.0;
+                        if !all_zero && !is_valid_quaternion(qx, qy, qz, qw) {
                             scan.violations += 1;
                             let kind = if !qx.is_finite() || !qy.is_finite() || !qz.is_finite() || !qw.is_finite() {
                                 "quaternion NaN/Inf"
@@ -643,18 +664,40 @@ fn check_string_comp_group(
         return None;
     }
 
-    let non_printable = data
-        .iter()
-        .filter(|&&b| b != 0x00 && !(0x20..=0x7E).contains(&b))
-        .count();
-    if non_printable > 0 {
-        issues.push(format!(
-            "{label}: ECS \"{comp_name}\" has {non_printable} non-printable bytes (byte-swap corruption?)"
-        ));
-        Some(1)
-    } else {
-        None
+    // The old check counted EVERY non-printable byte as "byte-swap corruption?".
+    // That was a false-positive generator, verified two ways: (1) these bodies are
+    // records of [binary entity-key][null-terminated string] ("Name") or pure
+    // (entity-key, name-HASH) pairs with no strings at all ("ModelName") — the keys/
+    // hashes are legitimately non-printable, and the DLC strings decode intact
+    // ("Tank_Ambience", "DLCCon003_Spawner01"…) with sequential keys; (2) printable-
+    // byte COUNTS are invariant under any byte permutation, so a count can never
+    // distinguish swapped from unswapped data in principle. The meaningful check for
+    // "Name": the body must actually contain identifier-like strings — flag only when
+    // a sizeable body has NO printable run of >=4 chars (true garbage). "ModelName"
+    // is a hash payload; there is nothing string-like to validate.
+    if comp_name == "ModelName" {
+        return None;
     }
+    if data.len() >= 16 {
+        let mut run = 0usize;
+        let mut max_run = 0usize;
+        for &b in data {
+            if (0x20..=0x7E).contains(&b) {
+                run += 1;
+                max_run = max_run.max(run);
+            } else {
+                run = 0;
+            }
+        }
+        if max_run < 4 {
+            issues.push(format!(
+                "{label}: ECS \"{comp_name}\" ({len}B) contains no printable string run (>=4 chars) — payload is not name records",
+                len = data.len()
+            ));
+            return Some(1);
+        }
+    }
+    None
 }
 
 fn is_string_component(name: &str) -> bool {

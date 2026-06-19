@@ -1,23 +1,47 @@
 //! Script UCFX consumption (LuaQ / BINN).
 
 use crate::consume::ConsumeResult;
+use mercs2_formats::ucfx::extract_chunk_body;
 
 const LUAQ_MAGIC: &[u8] = b"\x1BLua";
 const BINN_MAGIC: &[u8; 4] = b"BINN";
 
-const EXPECTED_SIZEOF_FIELDS: [u8; 5] = [4, 4, 4, 8, 0];
+// Lua 5.1 header sizeof block: [sizeof int, sizeof size_t, sizeof Instruction,
+// sizeof lua_Number, integral-flag]. The mercs2 Lua fork (and retail pc-game-vz.wad,
+// verified: BINN bodies are `\x1BLuaQ\x00\x01\x04\x04\x04\x04\x00…`) uses a 32-bit
+// build with FLOAT lua_Number, so lua_Number is 4 bytes, not the desktop default 8.
+// (The old `8` was never exercised — scripts ship payload under the BINN chunk, and
+// the previous "no data chunk" early-return skipped this check entirely.)
+const EXPECTED_SIZEOF_FIELDS: [u8; 5] = [4, 4, 4, 4, 0];
 const MAX_REASONABLE_SIZE: u32 = 100_000;
 
-pub fn consume_script(_container: &[u8], data_body: Option<&[u8]>, label: &str) -> ConsumeResult {
+pub fn consume_script(container: &[u8], data_body: Option<&[u8]>, label: &str) -> ConsumeResult {
     let mut issues = Vec::new();
     let mut structural_violations = 0u32;
-    let Some(body) = data_body else {
-        issues.push(format!("{label}: no data chunk"));
-        return ConsumeResult {
-            consumed: true,
-            issues,
-            ..Default::default()
-        };
+    // Script containers ship their LuaQ payload under the `BINN` chunk tag, not
+    // `data` — verified against retail pc-game-vz.wad (402/402 sampled script
+    // containers are (INFO, BINN) or (INFO, DEPS, BINN), BINN body = `\x1BLuaQ`
+    // bytecode). The old "no data chunk" error here was a false positive that ALSO
+    // skipped payload validation entirely; falling back to the BINN chunk turns the
+    // LuaQ checks (version/endian/sizeof/proto walk) on for these scripts.
+    let binn_owned;
+    let body: &[u8] = match data_body {
+        Some(b) => b,
+        None => match extract_chunk_body(container, b"BINN") {
+            Some(b) => {
+                binn_owned = b;
+                &binn_owned
+            }
+            None => {
+                issues.push(format!("{label}: no script payload chunk (data or BINN)"));
+                return ConsumeResult {
+                    consumed: true,
+                    issues,
+                    structural_violations: 1,
+                    ..Default::default()
+                };
+            }
+        },
     };
 
     if body.len() >= 5 && body.starts_with(LUAQ_MAGIC) {
@@ -131,8 +155,12 @@ fn walk_lua_proto(data: &[u8], start: usize) -> Result<usize, String> {
                 }
             }
             3 => {
-                // number: 8 bytes (sizeof lua_Number)
-                pos += 8;
+                // number: sizeof lua_Number = 4 (mercs2 Lua uses FLOAT, per the
+                // header's [4,4,4,4,0] sizeof block — verified retail + DLC). The
+                // old `8` (desktop double) ran the walk 4 bytes off after the first
+                // number constant, so subsequent string bytes were misread as type
+                // tags ("unknown constant type 110/115/…").
+                pos += 4;
                 if pos > data.len() {
                     return Err("overrun in number constant".into());
                 }

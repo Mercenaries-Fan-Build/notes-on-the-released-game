@@ -15,6 +15,12 @@ and `render_handle_decomp2.txt`. No binary or game files were modified.
 > FPO stack-walk wall sits. Ghidra left functions there undefined; this pass
 > force-disassembled and created the resolve-loop function so it decompiled cleanly.
 
+> **Related (2026-06-02):** a later patch-WAD live-debug session confirmed this
+> render-view path is **NOT** involved in the GlobalEnter livelock / data-as-code
+> faults observed there — slot `[0x00DFC2F8]` stayed intact at `0x017CFAF0` throughout
+> (the §7 cross-WAD dedupe is holding). See
+> [`patch_wad_globalenter_livelock_analysis.md`](patch_wad_globalenter_livelock_analysis.md).
+
 ---
 
 ## 1. The crash function — resolve loop `FUN_024611A3` (`.securom`)

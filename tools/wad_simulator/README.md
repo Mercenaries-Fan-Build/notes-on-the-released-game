@@ -1,16 +1,37 @@
-# WAD Simulator (Rust)
+# Mercenaries 2 Rust Tools (v1.0.0)
 
-Engine-accurate consumption simulator for Mercenaries 2 FFCS `.wad` archives. Mirrors
-Python pipeline decoders where practical and validates converted LE blocks after DLC
-byte-swap.
+A comprehensive Rust toolkit for Mercenaries 2 modding and analysis.
 
-## Workspace crates
+## Published Crates
 
-| Crate | Binary | Role |
-|-------|--------|------|
-| `mercs2_formats` | (lib) | FFCS/UCFX parsing, type hashes, shared chunk validators |
-| `ucfx_byteswap` | `ucfx_byteswap` | Xbox 360 BE → PC LE block conversion + post-swap validation |
-| `wad_simulator` | `wad_simulator` | ASET OOB audit + full asset consumption simulation |
+All crates available on crates.io:
+
+| Crate | Version | Binary | Role |
+|-------|---------|--------|------|
+| [mercs2_formats](https://crates.io/crates/mercs2_formats) | 1.0.0 | (lib) | FFCS/UCFX parsing, type hashes, shared chunk validators |
+| [ucfx_byteswap](https://crates.io/crates/ucfx_byteswap) | 1.0.0 | `ucfx_byteswap` | Xbox 360 BE → PC LE block converter + validator |
+| [loadprobe](https://crates.io/crates/loadprobe) | 1.0.0 | `loadprobe` | Game log analyzer (pmc_blackbox.log) with crash/hang detection |
+| [wad_simulator](https://crates.io/crates/wad_simulator) | 1.0.0 | `wad_simulator` | Engine-accurate WAD consumer with ASET OOB detection |
+
+## Installation
+
+### From crates.io (recommended)
+
+```bash
+# Install individual tools
+cargo install mercs2_formats  # Library only, use in your own code
+cargo install ucfx_byteswap  # Xbox BE→PC LE converter
+cargo install loadprobe       # Game log analyzer
+cargo install wad_simulator   # WAD consumption simulator
+```
+
+### From source
+
+```bash
+git clone https://github.com/Mercenaries-Fan-Build/notes-on-the-released-game.git
+cd notes-on-the-released-game/tools/wad_simulator
+cargo build --release --workspace
+```
 
 ## Validation coverage
 

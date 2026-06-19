@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -160,6 +160,13 @@ help:
 	@echo "  make test-windows      Start Windows 7 Docker container (dockur/windows) for game testing"
 	@echo "  make test-windows-down Stop the Windows test container"
 	@echo "  make test-windows-logs Follow container logs"
+	@echo ""
+	@echo "  make harvest-dlc-strings OUTPUT=./output"
+	@echo "                      DLC patch WAD asset names → fold new hashes into tools/rainbow_table.json"
+	@echo "  make export-console-strings"
+	@echo "                      Xbox 360 + PS3 WAD names+blocks → game-files/<stem>.{blocks,strings,unique-strings}.txt (+table)"
+	@echo "  make extract-strings OUTPUT=./output"
+	@echo "                      Both of the above (vars: PATCH_WAD XBOX_WAD PS3_WAD; STRINGS_MERGE=0 to skip table writes)"
 	@echo ""
 	@echo "  make ghidra-annotate-preanalysis"
 	@echo "                      Scan Mercs 1 source → scripts/mercs2_annotations.json (for Ghidra script)"
@@ -566,11 +573,27 @@ crack-game:
 	@echo ""
 	@echo "Building pmc_bb.dll..."
 	@$(MAKE) pmc-blackbox
-	@cp "$(REPO_ROOT)/dlls/pmc_bb.dll" "$(OUTPUT)/patched/pmc_bb.dll"
+	@cp "$(OUTPUT)/dlls/pmc_bb.dll" "$(OUTPUT)/patched/pmc_bb.dll"
 	@echo ""
 	@echo "Ready: $(OUTPUT)/patched/"
 	@echo "  Mercenaries2.exe   (patched, imports pmc_bb.dll)"
 	@echo "  pmc_bb.dll   (SecuROM spoof + debug console + ASI loader)"
+
+# ---- Animation Hash Table Patch (1024 -> 4096 entries) ----
+# Expands the animation override hash table to prevent livelock when loading
+# patch WADs with >1024 animation entries (DLC has 2,609).
+CRACKED_EXE ?=
+
+patch-anim-table:
+	@test -n "$(CRACKED_EXE)" || (echo "error: set CRACKED_EXE=path/to/cracked/Mercenaries2.exe" >&2; exit 1)
+	@test -f "$(CRACKED_EXE)" || (echo "error: cracked exe not found at $(CRACKED_EXE)" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/patched"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/patch_anim_table.py" \
+	  "$(CRACKED_EXE)" \
+	  --output "$(OUTPUT)/patched/Mercenaries2.exe"
+	@echo ""
+	@echo "Patched EXE: $(OUTPUT)/patched/Mercenaries2.exe"
+	@echo "  Animation hash table expanded from 1024 to 4096 entries"
 
 # ---- Native Lua 5.1 Compiler (Mercs2-compatible) ----
 # Builds a platform-native luac by copying clean upstream Lua 5.1.5 source,
@@ -591,7 +614,14 @@ else
   LUA_PLAT := posix
 endif
 
-build-luac: $(LUAC_NATIVE)
+build-luac:
+	@if [ -f "$(REPO_ROOT)/tools/lua51-mercs2/luac.exe" ]; then \
+	   echo "Using prebuilt luac: tools/lua51-mercs2/luac.exe (skipping rebuild)"; \
+	elif [ -x "$(LUAC_NATIVE)" ]; then \
+	   echo "Using built luac: $(LUAC_NATIVE)"; \
+	else \
+	   "$(MAKE)" "$(LUAC_NATIVE)"; \
+	fi
 
 $(LUAC_NATIVE): $(LUAC_PATCHES)/*.patch
 	@echo "Building native luac (platform: $(LUA_PLAT))..."
@@ -604,7 +634,7 @@ $(LUAC_NATIVE): $(LUAC_PATCHES)/*.patch
 	   patch -d "$(LUAC_BUILD_DIR)" -p1 < "$$p" || exit 1; \
 	 done
 	@echo "  [3/4] Compiling..."
-	@$(MAKE) -C "$(LUAC_BUILD_DIR)" $(LUA_PLAT) 2>&1 | tail -3
+	@"$(MAKE)" -C "$(LUAC_BUILD_DIR)" $(LUA_PLAT) 2>&1 | tail -3
 	@test -f "$(LUAC_NATIVE)" || (echo "  ERROR: build failed" >&2; exit 1)
 	@echo "  [4/4] Verifying bytecode header..."
 	@echo 'print("")' > /tmp/_luac_verify.lua
@@ -635,6 +665,50 @@ build-ucfx-byteswap:
 	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p ucfx_byteswap
 	@echo "  Built: tools/wad_simulator/target/release/ucfx_byteswap"
 
+# Build + run the engine-consumption simulator over a WAD. Includes the
+# texture buffer-too-small validator (BODY shorter than the engine's
+# dimension-derived DXT mip chain -> STATUS_BUFFER_TOO_SMALL -> streaming
+# livelock). Compilation is platform-agnostic via cargo.
+#   make wad-simulator                       # runs on $(OUTPUT)/data/vz-patch.wad
+#   make wad-simulator SIM_WAD=/path/to.wad  # any WAD
+#   make wad-simulator SOURCE_WAD=game-files/vz.wad   # add base overlay
+# Tip: pipe through grep for just the streaming-livelock hits:
+#   make wad-simulator 2>&1 | grep -i buffer_too_small
+SIM_WAD=$(OUTPUT)/data/vz-patch.wad
+SOURCE_WAD=$(REPO_ROOT)/game-files/pc-game-vz.wad
+RAINBOW_TABLE=$(REPO_ROOT)/tools/rainbow_table.json
+# External streaming audio dir fed to the simulator (--audios-dir). Default: the
+# converted audio produced by the pipeline. Passed only when it exists.
+SIM_AUDIOS_DIR=$(OUTPUT)/data/Audios
+wad-simulator:
+	@echo "Building wad_simulator (cargo, platform-agnostic)..."
+	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p wad_simulator
+	@test -f "$(SIM_WAD)" || (echo "error: WAD not found: $(SIM_WAD) (set SIM_WAD=...)" >&2; exit 1)
+	@echo "Running wad_simulator on $(SIM_WAD)..."
+	"$(REPO_ROOT)/tools/wad_simulator/target/release/wad_simulator" \
+	  --wad "$(SIM_WAD)" \
+	  $(if $(wildcard $(RAINBOW_TABLE)),--rainbow-table "$(RAINBOW_TABLE)",) \
+	  $(if $(wildcard $(SIM_AUDIOS_DIR)),--audios-dir "$(SIM_AUDIOS_DIR)",) \
+	  $(if $(SOURCE_WAD),--base-wad "$(SOURCE_WAD)" --base-wad-dir "$(dir $(SOURCE_WAD))",)
+
+# Rosetta oracle: convert every Xbox base-game entry through the production
+# converter and diff byte-for-byte against the PC vz.wad ground truth (keyed by
+# block path + asset hash). Regression gate for the BE->LE converter.
+# See .cursor/notes/rosetta_oracle_baseline.md.
+ROSETTA_XBOX_WAD ?= $(REPO_ROOT)/game-files/xbox-vz.wad
+ROSETTA_PC_WAD   ?= $(REPO_ROOT)/game-files/vz.wad
+ROSETTA_JOBS     ?= 8
+ROSETTA_TYPE     ?=
+
+rosetta-oracle: build-ucfx-byteswap
+	@test -f "$(ROSETTA_XBOX_WAD)" || (echo "error: xbox WAD not found at $(ROSETTA_XBOX_WAD) — set ROSETTA_XBOX_WAD=" >&2; exit 1)
+	@test -f "$(ROSETTA_PC_WAD)" || (echo "error: PC WAD not found at $(ROSETTA_PC_WAD) — set ROSETTA_PC_WAD=" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/wad_be_le_oracle.py" \
+	  --xbox-wad "$(ROSETTA_XBOX_WAD)" --pc-wad "$(ROSETTA_PC_WAD)" \
+	  --converter rust --jobs $(ROSETTA_JOBS) \
+	  $(if $(ROSETTA_TYPE),--type $(ROSETTA_TYPE),) \
+	  --out-dir "$(OUTPUT)/_scratch/rosetta_baseline"
+
 dlc-port: build-luac build-ucfx-byteswap
 	@test -f "$(DLC_RAR)" || (echo "error: DLC RAR not found at $(DLC_RAR) — set DLC_RAR=path" >&2; exit 1)
 	@test -n "$(SOURCE_WAD)" || (echo "error: set SOURCE_WAD=path/to/vz.wad (retail PC base WAD)" >&2; exit 1)
@@ -644,8 +718,8 @@ dlc-port: build-luac build-ucfx-byteswap
 	  --x360-rar "$(DLC_RAR)" \
 	  --source-wad "$(SOURCE_WAD)" \
 	  --no-hook \
-	  $(if $(DESCRIPTOR_LIMIT),--descriptor-limit $(DESCRIPTOR_LIMIT),) \
 	  $(if $(JOBS),--jobs $(JOBS),) \
+	  $(DLC_PORT_FLAGS) \
 	  --output "$(OUTPUT)/data/vz-patch.wad" \
 	  --extract-audio "$(OUTPUT)/data/Audios"
 	@echo ""
@@ -999,13 +1073,28 @@ validate-probe-results:
 # ---- PMC Blackbox (SecuROM spoof + debug console + ASI loader) ----
 # Output: pmc_bb.dll — game's import table must reference this name.
 
+# There is now ONE build. The engine compat DETOURS (compat_hooks.c / MinHook)
+# were removed — they reintroduced the early-init 0x45b1d2 crash. pmc_bb applies
+# only the in-memory compat PATCHES (compat_patches.gen.c via VirtualProtect:
+# anim-table 1024->4096 expansion + DLC guards) — no exe edit, no engine hooks.
+# `make pmc-blackbox-nopatch` builds a control DLL with the patches compiled out
+# (-DPMC_NO_RUNTIME_PATCH) to A/B whether a runtime patch is responsible.
 pmc-blackbox:
 	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
-	@mkdir -p "$(REPO_ROOT)/dlls"
-	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(REPO_ROOT)/dlls/pmc_bb.dll"
+	@mkdir -p "$(OUTPUT)/dlls"
+	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
 	@echo ""
-	@echo "Install: copy dlls/pmc_bb.dll to <game>/pmc_bb.dll"
+	@echo "Built pmc_bb.dll (compat PATCHES in-memory, no engine hooks)."
+	@echo "Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
 	@echo "         (game import table must reference pmc_bb.dll)"
+
+pmc-blackbox-nopatch:
+	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw EXTRA_CFLAGS=-DPMC_NO_RUNTIME_PATCH
+	@mkdir -p "$(OUTPUT)/dlls"
+	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
+	@echo ""
+	@echo "Built CONTROL pmc_bb.dll (compat patches DISABLED, -DPMC_NO_RUNTIME_PATCH)."
+	@echo "Install: copy $(OUTPUT)/dlls/pmc_bb.dll to <game>/pmc_bb.dll"
 
 # ---- Ghidra Annotation (Mercs 1 → Mercs 2 cross-reference) ----
 
@@ -1039,3 +1128,41 @@ verify-audio-converter-goldens:
 	  --spec "$(REPO_ROOT)/analysis/audio_endian/audio_field_spec.json"
 
 verify-audio-endian: verify-audio-field-map verify-audio-converter
+
+# ---- Name-string extraction → pandemic_hash rainbow table (pure Python; Mac/Linux/Windows) ----
+# Harvest DLC/console asset name strings and fold genuinely-new pandemic_hash_m2
+# hashes into tools/rainbow_table.json (gitignored, regenerable). Console export
+# also writes per-WAD <stem>.{blocks,strings,unique-strings}.txt into game-files/.
+#
+#   make harvest-dlc-strings  OUTPUT=./output     # DLC patch WAD  → rainbow table
+#   make export-console-strings                   # Xbox 360 + PS3 → game-files/*.txt + table
+#   make extract-strings      OUTPUT=./output     # both of the above
+#
+# Override inputs: PATCH_WAD=… XBOX_WAD=… PS3_WAD=…  ·  skip table writes: STRINGS_MERGE=0
+PATCH_WAD ?= $(OUTPUT)/data/vz-patch.wad
+XBOX_WAD ?= $(REPO_ROOT)/game-files/xbox-vz.wad
+PS3_WAD ?= $(REPO_ROOT)/game-files/ps3-VZ.WAD
+STRINGS_MERGE ?= 1
+ifeq ($(STRINGS_MERGE),1)
+  STRINGS_MERGE_FLAG := --merge
+else
+  STRINGS_MERGE_FLAG :=
+endif
+
+harvest-dlc-strings:
+	@WAD="$(PATCH_WAD)"; \
+	  if [ ! -f "$$WAD" ] && [ -f "$(REPO_ROOT)/game-files/vz-patch.wad" ]; then WAD="$(REPO_ROOT)/game-files/vz-patch.wad"; fi; \
+	  test -f "$$WAD" || (echo "error: patch WAD not found ($(PATCH_WAD) or game-files/vz-patch.wad) — set PATCH_WAD= or run make dlc-port" >&2; exit 1); \
+	  echo "Harvesting DLC strings from $$WAD"; \
+	  "$(PYTHON)" "$(REPO_ROOT)/tools/harvest_dlc_strings.py" --wad "$$WAD" --quality $(STRINGS_MERGE_FLAG)
+
+export-console-strings:
+	@test -f "$(XBOX_WAD)" || test -f "$(PS3_WAD)" || \
+	  (echo "error: neither XBOX_WAD ($(XBOX_WAD)) nor PS3_WAD ($(PS3_WAD)) found — set XBOX_WAD=/PS3_WAD=" >&2; exit 1)
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/export_platform_strings.py" \
+	  $(if $(wildcard $(XBOX_WAD)),--wad "$(XBOX_WAD)",) \
+	  $(if $(wildcard $(PS3_WAD)),--wad "$(PS3_WAD)",) \
+	  --out-dir "$(REPO_ROOT)/game-files" \
+	  $(STRINGS_MERGE_FLAG)
+
+extract-strings: harvest-dlc-strings export-console-strings

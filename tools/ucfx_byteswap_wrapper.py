@@ -1,13 +1,14 @@
 """Wrapper to call the Rust ucfx_byteswap binary from Python.
 
 Provides a drop-in replacement for the byte-swap step in the DLC port
-pipeline.  The Rust binary handles the structural BE→LE conversion;
-entry-level overrides and type-hash stripping remain in Python.
+pipeline.  The Rust binary handles the full structural BE→LE conversion
+(all chunk tags and type_hashes) for decompressed Xbox 360 blocks.
 """
 from __future__ import annotations
 
 import subprocess
 import shutil
+import struct
 import sys
 from pathlib import Path
 
@@ -120,30 +121,6 @@ def validate_block_file_rust(path: Path, *, strict: bool = False) -> list[str]:
     return validate_block_rust(path.read_bytes(), strict=strict)
 
 
-def byteswap_block_python(
-    block_data: bytes,
-    *,
-    permissive: bool = False,
-) -> bytes:
-    """Convert BE block to LE using Python ``ucfx_be_to_le`` (ECS-aware)."""
-    from ucfx_be_to_le import byteswap_ucfx_block
-
-    le_data, _stats = byteswap_ucfx_block(block_data, permissive=permissive)
-    return le_data
-
-
-def byteswap_block_ecs_python_fallback(
-    block_data: bytes,
-    *,
-    permissive: bool = False,
-) -> bytes:
-    """Rust byteswap with Python fallback when Rust fails on an ECS-heavy block."""
-    try:
-        return byteswap_block_rust(block_data, validate=False)
-    except (RuntimeError, FileNotFoundError):
-        return byteswap_block_python(block_data, permissive=permissive)
-
-
 def byteswap_block_rust(
     block_data: bytes,
     *,
@@ -190,3 +167,56 @@ def byteswap_block_rust(
         )
 
     return result.stdout
+
+
+def recompute_block_aset_subs_rust(
+    decompressed: bytes,
+    entries: "list[tuple[int, int, bool, bool]]",
+) -> "list[int]":
+    """ASET sub-entry recompute for one block, via the Rust binary.
+
+    Faithful replacement for the per-block body of dlc_port
+    ``_recompute_aset_sub_entries``.
+
+    Args:
+        decompressed: the block's decompressed LE bytes.
+        entries: list of ``(asset_hash, u32_2, primary, in_base)`` for that block
+            (``in_base`` = the hash also exists in the base game WAD).
+
+    Returns:
+        Updated ``u32_2`` (one per input entry, same order).
+    """
+    binary = _find_binary()
+    if binary is None:
+        raise FileNotFoundError(
+            "ucfx_byteswap binary not found. Build with: "
+            "cargo build --release -p ucfx_byteswap"
+        )
+    _warn_if_stale(binary)
+
+    n = len(entries)
+    buf = bytearray()
+    buf += struct.pack("<I", n)
+    for h, u2, primary, in_base in entries:
+        buf += struct.pack(
+            "<IIBB", h & 0xFFFFFFFF, u2 & 0xFFFFFFFF,
+            1 if primary else 0, 1 if in_base else 0,
+        )
+    buf += decompressed
+
+    result = subprocess.run(
+        [str(binary), "--stdin", "--aset-recompute"],
+        input=bytes(buf),
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"ucfx_byteswap --aset-recompute failed (exit {result.returncode}): {stderr}"
+        )
+    out = result.stdout
+    if len(out) != 4 * n:
+        raise RuntimeError(
+            f"aset-recompute returned {len(out)} bytes, expected {4 * n}"
+        )
+    return [struct.unpack_from("<I", out, i * 4)[0] for i in range(n)]

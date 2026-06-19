@@ -5,3 +5,4 @@ LIBRARY pmc_bb
 EXPORTS
     BlackboxEntry @1
     pmc_log
+    pmc_log_flush

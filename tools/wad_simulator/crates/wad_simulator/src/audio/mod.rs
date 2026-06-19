@@ -4,8 +4,8 @@ pub mod wavebank;
 
 pub use soundbank::consume_soundbank;
 pub use wavebank::{
-    clip_by_hash, consume_wavebank, consume_wavebank_with_options, LoadedWavebank,
-    WavebankConsumeOptions, CODEC_XBOX_ADPCM,
+    consume_wavebank_with_options, LoadedWavebank,
+    WavebankConsumeOptions,
 };
 
 pub use mercs2_formats::types::{

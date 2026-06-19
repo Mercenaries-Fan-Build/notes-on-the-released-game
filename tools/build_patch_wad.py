@@ -401,11 +401,25 @@ def apply_bytecode_replacement_to_block(
     script_name: str,
     new_bytecode: bytes,
 ) -> bytes:
-    """Replace a script's LuaQ bytecode in a decompressed block.
+    """Replace a script's Lua bytecode in a decompressed block.
 
-    Finds the named script entry, locates its LuaQ signature, replaces
-    the bytecode, updates the block header's chunk_size, and recomputes
-    the CSUM.  Returns the modified decompressed block.
+    Finds the named script entry and REBUILDS its UCFX container around the new
+    bytecode via `_build_ucfx_script_chunk`, so every size field is consistent
+    with `new_bytecode`: the UCFX header `data_area_size`, the INFO
+    bytecode-length, and the BINN descriptor size. The block-entry size is
+    updated and the CSUM is recomputed inside the builder. Returns the modified
+    decompressed block.
+
+    History (do not regress): the previous implementation spliced the new
+    bytecode in place over the old LuaQ body but left the *original* UCFX header
+    `data_area_size` and BINN descriptor size untouched (e.g. wifmissionflow's
+    67,597) while the body shrank to a ~313-byte chain-wrapper. The engine then
+    read the BINN body length from the stale descriptor and over-read far past
+    the ~515-byte container -> world-load buffer overflow / livelock at the
+    masterscript's wifmissionflow load (phase 10). It also cut at `LuaQ` (after
+    the 0x1B), keeping the old 0x1B and prepending the new one -> a corrupt
+    double-0x1B signature. Rebuilding the container from scratch fixes all of
+    these and matches the path already used for the preserved *_orig entry.
     """
     entries = parse_block_entries(decompressed)
     target_entry = None
@@ -424,44 +438,25 @@ def apply_bytecode_replacement_to_block(
 
     target_name = get_script_name(decompressed, target_entry)
     print(f"  Found script '{target_name}' at UCFX chunk {target_entry['index']}")
-    print(f"    Hash: 0x{target_entry['hash']:08X}, Size: {target_entry['size']:,} bytes")
+    print(f"    Hash: 0x{target_entry['hash']:08X}, old size: {target_entry['size']:,} bytes")
+
+    # Rebuild the container so UCFX/INFO/BINN sizes all match the new bytecode.
+    new_chunk = _build_ucfx_script_chunk(
+        script_name, new_bytecode, target_entry["hash"]
+    )
 
     entry_start = target_entry["offset"]
-    entry_end = entry_start + target_entry["size"] - 8  # exclude CSUM trailer
-    chunk = decompressed[entry_start:entry_end]
-    luaq_rel = chunk.find(LUAQ_SIG)
-    if luaq_rel < 0:
-        raise ValueError("No LuaQ signature found in target UCFX chunk")
+    entry_end = entry_start + target_entry["size"]  # full entry incl CSUM trailer
 
-    old_luaq_abs = entry_start + luaq_rel
-    old_bytecode_len = entry_end - old_luaq_abs
-    new_bytecode_len = len(new_bytecode)
-    size_delta = new_bytecode_len - old_bytecode_len
-
-    print(f"    LuaQ at: 0x{old_luaq_abs:x} (entry +{luaq_rel})")
-    print(f"    Old bytecode: {old_bytecode_len:,} bytes")
-    print(f"    New bytecode: {new_bytecode_len:,} bytes")
-    print(f"    Size delta: {size_delta:+,} bytes")
-
-    modified = bytearray(decompressed)
-
-    pre_luaq = bytes(modified[:old_luaq_abs])
-    post_entry = bytes(modified[entry_end + 8:])  # after CSUM trailer
-
-    new_chunk = pre_luaq[entry_start:old_luaq_abs] + new_bytecode
-    new_chunk_size = len(new_chunk) + 8  # +8 for CSUM tag + value
-
-    rebuilt = bytearray(modified[:entry_start])
+    rebuilt = bytearray(decompressed[:entry_start])
     rebuilt.extend(new_chunk)
-    new_csum = crc32_mercs2(bytes(rebuilt[entry_start:]))
-    rebuilt.extend(CSUM_TAG)
-    rebuilt.extend(struct.pack("<I", new_csum))
-    rebuilt.extend(post_entry)
+    rebuilt.extend(decompressed[entry_end:])
 
-    _update_block_header_size(rebuilt, target_entry["index"], new_chunk_size)
+    _update_block_header_size(rebuilt, target_entry["index"], len(new_chunk))
 
-    print(f"    New CSUM: 0x{new_csum:08X}")
-    print(f"    New chunk size: {new_chunk_size:,} bytes (delta {size_delta:+,})")
+    print(f"    New bytecode: {len(new_bytecode):,} bytes")
+    print(f"    Rebuilt container: {len(new_chunk):,} bytes "
+          f"(BINN descriptor size = {len(new_bytecode):,}; UCFX/INFO/BINN consistent)")
 
     return bytes(rebuilt)
 
@@ -771,6 +766,12 @@ def extract_script_bytecode(decompressed: bytes, script_name: str) -> bytes:
     luaq_rel = chunk.find(LUAQ_SIG)
     if luaq_rel < 0:
         raise ValueError(f"No LuaQ in {script_name!r}")
+    # LUAQ_SIG ("LuaQ") matches AFTER the 0x1B Lua 5.1 signature byte. Back up to
+    # include it so the extracted bytecode is a complete \x1BLuaQ chunk; without
+    # this the preserved {hook}_orig loses its signature byte and the engine's
+    # Lua loader rejects it (headerless chunk).
+    if luaq_rel > 0 and chunk[luaq_rel - 1] == 0x1B:
+        luaq_rel -= 1
     return chunk[luaq_rel:]
 
 

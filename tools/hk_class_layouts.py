@@ -294,6 +294,39 @@ HK_QTRANSFORM_SIZE = 48
 HK_QTRANSFORM_SWAP = U32  # all f32, swap as u32
 
 # ---------------------------------------------------------------------------
+# hkpMoppCode — collision MOPP (Memory-Optimised Partial Polytope) bytecode.
+# Size 48 (HK550, 32-bit), then an INLINE u8 bytecode buffer at +48.
+# [0:8]   hkReferencedObject (vtable u32; memSize/refCount u16 — zero in packfile)
+# [16:32] m_info hkVector4 (4 × f32)
+# [32:36] m_data.ptr (→ +48), [36:40] m_data.size, [40:44] capacityAndFlags
+# [44]    m_buildType (u8) + pad
+# [48:..] m_data buffer: the MOPP bytecode, a u8 ARRAY — must NOT be u32-swapped
+#         (a blind sweep reverses every 4 bytes → the whole MOPP tree is garbage →
+#         broken collision; and the load-time MOPP walk can read out of bounds).
+# ---------------------------------------------------------------------------
+HKP_MOPP_CODE_SIZE = 48
+HKP_MOPP_CODE_ARRAYS = {
+    "m_data": {"ptr_off": 32, "count_off": 36, "elem_size": 1, "elem_swap": U8},
+}
+
+# ---------------------------------------------------------------------------
+# WpMeshShape16 — Pandemic custom 16-bit-indexed collision-mesh shape.
+# Fixed struct (hkReferencedObject base + radius + bound vectors + array
+# descriptors), then TWO u16 index arrays reached via local fixups:
+#   {ptr@+28, count@+32}  → f32 vector array (handled by the default u32 sweep)
+#   {ptr@+80, count@+84}  → u16 index array  (must be u16-swapped, not u32)
+#   {ptr@+88, count@+92}  → u16 index array  (must be u16-swapped, not u32)
+# A blind u32 sweep transposes each u16 pair → wrong triangle indices → broken
+# collision. Size kept minimal (the base) so the array fixups drive the swap and
+# the fixed struct / f32 buffers fall through to the default u32 fill.
+# ---------------------------------------------------------------------------
+WP_MESH_SHAPE16_SIZE = 8
+WP_MESH_SHAPE16_ARRAYS = {
+    "indices_b": {"ptr_off": 80, "count_off": 84, "elem_size": 2, "elem_swap": U16},
+    "indices_c": {"ptr_off": 88, "count_off": 92, "elem_size": 2, "elem_swap": U16},
+}
+
+# ---------------------------------------------------------------------------
 # Master class registry: maps classname → (object_size, swap_map, arrays)
 # swap_map is either a list of (offset, width) or "all_u32" for pure-u32 classes
 # ---------------------------------------------------------------------------
@@ -367,6 +400,17 @@ CLASS_REGISTRY: dict[str, dict] = {
         "size": HKA_BONE_SIZE,
         "swap": HKA_BONE_SWAP,
         "arrays": {},
+    },
+    # ── physics (PHY2 collision packfiles) ──
+    "hkpMoppCode": {
+        "size": HKP_MOPP_CODE_SIZE,
+        "swap": "all_u32",
+        "arrays": HKP_MOPP_CODE_ARRAYS,
+    },
+    "WpMeshShape16": {
+        "size": WP_MESH_SHAPE16_SIZE,
+        "swap": "all_u32",
+        "arrays": WP_MESH_SHAPE16_ARRAYS,
     },
 }
 

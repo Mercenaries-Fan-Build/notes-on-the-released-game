@@ -1,5 +1,6 @@
 //! Mercenaries 2 WAD engine consumption simulator.
 
+mod action_table;
 mod animation;
 mod aset_validate;
 mod audio;
@@ -83,6 +84,43 @@ struct Cli {
     /// Path to rainbow_table.json for annotating unresolved hashes with asset names
     #[arg(long)]
     rainbow_table: Option<PathBuf>,
+
+    /// Directory of the game's WADs (e.g. the install `data/` dir). Every non-patch
+    /// WAD found here (English/shell/Loading/vz) has its ASET loaded for cross-ref
+    /// resolution, so refs into sibling WADs don't false-report as unresolved. The
+    /// patch (`--wad`) and the primary base (`--base-wad`) are skipped (not reloaded).
+    #[arg(long)]
+    base_wad_dir: Option<PathBuf>,
+}
+
+/// Discover sibling base WADs in a game `data/` dir: every `*.wad` except the patch
+/// (`--wad`), the primary base (`--base-wad`), and anything whose name contains
+/// "patch" (overlay WADs are not base resolution sources).
+fn discover_aux_wads(dir: &std::path::Path, patch: &std::path::Path, primary_base: Option<&std::path::Path>) -> Vec<PathBuf> {
+    let patch_name = patch.file_name();
+    let base_name = primary_base.and_then(|p| p.file_name());
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        eprintln!("WARNING: --base-wad-dir {} not readable", dir.display());
+        return out;
+    };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.extension().and_then(|e| e.to_str()) != Some("wad") {
+            continue;
+        }
+        let name = p.file_name();
+        if name == patch_name || (base_name.is_some() && name == base_name) {
+            continue;
+        }
+        let lname = name.and_then(|n| n.to_str()).unwrap_or("").to_ascii_lowercase();
+        if lname.contains("patch") {
+            continue;
+        }
+        out.push(p);
+    }
+    out.sort();
+    out
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -140,6 +178,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         println!();
+
+        println!(
+            "{}",
+            "=== ASET Hash Ownership Validation ===".bright_white().bold()
+        );
+        match aset_validate::run_aset_hash_validation(&cli.wad, cli.limit) {
+            Ok(stats) => {
+                aset_validate::print_hash_validation_summary(&stats);
+                if stats.misrouted > 0 || stats.true_ghost > 0 {
+                    exit_code = 1;
+                }
+            }
+            Err(e) => {
+                eprintln!("ASET hash validation failed: {e}");
+                exit_code = 1;
+            }
+        }
+        println!();
     }
 
     if !cli.skip_assets {
@@ -149,6 +205,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         let base = cli.base_wad.as_deref();
         let patch = Some(cli.wad.as_path());
+        let aux_wads = cli
+            .base_wad_dir
+            .as_ref()
+            .map(|d| discover_aux_wads(d, &cli.wad, base))
+            .unwrap_or_default();
         let manifest_path = cli.audio_manifest.clone().or_else(|| {
             Some(PathBuf::from("output/analysis/dlc_audio_manifest.json"))
         });
@@ -163,6 +224,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             asset_limit: cli.asset_limit,
             progress_interval: cli.progress_interval,
             jobs: cli.jobs,
+            rainbow: rainbow.as_ref(),
+            aux_wads,
         };
         match simulate::run_simulate_with_options(base, patch, opts) {
             Ok(report) => {

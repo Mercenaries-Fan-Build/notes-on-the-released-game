@@ -1,5 +1,5 @@
 /**
- * pmc_bb.dll — SecuROM Spoof + Debug Console + ASI Loader
+ * pmc_bb.dll — SecuROM Spoof + Debug Console + ASI Loader + Compat Hooks
  *                    for Mercenaries 2: World in Flames
  *
  * Self-contained entry point that replaces the need for a separate ASI loader
@@ -12,22 +12,23 @@
  * Responsibilities:
  *   1. Creates the SecuROM v7 spoof Event (mandatory for game boot)
  *   2. Allocates a debug console window with stdout/stderr redirection
- *   3. Discovers and LoadLibrary's all .asi plugins from:
+ *   3. Installs runtime compatibility hooks (MinHook) for crash prevention
+ *   4. Fixes underground spawn validation
+ *   5. Discovers and LoadLibrary's all .asi plugins from:
  *      - Game root directory
  *      - scripts/ subfolder
  *      - plugins/ subfolder
  *      - update/ subfolder
- *   4. Reports load success/failure for each plugin
- *   5. Exports pmc_log() — centralized logging API for all ASI plugins.
+ *   6. Reports load success/failure for each plugin
+ *   7. Exports pmc_log() — centralized logging API for all ASI plugins.
  *      Writes timestamped, source-tagged lines to the console AND to a
  *      single pmc_blackbox.log file on disk.
  *
  * The DLL exports BlackboxEntry by ordinal #1 (the game's import table
  * resolves this by ordinal) and pmc_log by name.
  *
- * Build (MinGW cross-compile from macOS/Linux):
- *   i686-w64-mingw32-gcc -shared -o pmc_bb.dll pmc_blackbox.c pmc_blackbox.def \
- *       -lkernel32 -luser32 -O2 -s -Wl,--enable-stdcall-fixup
+ * Build (MinGW cross-compile):
+ *   make mingw   (see Makefile for full command)
  *
  * Architecture: 32-bit (x86) Windows DLL — Mercenaries 2 is a 32-bit game.
  */
@@ -37,8 +38,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include "lua_log_hook.h"
+#include "stream_probe.h"
+#include "pool_probe.h"
+#include "crash_handler.h"
+#include "fingerprint.h"
+extern int InstallSegProbe(void);
+extern int InstallPrmgGuard(void);
+extern int InstallPrmgEntityGuard(void);
+extern int InstallPrmgBuildWatch(void);
+extern int InstallCcTracer(void);
+#include "heap_guard.h"
 
-#define PMC_BLACKBOX_VERSION "2.1.0"
+#define PMC_BLACKBOX_VERSION "3.0.0"
 #define SECUROM_XOR_KEY 0x19EA3FD3
 
 /* --- SecuROM event spoof --- */
@@ -58,6 +70,14 @@ static void CreateSecuROMEvent(void) {
 static FILE*           g_logfile = NULL;
 static CRITICAL_SECTION g_logLock;
 
+static volatile LONG g_logPending = 0;
+volatile LONG g_logDropped = 0;
+/* Flush every line: a buffered tail is lost on a hard crash, and the missing
+ * lines previously made an end-of-load fault (STATE_WAITFORSTREAMING) look like
+ * an early-init one. fflush per line is cheap for a debug logger and keeps the
+ * crash-time tail truthful. Raise this only if log volume becomes a hot path. */
+#define LOG_FLUSH_THRESHOLD 1
+
 static void InitLogFile(void) {
     char exe_dir[MAX_PATH];
     GetModuleFileNameA(NULL, exe_dir, MAX_PATH);
@@ -67,6 +87,8 @@ static void InitLogFile(void) {
     char log_path[MAX_PATH];
     wsprintfA(log_path, "%spmc_blackbox.log", exe_dir);
     g_logfile = fopen(log_path, "w");
+    if (g_logfile)
+        setvbuf(g_logfile, NULL, _IOFBF, 8192);
 
     InitializeCriticalSection(&g_logLock);
 }
@@ -93,16 +115,35 @@ __declspec(dllexport) void pmc_log(const char *source, const char *fmt, ...) {
               st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
               source ? source : "???", msg);
 
-    EnterCriticalSection(&g_logLock);
-
-    fputs(line, stdout);
-    fflush(stdout);
-
-    if (g_logfile) {
-        fputs(line, g_logfile);
-        fflush(g_logfile);
+    /*
+     * Use TryEnterCriticalSection so callers on latency-sensitive threads
+     * (D3D9 rendering, audio) never block.  Dropped messages are counted
+     * via g_logDropped and reported at shutdown.
+     */
+    if (!TryEnterCriticalSection(&g_logLock)) {
+        InterlockedIncrement(&g_logDropped);
+        return;
     }
 
+    fputs(line, stdout);
+
+    if (g_logfile)
+        fputs(line, g_logfile);
+
+    if (InterlockedIncrement(&g_logPending) >= LOG_FLUSH_THRESHOLD) {
+        fflush(stdout);
+        if (g_logfile) fflush(g_logfile);
+        InterlockedExchange(&g_logPending, 0);
+    }
+
+    LeaveCriticalSection(&g_logLock);
+}
+
+__declspec(dllexport) void pmc_log_flush(void) {
+    EnterCriticalSection(&g_logLock);
+    fflush(stdout);
+    if (g_logfile) fflush(g_logfile);
+    InterlockedExchange(&g_logPending, 0);
     LeaveCriticalSection(&g_logLock);
 }
 
@@ -272,6 +313,73 @@ static void LoadASIPlugins(void) {
     pmc_log("blackbox", "  Summary: %d loaded, %d failed, %d total", loaded, failed, total);
 }
 
+/* --- Runtime compat patches (the proven exe-patch, applied IN MEMORY) ---
+ *
+ * Mirrors tools/patch_anim_table.py exactly (auto-generated into
+ * compat_patches.gen.c by tools/pmc_blackbox/gen_compat_patches.py). The headline
+ * fix is the anim/stance hash-table expansion 1024 -> 4096 in FUN_0067cfb0: the DLC
+ * resident ActionTable has 1036 entries, overflowing the fixed 1024-slot table and
+ * livelocking the world load at the 0x67D130 linear probe (we measured exactly 13
+ * stuck streaming nodes = 1036 - 1023). Expanding to 4096 (count 0x400->0x1000,
+ * mask 0x3FF->0xFFF, stack frame + table-base offsets shifted) gives ample headroom.
+ * Also includes the hash-zero sentinel fix and the texture/effect/vtxdecl NULL
+ * guards from the same proven patch set.
+ *
+ * Applied here at DllMain time — the EXE image is fully mapped before an imported
+ * DLL's DllMain runs (same as the spawn-flag write below) — so 0x67CFB0 etc. are
+ * live. Each patch verifies the expected original bytes first; if the bytes already
+ * match the patched form (e.g. running a pre-patched exe) it is counted as
+ * already-present, and any true mismatch is skipped+logged (never corrupts an
+ * unexpected build). NOT an exe edit: Mercenaries2.exe on disk is untouched. */
+typedef struct {
+    DWORD va;
+    const unsigned char *exp;
+    const unsigned char *pat;
+    unsigned int len;
+    const char *desc;
+} CompatPatch;
+extern const CompatPatch g_compatPatches[];
+extern const unsigned int g_compatPatchCount;
+
+static void ApplyCompatPatches(void) {
+    unsigned int applied = 0, already = 0, mismatch = 0, failed = 0;
+    HANDLE proc = GetCurrentProcess();
+    unsigned int i;
+
+    pmc_log("compat", "[Runtime exe-patch] anim-table 1024->4096 + DLC compat guards (%u patches)",
+            g_compatPatchCount);
+
+    for (i = 0; i < g_compatPatchCount; i++) {
+        const CompatPatch *cp = &g_compatPatches[i];
+        BYTE *addr = (BYTE *)cp->va;
+        DWORD oldProt;
+
+        if (!VirtualProtect(addr, cp->len, PAGE_EXECUTE_READWRITE, &oldProt)) {
+            failed++;
+            pmc_log("compat", "  [FAIL vprotect] 0x%08lX  %s", (unsigned long)cp->va, cp->desc);
+            continue;
+        }
+        if (memcmp(addr, cp->exp, cp->len) == 0) {
+            memcpy(addr, cp->pat, cp->len);
+            applied++;
+        } else if (memcmp(addr, cp->pat, cp->len) == 0) {
+            already++;
+        } else {
+            mismatch++;
+            pmc_log("compat", "  [SKIP mismatch] 0x%08lX  %s", (unsigned long)cp->va, cp->desc);
+        }
+        VirtualProtect(addr, cp->len, oldProt, &oldProt);
+        FlushInstructionCache(proc, addr, cp->len);
+    }
+
+    pmc_log("compat", "Compat patches: %u applied, %u already-present, %u mismatch, %u vprotect-fail (of %u)",
+            applied, already, mismatch, failed, g_compatPatchCount);
+    if (mismatch > 0) {
+        pmc_log("compat", "  WARNING: %u patch site(s) had unexpected bytes — wrong exe build? "
+                          "Those sites were left untouched.", mismatch);
+    }
+}
+
 /* --- Exported function (ordinal #1) ---
  *
  * The patched EXE imports pmc_bb.dll by ordinal #1. This function is
@@ -296,6 +404,112 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 
         /* Debug console — safe in DllMain for AllocConsole */
         InitDebugConsole();
+
+        /* Self-attributing fingerprint: hash the mutable game artifacts (exe,
+         * dlls, scripts ASIs, data WADs) on a worker thread and write
+         * [blackbox] BUILD lines, so this run's log is bound to the exact bytes
+         * that produced it (no size/mtime guessing). loadprobe surfaces these. */
+        pmc_start_fingerprint(hinstDLL);
+
+        /* Crash handler — install FIRST so any later fault (init, world-load
+         * spawn, streaming) is recorded with its EIP + registers before the
+         * process dies. The retail EXE otherwise vanishes silently on a fault. */
+#ifndef PMC_DISABLE_CRASH_HANDLER
+        InstallCrashHandler();
+#endif
+
+        /* NOTE: the former compat_hooks.c engine detours (hash-lookup 0x8242B0,
+         * GetChunkDataReader 0x464780, vertex-decl clamp 0x74D6D0) have been REMOVED.
+         * They were live MinHook detours that ran our code on hot, multi-threaded
+         * engine paths; one faulted early init at 0x45B1D2, another was a passive
+         * counter, and the vertex-decl one merely CLAMPED stream indices — masking
+         * bad DLC data rather than fixing it. The real fixes are the in-memory
+         * compat patches below (and correct converter output). */
+
+        /* Runtime exe-patch: anim-table 1024->4096 expansion + DLC compat guards,
+         * applied in memory (no exe edit). The DLC ActionTable (1036 entries)
+         * overflows the stock 1024-slot table -> world-load livelock; this is the
+         * fix. Built from the proven tools/patch_anim_table.py patch set.
+         * Opt out with -DPMC_NO_RUNTIME_PATCH for a control run. */
+#ifdef PMC_NO_RUNTIME_PATCH
+        pmc_log("compat", "runtime exe-patch DISABLED at build time (control run)");
+#else
+        ApplyCompatPatches();
+#endif
+
+        /* Native Lua message capture — patch the game's print/Debug.Printf
+         * func-pointer slots so every Lua-level log line (incl. the "global
+         * start" world-load marker) is recorded to pmc_blackbox.log.
+         *
+         * ON by default — pmc_bb is the self-contained capture, replacing the
+         * dlc_enable god-object. Opt out only for a control run with
+         * -DPMC_DISABLE_LUA_LOG_HOOK. See [[pmc-bb-native-lua-logging]]. */
+#ifndef PMC_DISABLE_LUA_LOG_HOOK
+        InstallLuaLogHook();
+#else
+        pmc_log("blackbox", "Lua log hook: DISABLED at build time (control run)");
+#endif
+
+        /* Streaming-stall probe — names the resources that wedge the world-load
+         * streaming queue (logs each stuck node once; safe at any call rate).
+         * Opt out with -DPMC_DISABLE_STREAM_PROBE. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_STREAM_PROBE
+        InstallStreamProbe();
+#endif
+
+        /* Render-instance pool drain tracer — poll-only watcher (no detour) on
+         * the 5120-cell pool's free-count. Classifies the world-load 0x4CC064
+         * exhaustion: BURST drain => T1 (converter inflated record count) vs
+         * gradual => T2 (legit budget overflow). Opt out with
+         * -DPMC_DISABLE_POOL_PROBE. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_POOL_PROBE
+        InstallPoolProbe();
+#endif
+
+        /* Render-instance pool overflow FIX — MinHook detour on the pop
+         * FUN_004cc030. The 5120-cell texture-component pool drains by distinct
+         * texture key; the DLC overlay's spawn region exceeds 5120, so the pop
+         * hits the NULL fallback -> 0x4CC064 AV. The detour serves a fresh 0x54
+         * cell past the cap instead of NULL, so the world loads. Opt out with
+         * -DPMC_DISABLE_POOL_OVERFLOW_FIX. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_POOL_OVERFLOW_FIX
+        InstallPoolOverflowFix();
+#endif
+
+        /* Segment-base tracer: FUN_004a9ac0(ESI) vs FUN_004a9da0(EDI) for the
+         * 0x4AB26B terrainmesh segment +4 bug. Logs only base mismatches.
+         * Opt out with -DPMC_DISABLE_SEG_PROBE. See [[worldload-0x4ab26b-segment-pointer]]. */
+#ifndef PMC_DISABLE_SEG_PROBE
+        InstallSegProbe();
+#endif
+
+        /* DIAGNOSTIC RUN: the PRMG element-skip guards are DISABLED so the
+         * 0x47A7C6/0x47AA5C crash fires naturally and the build-watch + crash
+         * handler can prove build-time-garbage vs post-build heap-overwrite.
+         * Static RCA showed the terrain meshes are structurally sound, so a guard
+         * only hides the real (upstream) corruptor. Re-enable by defining
+         * PMC_ENABLE_PRMG_GUARD. See [[worldload-0x47aa5c-prmg-handle-miss]]. */
+#ifdef PMC_ENABLE_PRMG_GUARD
+        InstallPrmgGuard();
+        InstallPrmgEntityGuard();
+#endif
+        /* Non-mutating: validates each built 0xBAB258 element vs the handle table
+         * and snapshots clean ones so the crash handler can name the corruptor. */
+        InstallPrmgBuildWatch();
+        /* Non-mutating: histograms the caller of every texture-component pool
+         * insert (FUN_004cc130) so the 0x4CC064 drain burst can be attributed to
+         * one inflated object vs many (capacity). Dumped by pool_probe at burst. */
+        InstallCcTracer();
+
+        /* Heap-history tracker — detours the hkThreadMemory allocator/free
+         * (0x88CB70/0x88CBD0) and records {op,ptr,size,caller} into a ring so the
+         * crash handler can name the heap corruptor behind the world-load
+         * type-confusion (use-after-free vs overflow + producer). Observation-only
+         * (no heap mutation). Kill switch: env PMC_NO_HEAP_GUARD=1, or build
+         * -DPMC_DISABLE_HEAP_GUARD. See [[worldload-hang-pending-node-status]]. */
+#ifndef PMC_DISABLE_HEAP_GUARD
+        InstallHeapGuard();
+#endif
 
         /* Fix underground spawn — early write + deferred watchdog thread.
          * Game init zeroes this flag; the watchdog re-applies it. */

@@ -1,12 +1,21 @@
 [package]
 name = "ucfx_byteswap"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+description = "Xbox 360 BE to PC LE converter for Mercenaries 2 UCFX blocks"
+license = "MIT"
+repository = "https://github.com/Mercenaries-Fan-Build/notes-on-the-released-game"
+keywords = ["mercenaries", "endian", "converter", "xbox", "ucfx"]
+categories = ["development-tools", "encoding"]
+
+[lib]
+name = "ucfx_byteswap"
+path = "src/lib.rs"
 
 [[bin]]
 name = "ucfx_byteswap"
 path = "src/main.rs"
 
 [dependencies]
-mercs2_formats = { path = "../mercs2_formats" }
+mercs2_formats = { version = "1.0", path = "../mercs2_formats" }
 clap = { version = "4", features = ["derive"] }

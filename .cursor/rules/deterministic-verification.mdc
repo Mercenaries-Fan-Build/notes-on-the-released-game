@@ -1,0 +1,46 @@
+---
+description: Verify conversions against ground truth; never use endianness/plausibility heuristics
+alwaysApply: true
+---
+
+# Verify Deterministically — Never Guess Endianness/Correctness
+
+This project has **ground truth**: `game-files/xbox-vz.wad` (BE) and
+`game-files/vz.wad` (LE) are the *same base game*, so any BE→LE conversion can be
+checked **byte-for-byte**. There is never a reason to judge data by plausibility.
+
+## Banned: plausibility heuristics
+
+Do NOT conclude data is wrong/right from "looks BE", "looks LE", "value out of
+range", "float looks huge", etc. These are noise. Proof: the "looks BE"
+checks in `tools/verify_ucfx_endian.py` flag **4634 issues in 400 blocks of the
+retail, known-good LE `vz.wad`** — a *higher* per-block rate than the converted
+patch WAD. A heuristic that fails on the shipping game proves nothing about a
+patch. Mesh vertex streams (packed/compressed formats) and non-placement `flgs`
+bodies trip these checks constantly even when perfectly little-endian.
+
+If you catch yourself writing a range/magnitude test to infer endianness, stop
+and use a deterministic check below instead.
+
+## Required: deterministic verification (pick one)
+
+1. **Rosetta byte-exact** (converter correctness): convert an
+   `xbox-vz.wad` block and assert it equals the matching `vz.wad` block
+   byte-for-byte (`tools/wad_be_le_oracle.py`). This is how the converter is
+   proven, not by inspection.
+2. **Patch == converter(source)** (patch correctness): a patch block must equal
+   re-running the validated converter on the original X360 source block,
+   byte-for-byte. No PC ground truth needed — even for DLC-only assets that
+   never shipped on PC.
+3. **Typed coverage** (no silent gaps): strict converter, `Strict swap
+   failures: 0`, `Total fallback u32 ops: 0`, no blind tag sweeps. Every chunk
+   tag/type must have a typed converter (see Byte-Swap Policy in `AGENTS.md`).
+4. **Round-trip idempotence** where a known inverse exists.
+
+## Trust / distrust
+
+- TRUST: byte-exact diffs vs ground truth, `Strict swap failures`,
+  `fallback u32 ops`, typed-coverage reports, the running game (x32dbg).
+- DISTRUST: "endian issues" counts from plausibility scanners. Treat that number
+  as noise unless it is calibrated against retail `vz.wad` and shown to be ~0
+  there first.

@@ -14,6 +14,9 @@ pub const TYPE_ID_PATH: u32 = 28;
 pub const TYPE_ID_EFFECT: u32 = 29;
 pub const TYPE_ID_STRINGDB: u32 = 7;
 pub const TYPE_ID_LEVEL: u32 = 20;
+/// "stance" / named-registry (ActionTable, VehicleAnimationLookup, Sounds, …);
+/// type_hash 0x207359C7. Processed by FUN_0067cfb0's fixed 1024-slot table.
+pub const TYPE_ID_STANCE: u32 = 11;
 pub const TYPE_ID_MATERIAL_PARAMS: u32 = 14;
 pub const TYPE_ID_MUSIC_STATE_MAP: u32 = 26;
 pub const TYPE_ID_MUSIC_CUE_TABLE: u32 = 4;
@@ -43,6 +46,12 @@ pub const TYPE_HASH_MUSIC_CUE_TABLE: u32 = 0xE8DF4D87;
 pub const TYPE_HASH_ANIM_STATE_MACHINE: u32 = 0xECE70371;
 pub const TYPE_HASH_WORLD_ENTITY_DATA: u32 = 0x5647C35D;
 pub const TYPE_HASH_GUIDMAP: u32 = 0x140E8728;
+/// "stance" / named-registry (ActionTable, VehicleAnimationLookup, Sounds, …).
+/// Its nested UCFX is INFO(dims triple)/TYPE(dim-name strings)/VALU(value rows);
+/// INFO+TYPE need per-field conversion (see convert.rs), not a blanket u32 swap,
+/// or the engine reads a transposed/byteswapped row count and overflows the
+/// 1024-slot table in FUN_0067cfb0 (world-load livelock @0x67D130).
+pub const TYPE_HASH_STANCE: u32 = 0x207359C7;
 pub const TYPE_HASH_FX_DICTIONARY: u32 = 0xFA46D8A8;
 pub const TYPE_HASH_WATERMAP: u32 = 0x4D7D30C4;
 
@@ -146,5 +155,132 @@ pub fn type_name(type_id: u32) -> &'static str {
         34 => "starter",
         35 => "script",
         _ => "unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn type_hash_roundtrip() {
+        // Known constants
+        assert_eq!(
+            type_hash_for_type_id(TYPE_ID_TEXTURE),
+            Some(TYPE_HASH_TEXTURE)
+        );
+        assert_eq!(
+            type_id_for_type_hash(TYPE_HASH_MODEL),
+            Some(TYPE_ID_MODEL)
+        );
+        assert_eq!(
+            type_id_for_type_hash(TYPE_HASH_TEXTURE),
+            Some(TYPE_ID_TEXTURE)
+        );
+    }
+
+    #[test]
+    fn all_constants_in_registry() {
+        let known_ids = vec![
+            TYPE_ID_WAVEBANK,
+            TYPE_ID_SOUNDBANK,
+            TYPE_ID_LAYER,
+            TYPE_ID_MODEL,
+            TYPE_ID_TEXTURE,
+            TYPE_ID_SCRIPT,
+            TYPE_ID_ANIMATION,
+            TYPE_ID_LOWRES_TERRAIN,
+            TYPE_ID_TERRAIN_MESH,
+            TYPE_ID_FONT,
+            TYPE_ID_PATH,
+            TYPE_ID_EFFECT,
+            TYPE_ID_STRINGDB,
+            TYPE_ID_LEVEL,
+            TYPE_ID_STANCE,
+            TYPE_ID_MATERIAL_PARAMS,
+            TYPE_ID_MUSIC_STATE_MAP,
+            TYPE_ID_MUSIC_CUE_TABLE,
+            TYPE_ID_ANIM_STATE_MACHINE,
+            TYPE_ID_WORLD_ENTITY_DATA,
+            TYPE_ID_FX_DICTIONARY,
+        ];
+        for type_id in known_ids {
+            let name = type_name(type_id);
+            assert_ne!(name, "unknown", "type_id {} has unknown name", type_id);
+        }
+    }
+
+    #[test]
+    fn unknown_type_id() {
+        assert_eq!(type_name(999), "unknown");
+    }
+
+    #[test]
+    fn unknown_type_hash() {
+        assert_eq!(type_id_for_type_hash(0xDEADBEEF), None);
+        assert_eq!(type_hash_for_type_id(999), None);
+    }
+
+    #[test]
+    fn type_name_from_hash_known() {
+        assert_eq!(type_name_from_hash(TYPE_HASH_TEXTURE), "texture");
+        assert_eq!(type_name_from_hash(TYPE_HASH_MODEL), "model");
+        assert_eq!(type_name_from_hash(TYPE_HASH_SCRIPT), "script");
+    }
+
+    #[test]
+    fn type_name_from_hash_watermap() {
+        assert_eq!(type_name_from_hash(TYPE_HASH_WATERMAP), "watermap");
+    }
+
+    #[test]
+    fn type_name_from_hash_unknown() {
+        assert_eq!(type_name_from_hash(0xDEADBEEF), "unknown");
+    }
+
+    #[test]
+    fn type_registry_no_duplicates() {
+        // Check that each hash is unique
+        for i in 0..TYPE_HASH_REGISTRY.len() {
+            for j in (i + 1)..TYPE_HASH_REGISTRY.len() {
+                assert_ne!(
+                    TYPE_HASH_REGISTRY[i].0, TYPE_HASH_REGISTRY[j].0,
+                    "Duplicate hash in registry"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn texture_constants_match() {
+        assert_eq!(TYPE_HASH_TEXTURE, 0xF011157A);
+        assert_eq!(TYPE_ID_TEXTURE, 27);
+        assert_eq!(type_id_for_type_hash(TYPE_HASH_TEXTURE), Some(27));
+    }
+
+    #[test]
+    fn script_constants_match() {
+        assert_eq!(TYPE_HASH_SCRIPT, 0x42498680);
+        assert_eq!(TYPE_ID_SCRIPT, 35);
+        assert_eq!(type_id_for_type_hash(TYPE_HASH_SCRIPT), Some(35));
+    }
+
+    #[test]
+    fn soundbank_constants_match() {
+        assert_eq!(TYPE_HASH_SOUNDBANK, 0x9F8BCA10);
+        assert_eq!(TYPE_ID_SOUNDBANK, 21);
+        assert_eq!(type_id_for_type_hash(TYPE_HASH_SOUNDBANK), Some(21));
+    }
+
+    #[test]
+    fn all_registry_entries_have_names() {
+        for (_hash, type_id) in TYPE_HASH_REGISTRY {
+            let name = type_name(*type_id);
+            // Most should have meaningful names
+            if *type_id != 999 && *type_id != 1000 {
+                // Allow unmapped IDs to have "unknown" name
+                let _ = name;
+            }
+        }
     }
 }

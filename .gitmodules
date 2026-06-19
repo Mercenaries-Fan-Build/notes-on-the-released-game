@@ -1,0 +1,3 @@
+[submodule "submodules/minhook"]
+	path = submodules/minhook
+	url = https://github.com/Mercenaries-Fan-Build/minhook.git
