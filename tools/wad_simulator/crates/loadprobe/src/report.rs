@@ -1,5 +1,18 @@
-//! Analysis of parsed log lines → a forensic `Report`, with a detailed text dump and
-//! an optional JSON form.
+//! Analysis of parsed log lines → a forensic `Report`, with detailed text and JSON output.
+//!
+//! This module takes a `Vec<LogLine>` and produces a `Report` struct containing:
+//! - **Verdict**: REACHED-WORLD / CRASH / HANG / TRUNCATED classification
+//! - **Phases**: Milestone hits with timestamps and progression percentage
+//! - **Crashes**: EIP, subsystem label, AV target, block context
+//! - **Pool health**: Texture-component cache capacity, garbage, refills
+//! - **Streaming**: WAITFORSTREAMING cycle count and duration
+//! - **Progression**: Acts staged, jobs imported, portals enabled, players created
+//! - **Gaps**: Largest inter-line time delays
+//! - **High-signal markers**: Filtered Lua messages with diagnostic prefixes
+//! - **Coverage**: Unknown sources and unparsed lines
+//!
+//! The `analyze` function is the main entry point. Output via `print_text` (ANSI)
+//! or `serde_json` for structured reports.
 
 use crate::parse::LogLine;
 use crate::phases::{self, LADDER, REACHED_WORLD_IDX};
@@ -188,6 +201,19 @@ pub struct Report {
 
 // ----- analysis -------------------------------------------------------------
 
+/// Analyze a parsed log into a comprehensive forensic `Report`.
+///
+/// # Arguments
+/// - `file`: Path to the log file (for reporting)
+/// - `log_sha256`: SHA-256 hash of the log file (identity binding)
+/// - `lines`: Parsed `LogLine`s from the log
+/// - `routine`: Source tags to suppress from the line dump
+/// - `signals`: High-signal Lua message prefixes to highlight
+/// - `hang_secs`: Time threshold (seconds) to classify a stalled load as a hang
+/// - `top_gaps`: Number of largest inter-line gaps to report
+///
+/// # Returns
+/// A fully-populated `Report` ready for text or JSON output.
 pub fn analyze(file: &str, log_sha256: String, lines: &[LogLine], routine: &[String], signals: &[String], hang_secs: u64, top_gaps: usize) -> Report {
     let real: Vec<&LogLine> = lines.iter().filter(|l| !l.raw_ts.is_empty()).collect();
 
@@ -531,6 +557,10 @@ fn truncate(s: &str, n: usize) -> String {
 
 // ----- text dump ------------------------------------------------------------
 
+/// Print a forensic report in human-readable ANSI-colored text format.
+///
+/// Includes verdict, phase timeline, pool health, crashes, high-signal markers, gaps,
+/// and the tail of the log. Respects the `colored` crate's color override settings.
 pub fn print_text(r: &Report) {
     let bar = "─".repeat(78);
     println!("{}", bar.dimmed());

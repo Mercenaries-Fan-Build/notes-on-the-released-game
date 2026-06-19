@@ -1,10 +1,19 @@
 //! Parser for `pmc_blackbox.log` lines.
 //!
-//! Format (see `tools/pmc_blackbox/pmc_blackbox.c` `pmc_log`):
-//!   `[HH:MM:SS.mmm] [source] message`
-//! Lua lines (`tools/pmc_blackbox/lua_log_hook.c`) carry a trailing `  @script:line`
-//! and `[world]` echoes are prefixed `>>> `. A few lines (continuation hexdumps) do
-//! not start with a timestamp; we keep them as `source == "raw"` attached in order.
+//! This module reads and parses the timestamped diagnostic stream emitted by `pmc_bb.dll`.
+//! Every line follows the format `[HH:MM:SS.mmm] [source] message`, where:
+//! - **timestamp** is wall-clock time (millisecond precision)
+//! - **source** is a diagnostic tag: `lua`, `crash`, `world`, `pool`, `mtrl`, `cc`, etc.
+//! - **message** is the diagnostic content
+//!
+//! Special cases:
+//! - Lua lines carry a trailing `  @script:line` suffix (script location in game Lua)
+//! - `[world]` echoes are prefixed `>>> ` (mirrored from game console)
+//! - Continuation hexdumps don't start with a timestamp; kept as `source == "raw"`
+//! - Midnight wraps are corrected by detecting backward jumps > 1 hour
+//!
+//! The main entry point is [`parse_log`], which returns a `Vec<LogLine>` with
+//! monotonic, midnight-corrected timestamps and parsed metadata (script, line number, etc.).
 
 /// One parsed log line. `script`/`line`/`world_echo`/`lineno` are retained for
 /// completeness and potential consumers (JSON, future call-site reporting) even
@@ -38,7 +47,14 @@ impl LogLine {
     }
 }
 
-/// Parse `HH:MM:SS.mmm` into milliseconds-since-midnight. Returns None on bad shape.
+/// Parse a log line timestamp in format `HH:MM:SS.mmm` into milliseconds-since-midnight.
+///
+/// Returns `None` if the timestamp has invalid shape or out-of-range values.
+///
+/// # Example
+/// ```ignore
+/// assert_eq!(parse_ts("21:02:43.033"), Some(75763033));
+/// ```
 fn parse_ts(s: &str) -> Option<u64> {
     // s like "21:02:43.033"
     let (hms, ms) = s.split_once('.')?;
@@ -53,7 +69,18 @@ fn parse_ts(s: &str) -> Option<u64> {
     Some(((h * 3600 + m * 60 + sec) * 1000) + mil)
 }
 
-/// Split a `  @script:line` suffix off a Lua message. Returns (msg, script, line).
+/// Split a `  @script:line` Lua location suffix from a message.
+///
+/// Returns a tuple of `(cleaned_msg, optional_script_name, optional_line_number)`.
+/// Only recognizes suffixes if they match the pattern: two spaces, `@`, then alphanumeric/colon.
+///
+/// # Example
+/// ```ignore
+/// let (msg, script, line) = split_script("some message  @myScript:42");
+/// assert_eq!(msg, "some message");
+/// assert_eq!(script, Some("myScript".to_string()));
+/// assert_eq!(line, Some(42));
+/// ```
 fn split_script(msg: &str) -> (String, Option<String>, Option<u32>) {
     // The hook emits "  @name:123" or "  @name"; find the LAST "  @".
     if let Some(at) = msg.rfind("  @") {
@@ -72,7 +99,22 @@ fn split_script(msg: &str) -> (String, Option<String>, Option<u32>) {
     (msg.to_string(), None, None)
 }
 
-/// Parse a full log file into ordered `LogLine`s, correcting a single midnight wrap.
+/// Parse a full `pmc_blackbox.log` into ordered `LogLine`s with monotonic timestamps.
+///
+/// Automatically corrects up to one midnight wrap (if timestamps jump backward by > 1 hour,
+/// assumes a new calendar day has started and applies a +86.4M ms offset).
+///
+/// # Arguments
+/// - `text`: The full log file content (may be large)
+///
+/// # Returns
+/// A `Vec<LogLine>` with timestamps corrected, metadata extracted (script/line/world_echo flags),
+/// and continuation lines (`raw` source) properly attached to their preceding timestamped line.
+///
+/// # Edge Cases
+/// - Empty lines are skipped
+/// - Lines without a valid `[ts] [source] msg` format are kept as raw continuations
+/// - Malformed timestamps fall through to raw continuation
 pub fn parse_log(text: &str) -> Vec<LogLine> {
     let mut out = Vec::new();
     let mut day_offset: u64 = 0;
@@ -138,7 +180,10 @@ fn push_raw(out: &mut Vec<LogLine>, line: &str, ts_ms: u64, lineno: usize) {
     });
 }
 
-/// Split a line into (ts, source, rest) where it begins `[ts] [source] rest`.
+/// Parse the prefix of a log line: `[ts] [source] rest`.
+///
+/// Returns `(timestamp_str, source_tag, message_body)` or `None` if the line
+/// doesn't match the expected format.
 fn parse_prefix(line: &str) -> Option<(&str, &str, &str)> {
     let rest = line.strip_prefix('[')?;
     let (ts, after) = rest.split_once(']')?;

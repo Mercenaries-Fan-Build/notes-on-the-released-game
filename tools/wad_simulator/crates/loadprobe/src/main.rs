@@ -4,10 +4,10 @@
 //! classifies the end-state (REACHED-WORLD / CRASH@EIP / HANG / TRUNCATED), and
 //! surfaces every non-routine ([lua]/[pool]) diagnostic line + high-signal Lua markers.
 
-mod parse;
-mod phases;
-mod report;
-mod sha256;
+pub mod parse;
+pub mod phases;
+pub mod report;
+pub mod sha256;
 
 use clap::Parser;
 use std::path::PathBuf;

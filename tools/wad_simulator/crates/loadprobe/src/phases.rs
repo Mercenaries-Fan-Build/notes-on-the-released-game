@@ -1,11 +1,25 @@
-//! Static tables: the world-load milestone ladder, high-signal Lua prefixes, and the
-//! known-crash-EIP map. Single source of truth — extend here as new markers appear.
+//! Static tables: the world-load milestone ladder, known crash EIPs, source tags, and
+//! high-signal diagnostic prefixes.
+//!
+//! This is the **single source of truth** for:
+//! - **Milestone ladder** (`LADDER`): 21 phases from process init to GlobalExit
+//! - **Crash EIP database** (`KNOWN_EIPS`): Maps crash addresses to subsystems
+//! - **Source tags**: Known diagnostic sources, instrumentation tags, and routine noise
+//! - **Progression patterns**: Job modules, faction prefixes, portal/act markers
+//!
+//! New crash sites, instrumentation tags, or milestone milestones are added here
+//! and immediately propagate to all analysis without code changes elsewhere.
 
-/// One milestone phase. `matches` are substrings; a phase is "reached" if ANY of its
-/// substrings appears in a line's message.
+/// One milestone phase in the world-load progression.
+///
+/// A phase is "reached" when ANY of its `matches` substrings appears in a log line's message.
+#[derive(Debug, Clone, Copy)]
 pub struct Phase {
+    /// Sequential index (0–20) in the load progression
     pub idx: usize,
+    /// Human-readable phase name
     pub name: &'static str,
+    /// Substrings to search for in log messages; phase reached if ANY matches
     pub matches: &'static [&'static str],
 }
 
@@ -59,16 +73,25 @@ pub static KNOWN_SOURCES: &[&str] = &[
     "raw",
 ];
 
+/// Check if a source tag is in the known registry.
+///
+/// Used to flag unknown sources (likely new instrumentation) in the coverage report.
 pub fn is_known_source(s: &str) -> bool {
     KNOWN_SOURCES.contains(&s)
 }
 
-/// Known crash EIP → suspected-subsystem label (ties to the memory notes).
-/// `teardown` marks an EIP that is a process hard-close / teardown ARTIFACT, not a
-/// spontaneous bug — the user force-killed the game and a worker faulted on the way out.
+/// A known crash site with subsystem context and classification.
+///
+/// `teardown` is set to `true` for EIPs that represent process hard-close / teardown artifacts
+/// (e.g., a worker thread faulting on process teardown), NOT genuine crashes. These should not
+/// trigger a CRASH verdict; they're user-initiated or benign end-of-process faults.
+#[derive(Debug, Clone, Copy)]
 pub struct KnownEip {
+    /// Exception Instruction Pointer (EIP register value at crash)
     pub eip: u32,
+    /// Human-readable description of the suspected subsystem or bug
     pub label: &'static str,
+    /// `true` if this is a process teardown artifact (hard-close), not a real crash
     pub teardown: bool,
 }
 
@@ -85,11 +108,17 @@ pub static KNOWN_EIPS: &[KnownEip] = &[
     KnownEip { eip: 0x007E045E, label: "ECS texture-component type-confusion", teardown: false },
 ];
 
+/// Look up the label for a known crash EIP, or `None` if unrecognized.
+///
+/// Used to provide context when reporting crashes to the user.
 pub fn eip_label(eip: u32) -> Option<&'static str> {
     KNOWN_EIPS.iter().find(|k| k.eip == eip).map(|k| k.label)
 }
 
-/// True if this EIP is a known process-teardown / hard-close artifact (not a real crash).
+/// Check if an EIP represents a known process-teardown / hard-close artifact.
+///
+/// Returns `true` only if the EIP is in the `KNOWN_EIPS` table AND marked with `teardown: true`.
+/// Such crashes should not prevent the REACHED-WORLD verdict; they're user-initiated or benign.
 pub fn is_teardown_eip(eip: u32) -> bool {
     KNOWN_EIPS.iter().any(|k| k.eip == eip && k.teardown)
 }
@@ -97,7 +126,10 @@ pub fn is_teardown_eip(eip: u32) -> bool {
 /// Faction prefixes used by job/contract module names (for the progression section).
 pub static FACTION_PREFIXES: &[&str] = &["Chi", "Oil", "Gur", "All", "Pir", "Pmc"];
 
-/// Is `module` a faction job/contract module name, e.g. `OilJob004`, `PmcCon033`?
+/// Check if a module name is a faction job/contract, e.g. `OilJob004`, `PmcCon033`.
+///
+/// Recognizes patterns: `{Faction}Job{digits}` or `{Faction}Con{digits}` where Faction is one of
+/// Chi, Oil, Gur, All, Pir, Pmc. Also recognizes `MrxTaskObjective` prefixed modules.
 pub fn is_job_module(module: &str) -> bool {
     let tail_digits = |s: &str| -> bool {
         let d: String = s.chars().rev().take_while(|c| c.is_ascii_digit()).collect();
