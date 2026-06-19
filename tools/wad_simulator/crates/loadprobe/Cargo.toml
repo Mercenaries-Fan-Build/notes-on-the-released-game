@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2021"
 description = "World-load progress + forensic analyzer for pmc_blackbox.log (Mercenaries 2 PC)"
 license = "MIT"
-repository = "https://github.com/austinkregel/mercenaries-game"
+repository = "https://github.com/Mercenaries-Fan-Build/notes-on-the-released-game"
 keywords = ["mercenaries", "log-analysis", "game-debugging", "forensics"]
 categories = ["command-line-utilities", "development-tools::debugging"]
 

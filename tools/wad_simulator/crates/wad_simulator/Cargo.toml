@@ -2,6 +2,11 @@
 name = "wad_simulator"
 version = "1.0.0"
 edition = "2021"
+description = "Engine-accurate WAD consumption simulator for Mercenaries 2"
+license = "MIT"
+repository = "https://github.com/Mercenaries-Fan-Build/notes-on-the-released-game"
+keywords = ["mercenaries", "wad", "simulation", "game", "engine"]
+categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
 name = "wad_simulator"

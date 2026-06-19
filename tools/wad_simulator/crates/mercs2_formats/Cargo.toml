@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2021"
 description = "Binary format parsers for Mercenaries 2 WAD archives (FFCS, UCFX, ASET, DLC containers)"
 license = "MIT"
-repository = "https://github.com/austinkregel/mercenaries-game"
+repository = "https://github.com/Mercenaries-Fan-Build/notes-on-the-released-game"
 keywords = ["mercenaries", "format", "wad", "ffcs", "ucfx"]
 categories = ["encoding", "parser-implementations", "no-std"]
 
