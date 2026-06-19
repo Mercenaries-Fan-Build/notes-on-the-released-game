@@ -183,3 +183,95 @@ impl std::fmt::Display for ChunkTag {
         write!(f, "{}", s)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_bytes_known_tags() {
+        assert_eq!(ChunkTag::from_bytes(*b"UCFX"), ChunkTag::Ucfx);
+        assert_eq!(ChunkTag::from_bytes(*b"COMP"), ChunkTag::Comp);
+        assert_eq!(ChunkTag::from_bytes(*b"info"), ChunkTag::Info);
+        assert_eq!(ChunkTag::from_bytes(*b"data"), ChunkTag::Data);
+        assert_eq!(ChunkTag::from_bytes(*b"BODY"), ChunkTag::Body);
+        assert_eq!(ChunkTag::from_bytes(*b"DEPS"), ChunkTag::Deps);
+        assert_eq!(ChunkTag::from_bytes(*b"watr"), ChunkTag::Watr);
+    }
+
+    #[test]
+    fn from_bytes_unknown_tags() {
+        let unknown = ChunkTag::from_bytes([0xDE, 0xAD, 0xBE, 0xEF]);
+        match unknown {
+            ChunkTag::Unknown(bytes) => {
+                assert_eq!(bytes, [0xDE, 0xAD, 0xBE, 0xEF]);
+            }
+            _ => panic!("Expected Unknown variant"),
+        }
+    }
+
+    #[test]
+    fn as_bytes_roundtrip() {
+        let tags = vec![
+            ChunkTag::Ucfx, ChunkTag::Comp, ChunkTag::Geom,
+            ChunkTag::Info, ChunkTag::Data, ChunkTag::Body,
+            ChunkTag::Watr, ChunkTag::Skin, ChunkTag::Dict,
+        ];
+        for tag in tags {
+            let bytes = tag.as_bytes();
+            let reconstructed = ChunkTag::from_bytes(bytes);
+            assert_eq!(tag, reconstructed);
+        }
+    }
+
+    #[test]
+    fn is_native_be() {
+        assert!(ChunkTag::Syek.is_native_be());
+        assert!(ChunkTag::Srts.is_native_be());
+        assert!(!ChunkTag::Data.is_native_be());
+        assert!(!ChunkTag::Body.is_native_be());
+        assert!(!ChunkTag::Info.is_native_be());
+    }
+
+    #[test]
+    fn display_format() {
+        assert_eq!(format!("{}", ChunkTag::Ucfx), "UCFX");
+        assert_eq!(format!("{}", ChunkTag::Info), "info");
+        assert_eq!(format!("{}", ChunkTag::Body), "BODY");
+    }
+
+    #[test]
+    fn display_unknown() {
+        let tag = ChunkTag::from_bytes([0x41, 0x42, 0x43, 0x44]); // "ABCD"
+        assert_eq!(format!("{}", tag), "ABCD");
+    }
+
+    #[test]
+    fn display_nonprintable() {
+        let tag = ChunkTag::from_bytes([0x00, 0x01, 0x02, 0x03]);
+        let display = format!("{}", tag);
+        // Nonprintable bytes should be '?'
+        assert!(display.contains('?'));
+    }
+
+    #[test]
+    fn all_container_markers() {
+        let containers = vec![ChunkTag::Ucfx, ChunkTag::Comp, ChunkTag::Geom, ChunkTag::Strm];
+        for tag in containers {
+            // Just verify they don't panic when used
+            let _ = tag.as_bytes();
+            let _ = tag.is_native_be();
+        }
+    }
+
+    #[test]
+    fn case_sensitivity() {
+        // "INFO" and "info" are different tags
+        assert_ne!(
+            ChunkTag::from_bytes(*b"INFO"),
+            ChunkTag::from_bytes(*b"info")
+        );
+        assert_eq!(ChunkTag::from_bytes(*b"INFO"), ChunkTag::InfoUpper);
+        assert_eq!(ChunkTag::from_bytes(*b"info"), ChunkTag::Info);
+    }
+}
