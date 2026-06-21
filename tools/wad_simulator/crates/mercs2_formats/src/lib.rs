@@ -29,6 +29,7 @@ pub mod dlc_input;
 pub mod dlc_stfs;
 pub mod ffcs;
 pub mod hash;
+pub mod model_cubeize;
 pub mod patch_wad;
 pub mod safe_slice;
 pub mod schema;
