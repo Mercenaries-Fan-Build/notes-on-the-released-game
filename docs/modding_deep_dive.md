@@ -865,7 +865,7 @@ These are the critical unknowns that determine modding feasibility:
 
 5. **Does `vz.bin` serve any role beyond startup validation?** Is it checked only by the launcher, or does the engine read it during gameplay?
 
-6. **What algorithm produces the ASET per-asset name hashes?** The *type* hashes use `pandemic_hash_m2()` (`"texture"` → `0xF011157A`, `"model"` → `0x5B724250`). But the per-asset *name* hashes (e.g., `0x35383CCD` for `vz_mar_roads`) do NOT match `pandemic_hash_m2()` on any tested name variant. The input to the name hash may include untested path prefixes or use a different algorithm entirely.
+6. **What algorithm produces the ASET per-asset name hashes?** ✅ **SOLVED (2026-06):** the name hash is `pandemic_hash_m2(name)` — the same function as the type hashes. Confirmed against **13,521 / 13,666** texture names in `output/extracted/texture_index.json` (the ~145 misses are localization-suffix bookkeeping, e.g. `pause_graphic_english` was hashed as `pause_graphic`), plus non-texture assets (`m2("hijack_mi26")` → its type-35 script entry; texture `m2("vz_veh_helicopter_mi26_wheels_dm")=0xB92F5EC3`). The old `vz_mar_roads → 0x35383CCD` counter-example was a bad/variant name, not a different algorithm. This **unblocks new-asset injection** for name-addressed assets (textures, scripts, stringdb). **Caveat:** vehicle *models* are referenced by hash/sub-entry, not a munge-able name (the mi26 model `0xEEC143F4` is an ASET sub-entry: block_idx 3543 / sub 0x14C9 / secondary_ref 0xFFFFFFFF); entities reference their model by hash via the resident block's asset-reference table (`(asset_hash, ref_count, obj_ptr…)` records).
 
 7. **What is the save file checksum algorithm?** Needed for save editing to survive integrity checks.
 
