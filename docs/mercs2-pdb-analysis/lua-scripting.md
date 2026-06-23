@@ -251,3 +251,38 @@ Same load→pcall shape, here running a small guard chunk that tests a `_MODULES
 - **Inferred** (not directly stated by a symbol): the per-module *responsibilities* (e.g. `ldo.c` = call/stack engine) — these follow from the modules being **stock Lua 5.1** whose roles are documented upstream, matched to adjacent recovered strings; the claim that the host engine is "Pangea" (consistent with `Pangea Lua Console` and project-wide `Pg*` usage); and the routing of WAD-packed bytecode through `lundump.c`.
 - **Excluded as not-Lua:** the GFx/ActionScript VM strings (`Error: Unsupported opcode %02X`, `registerClass`, `Attempt to write read-only property %s.%s`, `_currentframe`, etc.) — a separate Scaleform scripting engine.
 - **No RTTI classes** belong to this system (Lua is a C library); the `## Key classes` section is intentionally empty.
+
+## How it works (decompiled)
+
+Source: the Xbox 360 Profile-build decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`). **Up-front honesty:** unlike the PC retail decomp, this Xbox decomp does **not** carry the Lua source/bootstrap strings or any Lua C-API symbol as inline literals. Grepping the named Xbox decomp for `lua_State`, `luaL`, `_MODULES`, `_IMPORT`, the opcode names (`LOADK`, `GETGLOBAL`), `loadstring`, `ToStringL`, `WriteToConsole`, and `Pangea Lua` all return **0 hits**. So the binding *table* (`{name, C-func}` pairs) and the VM dispatcher are **not directly locatable in this build's decomp** — see "Corrections & open questions." What *is* recoverable is the **console-command argument-marshalling layer** that the `Sys.*` C-functions use, anchored on the one named host function, `CurrentLuaState`.
+
+### `CurrentLuaState @824340a0` is a console *command handler*, not the registrar
+The function the inventory surfaces as the Lua bridge is actually a small console command that fetches a typed argument and formats it for the console — it is one of the `Sys.*` closures, not the layer that registers them:
+
+```c
+undefined8 CurrentLuaState(undefined4 param_1) {        // @824340a0
+  local_c[0] = param_1;
+  iVar1 = FUN_8241cbf0(local_c,1,&local_10);            // fetch 1 arg from the call frame
+  if (iVar1 < 1) { local_10 = DAT_82001058; }           // default when no arg supplied
+  FUN_82606458(CONCAT44(local_10,uStack_48),0xffffffff82027b90);  // printf-style format w/ name ptr 0x82027b90
+  return 0;
+}
+```
+
+`FUN_82606458` is a stack-walking `printf`-style formatter (its body builds an output string from a format pointer + varargs and a `TBLr` translation table). So `CurrentLuaState` *reads* the current Lua-state handle and prints it; it does not register anything.
+
+### The real Lua↔C glue is `FUN_8241cbf0`, the typed-argument fetcher (call pattern only)
+Every `Sys.*` C-function in this build pulls its parameters through `FUN_8241cbf0(args_out, count, &result)`. It is called from **261 sites** across the decomp, and the call shape is identical in `CurrentLuaState` (`FUN_8241cbf0(local_c,1,&local_10)`) and its neighbours, e.g. `FUN_82434100` (`FUN_8241cfa0(&local_30,1,&local_2c,0)` for a float-typed variant). This is the C-API marshalling boundary — the engine's equivalent of `lua_to*`/`luaL_check*` wrapped per argument-type.
+
+> **Caveat (decomp gap):** at its own VA, `FUN_8241cbf0` decompiles to an 8-byte stub that tail-calls `FUN_829167ec`, and the whole `FUN_829167xx` family are **empty `return;` stubs** in this decomp (Ghidra did not recover their bodies — this is the known unrecovered region). So the *internals* of the arg-fetch/marshalling are not visible; only the **callsite signature and 261-caller fan-in** are real and citable. Verified: `grep -c "FUN_8241cbf0(" xenon_decomp_named.c` → 261; `FUN_829167e0`/`e4`/`e8` bodies are `void … { return; }`.
+
+### Where the Lua VM bytecode loader actually is
+The shipped game loads precompiled chunks via `lundump.c` (`luaU_undump`) — but in this Xbox decomp neither the `lundump` asserts nor `luaU_undump` are named or string-anchored (0 hits for `precompiled chunk`/`bad header` as inline literals). The loader is present in the binary (the inventory lists its six assert offsets at `0x00b5434`–`0x00b5580`) but is **not reachable by name or string in `xenon_decomp_named.c`**. The disassemble/flip-endian/reassemble bytecode pipeline documented in project memory therefore remains anchored on the *string/offset* evidence, not on a decompiled function in this build.
+
+## Corrections & open questions
+
+- **The host "Sys"/binding registration layer is NOT present in the Xbox decomp.** The doc's "PC decompilation cross-reference" correctly locates the module-system bootstrap and chunk-runner in the *PC retail* build (`FUN_005a2c40`, `FUN_0060994e`, `FUN_00860240`, `FUN_0085df50`). Those findings are **PC-only**; the equivalent functions in the Xbox Profile build cannot be confirmed because the Lua source-chunk strings and C-API symbols did not survive into `xenon_decomp_named.c` (grep: `MODULES`=0, `lua_State`=0, `luaL`=0, `loadstring`=0). This is an **Xbox-vs-PC asymmetry**, not a contradiction — but it means the Xbox-side claim that the engine "registers C closures then compiles/runs the bootstrap chunk" is **unverified in this decomp** and rests entirely on the PC build.
+- **`CurrentLuaState` corrected.** The "Engine embedding / host (Sys) API" section lists `CurrentLuaState` among the host functions; the decomp shows it is specifically a **console read/print command** (`@824340a0`) that fetches one arg via `FUN_8241cbf0` and formats it — consistent with it being a `Sys.*` closure, but it is a *consumer* of the binding, not part of the binding machinery. Confirmed by body.
+- **Opcode/error/metamethod/library strings: not in this decomp.** The doc's "Notable strings" are all real in the strings table, but **none are inlined** in `xenon_decomp_named.c`, so no VM-internal function (dispatch loop, GC, parser) can be code-grounded from this build. The per-module responsibility mapping (`ldo.c`=call engine, etc.) remains **inference from stock Lua 5.1**, exactly as the doc already states — the decomp neither confirms nor contradicts it.
+- **Open question — the {name, C-func} table.** I could not locate the table(s) of `Sys.*`/`Mrx*` registrations in the Xbox decomp (no `lua_pushcclosure`/`luaL_register` symbol or distinctive string survives). The 261-caller fan-in of `FUN_8241cbf0` proves a *uniform* arg-fetch ABI exists for those closures, but the registration site is unresolved here.
+- **Open question — `FUN_829167xx` stubs.** Because the central marshalling/dispatch trampolines decompile to empty stubs, any behavioral claim about argument typing, error propagation, or the `pcall` boundary on the Xbox side would be fabrication. Marked unrecoverable in this build.

@@ -156,8 +156,86 @@ thunk_FUN_004935d1(s_CameraShakeTypeEnum_00bc6288);  // <-- registers the enum b
 
 `FUN_0065ea10` then references the same `s_CameraShakeTypeEnum` string (`FUN_00656720(s_CameraShakeTypeEnum_00bc6288,0)`) while pushing default field values (`0x3f800000` = 1.0f scale) into a `CameraShake` component descriptor — i.e. it wires the shake-type enum into the component's editable field set.
 
+## How it works (decompiled)
+
+Grounded in the Xbox PowerPC decomp `output/_ghidra_x360/xenon_decomp_named.c`. Every VA was confirmed present with the quoted snippet.
+
+### `PgSysCamera @825e9830` — the engine camera system is two sub-objects
+
+The PC doc inferred a `PgSysCamera` "engine camera-system object." The Xbox body shows what it actually does on init: it allocates **two** camera sub-systems and stores their handles into the owning PgSystem struct:
+
+```c
+==== PgSysCamera @825e9830  size=96 ====
+void PgSysCamera(int param_1) {
+  uVar1 = FUN_8246cf08(0xffffffff83102288,0xffffffff82047a60);
+  *(undefined4 *)(param_1 + 0x1ec0) = uVar1;        // sub-system A
+  uVar1 = FUN_8246cf08(0xffffffff83151308,0xffffffff82047a60);
+  *(undefined4 *)(param_1 + 0x1ec4) = uVar1;        // sub-system B
+}
+```
+
+So the camera system is hosted inside the larger PgSystem object at fixed offsets `+0x1ec0`/`+0x1ec4` (mirroring `PgSysAi`'s `+0x3cdc/+0x3ce0` and `PgSysCamera`'s sibling systems). This is registration/wiring, not the per-frame update — `CameraUpdate`/`Camera::EndFrame` (still only strings in this build's named set) are separate.
+
+### `CameraCollisionCastRay @825ea110` — confirmed: it is a multi-viewport ray bundle
+
+The doc's "ray cast to keep the camera out of geometry" is **directionally right but under-stated**. The body builds a 16-float ray/transform bundle (`FUN_82205f28(&local_e0)` fills it) and then writes it into **5 viewport slots** (loop `lVar5 = 5`, stride `0x620`):
+
+```c
+==== CameraCollisionCastRay @825ea110 ====
+  lVar2 = FUN_82916f38();  FUN_82205f28(&local_e0);   // build 16 floats (matrix/ray)
+  lVar2 = lVar2 + 0x20;  lVar5 = 5;
+  do {
+    iVar4 = FUN_8256eb28(lVar2);
+    iVar4 = *(int *)(iVar4 + 4) * 0x70 + iVar4;        // index a 0x70-stride record
+    lVar2 = lVar2 + 0x620;                              // next viewport (stride 0x620)
+    *(float *)(iVar4 + 0x10) = (float)dVar6;           // store the 16 floats
+    ...
+  } while (... lVar5 != 0);
+```
+
+So the cast is applied per-viewport (up to 5, consistent with split-screen co-op). VMX128 vector ops in this function don't decode (the `dVar*` doubles are the FPU image of paired-single loads); the surrounding store layout is readable, the actual cast math is partly a VMX gap.
+
+### `CameraBlendTime @825109e0` — a preset *loader* keyed by named tunables
+
+The doc lists `CameraBlendTime` as a tunable. The named function of that name is actually a **camera-preset reader**: it pulls a long list of float params by string key, each with a default, via `FUN_825047d0(default, key)`:
+
+```c
+==== CameraBlendTime @825109e0 ====
+  local_90 = FUN_82504700(0xffffffff8203ba48,0);
+  local_8c = (float)FUN_825047d0(DAT_82111278, 0x...8203cfb0);   // read float param w/ default
+  local_78 = (float)FUN_825047d0(DAT_82111278, 0x...8203ceb4);
+  ... (FUN_82504aa8 reads 3-float vectors: offsets) ...
+  local_88 = (float)FUN_825047d0(DAT_82001d00, 0x...8203cf98);
+```
+
+This is the function that materializes a camera-mode preset (offsets, blend time, FOV-related floats) from the named-parameter table — i.e. the runtime side of the `CameraOffset`/`CameraBlendTime`/`Fov*` tunables the doc lists as strings. (unverified: the exact key each `0x8203cf*` address maps to — the keys are param-name strings not symbolized inline; the *pattern* "read named float with default" is certain.)
+
+### Camera components are ECS descriptor registrars (real pool sizes)
+
+`CameraCarPreset`, `CameraShake`, and `HumanCameraModifier` resolve to the same one-shot ECS-component-descriptor registrar template as on PC, and the Xbox bodies give the **byte sizes** of each component's pool element:
+
+```c
+==== CameraCarPreset @829ef010 ====
+  FUN_824fcac8(0xffffffff83802dd8,0x50);   // pool element size = 0x50 (80 bytes)
+  DAT_83802dfc = "CameraCarPreset";
+==== CameraShake @829ef240 ====  FUN_824fcac8(...,0x10);  DAT_... = "CameraShake";          // 16 B
+==== HumanCameraModifier @829ef2d0 ==== FUN_824fcac8(...,0x38); DAT_... = "HumanCameraModifier"; // 56 B
+```
+
+`FUN_824fcac8(globals, SIZE)` sets the component's per-instance byte size; `FUN_824fd430`/`FUN_824fd490` bracket the descriptor init; the trailing string is the type name. This is the Xbox analog of the PC `FUN_006401b0` registrar the doc already cites — and it adds the concrete element sizes (`CameraCarPreset`=80 B, `CameraShake`=16 B, `HumanCameraModifier`=56 B), which the PC doc did not have.
+
+## Corrections & open questions
+
+- **`PgSysCamera` is two sub-systems, not one object** — `@825e9830` allocates two handles into `PgSystem+0x1ec0/+0x1ec4`. The doc's "engine camera-system object (class/singleton name)" is right that it's the host, but it's a *pair* of sub-systems. (Their identity — e.g. world-camera vs. UI/2D-camera, matching the `Mercs2D cam` string — is **unverified**.)
+- **`CameraCollisionCastRay` is per-viewport (≤5), confirmed** — the "keep camera out of geometry" reading is consistent with a 5-viewport ray bundle (`stride 0x620`), upgrading the doc's inference to code-backed. The cast math is partly a VMX128 gap.
+- **`CameraBlendTime` (the named function) is a preset loader, not just a scalar** — it reads many keyed floats. The *string* `CameraBlendTime` is a tunable; the *function* of that name builds a whole preset. The doc conflated the two; corrected here.
+- **Component sizes now known** — `CameraCarPreset`=0x50, `CameraShake`=0x10, `HumanCameraModifier`=0x38 bytes/instance (from `FUN_824fcac8` args). The doc's pool *counts* (e.g. `CameraShake 384 128`) come from a separate allocator-size string table and are not contradicted.
+- **Still strings-only (could not verify in code):** `CameraUpdate`, `Camera::EndFrame`, `CameraFade`, `FovMaxSpeed`, the cinematic Lua bindings (`SetCinematicMode`/`TeleportCamera`) — these have no decompiled body under those names in the Xbox named set, so the doc's behavioral readings of them remain inference.
+- **Open:** which of the `0x8203cf*` keys `CameraBlendTime` reads maps to which documented tunable; whether `CameraCtrl` vs `Camera` is the controller vs. the camera object (symbols alone, as the doc notes, don't settle it).
+
 ## Cross-references
 
+- `docs/mercs2-pdb-analysis/debug-cheat-menu.md` — `FreezeViewport @82277410` (a real registered toggle), `Camera Tweak`, and the marketing/free-eye camera debug entries.
 - `docs/mercs2-pdb-analysis/rendering-shaders.md` — the camera produces the view matrix / `cameraPos` / `InvViewport` shader constants (string cluster @15565-15576).
 - `docs/mercs2-pdb-analysis/vehicles.md` — `CameraCarPreset`, `CameraTank`, `CameraTurret`, `CameraHelicopter`, `CamDistToHeli` are per-vehicle camera modes.
 - `docs/mercs2-pdb-analysis/weapons-combat.md` — the `(modifer)` camera FOV/shake adjustments (`CrouchFov`, `Fov`, `CameraShakeScale`) are weapon/aim modifiers; `VisionFOV`, `AimAssist` cluster.

@@ -312,8 +312,71 @@ It takes a (state, event-name) pair, compares the name against `retry` and `Init
 
 This builds a key/value record (`gameId`, a 64-bit `userId`, an `includeStats` bool) via the writer helpers `FUN_00975940`/`FUN_00975800`. It is part of the EA-Blaze-style report back-end referenced in the achievement/stats section, not a gameplay-side stat call.
 
+## How it works (decompiled)
+
+Grounded in the Xbox PowerPC decomp `output/_ghidra_x360/xenon_decomp_named.c`. Every VA was confirmed present with the quoted snippet. The Xbox build *names* the entitlement/paying/pricing functions (the PC cross-ref above did not cover them), so this section adds the online-commerce layer.
+
+### `GetEntitlementByBundle` / `GetPayingStatus` — EA-Nucleus "subs" (subscription) requests
+
+These two register/build a back-end request and are nearly identical. Both stamp a request via a shared helper and then bind one parameter:
+
+```c
+==== GetEntitlementByBundle @821828b8  size=88 ====
+  FUN_82182698(param_1,param_2,PTR_s_GetEntitlementByBundle_82d72630);  // name the request
+  FUN_8218a788(param_2,0xffffffff8210d0dc,param_3);                     // bind a param
+
+==== GetPayingStatus @82182a48  size=88 ====
+  FUN_82182698(param_1,param_2,PTR_s_GetPayingStatus_82d72660);
+  FUN_8218a788(param_2,0xffffffff8210d0dc,param_3);
+```
+
+The shared builder `FUN_82182698` stamps the request type tag `0x73756273` = ASCII **`'subs'`** and binds the method name:
+
+```c
+==== FUN_82182698 @82182698 ====
+  *(undefined4 *)(param_2 + 0x18) = 0x73756273;          // 'subs' service tag
+  FUN_8218a788(param_2,0xffffffff8210c2f4,param_3);      // method-name field
+```
+
+So `GetEntitlementByBundle`/`GetPayingStatus`/`GetSubscriptionAbility`/`SuspendEntitlement`/`GetCouponsByBundle` are all methods of an EA **subscription/entitlement** service (`'subs'`). This matches the string block (`entitlementStatus`, `entitlementSuspendDate`, `revenueType`, `recurringCycles`, `couponsByBundle.%d.*`, `pricingSelections.%d.*`) — an EA-Nucleus/Blaze commerce back-end, the same online layer as the achievement/stats reporter documented above.
+
+### `GetPricingSelectionsByCode @82182ad8` — linked-list lookup by code string
+
+Unlike its siblings, this one resolves locally: it reads a code string and walks a global linked list of pricing-selection records, returning the matching node's payload:
+
+```c
+==== GetPricingSelectionsByCode @82182ad8 ====
+  cVar3 = FUN_8218ad78(param_2,0x...8210c2f4,local_30,0x20);   // read the "code" arg (<=0x20)
+  if (cVar3 != '\0') {
+    ppuVar4 = &PTR_PTR_82d71c4c;  puVar2 = PTR_PTR_82d71c4c;    // head of pricing-selection list
+    while (puVar2 != 0) {
+      pcVar6 = *(char **)(puVar2 + 4);                          // node's code string
+      ... strcmp(pcVar6, local_30) ...
+      if (match) return *ppuVar4;                               // return the matching selection
+      ppuVar4 = ppuVar4 + 1;  puVar2 = *ppuVar4;
+    }
+  }
+  return 0;
+```
+
+This is a client-side registry of pricing selections keyed by a short code (≤0x20 chars), returning a record pointer or NULL — i.e. "look up the offer/SKU for this code."
+
+### Save-event handler and ECS registrars: Xbox confirms the PC cross-ref
+
+The PC doc resolved `SaveData`/`autoSave`/`CashValue` etc. to PC functions. On Xbox, `SaveGameData @8236dc20` and `EnableUsingFakeProfile @824a5ea8` are present as named functions (the dev "fake profile" path the doc cites from the `EnableUsingFakeProfile` string), and the cash/faction/objective components appear as the same one-shot ECS registrars (`CashValue @829f05b0`, `RuntimeObjectiveMarker @829f44f0`, `ModelMixerProfile @829f2c30`) — confirming the PC-side `FUN_006416d0` template has Xbox twins. (I did not fully decode `SaveGameData`'s body; it is named and present, corroborating the save layer, but its internal state machine is not re-derived here.)
+
+## Corrections & open questions
+
+- **Entitlement/paying/pricing are an EA subscription service (new fact):** `GetEntitlementByBundle`/`GetPayingStatus` stamp the `'subs'` (`0x73756273`) request tag via `FUN_82182698` and are method-name registrations against an online commerce back-end (Nucleus/Blaze), not local gameplay. The string block (`recurringCycles`, `revenueType`, `couponsByBundle.*`) is a subscription/coupon model. This is consistent with — and extends — the doc's "EA-Blaze online back-end" framing into the commerce/entitlement domain.
+- **`GetPricingSelectionsByCode` is a local list lookup (new fact):** it walks `PTR_PTR_82d71c4c` and string-matches a ≤0x20-char code, returning a record or NULL — confirmed in code, not inferred.
+- **Achievements/stats back-end (unchanged, corroborated):** the doc's read that achievements/stats/leaderboards/entitlements are one online EA back-end is supported — the entitlement methods sit in the same `.rdata` neighborhood and share the request-builder style. Still, the *gameplay-facing* `GrantAchievement`/`AchievementIsGranted` vs the back-end `Eval/Synch/SetAchievements` split is **not re-verified in Xbox code** (those remain string-level).
+- **Economy/components (corroborated):** `CashValue`/`FactionValue`/`RuntimeObjectiveMarker`/`ModelMixerProfile` are confirmed as ECS components on Xbox (named registrars `@829f05b0`/`@829f44f0`/`@829f2c30`), matching the PC `FUN_006416d0` template. The doc's "cash is an entity component" claim is **confirmed on both builds**.
+- **Open / unresolved in code:** the contract/mission lifecycle (`ContractActivated`→`Completed`/`Cancelled`), the `SendEvent_*Objective*` event bus, and the achievement-grant gameplay path have no decompiled bodies under those names in the Xbox set — they stay string/event inference (as the doc flags). The save-corruption state machine (`hasCorruptedSave`) is resolved only on PC (`FUN_00614080`), not re-derived on Xbox here.
+- **Cheat/unlock link:** `HasPlayerUnlockedCode` (the doc's content-gate) ties to the Lua `Cheat` table surfaced by the debug menu — see the new `docs/mercs2-pdb-analysis/debug-cheat-menu.md`; the actual God-Mode/Infinite-Ammo effects are Lua-driven, **not** a native game-systems toggle in this decomp.
+
 ## Cross-references
 
+- `docs/mercs2-pdb-analysis/debug-cheat-menu.md` — the Lua-bound `Cheat` table (God Mode / Infinite Ammo), `HasPlayerUnlockedCode`, and the developer debug menu.
 - `docs/mercs2-pdb-analysis/pangea-engine-core.md` — `PgGameSystem.cpp` is the engine host for this layer (`Pg*` classes, event bus).
 - `docs/mercs2-pdb-analysis/physics-game.md` and `docs/mercs2-pdb-analysis/vehicles.md` — gameplay components these systems read/score.
 - Existing project docs that overlap this system's scope:

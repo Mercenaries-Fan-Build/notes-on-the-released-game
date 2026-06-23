@@ -234,6 +234,71 @@ Havok memory header path referenced from this layer:
 
 Notable field-name strings (ragdoll/raycast tunables): `ragdollBoneLayers`, `ragdollLayer`, `ragdollFrame`, `ragdollAnkleIndex`, `ragdollShoulderIndex`, `raycastLayer`, `raycastInterface`, `raycastDistanceUp`/`raycastDistanceDown`, `floorRaycastLayer`, `iterativeLinearCastMaxIterations`, `iterativeLinearCastEarlyOutDistance`.
 
+## How it works (decompiled)
+
+VAs are from `output/_ghidra_x360/xenon_decomp_named.c` (base `0x82000000`); snippets are copied verbatim. The big caveat this section establishes: most `PgSys*` / `*Messages` symbols in this doc resolve to **registration stubs** (engine-system slots and profiler timer zones), not the per-frame physics logic. The genuine bridge logic that *is* decompiled is the cast path and the ECS-component registrars.
+
+### `PgSys*` names are engine system-slot registrars, not update loops
+
+`PgSysVehicle` @`82373600`, `PgSysTurret` @`82372f20`, `PgSysGrapplingHook` @`8222d338` and `HumanStateMachine` @`823551e0` allocate a slot in the global engine-system bitmask `DAT_830f982c` and park their name + dependency handles:
+
+```c
+  // PgSysVehicle: claim a free bit in the 32-system mask, store the name
+  if ((DAT_830f982c & uVar3) == 0) {
+     DAT_830f982c = DAT_830f982c | uVar3;
+     *(char **)(&DAT_830f98b0 + uVar2 * 4) = "PgSysVehicle";
+  }
+  *(uint *)(param_1 + 0x10) = uVar3;                       // system id back to caller
+  uVar1 = FUN_8246cf08(0xffffffff830ff930, ...);           // wire dep: Car controller @830ff930
+```
+Note `PgSysVehicle` wires the same `830ff930` global the vehicle `CarTurn` verb enqueues into (see vehicles.md), tying the system to the Car controller. `PgSysGrapplingHook` @`8222d338` is the smallest case — it just lazily resolves one dependency handle into `param_1+0x10`. **These are setup, not the per-frame `Update`.** The actual `PgHavokManager::Update` / `UpdatePgPhysicsActor` per-frame bodies are *not* in the named set.
+
+### `UpdateHumans` / `GrapplingHookMessages` are profiler-zone registrars (mislabelled)
+
+`UpdateHumans` @`8236f410` and `GrapplingHookMessages` @`8222dd30` do **not** update humans or route grapple messages — they register a profiler timer zone (name + ARGB color) into the global zone table via the open-addressing insert `FUN_8290bc68` (see havok-physics.md):
+```c
+  // GrapplingHookMessages
+  uVar1 = FUN_8290ba80(0xffffffff82001cc4);
+  iVar2 = FUN_8290bc68(uVar1,0xffffffff83cb28f4,0x100);          // hash-insert into zone table
+  *(ulonglong *)(&DAT_83cb20f4 + iVar2 * 8) = CONCAT44(0xff000000,uStack_1c); // color black
+```
+`UpdateHumans` registers a zone colored `0xff4763ff` and several sub-zones. The symbol recovery attached these gameplay names to the functions that merely *reference the name string*. Treat `UpdateHumans`/`GrapplingHookMessages`/`HumanStateMachine` as **zone/slot registrars** unless a body shows otherwise.
+
+### The cast path: `CameraCollisionCastRay` is real ray-setup code
+
+`CameraCollisionCastRay` @`825ea110` (420 B) is genuine bridge logic. It walks **5 camera collision records** at stride `0x620` and writes a 16-float matrix/ray block (`+0x10..+0x4c`) into each, then sets two squared-radius fields:
+```c
+  lVar2 = FUN_82916f38() + 0x20;  lVar5 = 5;            // 5 cameras
+  do {
+    iVar4 = FUN_8256eb28(lVar2);  iVar4 = *(int*)(iVar4+4)*0x70 + iVar4;
+    *(float *)(iVar4 + 0x10) = (float)dVar6; ... +0x4c  // 16 floats: ray/transform
+    lVar2 = lVar2 + 0x620;
+  } while (lVar5 != 0);
+  *(float *)(iVar4 + 0x1ed8) = fVar1 * fVar1;            // radius² (DAT_82b8a65c²)
+```
+Its tail then registers a profiler zone (same `DAT_83cb20f4` idiom) — so even a real function carries the registration boilerplate, which is why the registration pattern alone doesn't prove a function is "just" a stub.
+
+### Physics ECS components are registered as streamable classes
+
+The `PgPhysicsActor*` family is wired into the ECS/reflection loader by registrar functions. `PhysicsActorRagdoll` @`829f5490`:
+```c
+  FUN_824fd430(0xffffffff838071ec,8);
+  DAT_838071ec = &PTR_FUN_82036228;                  // component vtable
+  DAT_83807204 = &PTR_FUN_82030fa0;                  // shared CopyFromStream reader
+  DAT_83807228 = "PhysicsActorRagdoll";              // class name
+```
+The identical shape registers `PhysicsActorWinch` @`829f5400`, `PhysicsActor` @`829f5370`, and the physics *properties* `PhysicsPropertyGravityScaler` @`829ed328`, `PhysicsPropertyUncrushable` @`829ed298`, `PhysicsPropertyFakeContinuous` @`829ed208` — all share the `PTR_FUN_82030fa0` stream reader, confirming the `PgPhysicsActor*` cluster is one polymorphic, stream-loaded component family (the doc's inference, now code-backed).
+
+## Corrections & open questions
+
+- **CORRECTION — `UpdateHumans` / `GrapplingHookMessages` / `HumanStateMachine` are registrars, not the named logic.** The doc's "Human (player/NPC) physics" and "Grappling hook" sections imply `BeginHumanPhysicsStep`/`HumanIntegrateJob`/`GrapplingHookMessages` carry the runtime behavior. The functions bearing those exact names are profiler-zone / system-slot registrars (VAs + snippets above). The actual human-step and grapple-message dispatch bodies are **not** in the named set.
+- **CORRECTION — `PgSysGrapplingHook`/`PgSysVehicle`/`PgSysTurret` are system-slot setup, not `Update`.** They claim a bit in `DAT_830f982c` and store dependency handles; no per-frame work is in these bodies.
+- **CONFIRMED — `PgPhysicsActor*` is one polymorphic stream-loaded component family (was inferred "single vtable/type table").** All variants register through the same `PTR_FUN_82030fa0` reader with only the vtable + name differing (VAs above).
+- **CONFIRMED — camera collision uses a 5-camera cast record at stride 0x620.** Concrete offsets from `CameraCollisionCastRay` (above); previously the cast API was symbol-only.
+- **UNKNOWN — the `PgPhysicsSystemDroplet` physics model.** No decompiled body in the named set implements the droplet/fluid update; the "linked-particle" reading remains inference (only the debug-counter strings exist).
+- **UNKNOWN — `Too many CastRay calls %i/%i` budget values and the delayed-raycast queue mechanics.** The assert strings name the quota but the cast-budget constant and the `DelayedRayCasts` processing body are not in the named/decoded set (VMX-truncated worker `_CastRayWorkerMT`).
+- **XBOX↔PC NOTE.** The PC cross-ref maps `RagdollController`/`PhantomPtrs`/`CollisionListnr` to Havok serializers; the Xbox side adds the ECS-component registrars (`PhysicsActorRagdoll` etc.) and the system-slot setup, but **neither build exposes the per-frame `PgHavokManager::Update`** as a named, fully-decoded function — consistent across both decompilations.
+
 ## Cross-references
 
 - [havok-physics.md](havok-physics.md) — the underlying Havok middleware (`hk*`/`hkp*`/`hka*` classes); this bridge sits on top of it.

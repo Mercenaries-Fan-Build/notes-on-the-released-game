@@ -198,3 +198,73 @@ Interspersed constants are the per-slot color/direction/density/speed defaults (
 - PC decomp: only `ScreenEffectType` string-anchors (to `FUN_00663890`); no vtable resolutions, since the system emits no RTTI. See PC decompilation cross-reference.
 - Claims not symbol-proven: that the `Gui*` set is a script-callable bus rather than C++ methods; that `ScreenEffect*` slots are scrolling-texture weather/post overlays; that markers/blips key off the GUID helpers; that `PgGui::BeginFrame`/`GUI::Render` are per-frame profiler scopes. Purpose of `MarkerModel` and the exact `ReticlePitch*` semantics are unclear from symbols alone.
 - Confidence: HIGH that this subsystem comprises a Scaleform/GFx Flash UI + Lua `Gui*`/`Marker*`/`Pda*` binding layer + minimap + reticle + screen-effect tunables. MODERATE on internal class structure (no RTTI/source to confirm boundaries).
+
+## How it works (decompiled)
+
+Source: the Xbox 360 Profile-build decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`). Several `Gui*`/HUD entry points are named, and their bodies prove the doc's central claim: the `Gui*` set is **not C++ methods — it is a script-callable event bus**, and it is the **same** bus the networking layer uses (`FUN_8241d458` → `FUN_82420690` → `FUN_8256eb28`).
+
+### `ToggleHud @8255e488` is a textbook bus call
+It allocates an event frame, reserves argument slots, pushes two args, and dispatches under a 32-bit event hash with the `.rdata` name as a debug label:
+
+```c
+void ToggleHud(undefined8 param_1,undefined1 param_2) {   // @8255e488
+  FUN_8241d458(local_20);                                  // allocate event frame (shared bus)
+  iVar1 = FUN_82878c50(local_20[0],1);                     // reserve 1 slot
+  if (iVar1 != 0) {
+    if ((int)param_1 == 0) FUN_82879760();
+    else FUN_82879ac0(local_20[0],param_1);                // push arg 0
+  }
+  iVar1 = FUN_82878c50(local_20[0],1);                     // reserve 1 slot
+  if (iVar1 != 0) FUN_82879a90(local_20[0],param_2);        // push arg 1
+  FUN_82420690(local_20,0x73962eb2,0xffffffff82042d00,2,0,1,0); // dispatch: hash 0x73962eb2, "Toggle HUD" name ptr, 2 args
+  FUN_8256eb28(local_20);
+}
+```
+
+This is the same `FUN_8241d458`/`FUN_82878c50`/`FUN_82420690`/`FUN_8256eb28` quartet documented in networking.md — confirming the GUI HUD-push API marshals into the one engine event bus. (`FUN_82878c50` enforces the ≤2048-arg-slot capacity; see networking "How it works".)
+
+### `GuiSetSupportMenuMode @8249ee48` toggles a flag and fires two mode events
+The named symbol does real work: it sets a mode byte on its object, then emits two events via `FUN_8241e758(..., name_ptr, 0)` using the `.rdata` pointers `0x8202f8d8` (`GuiSetDialogBoxMode`) and `0x8202f8c0` (`GuiSetSupportMenuMode`):
+
+```c
+undefined8 GuiSetSupportMenuMode(int *param_1) {          // @8249ee48
+  if (*param_1 == 0) return 0;
+  *(undefined1 *)(param_1 + 1) = 1;                         // set support-menu-mode flag
+  iVar1 = FUN_82878c50(*param_1,1);
+  if (iVar1 != 0) FUN_828799b8(*param_1,0xffffffff8249ec28,0);
+  FUN_8241e758(param_1,0xffffffffffffd8ee,0xffffffff8202f8d8,0); // emit GuiSetDialogBoxMode
+  ...
+  FUN_8241e758(param_1,0xffffffffffffd8ee,0xffffffff8202f8c0,0); // emit GuiSetSupportMenuMode
+  return 1;
+}
+```
+
+The wrapper `FUN_8249ef18` shows the call context: it zero-inits a 5-field state block (handles default to `0xffffffff`), seeds it from `DAT_837fe3a0+0x10` (the bus context), calls `GuiSetSupportMenuMode()`, and marks itself initialized — i.e. the support-menu HUD object is a bus client tied to the same `DAT_837fe3a0` context.
+
+### `PgPlayerPDAMapMode @825666a8` builds the PDA-map mode object + a render sub-object
+This is a constructor for the full-screen PDA map mode: it allocates two heap blocks (`FUN_82902840(0xc)` and `FUN_82902840(0x660)`), initializes them via vtable calls, copies a player/context handle (`*(param_2+0x14)`) into each, and registers a callback through the shared 8-slot registrar `FUN_8246cf08(…, 0x8204391c)`:
+
+```c
+void PgPlayerPDAMapMode(int param_1,int param_2) {        // @825666a8
+  uVar1 = FUN_82902840(0xc);                                // small mode object
+  piVar2 = (int *)FUN_82554dc0(uVar1,*(undefined4 *)(param_2 + 0x14));
+  *(int **)(param_1 + 0x10) = piVar2;
+  (**(code **)(*piVar2 + 4))(piVar2,*(undefined4 *)(param_2 + 0x14)); // vtable init
+  uVar1 = FUN_82902840(0x660);                              // 0x660-byte render/state object
+  iVar3 = FUN_825626d0((double)*(float *)(param_1 + 0x1c),uVar1, ... , param_1 + 0x48);
+  ...
+  uVar4 = FUN_8246cf08(0xffffffff830d3a08,0xffffffff8204391c); // register callback (name ptr 0x8204391c)
+  *(undefined4 *)(param_1 + 0x30) = uVar4;
+}
+```
+
+So the PDA map is an allocated mode object with a 0x660-byte render companion and a registered update callback — consistent with the `SetPDAMapMode`/`RequestPDAMapModeExit` script API the doc lists.
+
+## Corrections & open questions
+
+- **Confirmed (was "not symbol-proven"): the `Gui*` set is a script-callable bus, not C++ methods.** The doc's "Claims not symbol-proven" list led with exactly this. `ToggleHud @8255e488` and `GuiSetSupportMenuMode @8249ee48` show the `FUN_8241d458`/`FUN_82420690`/`FUN_8256eb28` event-marshalling pattern with a 32-bit event hash (`0x73962eb2` for Toggle HUD) and the `.rdata` name as a debug label — the same bus the `Net*` layer uses. Promote to code-backed fact.
+- **`ToggleHud`'s event hash and name pointer are concrete:** hash `0x73962eb2`, name ptr `0x82042d00`. `GuiSetSupportMenuMode` fires events named via `0x8202f8d8`/`0x8202f8c0` — these match the inventory's `GuiSetDialogBoxMode`/`GuiSetSupportMenuMode` offsets, confirming the name strings double as event identifiers.
+- **`PgPlayerPDAMapMode @825666a8` corroborates the PDA-map-mode object.** A real constructor allocates the mode object + a 0x660-byte render object and registers a callback — backing the "PDA map is a separate world-blip/mode system" framing.
+- **Not supported in this decomp: the Scaleform/GFx render pipeline.** `PgGui::BeginFrame`, `GUI::Render`, `GuiMarkers::Render`, the `GFx*` loader, and every reticle/screen-effect/minimap *symbol* are **not inlined or named** in `xenon_decomp_named.c` (the `Gui*Update` HUD-push functions like `GuiHealthUpdate`/`GuiAmmoUpdate`/`GuiMinimapUpdate` are not named here either). So the Flash render path and the per-field HUD pushers **cannot be code-grounded in this build** — they remain string/offset evidence only. The PC `FUN_00663890` screen-effect registrar in the cross-reference is the only render-adjacent function resolved anywhere, and it is PC-side.
+- **Open question: the `Gui*Update` pushers.** I could not locate `GuiHealthUpdate`/`GuiAmmoUpdate`/`GuiReticleUpdate` etc. as named functions in the Xbox decomp; only the *mode/toggle* entries (`ToggleHud`, `GuiSetSupportMenuMode`) and the *PDA map* constructor surfaced. The per-frame value-push functions are unnamed/unrecovered here.
+- **Decomp gap caveat:** `FUN_82420690`/`FUN_8256eb28` collapse to `FUN_829167xx` empty stubs at their own VAs; only their call signatures and the data marshalled into them are citable, not their internals.

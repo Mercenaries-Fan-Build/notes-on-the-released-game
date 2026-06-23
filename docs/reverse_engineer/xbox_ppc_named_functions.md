@@ -2,6 +2,13 @@
 
 863 functions named, from: their own Class::Method/identifier debug strings, RTTI vtable constructors (`*_ctor`), and Ghidra analysis. Addresses are VAs in the recovered image (base 0x82000000).
 
+> **Caveat (from the code audit):** a string-derived name marks the function that *references*
+> that string — frequently a **registration stub** (profiler/system-slot/ECS-component registrar),
+> not the named thing's implementation. Verified misnamings: `BoatStop` (AI-state registrar),
+> `PathFind` (debug-color registrar), `DamagePerson` (debug command). RTTI `*_ctor` names are
+> reliable. Treat string-derived names as a starting pointer; confirm against the decompiled body.
+> See docs/mercs2-pdb-analysis/README.md → "Code-audit corrections".
+
 | VA | Function | size |
 |---|---|---|
 | `82175150` | `thunk_FUN_8291e6d0` | 4 |

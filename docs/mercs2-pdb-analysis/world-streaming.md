@@ -353,6 +353,86 @@ _DAT_017bd1b4 = s_HibernationControl_00bc4fcc;      // <-- names this component
 puVar1[3]  = s_Stbroadphase_00b59080;                   // broad-phase stage tag
 ```
 
+## How it works (decompiled)
+
+All VAs below are from the recovered **Xbox 360** decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base 0x82000000; RVA = VA − 0x82000000). Grep-confirmed before writing. Note up front: in this PPC build Ghidra recovered very few inline string labels (only ~41 `s_*` labels in 38,581 functions), and the `.rdata` symbol-name strings the rest of this doc cites are **almost never propagated into function bodies**. The two profiler-string references that survive in the render range are `0x82014a9c` and `0x82014c64`. So most world-streaming functions are *not* directly identifiable by an inlined name; the functions named below were recovered from Ghidra's own name annotations and from the alloc/registration "owner-tag" arguments (a `0xffffffff8202XXXX` constant that equals the owning symbol's RVA), which I cross-checked against the inventory.
+
+### The ECS component-descriptor mechanism (the world-content load backbone)
+
+Every world-content type that streams from the WAD is registered as a reflection/ECS component descriptor by a tiny run-once function. `TerrainGuidMappingHighResToLowRes @0x829f6ba8` is representative:
+
+```c
+void TerrainGuidMappingHighResToLowRes(void) {
+  FUN_824fd430(0xffffffff83808154,8);              // init descriptor record (flags=8)
+  DAT_83808154 = &PTR_FUN_82036db8;                // this component's method/vtable
+  FUN_824fcac8(0xffffffff8380816c,4);              // init field-hash table, component size = 4 bytes
+  DAT_8380819c = 0;
+  DAT_8380816c = &PTR_FUN_82030fa0;                // SHARED stream-deserialize vtable
+  FUN_824fd490(0xffffffff83808154);                // register descriptor, assign type id
+  DAT_83808190 = "TerrainGuidMappingHighResToLowRes";   // type name (inlined here!)
+  FUN_82916ef8(0xffffffff82b21828);
+}
+```
+
+The three helpers are the engine's reflection plumbing (verified by reading their bodies):
+- **`FUN_824fd430 @0x824fd430`** stamps the descriptor record: id slots `0xffff`/`0xffff`, vtable `&PTR_FUN_82030f50`, `param_1[3]=0x100` (pool capacity = 256), `param_1[5]=3` (element count). `&PTR_FUN_82030f50` is used **468** times — once per descriptor.
+- **`FUN_824fcac8 @0x824fcac8`** builds the field/reflection-hash table: `param_1[5] = 0x9e3779b9` (the golden-ratio hash seed), `param_1[4]=param_1[10]=0x100`, and stores the component byte-size (its `param_2`) as a u16 at offset 0xc.
+- **`FUN_824fd490 @0x824fd490`** appends the descriptor into one of two global arrays (`&DAT_83808ae0` if flag bit 3 set, else `&DAT_83808ee0`) and assigns a sequential type id (`DAT_838096e0`/`DAT_838096e4`).
+
+The **shared deserialize pointer `&PTR_FUN_82030fa0` is wired into 232 component descriptors** — proving the doc's inference that these components are stream-deserialized from the load path. This is the Xbox-side equivalent of the PC `&PTR_CopyFromStream_*` the existing "PC decompilation cross-reference" describes, and it **independently confirms the `0x9e3779b9` seed in the Xbox build** (the seed appears 4× total, in `FUN_824fcac8` and 3 sibling field-table initializers).
+
+Concrete, code-grounded component byte-sizes (the `FUN_824fcac8` size arg) for world types in this cluster:
+
+| Component (VA) | size arg | name string in body |
+|---|---|---|
+| `TerrainKey @0x829f1aa0` | 4 | `"TerrainKey"` |
+| `TerrainGuidMappingHighResToLowRes @0x829f6ba8` | 4 | `"TerrainGuidMappingHighResToLowRes"` |
+| `RuntimeTerrainBound @0x829f6050` | 0x1c | `"RuntimeTerrainBound"` |
+| `SysPathRoadIndex @0x829f6c38` | 4 | `"SysPathRoadIndex"` |
+| `SysPathIntersectionIndex @0x829f6cc8` | 4 | `"SysPathIntersectionIndex"` |
+
+(These are *element sizes*, not pool counts — see Corrections re: the `RuntimeSoundEffect 1024` rows.)
+
+### `PgSysPopulation @0x823641f0` — registering the population system into the world-update list
+
+```c
+void PgSysPopulation(void) {
+  if (DAT_83793dd0 == 0)
+    DAT_83793dd0 = FUN_822073b8(0xffffffff83109cb0,0xffffffff8202080c);  // tag 0x2080c = "PgSysPopulation"
+  if (DAT_83793dd4 == 0)
+    DAT_83793dd4 = FUN_822ed8c0(0xffffffff830f9828,0xffffffff8202080c);
+  cVar1 = FUN_8235dd88(0xffffffff82364058);                 // already-registered?
+  if ((cVar1 == '\0') && (DAT_82c2160c < DAT_82c21610)) {   // room in the system array?
+    (&DAT_82c215c8)[DAT_82c2160c] = FUN_82364058;           // append the system's Update fn
+    DAT_82c2160c = DAT_82c2160c + 1;
+  }
+}
+```
+
+Confirmed: 0x2080c resolves to `PgSysPopulation` in the inventory. This registers two message handlers and then appends `FUN_82364058` (the actual `PgSysPopulation::Update`) into a **fixed-capacity** game-system array (`&DAT_82c215c8`, guarded by `DAT_82c2160c < DAT_82c21610`). The paired teardown `FUN_823642b8` removes it (`FUN_8235dde0`) and frees the two handlers. This is the concrete wiring behind the doc's "`SysWorldJob`/`UpdateWorldDb` per-frame world-system update hooks."
+
+### `ReadyToReload @0x822ed658` — the asset-loading/DMA profiler timers
+
+```c
+uVar1 = FUN_8290ba80(0xffffffff82017e04); FUN_82902f90(uVar1,0xffffffff82017e04); // 0x17e04 = "AssetLoading"
+...
+uVar1 = FUN_8290ba80(0xffffffff82017df8); FUN_82902f90(uVar1,0xffffffff82017df8); // 0x17df8 = "WaitForDma"
+uVar1 = FUN_8290ba80(0xffffffff82017dec); FUN_82902f90(uVar1,0xffffffff82017dec); // 0x17dec = "ReadyToDie"
+```
+
+`FUN_8290ba80 @0x8290ba80` is **not** a profiler-enter — its body is an **FNV-1a string hash** (seed `0x811c9dc5`, prime `0x1000193`, lowercase-folds via `| 0x20`, final `^ 0x2a`). So this idiom is "hash the marker name, then register/look-up the profiler timer by that hash+name." The markers (RVAs confirmed in inventory: 0x17e04 `AssetLoading`, 0x17df8 `WaitForDma`, 0x17dec `ReadyToDie`) show the load path has explicit `AssetLoading → WaitForDma` (DMA-based asset streaming) phases — code-level support for the "DMA asset loading" picture in the project's streaming notes. The color word `0xff006400` (ARGB) is the marker color.
+
+## Corrections & open questions
+
+- **CONFIRMED (was inferred):** "Terrain LOD has a high-res→low-res GUID mapping." `TerrainGuidMappingHighResToLowRes` is a real, stream-loaded ECS component descriptor (`@0x829f6ba8`, size 4, name string inlined). Likewise the two-tier terrain/road graph is real: `SysPathRoadIndex`/`SysPathIntersectionIndex`/`RuntimeTerrainBound` are sibling stream-loaded components.
+- **CONFIRMED (was inferred):** "These components are stream-deserialized as part of the world load." The shared `&PTR_FUN_82030fa0` deserialize vtable is wired into 232 descriptors including the terrain/region/spawn-list ones.
+- **CONFIRMED cross-build:** the `0x9e3779b9` reflection hash seed the PC cross-reference cites is present in the **Xbox** build too (`FUN_824fcac8 @0x824fcac8`), so it is not a PC-only artifact.
+- **CORRECTION to the "Reflection class-size registrations" table:** those string rows (`HibernationControl 14080`, `RuntimeSoundEffect 1024`, `LineRegion 512 128`, etc.) are **pool/count + alignment**, NOT the component's element byte-size. The actual per-element size is the `FUN_824fcac8` arg in each descriptor (e.g. `RuntimeTerrainBound` = 0x1c = 28 bytes; `TerrainKey` = 4 bytes). Do not read `14080`/`1024`/`512` as `sizeof(component)`.
+- **CORRECTION to the existing "PC decompilation cross-reference" framing:** that section's `FUN_*` VAs are all from the **PC retail** build (`output/_ghidra/all_functions_decomp.txt`), not the Xbox prototype this doc is provenance-scoped to. They are valid but should be labelled as PC-build VAs; the Xbox equivalents of those descriptor inits are the `@0x829fXXXX` functions above.
+- **NOT SUPPORTED by the Xbox decompilation (open):** the **pre-load → post-load streaming pipeline** ordering (`StreamPreload`/`StreamPostload`/`UpdateStreamBlocks`/`StreamManagerUpdate`). The `.rdata` symbol strings exist, but their RVAs (0x20cec, 0x20d00, 0x20d10, 0x2f0d4, 0x2c81c, 0x180f0) are **not referenced anywhere** in the Xbox decomp bodies — the functions weren't string-anchored by Ghidra, so I could not read `StreamManagerUpdate`/`LoadLevel`/`IsLoadingOrStreaming` and cannot confirm their control flow from this build. (The one `UpdateStreamBlocks` reference at 0x2f0d4 is the **audio** `SubmitToGroups @0x82496b00` marker table — see audio-pal.md — not world-content streaming, exactly as the doc's caution says.)
+- **OPEN:** `TerrainObject::Activate/Deactivate`, `PropPhysics::Activate/Deactivate`, the `HibernationControl` distance logic, and the `vz.wad`/`shell.wad`/`loading.wad` open path are **not located** in the Xbox decomp by name; the proximity-streaming claim remains an inference here (the project's runtime memory notes are the better source for that path).
+- **Xbox-vs-PC contradiction:** none found in this cluster; the descriptor mechanism matches between builds (PC `CopyFromStream` vtable + `0x9e3779b9` seed ⇔ Xbox `&PTR_FUN_82030fa0` + `0x9e3779b9`). VMX128 vector math (terrain height interpolation, water) does not appear because those leaf functions are not in the named set and PPC vector ops don't decode.
+
 ## Evidence & confidence
 
 - **Symbol count / sections:** `output/jul08_prototype/inventory/world-streaming.txt` lists 332 lines; the vast majority are `.rdata` (exported reflection names, shader names, debug strings, method names), with a handful of `.data` singletons (`PgLineRegion` 0x0b8a420, `PgTerrainMesh` 0x0b8a45c, `PgLowResTerrain` 0x0b8a46c, `SpawnList` 0x0c4d530, `SpawnWeighting` 0x0c4d570, `SpawnerState` 0x0c4d6b0).

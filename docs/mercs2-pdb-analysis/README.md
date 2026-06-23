@@ -80,6 +80,37 @@ cover the rest of the disc (indexed in [../reverse_engineer/jul08_prototype_iso.
 - [imports-exports.md](imports-exports.md) — XDK/kernel API surface (incl. `xbdm.xex` debug monitor, `XHV` voice, `XONLINE`); feature set.
 - [pdata-functions.md](pdata-functions.md) — `.pdata` unwind table → complete function inventory (~39,000 functions in `.text`).
 
+## Code-audit corrections (4-agent decompilation pass)
+
+After the Xbox PPC build was decompiled, four agents audited every system doc against the
+actual decompiled code (each cited VA + snippet was adversarially re-verified — 0 fabrications).
+Each system doc now has **"How it works (decompiled)"** and **"Corrections & open questions"**
+sections. The cross-cutting corrections that change how to read this whole corpus:
+
+- **Many "named" functions are registration stubs, not the named logic.** The Xbox naming
+  attached each string's name to whatever function *references* it — often a registrar. Three
+  code-confirmed idioms: profiler timer-zone registrars (`FUN_8290bc68` hash-inserts name+ARGB),
+  engine system-slot registrars (claim a bit in `DAT_830f982c`), and ECS component registrars
+  (≈232 components share one reader `&PTR_FUN_82030fa0`). Concretely misnamed: `BoatStop`
+  @823b76e0 = the AI-state-table registrar; `PathFind` @823f5438 = a debug-**color** registrar;
+  `DamagePerson` @8245af18 = a debug command, not the damage solver. Treat a symbol-table name as
+  *"this function references that string,"* not *"this function implements it,"* until the body
+  confirms it.
+- **The Xbox decomp has almost no inline string labels** (~22 functions show `s_*`/`PTR_s_*`),
+  because Ghidra didn't resolve most PPC `lis/addi` string loads to data refs. So function bodies
+  read with raw addresses, not strings — and the function-VA anchors in the original (pre-decomp)
+  docs are **PC-retail addresses from the pairing, not Xbox**.
+- **The real per-frame math is VMX128-truncated and undecodable** in both builds: vehicle drive
+  models (consuming `EngineTorque`/`GearRatio*`), `hkpWorld::stepWorld`, ragdoll/pose extraction,
+  audio mixing, shader semantics. Pipeline orderings in the Overviews are inferred from
+  profiler-label sequences, not traced control flow (now flagged as such per doc).
+- **What the code *did* confirm or newly reveal:** vehicle control verbs are command-queue
+  producers (per-class rings, caps 0x200/100/0x400); a single event-bus quartet drives both
+  `Net*` and `Gui*` (script-callable, not C++ methods); the debug/cheat menu is fully wired
+  (`RollingCacheDbg` @8227aa80 registers 27 toggle callbacks) but God Mode/Infinite Ammo are
+  **Lua-bound, not native**; entitlement/paying is the EA subscription back-end (`'subs'` tag
+  `0x73756273`). See [debug-cheat-menu.md](debug-cheat-menu.md) and each system's new sections.
+
 ## Conventions
 
 - Cited symbols are **copy-exact** from the evidence files; offsets are PE offsets from the inventory.

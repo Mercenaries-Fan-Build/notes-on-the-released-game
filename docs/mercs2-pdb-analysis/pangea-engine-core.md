@@ -239,3 +239,100 @@ Tail-called by `FUN_0084f130` (caller list includes `0x008522ca` inside `FUN_008
 Every `Pg*`/`Mrx*`/`Pal*`/`Pimp*` symbol, source path, offset, and quoted string above literally exists at the cited offset/line in the evidence files.
 
 The architecture/behavior claims are interpretation: that `PgSys*` are tickable systems registered with a `PgGameSystem` manager; that `PgUpdateState`/`PgRunState` gate the main loop and its framerate policy; that the `.data` `Pg*` singletons are asset-type registries; that `PgModelStateMachine` is the per-entity state machine driven by `PgScriptEventManager`. No `Pg*`/`Mrx*` RTTI class descriptors exist to confirm class layout — these names are debug-string/source-path evidence only. Where the symbol name alone does not establish behavior, the doc says so rather than speculating.
+
+## How it works (decompiled)
+
+Source: the Xbox 360 Profile-build decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`). The `PgSys*` constructors *are* named in this build, and their bodies confirm the system-registry architecture the doc inferred from names alone.
+
+### The `PgSys*` registry is a 32-bit slot bitmask + parallel name table
+`PgSysVehicle @82373600` is the clearest example. It claims a free slot from a 32-bit global allocation bitmask, writes its own name string into a parallel name array, and returns the slot index:
+
+```c
+void PgSysVehicle(int param_1) {                       // @82373600
+  uVar3 = 1; uVar2 = 0;
+  do {
+    if ((DAT_830f982c & uVar3) == 0) {                  // global system-slot bitmask
+      DAT_830f982c = DAT_830f982c | uVar3;              // claim this bit
+      uVar3 = ~uVar2;                                    // slot index (bitwise-NOT encoded)
+      *(char **)(&DAT_830f98b0 + uVar2 * 4) = "PgSysVehicle";  // parallel name table
+      goto LAB_82373654;
+    }
+    uVar2 = uVar2 + 1; uVar3 = uVar3 << 1;
+  } while ((int)uVar2 < 0x20);                            // up to 32 systems
+  ...
+  *(uint *)(param_1 + 0x10) = uVar3;                      // store slot id into this system object
+  uVar1 = FUN_8246cf08(0xffffffff830ff930,0xffffffff82020e58); // register 3 callbacks into named managers
+  ...
+}
+```
+
+`PgSysNetworking @82593618` repeats the identical pattern against a *different* 32-slot bitmask (`DAT_8318a8a4`, name table `&DAT_8318a928`, name string `"PgSysNetworking"`), confirming each subsystem family owns its own 32-entry registry rather than one global table. `0x20` (=32) is the hard cap per registry — matching the Pimp "Too many Jobtypes"/bounded-registry pattern documented in jobs-threading. (Verified: both bodies present at the cited VAs; `"PgSysVehicle"`/`"PgSysNetworking"` are inline literals.)
+
+### Callback/listener registration: two fixed-capacity slot allocators
+The `FUN_8246cf08` and `FUN_822073b8` calls peppered through every `PgSys*` ctor are **listener-slot registrars**, not asset-DB lookups. They take a manager pointer + an identity pointer (an `.rdata` name string) and drop the identity into the first free slot of a small fixed array:
+
+```c
+uint FUN_8246cf08(int param_1,undefined4 param_2) {     // @8246cf08 — 8-slot (byte bitmask)
+  bVar1 = 1; uVar2 = 0;
+  do {
+    if ((bVar1 & *(byte *)(param_1 + 4)) == 0) {          // bitmask at manager+4
+      *(byte *)(param_1 + 4) = bVar1 | *(byte *)(param_1 + 4);
+      *(undefined4 *)((uVar2 + 10) * 4 + param_1) = param_2;  // store at +0x28 + slot*4
+      return ~uVar2;
+    }
+    uVar2 = uVar2 + 1; bVar1 = bVar1 << 1;
+  } while ((int)uVar2 < 8);                                // 8 slots
+  return 0;
+}
+```
+
+`FUN_822073b8 @822073b8` is the same shape with a **ushort** bitmask (16 slots, payload stored at `(slot+0x12)*4`). So managers expose either an 8-entry or 16-entry observer array, bitmask-tracked at `+4`. This is the real mechanism behind "each `PgSys<Name>` is registered with the manager."
+
+### Per-frame update-list registration (`PgSysPopulation`)
+`PgSysPopulation @823641f0` shows the *frame-tick* side: it caches two callback handles, then appends its update function `FUN_82364058` to a global update-fn list, bounded by a count/cap pair:
+
+```c
+void PgSysPopulation(void) {                            // @823641f0
+  if (DAT_83793dd0 == 0) DAT_83793dd0 = FUN_822073b8(0xffffffff83109cb0,0xffffffff8202080c); // 16-slot
+  if (DAT_83793dd4 == 0) DAT_83793dd4 = FUN_822ed8c0(0xffffffff830f9828,0xffffffff8202080c);
+  cVar1 = FUN_8235dd88(0xffffffff82364058);              // already registered?
+  if ((cVar1 == '\0') && (DAT_82c2160c < DAT_82c21610)) { // count < cap
+    (&DAT_82c215c8)[DAT_82c2160c] = FUN_82364058;         // append update fn
+    DAT_82c2160c = DAT_82c2160c + 1;
+  }
+}
+```
+
+The `0x8202080c` second argument is the `.rdata` `"PgSysPopulation"` name pointer reused as the manager key — confirming the name string doubles as the registration key, exactly as the asset-registry-by-name interpretation claimed.
+
+### Per-entity object/state-machine wiring (`ObjectStateUpdate`, `PgModelStateMachine`)
+`ObjectStateUpdate @8231ce10` installs a vtable and **prepends itself to a linked update list** hung off an engine object at `+0x74`, then builds the state-transition table:
+
+```c
+void ObjectStateUpdate(void) {                          // @8231ce10
+  if ((DAT_836dba20 & 1) == 0) { ... DAT_836dba18 = &PTR_FUN_8201e2e0; ... }  // one-shot init + vtable
+  iVar2 = FUN_824d01f0();
+  DAT_836dba1c = *(undefined4 *)(iVar2 + 0x74);           // save old list head
+  *(undefined ****)(iVar2 + 0x74) = &DAT_836dba18;        // become the new head
+  CreateStateTransTable();                                 // @823163d8 (named) — build transition table
+  ...
+  iVar2 = FUN_8290bc68(uVar1,0xffffffff83cb28f4,0x100);    // register a named perf zone (hash table, 256 buckets)
+  *(ulonglong *)(&DAT_83cb20f4 + iVar2 * 8) = CONCAT44(0xff800080,uStack_1c); // zone color
+  DAT_83cb20e8 = DAT_83cb20e8 + 1;
+}
+```
+
+`CreateStateTransTable @823163d8` is independently named, confirming the `CreateStateTransTable`/`OnStateChange`/`SetStateOnTimer` state-machine vocabulary the doc lists from strings is backed by real functions. The trailing `FUN_8290bc68(... ,0x83cb28f4,0x100)` block is a **named profiler-zone registrar** — an open-addressing hash insert into a 256-bucket table with a packed RGBA color and a running count `DAT_83cb20e8`; the same block appears in `SyncCPUGPU @824c5f60`. This is the engine's PIX/named-timer zone system, shared across systems.
+
+### Device-heap operations are real and match the inventory offsets
+`PimpDeviceHeap__Defrag @82905c00` calls a get/put pair (`FUN_8290ba80`/`FUN_82902f90`) against exactly the three `.rdata` name pointers `0x820c585c` (`PimpAllocFromDeviceHeap`), `0x820c5844` (`PimpFreeToDeviceHeap`), `0x820c582c` (`PimpDeviceHeap::Defrag`) — the same three offsets the jobs-threading inventory lists, confirming those names are co-located device-heap operations.
+
+## Corrections & open questions
+
+- **Confirmed (was "inferred"): `PgSys*` are slot-registered systems.** The doc said "no RTTI class layout confirms it." The decomp now confirms the registry is a **32-bit-per-family allocation bitmask + parallel name-string table** (`PgSysVehicle @82373600`, `PgSysNetworking @82593618`), capped at 32 systems per family. Promote this from inference to code-backed fact.
+- **Confirmed: the name string is the registration key.** Every `PgSys*` ctor passes its `.rdata` name pointer (e.g. `0x82020e58` for "PgSysVehicle", `0x8202080c` for "PgSysPopulation") as the manager-registration argument — backing the "asset/system registry keyed by name" claim with code.
+- **Corrected nuance: `FUN_8246cf08`/`FUN_822073b8` are listener-slot allocators, not asset-DB queries.** They are fixed-capacity (8 and 16 slot) bitmask allocators that store a callback identity, not name→asset lookups. The doc's general "system-registry / per-frame Update dispatch" framing is right, but the specific helpers do *registration into bounded observer arrays*.
+- **`CreateStateTransTable` is real (`@823163d8`).** The model-state-machine vocabulary the doc lists from strings (`CreateStateTransTable`, `OnStateChange`, `SetStateOnTimer`) is backed by at least this named function; `ObjectStateUpdate @8231ce10` calls it during per-entity init.
+- **Not supported by the decomp: the heap-report and framerate-mode behavior.** The heap-partition printout and the `Variable/Hybrid/Adaptive Framerate` mode strings are real in the strings table but are **not inlined** in `xenon_decomp_named.c`, so the run-loop/framerate-policy state machine (`PgRunState`/`PgUpdateState`) **cannot be code-grounded in this build** — those remain string-only.
+- **Open question: the `PgGameSystem` master tick.** I located the per-system *registration* (ctors) and one update-list append (`PgSysPopulation`), but not a single master `PgGameSystem::Update` that iterates the 32-slot tables in order. It is likely among the `FUN_829167xx`-stubbed or unnamed functions; its dispatch order is undetermined here.
+- **Decomp gap caveat:** many small engine helpers (`FUN_829167e0`..`ec`, and several `thunk_FUN_*`) decompile to empty `return;` stubs in this build — Ghidra did not recover them. No behavioral claim is made about those.

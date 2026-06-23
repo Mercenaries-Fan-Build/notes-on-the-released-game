@@ -179,3 +179,64 @@ Directly attested by symbol/string evidence:
 - Havok query workers (`_CastShapeWorkerMT`, `_CastRayWorkerMT`, `_CacheBroadPhaseWorkerMT`) and MT controls exist.
 
 What remains inferred rather than attested: the `TimersThread*` integers' exact meaning (only the per-thread buffer-sizing role is inferred — the strings give no definition). Everything else above (the `a64` queue being lock-free, the dedicated worker pool, the streaming/game-systems consumer relationship, the `*WorkerMT` roles) follows directly from the recovered names and asserts. None of the Pimp job/timer/thread functions could be located in the PC retail decomp — see the PC decompilation cross-reference section.
+
+## How it works (decompiled)
+
+Source: the Xbox 360 Profile-build decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`). **Up-front honesty:** the Pimp job/queue/timer/thread/cpu core is **largely unreachable in this decomp.** None of the Pimp assert strings (`pimpQueue full`, `Too many params`, `pimpInit`, `Too many Jobtypes`, `non-pimp threads`, `PIMP ASSERT`, `TimerEndFrame`) are inlined as literals (grep: 0 hits each), and the scheduler functions are not named. So the job scheduler, the `a64` lock-free queue, and the per-CPU timer wheel **cannot be code-grounded from this build** — they remain symbol/string evidence only. What *is* decompiled and citable is the request-queue object, the device-heap defrag, and the GPU-sync fence.
+
+### `RequestQueue @8277f038` — a queue object constructor
+A small object ctor: it installs a vtable (`PTR_FUN_820a4aa0`), zeroes head/tail/count-style fields, sets one field to `1` (likely a "open"/capacity flag), and constructs an embedded sub-object at `+0xb`:
+
+```c
+undefined4 * RequestQueue(undefined4 *param_1) {          // @8277f038
+  FUN_8277d818(param_1,0xffffffff820a4aa4);                // base init (name ptr 0x820a4aa4)
+  *param_1 = &PTR_FUN_820a4aa0;                             // vtable
+  param_1[5] = 0; param_1[6] = 0; param_1[7] = 0;          // head/tail/count
+  param_1[8] = 0; param_1[9] = 1; param_1[10] = 0;
+  FUN_82781068(param_1 + 0xb,0xffffffff820a4a90);           // embedded sub-object (the storage?)
+  return param_1;
+}
+```
+
+The matching destructor `FUN_8277f0b0` tears down the `+0xb` sub-object and a `+5` block, consistent with a queue holding an inline storage region. This is a *request* queue (used by the streaming/impression-request paths), not necessarily the Pimp `a64` job queue — the name pointer `0x820a4aa4` is distinct from the Pimp sources.
+
+### `PimpDeviceHeap__Defrag @82905c00` — the device-heap maintenance op
+Confirms the three device-heap operations are co-located and string-keyed exactly as the inventory lists them:
+
+```c
+void PimpDeviceHeap__Defrag(void) {                       // @82905c00
+  uVar1 = FUN_8290ba80(0xffffffff820c585c); FUN_82902f90(uVar1,0xffffffff820c585c); // PimpAllocFromDeviceHeap
+  uVar1 = FUN_8290ba80(0xffffffff820c5844); FUN_82902f90(uVar1,0xffffffff820c5844); // PimpFreeToDeviceHeap
+  uVar1 = FUN_8290ba80(0xffffffff820c582c); FUN_82902f90(uVar1,0xffffffff820c582c); // PimpDeviceHeap::Defrag
+}
+```
+
+The three `.rdata` pointers `0x820c585c`/`0x820c5844`/`0x820c582c` are exactly the inventory offsets `0x00c585c`/`0x00c5844`/`0x00c582c` (offset = VA − 0x82000000). `FUN_8290ba80`/`FUN_82902f90` are a named get/put pair (a profiler-zone or lock acquire/release around each heap op).
+
+### `SyncCPUGPU @824c5f60` — the CPU/GPU fence + named perf zone
+The CPU-GPU synchronization point. It flips a GPU register bit, then registers a named profiler zone via the same hash-insert (`FUN_8290bc68(... , 0x83cb28f4, 0x100)`) used by the engine's per-frame zones:
+
+```c
+void SyncCPUGPU(void) {                                   // @824c5f60
+  DAT_83451ca4 = &DAT_83800de0;
+  FUN_82311e20(0xffffffff83800de0);
+  DAT_83800e20 = (DAT_8345192e & 1) << 0x1c | DAT_83800e20 & 0xefffffff; // set bit 28 of a GPU reg
+  uVar1 = FUN_8290ba80(0xffffffff82030d98); FUN_82902f90(uVar1,0xffffffff82030d98);
+  ...
+  iVar2 = FUN_8290bc68(uVar1,0xffffffff83cb28f4,0x100);    // register "SyncCPUGPU" perf zone (256-bucket table)
+  *(ulonglong *)(&DAT_83cb20f4 + iVar2 * 8) = CONCAT44(0xff0000ff,uStack_1c); // zone color (blue)
+  DAT_83cb20e8 = DAT_83cb20e8 + 1;                          // running zone count
+}
+```
+
+This is the same profiler-zone registry described in pangea-engine-core ("How it works") — the `0x83cb28f4` table with count `DAT_83cb20e8`. It is the threading-relevant primitive that survived naming, and it ties the per-CPU timer-tree (`RootTimer`/`RenderTimers`/`TimersThread%d`) the doc lists to a concrete 256-bucket hash registry.
+
+## Corrections & open questions
+
+- **Not supported in this build: the Pimp scheduler/queue/timer internals.** The doc describes jobs, the `a64` lock-free queue, per-CPU timers, and the worker pool from assert strings. **None** of those assert strings are inlined in `xenon_decomp_named.c` (verified: 0 hits for every Pimp assert literal), and no scheduler function is named. So those claims remain **string-only inference** — the decomp neither confirms nor refutes the lock-free queue, the worker-pool dedication, or the Jobtype registry. This is the most under-grounded system in the cluster.
+- **Confirmed: device-heap ops match the inventory.** `PimpDeviceHeap__Defrag @82905c00` references exactly the three inventory offsets for `PimpAllocFromDeviceHeap`/`PimpFreeToDeviceHeap`/`PimpDeviceHeap::Defrag`, so those three are a genuine co-located trio. Promote from name-only to code-confirmed.
+- **New finding: the profiler-zone registry is shared engine-wide.** `SyncCPUGPU @824c5f60` and the entity/state code (`ObjectStateUpdate`, pangea-core) register named zones into the same 256-bucket hash table (`0x83cb28f4`, count `DAT_83cb20e8`). This is the concrete backing for the `RootTimer`/`TimersThread*` timing tree the doc lists.
+- **`RequestQueue @8277f038` is a request queue object, likely not the Pimp `a64` job queue.** Its base name pointer (`0x820a4aa4`) is unrelated to the `pimp_queue_a64.h` source. The doc should not conflate it with the job queue; it is a separate (impression/streaming) request queue.
+- **Correct as-is: `MassiveThread` is not Pimp.** `MassiveThread @82783c88` exists in the Xbox decomp as a named static-init stub (installs vtable, stores name, returns) — consistent with the doc's PC-side finding that it is the ad-SDK worker, not a Pimp thread. No correction needed.
+- **Open question: the worker-thread entry points and `pimpInit`.** I found no `CreateThread`/worker-loop function tied to Pimp in this decomp, nor `pimpInit`. The Havok `*WorkerMT` symbols are likewise not named here. The threading bootstrap remains unresolved on the Xbox side.
+- **Decomp gap caveat:** several Pimp-adjacent helpers decompile to `thunk_FUN_*` / `FUN_829167xx` empty stubs; no behavior is claimed for those.

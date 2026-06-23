@@ -359,6 +359,80 @@ The terminal assignment of the `MusicSource` type-name string is what anchors th
 
 `FUN_007aa750` = `attachSound` handler. It walks the `attachSound` binding table (`PTR_s_attachSound_00b93708`), allocating a 0x34-byte node per entry (tagged `0x56471e89` / `&DAT_9fe1234a`) and calling `FUN_007837d0` to bind each sound — a registry/attach pass rather than a single method.
 
+## How it works (decompiled)
+
+VAs below are from the **Xbox 360** decompilation `output/_ghidra_x360/xenon_decomp_named.c` (base 0x82000000; RVA = VA − 0x82000000). Grep-confirmed. Important up-front correction to the existing doc: the "PC decompilation cross-reference" section's claim that the Pal methods "embed their own `Class::Method` name as a profiler-scope string" is **a PC-build property that does NOT hold in the Xbox build** — Ghidra recovered essentially no inline name strings here, and the Pal method RVAs (0xbf0f4 `BankUpdate`, 0xbf2f8 `MixSources`, 0xbf4c4 `FindCue`, 0xbf6ec `Update`, …) are **not referenced anywhere** in the Xbox decomp bodies. So the named Pal *methods* are not directly locatable in this build; what I *can* ground is the source-file-marked Pal functions, the message-bus, the update-pipeline marker table, and the ECS sound-component descriptors.
+
+### The audio update pipeline is a profiler-marker table — order confirmed in code
+
+`SubmitToGroups @0x82496b00` registers the entire audio update pipeline's per-pass timers, one `(hash, name)` pair per pass:
+
+```c
+void SubmitToGroups(void) {
+  uVar1 = FUN_8290ba80(0xffffffff8202f298); FUN_82902f90(uVar1,0xffffffff8202f298); // RtSoundAmbience
+  uVar1 = FUN_8290ba80(0xffffffff8202f284); FUN_82902f90(uVar1,0xffffffff8202f284); // RtAmbienceCollect
+  uVar1 = FUN_8290ba80(0xffffffff8202f270); FUN_82902f90(uVar1,0xffffffff8202f270); // RtAmbienceUpdate
+  ...
+  uVar1 = FUN_8290ba80(0xffffffff8202f0e8); FUN_82902f90(uVar1,0xffffffff8202f0e8); // SoundPlayer.Update
+  uVar1 = FUN_8290ba80(0xffffffff8202f0d4); FUN_82902f90(uVar1,0xffffffff8202f0d4); // UpdateStreamBlocks
+  uVar1 = FUN_8290ba80(0xffffffff8202f0c8); FUN_82902f90(uVar1,0xffffffff8202f0c8); // UpdateLoads
+}
+```
+
+I resolved the marker RVAs against the inventory; they map **exactly** to the documented pipeline names (0x2f298 `RtSoundAmbience`, 0x2f284 `RtAmbienceCollect`, 0x2f270 `RtAmbienceUpdate`, 0x2f260 `RtSoundEffect`, 0x2f250 `RtSoundCollect`, 0x2f240 `RtSoundUpdate`, 0x2f218 `MusicManager.Update`, 0x2f1bc `SoundAmbience.Update`, 0x2f174 `SoundMsgTranslator::Update`, 0x2f0e8 `SoundPlayer.Update`, 0x2f0d4 `UpdateStreamBlocks`, 0x2f0c8 `UpdateLoads`). So the "Update-pipeline / profiler markers" in the existing doc is **a real, ordered pass list**, registered here. Note `FUN_8290ba80 @0x8290ba80` is an **FNV-1a hash** (seed `0x811c9dc5`, prime `0x1000193`, `| 0x20` lowercase-fold, `^ 0x2a`), not a profiler-enter — these passes are keyed by name-hash. `UpdateStreamBlocks` (0x2f0d4) is firmly inside this **audio** table, confirming world-streaming.md's caution that it is sound-stream, not world-content, streaming.
+
+### The message bus is concrete: a translator with a fixed 14-slot handler array
+
+`PgSoundMessageTranslator @0x82485428` lazily constructs a fixed array of message handlers, each tagged with the owner RVA `0x2e420` (= `PgSoundMessageTranslator`):
+
+```c
+if (*param_1 == 0)      { iVar1 = FUN_822073b8(0xffffffff831b1370,0xffffffff8202e420); *param_1 = iVar1; }
+if (param_1[1] == 0)    { iVar1 = FUN_822073b8(0xffffffff83187008,0xffffffff8202e420); param_1[1] = iVar1; }
+if (param_1[2] == 0)    { iVar1 = FUN_8246cf08(0xffffffff83151308,0xffffffff8202e420); param_1[2] = iVar1; }
+... (slots 0..13, two factory fns FUN_822073b8 / FUN_8246cf08 by handler type) ...
+```
+
+`PgSoundMessageHandler @0x82484e48` is the same shape with 2 slots tagged `0x2e404` (= `PgSoundMessageHandler`), and `PgMusicStateMachine @0x824897c8` lazily builds one handler tagged `0x2e648` (= `PgMusicStateMachine`, confirmed in the pangea-engine-core inventory). So the "filter → handler → translator" message-bus design is real: each level is an array of typed handler objects, lazily allocated, and the cleanup paths (`FUN_82485298`, `FUN_82404c48`) tear them down slot-by-slot.
+
+### Pal Xenon engine construction (source-file-anchored)
+
+The two functions Ghidra tagged with Pal source files are genuine Pal code. `FUN_828d2360` (`/* source: PalSoundEngineXenon.cpp */`) is the engine factory:
+
+```c
+uVar1 = thunk_FUN_824e7d58(0xa0,0xa9,0xffffffff820bf400);  // alloc 0xA0-byte engine, file/line/tag
+if ((uVar1 & 0xffffffff) != 0) { uVar2 = FUN_828d9268(uVar1,0); return uVar2; }   // construct
+```
+
+and `FUN_828d9268 @0x828d9268` is the `PalSoundEngineXenon` constructor: sets vtable `&PTR_LAB_820bf9fc`, a version/flag word `0xc001`, builds a self-referential linked list (`param_1[5]=param_1[6]=param_1+5`), and initializes ~25 float fields to `DAT_82111270` (a shared default float — volumes/gains/positions). `FUN_828ce9b8` (`/* source: PalEngine.cpp */`) shows the cue/bank node format: when a record's first byte is the tag `'\x1d'`, it allocates a 0x28-byte node, links it into a list (`FUN_828cdd50(node, this+0x30)`), and returns the record's `+0xC` field. These confirm Pal owns the actual voice/wave object pools, allocated with file/line/tag-stamped allocations (`thunk_FUN_824e7d58(size, line, tag)`).
+
+### Sound ECS components — exact element sizes
+
+The runtime/placed sound components register through the shared ECS descriptor mechanism (see world-streaming.md for the decompiled `FUN_824fd430`/`FUN_824fcac8`/`FUN_824fd490` helpers). Code-grounded element sizes (the `FUN_824fcac8` arg) and inlined name strings:
+
+| Component (VA) | element size | name string in body |
+|---|---|---|
+| `SoundEffect @0x829f1b30` | 0x1c | `"SoundEffect"` |
+| `SoundAmbience @0x829f1bc0` | 0x14 | `"SoundAmbience"` |
+| `SoundInterior @0x829f1c50` | 0xc | `"SoundInterior"` |
+| `MusicSource @0x829f1ce0` | 8 | `"MusicSource"` |
+| `MusicRegion @0x829f1d70` | 4 | `"MusicRegion"` |
+| `RuntimeSoundEffect @0x829f4190` | 0x1c | `"RuntimeSoundEffect"` |
+| `RuntimeSoundAmbience @0x829f4220` | 1 | `"RuntimeSoundAmbience"` |
+| `RuntimeMusicRegion @0x829f42b0` | 1 | `"RuntimeMusicRegion"` |
+
+Each wires `&PTR_FUN_82030fa0` (the shared stream-deserialize vtable) — so placed sounds are stream-loaded from the WAD just like terrain/render components.
+
+## Corrections & open questions
+
+- **CORRECTION (significant):** the existing "PC decompilation cross-reference" says the Pal methods "embed their own `Class::Method` name as a profiler-scope string … the function literally announces its own name." That is **true only of the PC retail build**. In the **Xbox** build the symbol-name strings are not propagated into bodies and the Pal-method RVAs are unreferenced, so I could **not** locate `PalEngine::BankUpdate`/`PalGlobalTable::FindCue`/`PalSoundInstance::Update`/`PalSoundEngine::MixSources`/etc. by name. The `FUN_0082ee60`/`FUN_00835a70`/`FUN_00836610`/… VAs in that table are **PC addresses**; they should be labelled PC-build, and the Xbox decomp does not corroborate those specific method bodies.
+- **CONFIRMED (was the doc's pipeline inference):** the `SoundPlayer.Update → … → MusicManager.Update / Rt*` ordered pipeline is registered as a real marker table in `SubmitToGroups @0x82496b00`, with every RVA resolving to the named pass.
+- **CONFIRMED (was inferred):** the "filter → handler → translator" message bus — `PgSoundMessageTranslator @0x82485428` builds a 14-slot typed-handler array, `PgSoundMessageHandler @0x82484e48` a 2-slot one, all tagged with their owner symbol RVA.
+- **CONFIRMED (was inferred):** Pal owns real object pools; the engine object is `0xA0` bytes (`FUN_828d2360`), built by `FUN_828d9268 @0x828d9268`; cue/bank nodes use a `'\x1d'` tag byte and 0x28-byte node (`FUN_828ce9b8`, PalEngine.cpp).
+- **CORRECTION:** the `RuntimeSoundEffect 1024` / `RuntimeSoundAmbience 128 64` / `RuntimeSoundRuinKey 16 16` rows are **pool count + alignment**, not `sizeof`. The real element sizes are 0x1c / 1 / (RuinKey not shown) per `FUN_824fcac8`. Same caveat as world-streaming.md.
+- **UNVERIFIED in Xbox build:** `XAudioCreateSourceVoice` — the string is in the import table per the doc, but **does not appear** in any decompiled body in `xenon_decomp_named.c` (the voice-manager call sites weren't recovered), so the XAudio backend wiring is asserted from the import string only, not from a read call site. The `PalSoundXenonVoiceManager::*`, `MixSources`, `GetClosestListener` bodies are likewise not in the named set.
+- **OPEN:** `PalGlobalTable::FindCue`'s two-path (id `< 0x401` direct vs `0xffff`-hashed) resolution described in the doc is from the **PC** function `FUN_00835a70`; I could not find/confirm it in the Xbox build. The music state-machine `State:`/timer dump logic is also unconfirmed at the body level (only the `PgMusicStateMachine` handler-init is readable).
+- **Vector-math gap (expected):** the actual mixing/3D-pan/distance-attenuation math is VMX128 and does not decode; `MixSources`/`MixWavesToOutput`/`CalculateVolume` numeric behavior is not recoverable from this dump even where the bodies exist.
+
 ## Cross-references
 
 - `docs/mercs2-pdb-analysis/world-streaming.md` — `PgSoundStreamIO`, `WaveBank`/`SoundBank` loading, `UpdateStreamBlocks`, `FreeMSStreams`/`ActiveMSStreams` overlap with the asset/streaming subsystem (`wavebank` is a streamed asset type).

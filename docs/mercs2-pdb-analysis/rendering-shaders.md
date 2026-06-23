@@ -315,6 +315,78 @@ _DAT_017bfc84 = s_RtLightAnimation_00bc5bcc;             // type name
 
 **`FUN_0064ac50` — bulk enum/type registrar (string-anchored, medium confidence).** A 16.9 KB function that references both `s_MaterialTypeEnum` and `s_ParticleKeyEnum` (and many more). Per the resolver caveat, a function referencing *many* of a system's strings is a registry/dispatch, not a 1:1 method — this is that function for the material-type and particle-key enums, not a `MaterialTypeEnum` accessor.
 
+## How it works (decompiled)
+
+VAs below are from the **Xbox 360** decompilation `output/_ghidra_x360/xenon_decomp_named.c` (base 0x82000000; RVA = VA − 0x82000000). Grep-confirmed. A reusable fact for this whole cluster: many Pangea functions open a profiler scope via `FUN_82297a68(stack, <color>, <name_RVA>)` where the 2nd arg is an ARGB color (e.g. `0xff646464`) and the 3rd arg is `0xffffffff8201XXXX` = the owning symbol's RVA. That third arg is how the otherwise-unnamed render functions self-identify, and it is what I used to confirm identities below against `inventory/rendering-shaders.txt`.
+
+### The EndFrame chain (platform split is real, and thin)
+
+`PgSysRender__EndFrame @0x8229c070` is the frame-end driver:
+
+```c
+void PgSysRender__EndFrame(int param_1) {
+  FUN_82297a68(auStack_20,0xffffffffff646464,0xffffffff82014c64);  // 0x14c64 = "PgSysRender::EndFrame"
+  FUN_8261e0c8(*(undefined4 *)(PTR_DAT_82d4eccc + 0x2d38));         // profiler push
+  if (*(char *)(param_1 + 0x138) != '\0')
+    PgScene__EndFrame(*(undefined4 *)(param_1 + 0x134));            // end the active scene
+  (**(code **)(*(int *)PTR_DAT_82d4ecc8 + 8))();                    // device vcall +8
+  FUN_8261e110(...); FUN_826062a0();                                // profiler pop
+}
+```
+
+It conditionally ends the scene at `+0x134` (gated by a flag at `+0x138`), then makes a device vcall. The renderer split is confirmed but **the Win32 path is a pure thunk to the base class** — `PgRendererWin32__EndFrame @0x828f28d8` is just:
+
+```c
+void PgRendererWin32__EndFrame(undefined8 param_1) {
+  FUN_82297a68(...,0xffffffff820c4edc);   // 0xc4edc = "PgRendererWin32::EndFrame"
+  PgRenderer__EndFrame(param_1);          // delegate to base
+  FUN_826062a0();
+}
+```
+
+and `PgRenderer__EndFrame @0x828f7310` is where the real GPU end happens — a vcall through the device object at `param_1 + 0x2ba0`, vtable slot `+0xC`:
+
+```c
+if (*(int **)(param_1 + 0x2ba0) != (int *)0x0)
+  (**(code **)(**(int **)(param_1 + 0x2ba0) + 0xc))();   // device->vtable[3]() = present/end
+```
+
+So the "cross-platform renderer abstraction" is real, but for EndFrame the Win32 backend adds nothing — the GPU-specific work is behind the device-object vtable at `[base+0x2ba0]`. (The Xenon `EndFrame` body itself is not in the named set, so I cannot show the Xenon-specific path.)
+
+`PgScene__EndFrame @0x82297f30` does scene teardown (`FUN_82295ea0(param_1 + 0x10)` — the scene's collector list at +0x10) and `PgJunk__EndFrame @0x824c0e88` flushes the "junk"/debris draw lists (7 sub-calls, marker 0x307e0).
+
+### Shader registration is a per-family run-once table (Xbox-confirmed)
+
+`PgTerrainMeshFP4D @0x822db050` is the terrain-mesh **shader-registry function** — the Xbox analog of the PC `FUN_0084f130`. Guarded by `DAT_833a3ca8` (run once), it makes 25 register calls:
+
+```c
+if (DAT_833a3ca8 == '\0') {
+  FUN_828f37a0(0xffffffff833a3cb4, 0xffffffff82017054, 0xffffffff82017064, 0); // ("PgTerrainMeshVP","PgTerrainMeshVP.sho", lod=0)
+  FUN_828f37a0(0xffffffff833a3dd8, 0xffffffff82017028, 0xffffffff8201703c, 0);
+  ...
+  FUN_828f37a0(0xffffffff833a434c, 0xffffffff82016f54, 0xffffffff82016f68, 1); // lod=1
+  FUN_828f37a0(0xffffffff833a4430, 0xffffffff82016f28, 0xffffffff82016f3c, 2); // lod=2
+  FUN_828f37a0(0xffffffff833a4514, 0xffffffff82016f10, 0xffffffff82016ef4, 3); // lod=3
+  ...
+  DAT_833a3ca8 = '\x01';
+}
+```
+
+Inventory confirms: 0x17054 = `PgTerrainMeshVP`, 0x17064 = `PgTerrainMeshVP.sho`, 0x16c70 = `PgTerrainMeshFP4D`. So each register call is **`(dest_slot, logical_name, name.sho, LOD_index)`** — this proves (a) the doc's `(name, name.sho)` pairing inference *and* (b) that the `1D/2D/3D/4D` suffixes correspond to an explicit numeric LOD argument (the 4th param cycles 0,1,2,3). This is the Xbox-side confirmation of the PC `FUN_0084f130` claim, with the added LOD detail. (`FUN_828f37a0`, the table-insert helper, is only present as a non-returning thunk in this dump, so its insertion logic isn't readable here.)
+
+### Render descriptor/components share the ECS reflection backbone
+
+Render-side runtime types (`RtLightAnimation`, `ParticleEmitter`, `ObjectMaterial`, the `Rt*` family) are registered by the **same** descriptor mechanism as world/audio components: `FUN_824fd430` (descriptor record, vtable `&PTR_FUN_82030f50`, pool 0x100) + `FUN_824fcac8` (field-hash table, seed `0x9e3779b9`, element size) + `&PTR_FUN_82030fa0` (shared stream-deserialize vtable) + `FUN_824fd490` (register/assign id). See world-streaming.md "How it works" for the decompiled helper bodies; `0x9e3779b9` and the deserialize vtable are shared across all 232 such descriptors. This means render components are stream-loaded from the WAD identically to terrain/audio components.
+
+## Corrections & open questions
+
+- **CONFIRMED (was inferred):** the `(logical name, .sho)` shader pairing AND the `FP/VP × LOD` permutation structure — `PgTerrainMeshFP4D @0x822db050` registers each shader as `(name, name.sho, lod)` with an explicit 0–3 LOD index.
+- **CONFIRMED (was inferred):** the platform-split renderer. But sharpen it: for EndFrame the **Win32 backend is a no-op thunk** to `PgRenderer__EndFrame @0x828f7310`; the GPU work is a device-object vcall at `[renderer+0x2ba0]→vtable[+0xC]`. The doc's "concrete GPU submit in `PgRenderer::SubmitToGPU`" is plausible but `SubmitToGPU`/`ProcessRender`/`RenderFrame`/`SubmitFrame`/`Update` bodies are **not in the Xbox named set** and their RVAs (0xc51e0, 0xc5228, 0x14c7c, 0x14c98, 0x14cb4) are **not referenced** in any decompiled body, so their internals are unverified here.
+- **CORRECTION of provenance:** the existing "PC decompilation cross-reference" `FUN_*` VAs (`FUN_0084f130`, `FUN_00646b60`, …) are **PC retail** addresses, not Xbox. They remain valid cross-build evidence but should be labelled as such; the Xbox shader registry is `PgTerrainMeshFP4D @0x822db050` (and sibling per-family registrars), and the Xbox `RtLightAnimation`/`ParticleEmitter`/`ObjectMaterial` descriptors live at `@0x829fXXXX`.
+- **CONFIRMED:** RTTI is Havok-only in the Xbox build too (`output/_ghidra_x360/rtti_vtables.txt` — every `Stream`/`Pg`-prefixed RTTI hit is `hk*`), so no `Pg*` render class can be named from RTTI in either build. The doc's "Key classes: none from RTTI" stands.
+- **OPEN / not determinable from this build:** pass ordering (z → color → shadow → reflection), `CollectShadowCasters`, the bloom/HDR post chain, decal-as-job, and the `_pl`/`_sl` suffix meaning (point-light/shadow-light) are **still inferences** — those functions are not named and their symbol RVAs are not referenced in any body I could read. The shadow-buffer technique is supported only by the `CompileWith*ShadowBuffering` flag strings, not by a decompiled body.
+- **Vector-math gap (expected):** all the actual pixel/vertex math, blending, and matrix setup is VMX128 and does not decode in this PPC dump; nothing about the shaders' numeric behavior can be recovered from the decompilation. Treat all shader *semantics* (vs registration plumbing) as unverified.
+
 ## Cross-references
 
 - `docs/mercs2-pdb-analysis/` — sibling per-system docs (e.g. world/streaming, audio, physics-Havok, animation/characters). The Havok `hk*` classes in the RTTI table belong to the physics doc; the `Fx*`/FaceFX cluster belongs to a characters/animation doc.

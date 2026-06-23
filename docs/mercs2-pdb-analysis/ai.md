@@ -237,3 +237,86 @@ FUN_00656720(s_AiPriorityEnum_00bc6864,&DAT_00bc6858);
 This shows `AiPatrolModeEnum` and `AiPriorityEnum` are two columns of one component's schema (consistent with the resolver mapping both symbols to this same function), each given a default value pointer.
 
 **`FUN_0064ac50` (16,897 bytes) — the master reflection registrar.** It references every AI/Cover enum string in sequence, e.g. `thunk_FUN_004935d1(s_CoverRatingEnum_...)`, `..._CoverTypeEnum_...`, `..._AiHintEnum_...`, `..._AiWaterZoneEnum_...`, `..._AiPatrolModeEnum_...`, `..._AiPriorityEnum_...`. Because it touches all of them it is the global type/enum registrar (the reason every `*Enum` symbol resolved to it), not a method for any one enum — cite it as the registrar, not as evidence for an individual enum.
+
+## How it works (decompiled)
+
+Grounded in the Xbox PowerPC decomp `output/_ghidra_x360/xenon_decomp_named.c`. Every VA below was confirmed present with the quoted snippet. The Xbox named set has the *actual* AI command/dispatch bodies (the PC cross-ref above only resolved the reflection registrars), so this section adds runtime behavior the doc didn't have.
+
+### `PgSysAi @8240b548` — the AI system is two lazily-allocated sub-objects
+
+The doc names `PgSysAi` from a string but had no body. The Xbox body shows it lazily creates two AI sub-systems and caches their handles in the owning PgSystem struct at fixed offsets:
+
+```c
+==== PgSysAi @8240b548  size=120 ====
+void PgSysAi(int param_1) {
+  if (*(int *)(param_1 + 0x3cdc) == 0) {                 // sub-system A not yet made
+    uVar1 = FUN_822ed8c0(0xffffffff830f9828,0xffffffff82024128);
+    *(undefined4 *)(param_1 + 0x3cdc) = uVar1;
+  }
+  if (*(int *)(param_1 + 0x3ce0) == 0) {                 // sub-system B
+    uVar1 = FUN_822073b8(0xffffffff831b1370,0xffffffff82024128);
+    *(undefined4 *)(param_1 + 0x3ce0) = uVar1;
+  }
+}
+```
+
+Its caller `FUN_8240b5c0` first allocates a third AI object (`FUN_82902840(0x468)` → a 0x468-byte struct) into `param_1+0x3ce4`, resets `DAT_837fd284`/`+0x3df8`, then calls `PgSysAi`. So the AI host lives inside `PgSystem` at `+0x3ce4` (main, 0x468 B), `+0x3cdc`, `+0x3ce0`. This is the Xbox-side ground truth for the `PgSysAi` symbol; the per-frame AI tick is elsewhere.
+
+### `DirectAction @823daea0` — the AI "do this action now" message path
+
+`DirectAction(entityGuid, actionHash)` is the core that several AI debug/script commands use. It builds a 3-word message `{guid, actionHash, 0}`, posts it locally, and — if hosting a multiplayer session — replicates it:
+
+```c
+==== DirectAction @823daea0 ====
+  local_50 = (undefined4)param_1;  local_4c = param_2;  local_48 = 0;   // {guid, actionHash, 0}
+  FUN_8222dbf0(0xffffffff83187008,&local_50);                          // post the AI message
+  if (DAT_837e5b00 != '\0') { FUN_823d9090(0x...82022ff8, DAT_82c4d054); }  // debug-log if enabled
+  iVar1 = FUN_82590e28();                                              // session player count
+  if ((1 < iVar1) && (FUN_8256e168())) {                              // hosting MP?
+    ... FUN_82581230(DAT_83815b50, auStack_40);                        // replicate to clients
+  }
+```
+
+So AI actions are a single-message bus with optional network replication; `DAT_837e5b00` is the AI-debug-log gate (the same flag-block as the `BoxCollect`/nav debug toggles).
+
+### `AimedScan` / `AimEnable` / `AimDisable` — AI aim commands use *hashed* action IDs
+
+These three (listed under "Aiming / aim-assist") are confirmed as AI aim-control commands, and they reveal that AI actions are addressed by 32-bit hashes:
+
+```c
+==== AimedScan @823dcbe8 ====
+  if (param_2 == '\0') { uVar1 = 0x3a054530; } else { uVar1 = 0x53ac2c09; }   // two action hashes
+  if (DAT_837e5b00 != '\0') { FUN_823d9090(0x...8202311c, DAT_82c4d048); }     // debug log
+  DirectAction(param_1, uVar1);                                                // dispatch via the bus
+
+==== AimEnable @823dcaa8 ====
+  local_1c = 3;  local_18 = DAT_83d186c0; ...                  // build a typed message
+  if (param_2 == '\0') { local_c = 1; ... } else { local_c = 2; ... }  // 1 = enable, 2 = disable mode
+  FUN_822fa0e8(0xffffffff83180bb0,&local_20);                  // post it
+```
+
+`AimedScan` toggles between hashes `0x3a054530` and `0x53ac2c09` (the off/on "aimedscan" action, matching the `aimedscan` planner verb in Notable strings) and dispatches through `DirectAction`. `AimEnable`/`AimDisable` use a parallel message (`FUN_822fa0e8`) with an explicit mode byte (`1`=enable, `2`=disable, `0`=off). This confirms the doc's "AI aim controls" reading with code.
+
+### `PathFind @823f5438` — this named function is a debug-render color, NOT pathfinding
+
+Important: the named function `PathFind` is **not** the pathfinding algorithm. Its body registers a debug-draw color into a 256-entry name/color table — it is the "`- Pathfind`" AI-debug visualizer entry:
+
+```c
+==== PathFind @823f5438 ====
+  uVar1 = FUN_8290ba80(0x...82023424);  FUN_82902f90(uVar1, 0x...82023424);  // resolve a debug name
+  iVar2 = FUN_8290bc68(uVar1, 0x...83cb28f4, 0x100);                          // 256-slot table
+  *(ulonglong *)(&DAT_83cb20f4 + iVar2 * 8) = CONCAT44(0xff00d7ff, ...);      // color 0xff00d7ff
+  DAT_83cb20e8 = DAT_83cb20e8 + 1;                                            // bump count
+```
+
+`0xff00d7ff` is an ARGB debug color. The doc's Notable-strings list already (correctly) treats `PathFind` as a planner-failure/debug string; this confirms the *function* of that name is the debug-color registrar, so no behavioral pathfinding claim should be hung on it.
+
+## Corrections & open questions
+
+- **`PgSysAi` is a multi-object host (new fact):** `@8240b548` lazily allocates two sub-systems (`+0x3cdc`,`+0x3ce0`); its caller adds a 0x468-byte main AI object at `+0x3ce4`. The doc only had the string.
+- **`PathFind` ≠ pathfinding (correction):** the named function `PathFind @823f5438` is a debug-color registrar (`0xff00d7ff`), not the navigation routine. Any reader assuming "`PathFind` = the A*/navmesh function" is wrong; the real nav code is unnamed in this build. The doc's string-level treatment was fine — this just nails the function.
+- **AI actions are a hashed message bus (new fact):** `DirectAction @823daea0` posts `{guid, actionHash, 0}` and replicates it when `FUN_82590e28() > 1` (hosting MP). AI commands are addressed by 32-bit hashes (`AimedScan` uses `0x3a054530`/`0x53ac2c09`). This upgrades the doc's "goal/action verbs go through a planner" from string inference to a code-shown dispatch path.
+- **`DAT_837e5b00` is the AI-debug gate:** the same flag toggled by the `BoxCollect`/nav debug-menu items (see `debug-cheat-menu.md`) gates the `FUN_823d9090` debug logging inside `DirectAction`/`AimedScan`/`AimEnable`. So the AI debug toggles really do change AI runtime logging.
+- **`MindKiller` is owned by AI, surfaced in the debug menu:** its menu label reflects `FUN_8240a108()` (an AI-side state), per `debug-cheat-menu.md`. What `MindKiller` disables in the sim (likely the whole AI "mind"/decision tick) is **unverified** — only that it's an AI kill-switch the menu mirrors.
+- **Still strings-only (could not verify in code):** the planner goal vocabulary (`moveto`/`takecover`/`attack`/…), cover state machine (`GoingToCover`/`AtCover`/…), squad and stimulus/threat scoring — these have no decompiled bodies under named symbols in the Xbox set; the doc's readings of them remain inference (correctly flagged there). The `AlertLow/Medium/HighThreshold` CAUTION in the doc (those are memory-pool MB thresholds, not AI alertness) is **confirmed correct** — they sit in `[x360_memory]` config, not AI code.
+- **Open:** which two sub-systems `PgSysAi` creates (perception vs. actuation? squad vs. individual?) — the constructor args (`0x830f9828`, `0x831b1370`) aren't symbolized.

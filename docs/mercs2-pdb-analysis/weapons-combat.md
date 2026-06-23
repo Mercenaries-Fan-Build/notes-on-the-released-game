@@ -317,3 +317,58 @@ This 16,897-byte function builds every reflection enum in the game by allocating
 What the evidence directly establishes: all 77 `.rdata` symbols exist at the cited offsets; `PgWeaponProjectile.cpp` is the system's build source file (assert at line 863); the `RuntimeWeapon` debug dump, equip dump, enum value lists, and tunable field names are present verbatim as quoted; and no weapons-combat class appears in the RTTI table (only Havok classes do).
 
 A few interpretive points worth flagging: the trailing numeric pairs in the descriptor dump are read as pool counts/grow sizes. `ReloadAsset`/`ReloadLayer`/`ReloadAll` are asset hot-reload rather than magazine reload (magazine reload is the `RuntimeWeapon` `bReloading`/`iRoundsPerReload` path). `ClipGeneratorFlags` (0x00712a0) is most likely the Havok `hkbClipGenerator` animation feature, not a weapon magazine, and is treated as ambiguous. The `DamagePassthrough` (component) vs `DamagePassThrough` (field) split and the exact field-to-component mapping of individual tunables are reconstructed from naming rather than layout symbols, and the purpose of some single symbols (e.g. `ExplosionFudge`, `WeaponBarrel` internals) is not fully determinable from symbols alone.
+
+## How it works (decompiled)
+
+Grounded in the Xbox PowerPC decomp `output/_ghidra_x360/xenon_decomp_named.c`. Every VA below was confirmed present with the quoted snippet. The Xbox build exposes the *registrar* bodies (with concrete per-instance sizes) and the `DamagePerson` debug command body that the PC cross-ref didn't quote.
+
+### Weapon/damage components are ECS descriptor registrars — with confirmed sizes
+
+The PC doc's `FUN_0063dc50` registrar template has an exact Xbox twin: `FUN_824fd430`/`FUN_824fcac8(globals, SIZE)`/`FUN_824fd490` + a name string. The Xbox bodies give the per-instance **byte size** of each component (the PC doc had strides but not all of these):
+
+```c
+==== WeaponBarrel @829ee0d8 ====           FUN_824fcac8(...,4);     DAT_... = "WeaponBarrel";          // 4 B
+==== WeaponEffects @829edfb8 ====          FUN_824fcac8(...,0x10);  DAT_... = "WeaponEffects";         // 16 B
+==== WeaponRecoilVehicle @829ee048 ====    FUN_824fcac8(...,8);     DAT_... = "WeaponRecoilVehicle";   // 8 B
+==== ExplosionFudge @829edf28 ====         FUN_824fcac8(...,4);     DAT_... = "ExplosionFudge";        // 4 B
+==== FUN_829ee168 ("WeaponProjectileBase") FUN_824fcac8(...,0x28);  DAT_... = "WeaponProjectileBase";  // 40 B
+==== MeleeCombatant @829f1e00 ====         FUN_824fcac8(...,0x28);  DAT_... = "MeleeCombatant";        // 40 B
+==== TickDamage @829f1e90 ====             FUN_824fcac8(...,0x10);  DAT_... = "TickDamage";            // 16 B
+==== DamageKey @829f1a10 ====              FUN_824fcac8(...,4);     DAT_... = "DamageKey";             // 4 B
+```
+
+So on Xbox: `WeaponProjectileBase` and `MeleeCombatant` instances are 40 B each, `TickDamage`/`WeaponEffects` 16 B, `WeaponRecoilVehicle` 8 B, `WeaponBarrel`/`DamageKey`/`ExplosionFudge` 4 B. `DamageKey @829f1a10` is the explicit Xbox confirmation that the damage-material key is its own 4-byte component (the doc inferred this from `DamageKeyEnum`). `FUN_82916ef8(...)` at the end of each registrar enqueues the descriptor into the global registry (same role as the PC `FUN_0064a770`).
+
+### `DamagePerson @8245af18` — a debug/script damage command that builds a damage event from a table
+
+The doc lists `DamagePerson` as the damage applier and as a notoriety key. The Xbox named function `DamagePerson` is actually a **command** (debug/Lua) that resolves a target, then constructs a damage event by reading numeric fields and writing them keyed by name:
+
+```c
+==== DamagePerson @8245af18  size=688 ====
+  iVar2 = FUN_8241cfa0(&local_70,1,&local_6c,0);          // resolve target/handle
+  ...
+  puVar3 = (undefined4 *)FUN_8240c250(DAT_837fd280,local_6c);  // get the damage-spec record
+  ...
+  FUN_8241cb28(auStack_20);                               // begin building a damage event
+  if (FUN_82878c50(local_70,1)) { FUN_82879c90(local_70,7,7); }   // mark/flag the target
+  ...
+  local_68 = (float)puVar3[1];  FUN_8241ff38(auStack_20,0x...82022d38,&local_68);  // field by name
+  local_60 = (float)puVar3[5];  FUN_8241ff38(auStack_20,0x...82022d58,&local_60);
+  local_58 = (float)puVar3[3];  FUN_8241ff38(auStack_20,0x...82022d48,&local_58);
+  ...
+```
+
+It reads a damage-spec record (`puVar3`) of `{int,int}` pairs, converts each to float, and stamps it into an event object (`auStack_20`) under named keys (`0x82022d38…` are the field-name strings, e.g. the `DamagePerson`/`DamageObject` reputation set). This is the *authoring/serialization* side, NOT the per-hit `ApplyDamage` math — confirming the PC doc's note that `ApplyDamage*` (the actual hit applier) is string-only and unresolved. The "DumpInventory"/damage debug strings (`%f, %f, ... 0x%08x`) sit in the same debug-command cluster.
+
+### `ReadyToReload @822ed658` — exists as a named runtime predicate
+
+`ReadyToReload @822ed658` is present in the Xbox named set (the doc treats reload as the `RuntimeWeapon bReloading/iRoundsPerReload` path). I did not fully decode its body (it's a short predicate that indexes the weapon runtime struct); it corroborates that magazine-reload readiness is a real runtime query distinct from the `ReloadAsset`/`ReloadLayer` hot-reload commands. (unverified: the exact struct offsets it tests.)
+
+## Corrections & open questions
+
+- **Component sizes confirmed (new fact):** `WeaponProjectileBase`=0x28, `MeleeCombatant`=0x28, `TickDamage`=0x10, `WeaponEffects`=0x10, `WeaponRecoilVehicle`=8, `WeaponBarrel`=4, `DamageKey`=4, `ExplosionFudge`=4 bytes/instance (from `FUN_824fcac8` args). These match/complete the PC strides (`WeaponProjectileBase` 0x28, `DamageKey` 0x4) — Xbox and PC **agree**.
+- **`DamageKey` is a standalone component (confirmed):** `@829f1a10` registers `DamageKey` as a 4-byte component — upgrades the doc's "damage-material key" from inference.
+- **`DamagePerson` (the function) is a command, not the applier (clarification):** the named `DamagePerson @8245af18` authors a damage event from a spec record; it is not the per-hit damage solver. The doc's two uses of the `DamagePerson` *string* (apply + notoriety key) are both string-level; the actual applier (`ApplyDamageToPrimaryHealth` etc.) remains **unresolved in code** on both builds. Not a contradiction, but the doc should not imply `DamagePerson` is the hit-resolution routine.
+- **`ReloadAll`/`ReloadAsset`/`ReloadLayer` = asset hot-reload (unchanged):** the Xbox set has `ReadyToReload` as the *magazine* predicate, separate from those — consistent with the doc.
+- **Still strings-only / unresolved in the Xbox named set:** `UpdateExplosions`, `PhysicsCreateExplosion`, `ApplyExplosionToBodies`, `ApplyDamage*`, the `RuntimeWeapon`/`RuntimeProjectile` per-frame update, homing guidance integration. The doc's behavioral readings of these stay inference. VMX128 vector math (projectile velocity/ballistics) does not decode and is a known gap.
+- **Open:** the field-name strings `DamagePerson` reads (`0x82022d38`/`d48`/`d58`/`d68`…) weren't symbolized inline, so the exact per-field meaning of the damage-spec record (`puVar3[1]`,`[3]`,`[5]`,…) is unconfirmed beyond "named float fields of a damage/reputation event."

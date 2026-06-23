@@ -390,6 +390,69 @@ The same shape appears for `VehiclePartType` (FUN_00665200, `s_VehiclePartType`)
 
 **FUN_0064ac50 — reflection/enum-registry dispatcher.** A 16,897-byte function whose body references four vehicle turret/part enum-name strings (`s_TurretAxisEnum_00bc6788`, `s_TurretControlTypeEnum_00bc62ec`, `s_TurretCouplingTypeEnum_00bc6354`, `s_VehiclePartType_00bc7690`, plus many non-vehicle enums). It is *not* a per-enum method but the central registry where these enums are wired into the reflection system, which is why the resolver mapped those turret/part enum symbols onto this single address. Note `WheelAxleEnum`/`s_RearAxle` are **not** registered here — they resolve to FUN_006599c0 only (see above).
 
+## How it works (decompiled)
+
+All VAs are from `output/_ghidra_x360/xenon_decomp_named.c` (base `0x82000000`); snippets are copied from the decompiled bodies. Unlike the symbol-only sections above, these are real function bodies — they expose how the per-frame control verbs reach the vehicle action and how the AI/turret states are wired.
+
+### Control verbs enqueue fixed-size command records into the controller's command ring
+
+The `Car*`/`Heli*`/`Boat*`/`Turret*` verbs are **not** the drive math — each builds a small command record on the stack (a command-ID word + float payload) and pushes it into the per-vehicle controller's command ring buffer. `CarTurn` @`823db5e0`:
+
+```c
+  local_18 = (float)param_1;          // steer amount (payload)
+  local_1c = 0x3483dbf1;              // command id (CarTurn)
+  local_20 = param_2;                 // header word
+  FUN_8239cd98(0xffffffff830ff930,&local_20);   // enqueue into Car controller @830ff930
+  if (DAT_837e5b00 != '\0') FUN_823d9090(...);   // optional replay/debug trace
+```
+`CarBrake` @`823db780` uses id `0x55b8e0a1`; `BoatTurn` @`823dc768` reuses id `0x3483dbf1` but targets the Boat controller global `83101b88`. So the command-ID is a stable hash per verb and the same hash can mean "turn" across vehicle types. The four globals seen are **per-vehicle-class controller singletons**: Car `830ff930`, Heli `830feb30`, Boat `83101b88`, Turret `83103158`.
+
+The enqueue helper `FUN_8239cd98` @`8239cd98` is a generic bounded ring:
+```c
+  if (*(char *)(param_1 + 0x893) != '\0') return;   // channel locked → drop
+  iVar1 = *param_1;                                  // current count (slot 0)
+  if (0x1ff < iVar1) { FUN_8256eb28(...); return; }  // CAP = 0x200 commands → overflow
+  param_1[iVar1 * 4 + 0x13] = *param_2;              // 4-word record per command
+  ... param_1[iVar1*4 + 0x16] = param_2[3];
+  *param_1 = *param_1 + 1;                            // bump count
+```
+The car/boat channel stores **4-word records, capped at 0x200** (car) / **100** (boat, `FUN_8239ce50` @`8239ce50`, `99 < iVar1`). The turret channel `FUN_823a4878` @`823a4878` stores **6-word records, capped at 0x400** — wider because turret aim carries a full direction vector. `TurretAim` @`823dd970` fills `local_14..local_c` from a 3-float `param_3` (the aim point) before enqueuing into `83103158`. This is the concrete backing for the symbol-doc's "Control verbs (input → action)" table.
+
+### `HeliElevate` is the one verb that also pre-integrates a value
+
+Most verbs are pure enqueues, but `HeliElevate` @`823db9c8` multiplies the input by a tunable before queuing a second command:
+```c
+  FUN_8239ce50(0xffffffff830feb30,&local_30);          // queue elevate
+  if (DAT_837e5b00 != '\0') {
+    local_2c = (float)(param_1 * (double)DAT_820011f0); // input * tuning scalar
+    ... FUN_823dab10(&local_30,DAT_82c4d040);
+  }
+```
+(The second block is gated by the same `DAT_837e5b00` debug flag, so it is a debug/visualization path, not the main drive.)
+
+### AI driving states are registered by `BoatStop`, not "a boat-stop behavior"
+
+`BoatStop` @`823b76e0` (980 B) is **misnamed**: it is the bulk **AI-state-table registrar**. Its body is ~58 calls to `FUN_823f9250(state_table @837e9bf8, <state-name-string>)`, and the string addresses are exactly the `.data` AI-state block this doc lists (`BoatStop/BoatMove/.../CarDriveRoads/TankAttack/TurretIdle`, addresses `82c48*`–`82c4c*`):
+```c
+  FUN_823f9250(0xffffffff837e9bf8,0xffffffff82c49b68);   // one per AI state name
+  FUN_823f9250(0xffffffff837e9bf8,0xffffffff82c49c88);
+  ... (×58)
+```
+So `837e9bf8` is the global AI driving/combat state registry, and the `BoatStop`…`TurretIdle` names in the `.data` block are its members — confirming the doc's "AI driving/combat states" reading from code. (`FUN_823f9250` itself tail-calls a VMX-truncated stub, so the per-state init is a decode gap.)
+
+### Enum/field registrars confirm the reflection model (Xbox side)
+
+`WheelAxleEnum` @`8250cfa0`, `VehiclePartType` @`8250fd60`, `TurretControlTypeEnum` @`8250dab0`, `TurretCouplingTypeEnum` @`8250dbd0` are present as real (small) functions on the Xbox side too, matching the PC reflection-registrar finding — the tuning surface is stream-loaded reflection, not hand-coded. `BoneCtrlFakeWheel` @`8251e948` (a vehicle bone controller) is a genuine factory: it reads a node handle (`FUN_824cf2e0`), resolves the bone via the profiler/string table, and stamps vtable `PTR_FUN_82040884` — i.e. the fake-wheel visual-spin controller is constructed per vehicle node.
+
+## Corrections & open questions
+
+- **CORRECTION — the `Tt*` cluster is functions, not "Havok classes."** This doc's "Havok integration / collision layer (Tt*)" section says the `Tt*` symbols "sit under this system" as if types. The Xbox decomp shows `TtSimulate` @`826dc4b0`, `TtRayCast` @`826922a8`, `TtrcMopp` @`829b7c58` are timer-bracketed **integration functions** (they push their own name as a `hkMonitorStream` label, then call the real worker). They are the shared Havok substrate, correctly flagged "belong to the physics doc more than here" — but they are not vehicle classes and not RTTI.
+- **CORRECTION — `BoatStop` is an AI-state *registrar*, not a stop behavior.** It registers the entire AI driving-state name set into table `837e9bf8` (VA + snippet above). The symbol-doc lists `BoatStop` only as a `.data` state name; the function that shares the name does the registration.
+- **CONFIRMED — control verbs are command-queue producers (was inferred "input → action").** Code shows the 4-word (car/boat) / 6-word (turret) records, per-class controller globals, command-ID hashes, and ring caps (0x200 / 100 / 0x400). VAs above.
+- **CONFIRMED — `CarPhysicsV2`/the tuning fields are stream-loaded reflection.** The enum/field registrars exist as real Xbox functions (VAs above), matching the PC side.
+- **UNKNOWN — the actual drive model (engine torque curve → wheel forces → integration).** No named Xbox function consumes `EngineTorque`/`GearRatio*`/`SpringStrength` with readable math; that logic lives in the unnamed `*PhysicsV2`/`hkpVehicleInstance` step, which is VMX128-heavy and does not decode. The tuning *field names* and the *command path into* the actor are code-grounded; the force computation is not.
+- **UNKNOWN — how `_CarWheel` (2304 B) / `CarPhysicsV2` (768 B) presize numbers map to struct layout.** Confirmed as pool sizes (presize log) but no decompiled ctor in the named set lays out those fields.
+
 ## Cross-references
 
 - `docs/mercs2-pdb-analysis/physics.md` (inferred filename) — the Havok `Tt*`/`hkp*` substrate (`TtSimulate`, `TtCollide`, `hkpAction`, `hkpPhysicsSystem`) underlying the vehicle physics actors.

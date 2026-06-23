@@ -403,6 +403,61 @@ This confirms `referencePose` is an array of one 48-byte transform per skeleton 
 
 > Confidence note: with no vtable bridge, none of these are proven 1:1 methods of the named class. The descriptor registrars are high-confidence as *registrars* (distinctive shared body) but only name the asset; the `FUN_0089*`/`FUN_008a*` field-conversion functions are confirmed to reference the cited strings but are schema-migration helpers, not the runtime sampling/blending code.
 
+## How it works (decompiled)
+
+VAs are from `output/_ghidra_x360/xenon_decomp_named.c` (base `0x82000000`); snippets are copied verbatim. The Xbox decomp does not name the per-frame sampling/blending math (that is VMX128, see the open questions), but it *does* expose two real, distinct mechanisms that the symbol-only doc could only infer: (1) how a `BoneCtrl*` is bound to a skeleton bone, and (2) how the per-action animation config is assembled from named reflection fields.
+
+### `BoneCtrl*` functions are bone-controller factories that bind a controller to a bone index
+
+`BoneCtrlLookAt` @`8251be68` is the constructor/binder for the look-at bone controller. It reads a node, takes the **16-bit bone index** from node`+4`, resolves the controller name, runs the shared bind helper `FUN_82353058`, and stamps the look-at controller vtable:
+
+```c
+  iVar3 = FUN_824cf2c0();                 // resolve target node
+  uVar1 = *(undefined2 *)(iVar3 + 4);     // bone index (u16) on the node
+  uVar2 = FUN_8290ba80(0xffffffff820322b0);  // "BoneCtrlLookAt" name handle
+  FUN_82353058(param_1,uVar2,uVar1);      // bind controller→bone
+  *param_1 = &PTR_FUN_8203fff8;           // look-at controller vtable
+```
+`BoneCtrlFakeWheel` @`8251e948` is byte-for-byte the same shape with a different node resolver (`FUN_824cf2e0`) and a different vtable (`PTR_FUN_82040884`). So the whole `BoneCtrl*` family (LookAt/RotationCopy/LocalRotation/StrapOn/Tentacle/Jostle/Wind/FakeWheel — all 108-byte siblings at `8251be68`..`8251e948`) are per-controller factories, each mapping a procedural controller to a specific bone index — confirming the doc's "family of procedural per-bone modifiers" reading, and giving each its own vtable.
+
+### Per-action/object animation config is assembled from named reflection fields
+
+`LookAtBone` @`8250c7a0` builds the look-at *config* by looking up several named fields and handing them to an action constructor:
+```c
+  local_30 = FUN_82504700(0xffffffff820321a8,0);   // field lookups by name-string addr
+  local_2c = FUN_82504700(0xffffffff8203b4f4,0);   // (8203b4f4 = "ControlledBone")
+  local_28 = FUN_82504700(0xffffffff8203b4e8,0);   // (8203b4e8 = "LookAtBone")
+  local_24 = FUN_82504700(0xffffffff82025ef0,10);
+  uVar2 = FUN_824cf2c0();
+  FUN_824fbff0(uVar2,param_1,0,uVar1,&local_30);    // construct the action with the config
+```
+`RotorBlurOffBone` @`8250c5c8` is the same builder for the helicopter rotor-blur controller — it reads rotor-blur fields (`8203b45c`/`8203b43c`/`8203b40c`/`8203b3f8` = the `RotorBlur*Bone`/`FirstRotorBladeBoneName`/`RotorHubBoneName` strings this doc lists) plus two float params via `FUN_825047d0`, then calls the same `FUN_824fbff0`. `EquipRunHumanAction` @`8250d428` follows the identical pattern for a human equip/run action. This is the concrete machinery behind the "named control bones" string table: each name string is a reflection field key consumed by these builders.
+
+### Animation asset classes share the ECS streaming registrar
+
+`AnimationController` @`829f6468` and `HumanAnimationSet` @`829eed28` register through the **same** stream reader `PTR_FUN_82030fa0` used by the physics components (see physics-game.md), confirming animation assets and physics actors live in one ECS/reflection registry:
+```c
+  // AnimationController
+  DAT_83807c2c = &PTR_FUN_820369e8;        // class vtable
+  DAT_83807c44 = &PTR_FUN_82030fa0;        // shared CopyFromStream reader
+  DAT_83807c68 = "AnimationController";     // class name
+```
+`HumanAnimationSet` differs only in vtable/name/size args — matching the PC-side "descriptor registrar" finding, now confirmed on Xbox.
+
+### FaceFX objects are factory-constructed
+
+`FxBone` @`828c3f38` is a FaceFX object factory: it allocates 0x18 bytes, lazily creates the `FxNamedObject` runtime class (`FxNamedObject()` → cached in `DAT_83949068`), then constructs via `FUN_828c2e90`. So the `Fx*`/`PFx*` names are live FaceFX runtime classes instantiated at load, not just strings.
+
+## Corrections & open questions
+
+- **CONFIRMED — `BoneCtrl*` are bone→controller binders (was inferred).** Each reads the node's u16 bone index and stamps a distinct controller vtable (`BoneCtrlLookAt`=`PTR_FUN_8203fff8`, `BoneCtrlFakeWheel`=`PTR_FUN_82040884`); VAs above. The doc's "applied after sampling" ordering is still inferred (the bind site doesn't prove call order), but the binding mechanism is code-backed.
+- **CONFIRMED — the "named control bones" strings are reflection field keys.** `LookAtBone`/`RotorBlurOffBone`/`EquipRunHumanAction` look them up via `FUN_82504700` and feed an action constructor (VAs above), exactly the model the doc inferred.
+- **CONFIRMED — animation assets use the same ECS streaming registrar as physics.** `AnimationController`/`HumanAnimationSet` share `PTR_FUN_82030fa0` with `PhysicsActorRagdoll` et al.
+- **CONFIRMED — FaceFX `Fx*` names are instantiated runtime classes.** `FxBone` factory (VA above).
+- **CORRECTION — the PC `referencePose` = "0x30-byte transform per bone" claim is supported, and the Xbox side is consistent but unverified.** The PC `FUN_0089d280` shows the `poseCount * 0x30` (48-byte `hkQsTransform`) copy; the Xbox image has no matching named function to re-confirm the stride, so cite the PC VA for that number. (Not a contradiction — just single-build evidence.)
+- **UNKNOWN — the actual sample/blend/IK math (`HumanSamplePose`, `SampleMt`, `FootPlacementNode`, `extractRagdollPose`).** None of these appear as named, decoded functions in the Xbox set; the profiler labels (`Sample BoneControllers`, `Foot Placement IK`, `Blending`, `HACKRenormalizeQuats`) are zone strings only. The math is VMX128 and does not decode. The pipeline *ordering* in the Overview remains inferred from the "Animation Debug Mode" label sequence, not from traced control flow.
+- **UNKNOWN — ragdoll blend weight / catch-fall thresholds.** The PC field-conversion functions name `referencePoseWeightThreshold`, `catchFall*`, etc., but no decompiled body in either build assigns readable default values to them beyond the `0xffff` "no bone" sentinel.
+
 ## Cross-references
 
 - `docs/mercs2-pdb-analysis/havok-physics.md` — Havok runtime; ragdoll constraints (`hkpRagdollConstraintData`, `hkpRagdollLimitsData`, `hkpRagdollMotorConstraintAtom`) and powered-ragdoll modifiers are shared with this system.

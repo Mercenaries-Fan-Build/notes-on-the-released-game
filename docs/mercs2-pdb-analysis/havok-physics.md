@@ -301,6 +301,61 @@ Tiny thunk that stamps the rigid-body vtable then delegates to the shared entity
 ```
 `param_2` is a writer/visitor vtable; the function feeds it field names (`Entity`, `hkpRigidBody`, `CollisionListnr`, `EntityListeners`, `SavedMotion`). This is the rigid-body's reflection/serialization descriptor, which is why it references the class-name string — not a 1:1 method, exactly the "registry/loader" pattern the bridge warns about.
 
+## How it works (decompiled)
+
+All VAs below are from the Xbox 360 decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`); quoted lines are copied from the decompiled bodies. The `St`/`Lt`/`Tt`-prefixed strings catalogued above are not class names — in the decompiled code they are **profiler timer-zone labels** that the real Havok integration functions push onto a per-thread timer-stream ring buffer before/after doing work. This makes the `Tt*` cluster (mislabelled as types in the symbol-only doc) traceable to actual integration code.
+
+### The `Tt*` functions are timer-bracketed Havok integration callbacks, not classes
+
+`TtSimulate` @`826dc4b0` is the per-island simulate callback. It pushes the label, maps a tri-state sim mode, calls the real worker, then pushes a close-marker:
+
+```c
+  if (puVar2 < *(undefined4 **)(iVar3 + 0xc)) {
+    *puVar2 = "TtSimulate";          // open timer zone (label + TBLr timestamp)
+    uVar4 = TBLr; ...
+  }
+  if (*param_2 == 0) { uVar4 = 2; } else { uVar4 = 1; if (*param_2 != 1) uVar4 = 0; }
+  FUN_826dc1c0(param_1,uVar4);        // <- the actual simulation step
+  ...
+    *puVar2 = &DAT_820022cc;          // close timer zone
+```
+The `*in_r13 + 0xc` it writes into is a `{write_ptr, end_ptr}` ring buffer (`hkMonitorStream`); each entry is a 3-word `{char* label, u64 TBLr}` (`puVar2 + 3`). This same open/work/close shape recurs in `TtRayCast` @`826922a8`, `TtrcMopp` @`829b7c58`, and `TtRayCastSimpl` @`829adfc8` — confirming `St`/`Lt`/`Tt` are the start/list/total monitor-stream timers, not RTTI. (Several, e.g. `TtRayCast`, end in `halt_baddata()` — VMX128 truncation; the tail is a known decode gap.)
+
+### MOPP raycast worker — the real shape-cast against compressed collision
+
+`TtrcMopp` @`829b7c58` is the MOPP (Memory-Optimized Partial Polytope) ray/shape-cast worker that the `hkpMoppBvTreeShape` uses. It reads the mopp blob off the shape and hands it to the MOPP virtual machine:
+
+```c
+  local_a0[0] = *(uint *)(param_1 + 0x34);        // mopp code size
+  local_a0[2] = *(undefined4 *)(param_3 + 8);
+  lVar5 = (ulonglong)local_a0[0] + 0x10;          // header(0x10) + code
+  ...
+  FUN_829d2b50(auStack_90, lVar5, *(undefined4 *)(param_1 + 0x10), ...); // mopp VM entry
+```
+So on a MOPP shape, `+0x34` = mopp-code byte count and `+0x10` = pointer to the mopp/info struct. `MoppShape` @`829b77c8` is the matching **reflection serializer** — it emits the shape's fields through a writer vtable (`(**(code**)(*param_2+4))`, `+0xc`), reading the same `+0x34` (code size) and `+0x10` (info) members. This corroborates the symbol-doc's note that `hkpMoppBvTreeShape`/`hkpMoppCode` exist, and pins the runtime field offsets.
+
+### Constructors are thin vtable-stamp thunks (matches the PC cross-ref)
+
+The Xbox decomp confirms the PC-side finding that Havok ctors are tiny: e.g. `hkpSphereShape_ctor` @`826915b8` is 44 bytes, `hkpMoppAgent_ctor` @`826a2d40` is 60 bytes, `hkpCollisionDispatcher_ctor` @`826a6a38` is 344 bytes (it wires the agent dispatch table). The thousands of `hkBaseObject_ctor_*` / `hkpSymmetricAgentFlip*Collector_ctor*` headers are the per-template-instantiation vtable setters Ghidra split out — they are real but carry no logic beyond stamping a vtable; do not read meaning into the trailing-underscore disambiguators.
+
+### Profiler-zone registration is a shared idiom (and a naming hazard)
+
+27 functions in the image write the global profiler color/name table `DAT_83cb20f4` via the open-addressing hash insert `FUN_8290bc68` @`8290bc68`:
+```c
+  uVar2 = param_1 - (...)/(param_3) * ...;        // hash % 0x100, linear probe
+  while (iVar1 != 0) { ... }                       // skip occupied slots
+  *(int *)(... + param_2) = (int)param_1;          // store name-hash
+```
+`FUN_8290ba80`/`FUN_82902f90` are the zone push/pop; the `0xff4763ff`/`0xff808080`/`0xff000000` constants stamped beside the name are the zone's ARGB debug color. Because the symbol recovery named many functions after the *string literal they reference*, several "system" names (e.g. `GrapplingHookMessages`, parts of `CameraCollisionCastRay`) are these registration stubs, not the named system's logic — see the per-system docs for which.
+
+## Corrections & open questions
+
+- **CORRECTION — `St`/`Lt`/`Tt` are profiler timer prefixes, now code-confirmed (was "likely" / inferred).** The Notable-strings section called the `St`/`Lt`/`Tt` prefixes "likely denote start-timer / list / total timer categories." The decompiled `TtSimulate`/`TtRayCast`/`TtrcMopp` bodies prove these strings are pushed as `hkMonitorStream` zone labels around real work (VAs above), so the `Tt*` cluster the *vehicles* doc lists as "classes" are integration **functions**, not RTTI types.
+- **CORRECTION — `hkpCollisionDispatcher::debugPrintTable` / `hkpContactMgrFactory` as "evidence of the dispatch table at runtime" is weaker than stated.** The dispatcher constructor `hkpCollisionDispatcher_ctor` @`826a6a38` (344 B) is the actual runtime object that builds the agent table; the `debugPrintTable` string (0x0099574) is only a debug-print label. The table is real, but cite the ctor VA, not the debug string.
+- **CONFIRMED — MOPP shape field layout.** `+0x34` = mopp code size, `+0x10` = mopp info pointer (from `TtrcMopp`/`MoppShape`, VAs above). Previously the doc only had the class names.
+- **UNKNOWN — the `hkpWorld`/`hkpSimulation` per-step call graph.** The Xbox image has **no named `stepWorld`/`integrate` function** (`hkWorld::stepBeginSt` at 0x0001734 is a string, not code in the named set; grep for a named `hkpWorld`/`stepBegin*` function returns 0 hits). The step is reached through `FUN_826dc1c0` (called by `TtSimulate`) and the PIMP job system, but that worker is unnamed and partly VMX-truncated. The actual integrator math (VMX128) does not decode.
+- **UNKNOWN — `m_sizeOfToiEventQueue` and other `hkpWorldCinfo` defaults.** The assert string names the tunable but no decompiled body in the named set initializes it with a literal we could read; the cinfo defaults live in VMX-heavy setup code.
+
 ## Cross-references
 
 - `docs/mercs2-pdb-analysis/physics-game.md` — Pangea's game-side physics wrappers (`PgHavokManager`, `PgPhysicsActor`, `oPgHavokManager`) that drive this Havok layer.

@@ -264,3 +264,90 @@ _DAT_017bebf4 = s_NetCategoryInfo_00bc56a4;
 - **Evidence basis:** every symbol name, offset, section, and quoted string above exists in the named evidence file. The three-layer split (replication `Net*` / Massive ad-client / Xb360 LIVE matchmaking) is grounded in disjoint string clusters.
 - **What is inferred:** the *behavioral* role of each group — that `NetSubCat*` enumerate replicated property categories, that `NetSafe*` are host-authoritative wrappers, that `NetClient*` are client-side mirrors, that `NetSynchImportModule`/`NetPull` do join-time state sync — is inferred from naming and string context, not from disassembled call graphs. The PlayNowOptions parser (`FUN_009ba4b0`) and the `CNetworkManager` allocator/accessor (`FUN_009e010a`/`FUN_009dff40`) are now confirmed against the PC decomp (see cross-reference).
 - **Not found / unclear:** no networking source-file paths in `source_paths.txt`; no `Net*`/`Massive*`/`Xb360Session` entries in the 324-class RTTI table (class names here come from log strings, not RTTI). `Online_grant_01` purpose unclear from symbols alone.
+
+## How it works (decompiled)
+
+Source: the Xbox 360 Profile-build decompilation `output/_ghidra_x360/xenon_decomp_named.c` (image base `0x82000000`). Unlike the PC cross-reference above (which resolves the Massive/Xb360 *transport*), the Xbox decomp exposes the **game-side replication/event layer** — the `Net*` callbacks are named, and their bodies reveal a single serialized **event bus** shared with the GUI/HUD layer.
+
+### The networked-event packet decoder (`NetEventCallback @825d3ce8`)
+This is the receive-side RPC dispatcher. It takes a packed event record and rebuilds an engine event from it. The record's byte at `+8` is a **header**: `>>4` selects a target/category, `>>1 & 7` is the **argument count** (max 7), and a per-argument type tag drives a 4-way switch:
+
+```c
+undefined8 NetEventCallback(undefined4 *param_1) {        // @825d3ce8
+  cVar2 = SynchNetImportModule(DAT_838b25e0,*param_1);    // ensure the module for this event hash is synced
+  if (cVar2 == '\0') return 0;
+  FUN_8241d458(auStack_20);                                // allocate an event frame (shared bus buffer)
+  FUN_822ef440(auStack_20,*(byte *)(param_1 + 8) >> 4);    // push the target/category nibble
+  if ((*(byte *)(param_1 + 8) & 0xe) != 0) {
+    uVar3 = 0;
+    do {
+      switch(*(undefined1 *)((int)param_1 + uVar3 + 4)) {  // per-arg type tag
+      case 0: uVar1 = FUN_82587150(param_1 + uVar3 + 3);    // 0 = string/guid
+              FUN_822ed780(auStack_20,uVar1); break;
+      case 1: FUN_822ef440(auStack_20,param_1[uVar3 + 3]); break;          // 1 = int
+      case 2: FUN_823d8fe8((double)(float)param_1[uVar3 + 3],auStack_20); break; // 2 = float
+      case 3: FUN_82315658(auStack_20,param_1[uVar3 + 3]); }               // 3 = (handle/guid)
+      uVar3 = uVar3 + 1 & 0xff;
+    } while (uVar3 < (*(byte *)(param_1 + 8) >> 1 & 7));    // loop argc times
+  }
+  FUN_8241e940(auStack_20,*(byte *)(param_1 + 8) >> 1 & 7);
+  FUN_82420690(auStack_20,*param_1,0xffffffff82047180,2,0,1,0); // dispatch: (frame, event_hash, "NetEventCallback", argc, ...)
+  FUN_8256eb28(auStack_20);
+  return 1;
+}
+```
+
+Key facts grounded here: events are identified by a **32-bit name hash** (`*param_1`), arguments are a typed TLV stream (4 types: string/guid, int, float, handle), the argument count is capped at **7**, and dispatch goes through `FUN_82420690(frame, hash, name_ptr, …)`. The `0x82047180` pointer is the `.rdata` `"NetEventCallback"` string used as the event's debug name.
+
+### The unified event-bus primitives (shared with GUI/HUD)
+The same three calls appear in nearly every `Net*` and `Gui*` function:
+- **`FUN_8241d458 @8241d458`** allocates an event frame from a global bus context: `uVar1 = *(undefined4 *)(DAT_837fe3a0 + 0x18); FUN_82878dc0(uVar1,0);` — i.e. the bus buffer lives at `DAT_837fe3a0+0x18` (19 references to `DAT_837fe3a0` engine-wide). Called from **41 sites**.
+- **`FUN_82878c50 @82878c50`** reserves N 8-byte argument slots in the frame, with a hard capacity check: `if ((... >> 3) + param_2 < 0x801)` → max **2048** entries (0x800), growing via `FUN_82882d50`. Returns 0 if full.
+- **`FUN_82420690`** is the build-and-dispatch entry (**22 callsites**); **`FUN_8256eb28`** finalizes. (Both decompile to `FUN_829167xx` stubs at their own VAs — see caveat — so only their *call signatures and the data marshalled into them* are citable, not their internals.)
+
+### Host-authoritative `NetSafe*` queries are bus round-trips
+`NetSafeAreBriefingAssetsLoaded @825ce830` builds a query event (hash `0x51ee8f14`, name ptr `0x820470f0`) and reads a result back:
+
+```c
+undefined1 NetSafeAreBriefingAssetsLoaded(int param_1) {  // @825ce830
+  bVar1 = *(byte *)(param_1 + 6) >> 6;
+  if (bVar1 != *(byte *)(param_1 + 5) >> 6) return 0;       // state mismatch → not loaded
+  if ((bVar1 != 1) && (bVar1 != 2)) return 1;
+  FUN_8241d458(auStack_1c);
+  FUN_82420690(auStack_1c,0x51ee8f14,0xffffffff820470f0,0,1,1,0); // query event, 0 args
+  FUN_8241cb68(auStack_1c,0xffffffffffffffff,local_20);   // read result
+  FUN_8256eb28(auStack_1c);
+  return local_20[0];
+}
+```
+
+### Module sync gating (`SynchNetImportModule @825ce918`)
+The join-time state-sync uses 32-bit module hashes. `SynchNetImportModule` checks whether a module (hash `0x762c8f61`) is present and populated, and if not, emits a sync-request event for the requested module hash:
+
+```c
+undefined8 SynchNetImportModule(undefined8 param_1,undefined8 param_2) {  // @825ce918
+  iVar1 = FUN_8241bb78(0x762c8f61);                        // hash → module record
+  if ((iVar1 != 0) && (0 < *(int *)(iVar1 + 0x40))) {       // record exists and has entries
+    ...
+    iVar1 = FUN_8241bb78(param_2);                          // is the requested module already synced?
+    if ((iVar1 != 0) && (0 < *(int *)(iVar1 + 0x40))) { ...; return 1; }
+    FUN_82315658(auStack_20,param_2);                       // else: push module hash as arg
+    FUN_82420690(auStack_20,0x762c8f61,0xffffffff82047110,1,0,1,0); // emit NetSynchImportModule event
+    ...
+  }
+}
+```
+
+`FUN_8241bb78(hash)` is the **name-hash → record lookup** (record `+0x40` = an entry count); it is invoked with literal hashes throughout the `Net*` layer. `NetEventCallback` calls `SynchNetImportModule` first, so **an event for a not-yet-synced module triggers a module pull before the event is delivered** — code-level confirmation of the doc's "join-time state sync" inference.
+
+### `PgSysNetworking @82593618` is a slot-registered system like every other `PgSys*`
+It claims a slot in its own 32-bit bitmask (`DAT_8318a8a4`), stores `"PgSysNetworking"` into the parallel name table `&DAT_8318a928`, and wires callbacks via the shared `FUN_8246cf08` (8-slot) registrar (see pangea-engine-core "How it works"). So networking is a first-class entry in the same system framework, not a bolt-on.
+
+## Corrections & open questions
+
+- **Confirmed (was "inferred from naming"): `Net*` are a serialized event/RPC bus.** The doc said the behavioral role of `NetSafe*`/`NetClient*`/`NetEventCallback` is "inferred from naming, not from disassembled call graphs." `NetEventCallback @825d3ce8` now provides the call graph: a 32-bit-hash-keyed, typed-TLV event decoder (4 arg types, ≤7 args) feeding `FUN_82420690`. Promote to code-backed fact.
+- **Confirmed: `NetSynchImportModule`/`NetPull` do module-hash join sync.** `SynchNetImportModule @825ce918` checks a module record by hash and emits a pull event when missing; `NetEventCallback` gates delivery on it. The "wire up state synchronization for a joining client" claim is now grounded.
+- **New finding: the Net layer and the GUI/HUD layer share one event bus.** `FUN_8241d458`/`FUN_82420690`/`FUN_8256eb28` and the `DAT_837fe3a0+0x18` frame buffer are common to both `Net*` and `Gui*`/`ToggleHud` functions. The doc's cross-reference to pangea-core ("NetCommand/NetNotify event channels live alongside Pangea engine event tokens") is correct and is the *same* bus, not merely adjacent.
+- **Event identity is a 32-bit name hash.** Concrete examples in code: `0x51ee8f14` (NetSafeAreBriefingAssetsLoaded), `0x762c8f61` (the import-module event/module). These are FNV-style hashes of the `.rdata` names; the name pointers (`0x820470f0`, `0x82047180`, `0x82047110`) ride along as debug labels.
+- **Not grounded in the Xbox decomp: the Massive ad-client and Xb360 LIVE transport.** Those were resolved only in the *PC* build (`FUN_009ba4b0`, `FUN_009e010a`, `FUN_009dff40`). In `xenon_decomp_named.c`, `MassiveThread @82783c88` / `NetCategoryInfo @829f3778` exist as named static-init stubs (they install a vtable + store the `.rdata` name and return), but the HTTP/session logic is not surfaced. The PC cross-reference remains the authority for the transport layer.
+- **Open question: where `FUN_82420690` actually routes.** Because it (and `FUN_8256eb28`) collapse to `FUN_829167xx` empty stubs in this decomp, I cannot show the local-vs-remote dispatch decision (i.e. when an event is executed locally vs serialized onto the wire). The *senders* are fully visible; the *router* is in the unrecovered region.
