@@ -1,8 +1,0 @@
-; pmc_bb.dll export definition
-; The game's import table references pmc_bb.dll by ordinal #1.
-; pmc_log is exported by name for ASI plugins to resolve via GetProcAddress.
-LIBRARY pmc_bb
-EXPORTS
-    BlackboxEntry @1
-    pmc_log
-    pmc_log_flush
