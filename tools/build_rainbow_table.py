@@ -12,6 +12,11 @@ Computes pandemic_hash_m2() for thousands of candidate strings drawn from:
 - Weapon/vehicle/item names
 - Pandemic Studios credits and EA-era strings
 - Systematic permutations (prefixes, suffixes, numbering)
+- ECS/reflection component class names (docs/mercs2-ecs registry, ~232 classes)
+- Reflection property/field names + enum members (weapon stats, etc.)
+- Identifier strings harvested from the game EXE .rdata/.data sections
+- Identifier + string-literal tokens from the decompiled Lua corpus (370 scripts)
+- The Saboteur (sibling Pandemic engine) blueprint stat vocabulary
 
 Output: tools/rainbow_table.json — maps hex hash strings to input strings.
         Also prints stats on which unknown hashes from the type registry were cracked.
@@ -24,14 +29,198 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pandemic_hash import pandemic_hash, pandemic_hash_m2  # noqa: E402
 
+# Keep console output ASCII-safe on cp1252 (Windows) terminals.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
-def gather_candidates(wad_path: Path | None = None) -> set[str]:
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def gather_ecs_registry_names() -> set[str]:
+    """ECS/reflection component class names recovered from the EXE reflection
+    registry (docs/mercs2-ecs/_registry_raw.tsv, ~232 classes)."""
+    out: set[str] = set()
+    tsv = ROOT / "docs" / "mercs2-ecs" / "_registry_raw.tsv"
+    if tsv.is_file():
+        for line in tsv.read_text(encoding="utf-8", errors="ignore").splitlines():
+            name = line.split("\t", 1)[0].strip()
+            if name:
+                out.add(name)
+        print(f"  Loaded {len(out)} ECS class names from registry")
+    return out
+
+
+def gather_reflection_field_names() -> set[str]:
+    """Reflection property/field names + enum members recovered from EXE rodata
+    during the ECS component RE. These are the hash-keyed stat fields that
+    appear in wpn_*/ECS data blocks (the values a blueprint editor would name)."""
+    weapon_fields = [
+        "iClipSize", "MaxAmmoReserve", "MaxAmmoReserveModifier",
+        "iBulletsPerShot", "iRoundsPerReload", "RateOfFire", "iTracerRound",
+        "iHideMagazineOnFire", "FireType", "SpecialCaseType", "AmmoTemplate",
+        "FireFromReticle", "FirstMagazine", "iMultipleMagazines",
+        "MaxAimAngle", "MaxAimAngleAi", "LowSkillScatter", "CenterBias",
+        "ScatterAimModeMin", "ScatterAimModeMax", "ScatterMin", "ScatterMax",
+        "ScatterPerShot", "RifleSkill", "PhysicalRecoil",
+        "MuzzleFlashHardpoint", "MuzzleFlashTemplate", "ShellEjectHardpoint",
+        "ShellTemplate", "Velocity", "MinVelocity", "MaxVelocity",
+        "Accel", "AccelTime", "HumanBoost", "Damage", "DamageDropoff",
+        "DamageDropoffStart", "DamageDropoffStop", "DamageMinimum",
+        "HeroMultiplier", "Multiplier", "MaxAge", "MaxForce",
+        "MinForceFalloff", "DetonationDistance", "LockOnMinWeight",
+        "LockOnMaxAngle", "LockOnMaxDistance", "LockOnTime", "TurnSpeed",
+        "BurstOnLength", "BurstOffLength", "BurstOnCloseLength",
+        "BurstOffCloseLength", "ChargeTime", "SingleShotWeapon",
+        "ReticlePitchLowest", "ReticlePitchMiddle", "ReticlePitchHighest",
+        "VelocityAtLowestPitch", "VelocityAtMiddlePitch",
+        "VelocityAtHighestPitch", "ThrowAngle", "GravityScale", "bCook",
+        "ReticleTexture", "ReticleType", "ReticleHealthType", "ScopeType",
+        "MinZoomLevel", "MaxZoomLevel", "ZoomMultiplier", "StartingZoom",
+    ]
+    other_fields = [
+        # AI / perception / population (ECS family 02)
+        "AiSkill", "Squad", "Perception", "Stimulus", "StimulusModifier",
+        # road / lane graph (family 06)
+        "LaneType", "LaneOffset", "LaneData", "RoadIntersection", "SpeedLimit",
+        # presentation / audio (family 05)
+        "Volume", "Pitch", "BlobShadow",
+        # gameplay state (family 07)
+        "Health", "ObjectScript", "StateMachine", "FactionValue",
+        "FactionMarker", "CashValue", "LandingZone",
+    ]
+    enums = [
+        "WeaponProjectileTypeEnum", "WeaponProjectileSpecialCaseTypeEnum",
+        "WeaponCouplingTypeEnum", "WeaponUIReticleTypeEnum",
+        "WeaponUIScopeTypeEnum", "WeaponUIReticleHealthTypeEnum",
+        "EquipmentTypeEnum", "TurretCouplingTypeEnum", "BoolEnum",
+        "AiPatrolModeEnum", "AiPriorityEnum", "NeedTypeEnum",
+        "TrafficControlEnum", "DynamicRoadTypeEnum", "FlowControlTypeEnum",
+        "AiWaterZoneEnum", "AiHintEnum",
+    ]
+    enum_members = [
+        "Automatic", "SemiAutomatic", "Burst", "Grapple", "Flare",
+        "Primary", "Secondary", "LinkedFire", "AlternateFire",
+        "Normal", "Wire", "Sniper", "True", "False", "Loop", "Bounce",
+        "Movement", "MovementPortal", "FirePoint", "CowerPoint",
+        "Curved", "MatchTarget", "MatchYawPitch", "StopSign", "TrafficLight",
+        "Overpass", "Wall", "NoTraffic", "NoVehicles", "NoPeds",
+    ]
+    out = set(weapon_fields) | set(other_fields) | set(enums) | set(enum_members)
+    # casing variants (the hash is case-insensitive via |0x20, but harmless)
+    out.update(s.lower() for s in list(out))
+    return out
+
+
+def gather_saboteur_concepts() -> set[str]:
+    """The Saboteur (sibling Pandemic 'WildStar' engine) blueprint stat
+    vocabulary, from the community Sab-Toolbox hash tables. Same hash algorithm
+    (pandemic_hash_m2), so any internal field name shared with Mercs 2 resolves
+    (verified: 'Automatic' and 'Model' hash identically in both games)."""
+    sab = [
+        # Weapon blueprint labels / candidate field names (Sab-Toolbox)
+        "Clip Size", "ClipSize", "Amount of Clips", "AmountOfClips", "Clips",
+        "Firerate", "FireRate", "Fire Rate", "Damage", "Accuracy",
+        "Automatic", "Scope", "Model", "Display Name", "DisplayName",
+        "Weapon HUD System", "Weapon HUD", "WeaponHud", "HUD",
+        "Weapon Zoom Amount", "WeaponZoom", "Zoom", "ZoomAmount",
+        "Zoomed-in Crosshair", "Zoomed-out Crosshair", "Crosshair", "Reticle",
+        "Zoomed-in Recoil", "Zoomed-out Recoil", "Recoil",
+        # Camera blueprint
+        "XYZ Position", "XYZ Rotation", "Position", "Rotation",
+        # general Saboteur / Pandemic engine concepts + archive types
+        "Blueprint", "WillToFight", "Will To Fight", "WillToFightValue",
+        "Megapack", "Tilepack", "Kilopack", "Loosefiles", "EditNodes",
+        "WildStar", "Saboteur",
+    ]
+    out = set(sab)
+    out.update(s.lower() for s in sab)
+    return out
+
+
+def _pe_string_sections(data: bytes) -> list[tuple[str, int, int]]:
+    """Return [(name, raw_ptr, raw_size)] for a PE's sections (for string harvest)."""
+    out: list[tuple[str, int, int]] = []
+    if data[:2] != b"MZ":
+        return out
+    pe_off = struct.unpack_from("<I", data, 0x3C)[0]
+    if data[pe_off:pe_off + 4] != b"PE\x00\x00":
+        return out
+    num_sections = struct.unpack_from("<H", data, pe_off + 6)[0]
+    opt_size = struct.unpack_from("<H", data, pe_off + 20)[0]
+    sec_off = pe_off + 24 + opt_size
+    for i in range(num_sections):
+        base = sec_off + i * 40
+        if base + 40 > len(data):
+            break
+        name = data[base:base + 8].rstrip(b"\x00").decode("ascii", "ignore")
+        raw_size = struct.unpack_from("<I", data, base + 16)[0]
+        raw_ptr = struct.unpack_from("<I", data, base + 20)[0]
+        out.append((name, raw_ptr, raw_size))
+    return out
+
+
+def harvest_exe_strings(exe_path: Path) -> set[str]:
+    """Harvest identifier-like ASCII strings from the game EXE's .rdata/.data
+    sections. This is where the reflection property-name table (iClipSize,
+    ScatterMin, Velocity, ...), ECS class names, enum members, and engine
+    identifiers actually live — none of which are in the WAD."""
+    out: set[str] = set()
+    try:
+        data = exe_path.read_bytes()
+    except Exception as e:
+        print(f"  EXE string harvest failed: {e}")
+        return out
+    sections = _pe_string_sections(data)
+    targets = [(n, o, s) for (n, o, s) in sections
+               if n.lower() in (".rdata", ".data") and s > 0]
+    if not targets:  # fallback: scan whole file (noisier)
+        targets = [("<all>", 0, len(data))]
+    ident = re.compile(rb"[A-Za-z_][A-Za-z0-9_]{2,63}")
+    for _name, off, size in targets:
+        blob = data[off:off + size]
+        for m in ident.finditer(blob):
+            out.add(m.group().decode("ascii"))
+    print(f"  Harvested {len(out):,} identifier strings from EXE "
+          f"sections {[t[0] for t in targets]}")
+    return out
+
+
+def harvest_lua_corpus_strings() -> set[str]:
+    """Identifier tokens + quoted string literals from the decompiled base-game
+    Lua corpus (docs/mercs2-luacd/src) — captures support-catalog tags
+    (aa, ah1z, laserguidedbomb, ...), function names, and table keys across all
+    370 scripts (the resident-block scripts the WAD bytecode harvest misses)."""
+    out: set[str] = set()
+    src = ROOT / "docs" / "mercs2-luacd" / "src"
+    if not src.is_dir():
+        return out
+    ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,63}")
+    strlit = re.compile(r'"([^"\n]{1,64})"')
+    n = 0
+    for lua in src.rglob("*.lua"):
+        try:
+            text = lua.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        n += 1
+        out.update(m.group() for m in ident.finditer(text))
+        out.update(m.group(1) for m in strlit.finditer(text))
+    if n:
+        print(f"  Harvested {len(out):,} strings from {n} decompiled Lua scripts")
+    return out
+
+
+def gather_candidates(wad_path: Path | None = None,
+                      exe_path: Path | None = None) -> set[str]:
     """Gather all candidate strings to hash."""
     candidates: set[str] = set()
 
@@ -532,6 +721,18 @@ def gather_candidates(wad_path: Path | None = None) -> set[str]:
     ]
     candidates.update(mercs1_ids)
 
+    # ── 19. Newly-learned: ECS registry, reflection fields, Lua corpus ──────
+    candidates |= gather_ecs_registry_names()
+    candidates |= gather_reflection_field_names()
+    candidates |= harvest_lua_corpus_strings()
+
+    # ── 20. The Saboteur (sibling engine) blueprint stat vocabulary ─────────
+    candidates |= gather_saboteur_concepts()
+
+    # ── 21. EXE rodata/data string harvest (reflection field + class names) ─
+    if exe_path and Path(exe_path).is_file():
+        candidates |= harvest_exe_strings(Path(exe_path))
+
     return candidates
 
 
@@ -559,7 +760,7 @@ def check_unknowns(table: dict[str, list[str]]) -> None:
     for h in unknown_hashes:
         key = f"0x{h:08X}"
         if key in table:
-            print(f"  CRACKED: {key} → {table[key]}")
+            print(f"  CRACKED: {key} -> {table[key]}")
             cracked += 1
         else:
             print(f"  still unknown: {key}")
@@ -570,6 +771,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Build pandemic_hash_m2 rainbow table")
     ap.add_argument("--wad", type=Path, default=None,
                     help="Retail vz.wad for extracting script/block names")
+    ap.add_argument("--exe", type=Path, default=None,
+                    help="Game EXE for harvesting .rdata/.data reflection "
+                         "field + class name strings")
     ap.add_argument("--output", "-o", type=Path,
                     default=Path(__file__).resolve().parent / "rainbow_table.json",
                     help="Output JSON file")
@@ -586,18 +790,35 @@ def main() -> int:
                 wad = candidate
                 break
 
+    # Auto-detect EXE (for reflection field/class name harvest)
+    exe = args.exe
+    if exe is None:
+        for candidate in [
+            Path("output/mercs2_v1.1_uncracked.exe"),
+            ROOT / "output" / "mercs2_v1.1_uncracked.exe",
+            Path("game-files/Mercenaries2.exe"),
+            ROOT / "game-files" / "Mercenaries2.exe",
+        ]:
+            if candidate.is_file():
+                exe = candidate
+                break
+
     print("Building pandemic_hash_m2 rainbow table")
     print("=" * 60)
+    if exe:
+        print(f"  EXE for string harvest: {exe}")
+    else:
+        print("  (no EXE found — pass --exe to harvest reflection field/class names)")
 
     print("\nGathering candidates...")
-    candidates = gather_candidates(wad)
+    candidates = gather_candidates(wad, exe)
     print(f"  Total unique strings: {len(candidates):,}")
 
     print("\nComputing hashes...")
     table = build_table(candidates)
     print(f"  Unique hashes: {len(table):,}")
     collisions = sum(1 for v in table.values() if len(v) > 1)
-    print(f"  Collisions: {collisions} (multiple inputs → same hash)")
+    print(f"  Collisions: {collisions} (multiple inputs -> same hash)")
 
     check_unknowns(table)
 

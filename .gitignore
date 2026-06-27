@@ -82,3 +82,7 @@ tools/external/
 build/
 # agent worktrees are embedded git repos — never commit them
 .claude/worktrees/
+*.lua
+
+tools/wad_simulator/
+tools/pmc_blackbox/
