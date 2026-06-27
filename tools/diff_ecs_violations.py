@@ -32,7 +32,10 @@ _RX = re.compile(
 def signatures(path: Path) -> collections.Counter:
     data = json.loads(path.read_text(encoding="utf-8"))
     out: collections.Counter = collections.Counter()
-    for s in data.get("ucfx_issues", []):
+    # ECS component NaN/Inf strings now live in their own differential channel
+    # (ecs_diff_issues); fall back to ucfx_issues for reports from older builds.
+    sources = data.get("ecs_diff_issues") or data.get("ucfx_issues", [])
+    for s in sources:
         if 'ECS "' not in s:
             continue
         m = _RX.search(s)
