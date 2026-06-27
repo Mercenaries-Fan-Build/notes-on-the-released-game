@@ -1,0 +1,44 @@
+---
+description: Mercenaries 2 Lua RE — verified VAs, boundary-aware bytecode/x86 scans
+globs: tools/**/*lua*,tools/dlc_enable_asi/**,docs/*lua*,**/*.asi
+alwaysApply: false
+---
+
+# Mercenaries 2 — Lua binary analysis rules
+
+## EXE gate
+
+- Canonical binary: `output/patched/Mercenaries2.exe` — **53,482,288 bytes**, image base **0x00400000**.
+- **Never** use hardcoded VAs unless size check passes. Re-run `tools/verify_lua_vas.py` after any EXE change.
+
+## Corrected VAs (do not use old values)
+
+| Wrong | Right |
+|-------|-------|
+| 0x0085F050 as `luaL_loadbuffer` | **0x00860240** = `luaL_loadbuffer`; 0x0085F050 = **`luaL_typerror`** |
+| 0x00868AD0 as `lua_pcall` | **0x0085DF50** = `lua_pcall`; 0x00868AD0 = **`luaD_pcall`** |
+
+## Calling conventions
+
+- LTCG APIs: prove from **≥2 independent E8 call sites** (register setup + stack cleanup). See `docs/lua_verification_methodology.md`.
+- **Prefer** cdecl `luaB_*` wrappers (`0x00860FC0` loadstring, `0x008615F0` pcall) over raw LTCG when possible.
+- `luaB_pcall` calls **`luaD_pcall`**, not `lua_pcall`.
+
+## Bytecode scanning
+
+- Valid chunk start: **`\x1bLuaQ`** (game) or **`\x1bLua`**, then full luac header (ver 0x51, 4-byte float numbers).
+- Parse protos; decode opcodes **only** in aligned `code[]` (4-byte instructions). **Never** grep random bytes or bare `LuaQ` substrings in compressed WADs.
+- Use `tools/lua_bytecode_scan.py` or `extract_all_scripts.py` + `luac -l -l`.
+
+## x86 scanning
+
+- Resolve **E8 rel32** targets; confirm destination in `.text` with plausible prologue (padding + `55 8B EC` / `83 EC`).
+- Do not treat arbitrary `0xE8` in string data as call sites.
+
+## Injection debugging
+
+- Log to crash-safe disk file (see `tools/dlc_enable_asi/dlc_enable.c`); use `pmc_log` when `pmc_bb.dll` is present.
+
+## TString / stack layout
+
+- `TValue`: 8 bytes; `lua_State+0x08` = top — validated in `dlc_enable.c`. TString data @ **+16** is hook-validated; re-verify if string reads fail.
