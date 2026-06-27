@@ -275,6 +275,19 @@ async def get_block_havok(block_id: int, db: AsyncSession = Depends(get_db)):
     return (await db.execute(q)).scalars().all()
 
 
+@router.get("/{block_id}/hulls")
+async def get_block_hulls(block_id: int, db: AsyncSession = Depends(get_db)):
+    """Per-piece convex break-hull metadata (vertex/plane counts + obj filename)
+    for the destructible's PHY2 collision, decoded by mercs2_formats::havok."""
+    from app.models import HavokHull
+    q = (
+        select(HavokHull)
+        .where(HavokHull.block_id == block_id)
+        .order_by(HavokHull.slice_index, HavokHull.hull_index)
+    )
+    return (await db.execute(q)).scalars().all()
+
+
 @router.get("/{block_id}/dialog")
 async def get_block_dialog(block_id: int, db: AsyncSession = Depends(get_db)):
     from app.models import DialogFragment

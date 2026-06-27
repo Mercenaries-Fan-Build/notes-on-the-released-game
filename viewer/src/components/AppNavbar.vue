@@ -32,6 +32,7 @@ const links = [
   { to: '/zones', label: 'Zone Editor' },
   { to: '/search', label: 'Search' },
   { to: '/placement-qa', label: 'Placement QA' },
+  { to: '/network-captures', label: 'Network Captures' },
 ]
 
 function isActive(to) {

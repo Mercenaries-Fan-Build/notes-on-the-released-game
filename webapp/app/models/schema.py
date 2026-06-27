@@ -193,6 +193,7 @@ class Block(Base):
     mesh_meta: Mapped[Optional[BlockMeshMeta]] = relationship(back_populates="block")
     submeshes: Mapped[list[Submesh]] = relationship(back_populates="block")
     havok_slices: Mapped[list[HavokSlice]] = relationship(back_populates="block")
+    havok_hulls: Mapped[list[HavokHull]] = relationship(back_populates="block")
     dialog_fragments: Mapped[list[DialogFragment]] = relationship(
         back_populates="block"
     )
@@ -274,12 +275,19 @@ class Submesh(Base):
     lod_alternatives: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     mesh_group_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mesh_draw_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Source model (asset hash) this submesh belongs to — the workbench's
+    # model-centric organization groups on this (a block can hold many models).
+    model_hash: Mapped[Optional[str]] = mapped_column(Text, index=True, nullable=True)
     prmt_draw_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     texture_diffuse: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     texture_normal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     texture_specular: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     hier_node_idx: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Destruction state from the orchestrator join (tools/destruction_join.py):
+    # damage_state carries intact|break_piece|static; switch_group ties pieces of
+    # one intact↔destroyed swap together.
     damage_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    switch_group: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     instanced_from: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     bbox_min_x: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     bbox_min_y: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -597,8 +605,36 @@ class HavokSlice(Base):
     has_convex_hull: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     convex_hull_filename: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     havok_version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Structured census from the exact decoder (mercs2_formats::havok, manifest
+    # schema "mercs2_havok/2"). class_counts = {class_name: instances}; the
+    # per-kind counts make destructible (convex/box pieces) vs static (MOPP
+    # mesh) queryable without re-reading the manifest.
+    class_counts: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    convex_hull_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    box_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mopp_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mesh_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     block: Mapped[Block] = relationship(back_populates="havok_slices")
+
+
+class HavokHull(Base):
+    """One `hkpConvexVerticesShape` break-piece hull (metadata only; the full
+    geometry lives in the `convex_hull_*.obj` the extractor writes). Per-hull
+    rows make the destructible subdivision analysis directly queryable — hull
+    counts per block, vertex/plane-count distributions."""
+
+    __tablename__ = "havok_hulls"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    block_id: Mapped[int] = mapped_column(ForeignKey("blocks.id"), nullable=False)
+    slice_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hull_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vertex_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    plane_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    obj_filename: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    block: Mapped[Block] = relationship(back_populates="havok_hulls")
 
 
 # ---------------------------------------------------------------------------
@@ -1121,3 +1157,60 @@ class ValidationResult(Base):
     run_at: Mapped[Optional[str]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+# ---------------------------------------------------------------------------
+# Network captures (coop / online-service capture server — "game httpbin")
+# ---------------------------------------------------------------------------
+
+class NetworkCapture(Base):
+    """One captured network event made by the game to the Modkit capture server.
+
+    Populated by the standalone ``coopserver`` service (HTTP / FESL / Theater /
+    raw TCP-UDP listeners). The goal is to log every request the game sends —
+    full params, headers and body — like httpbin, so we can see what the title
+    screen (shell.wad) and in-game (vz.wad) code asks EA's dead services for.
+    """
+
+    __tablename__ = "network_captures"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # http | https | fesl | theater | tcp | udp
+    protocol: Mapped[str] = mapped_column(Text, nullable=False)
+    # inbound (game->modkit request) | outbound (our stub response)
+    direction: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    peer_addr: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    server_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # SNI / Host header / configured hostname this connection was redirected from
+    host: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # HTTP-specific
+    method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # FESL / Theater-specific
+    fesl_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    fesl_txn: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # FESL message id is a 32-bit *unsigned* value (high bits encode packet kind),
+    # so it can exceed signed INTEGER range — store it wide.
+    fesl_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    headers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # merged query string + form fields + FESL key=value pairs
+    params: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body_hex: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body_len: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    response_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[Optional[str]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+Index("ix_network_captures_protocol", NetworkCapture.protocol)
+Index("ix_network_captures_host", NetworkCapture.host)
+Index("ix_network_captures_fesl_txn", NetworkCapture.fesl_txn)
+Index("ix_network_captures_created_at", NetworkCapture.created_at)

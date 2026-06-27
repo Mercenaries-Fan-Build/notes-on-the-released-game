@@ -37,7 +37,8 @@ from pathlib import Path
 # Allow running from webapp/ as well as repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, func, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.base import Base
@@ -51,6 +52,8 @@ from app.models.schema import (
     DialogFragment,
     EcsComponentType,
     EcsRecord,
+    HavokHull,
+    HavokSlice,
     LuaChunk,
     Placement,
     PrecacheSlot,
@@ -117,6 +120,31 @@ def make_session(url: str) -> Session:
 # WAD archives + block registration from FFCS manifests + paths.txt
 # ---------------------------------------------------------------------------
 
+# Block columns that are user-curated review state — never overwritten when a
+# re-ingest refreshes a block's extraction-derived fields.
+_BLOCK_PRESERVE_ON_CONFLICT = {
+    "id", "stem", "created_at",
+    "review_status", "review_notes", "reviewed_by", "reviewed_at", "category_id",
+}
+
+
+def _upsert_blocks(session: Session, rows: list[dict]) -> None:
+    """Bulk find-then-update-or-create on the unique `stem`: insert new blocks,
+    refresh extraction fields on existing ones, preserve review curation."""
+    if not rows:
+        return
+    from app.models import Block
+    stmt = pg_insert(Block.__table__).values(rows)
+    update_cols = {
+        c.name: stmt.excluded[c.name]
+        for c in Block.__table__.columns
+        if c.name not in _BLOCK_PRESERVE_ON_CONFLICT and c.name in rows[0]
+    }
+    update_cols["updated_at"] = func.now()
+    stmt = stmt.on_conflict_do_update(index_elements=["stem"], set_=update_cols)
+    session.execute(stmt)
+
+
 def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
     """Ingest FFCS manifest.json + paths.txt for each WAD → wad_archives + blocks.
     Returns {wad_name: wad_id}."""
@@ -140,8 +168,7 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
         manifest = json.loads(manifest_path.read_text())
         chunks = {c["tag"]: c for c in manifest.get("chunks", [])}
 
-        wad = WadArchive(
-            name=wad_name,
+        wad_fields = dict(
             filename=f"{wad_name}.wad",
             file_size_bytes=manifest.get("file_size"),
             ffcs_version=manifest.get("version"),
@@ -160,7 +187,14 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
             pths_size_bytes=chunks.get("PTHS", {}).get("size"),
             chunk_summary=json_for_pg(manifest.get("chunks")),
         )
-        session.add(wad)
+        # Find then update-or-create (idempotent re-runs).
+        wad = session.query(WadArchive).filter_by(name=wad_name).one_or_none()
+        if wad is None:
+            wad = WadArchive(name=wad_name, **wad_fields)
+            session.add(wad)
+        else:
+            for k, v in wad_fields.items():
+                setattr(wad, k, v)
         session.flush()
         wad_ids[wad_name] = wad.id
         log.info("Registered WAD: %s (id=%d)", wad_name, wad.id)
@@ -168,7 +202,7 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
         if paths_path.exists():
             paths = paths_path.read_text().splitlines()
             review_root = extracted / "review" / batch_name
-            blocks_to_add: list[Block] = []
+            block_rows: list[dict] = []
 
             for idx, raw_path in enumerate(paths):
                 try:
@@ -211,7 +245,7 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
                         if (review_dir / "mesh.obj").exists():
                             obj_path = str(review_dir / "mesh.obj")
 
-                    block = Block(
+                    block_rows.append(dict(
                         wad_id=wad.id,
                         block_index=idx,
                         path=raw_path,
@@ -240,13 +274,12 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
                         tag_occurrences=json_for_pg(ucfx_data.get("tag_occurrences")) if ucfx_data else None,
                         strings_sample=json_for_pg(ucfx_data.get("strings_sample")) if ucfx_data else None,
                         raw_ucfx_json=json_for_pg(ucfx_data),
-                    )
-                    blocks_to_add.append(block)
+                    ))
 
-                    if len(blocks_to_add) >= BATCH_SIZE:
-                        session.add_all(blocks_to_add)
+                    if len(block_rows) >= BATCH_SIZE:
+                        _upsert_blocks(session, block_rows)
                         session.flush()
-                        blocks_to_add.clear()
+                        block_rows.clear()
                 except Exception:
                     log.warning("Skipping bad record in ingest_wad_manifests: %s", raw_path, exc_info=True)
                     try:
@@ -255,8 +288,8 @@ def ingest_wad_manifests(session: Session, output: Path) -> dict[str, int]:
                         pass
                     continue
 
-            if blocks_to_add:
-                session.add_all(blocks_to_add)
+            if block_rows:
+                _upsert_blocks(session, block_rows)
                 session.flush()
             log.info("  Registered %d blocks for WAD %s", len(paths), wad_name)
 
@@ -277,8 +310,19 @@ def build_stem_lookup(session: Session) -> dict[str, int]:
 # Mesh metadata + submeshes from review/ trees
 # ---------------------------------------------------------------------------
 
-def ingest_mesh_metadata(session: Session, output: Path, stem_to_id: dict[str, int]) -> None:
-    """Walk review/ trees and ingest mesh.meta.json + submeshes/index.json."""
+def ingest_mesh_metadata(
+    session: Session,
+    output: Path,
+    stem_to_id: dict[str, int],
+    only_stems: set[str] | None = None,
+) -> None:
+    """Walk review/ trees and ingest mesh.meta.json + submeshes/index.json.
+
+    Idempotent per block (deletes a block's mesh-meta + submeshes before
+    re-inserting). `only_stems`, when given, restricts the walk to those block
+    stems (for a targeted re-ingest)."""
+    from app.models import BlockMeshMeta as _BMM  # local import; ORM models
+
     review_root = output / "extracted" / "review"
     count_meta = 0
     count_sub = 0
@@ -291,9 +335,15 @@ def ingest_mesh_metadata(session: Session, output: Path, stem_to_id: dict[str, i
                 continue
             try:
                 stem = block_dir.name
+                if only_stems is not None and stem not in only_stems:
+                    continue
                 block_id = stem_to_id.get(stem)
                 if block_id is None:
                     continue
+
+                # idempotent: clear this block's prior mesh rows before re-inserting
+                session.query(Submesh).filter_by(block_id=block_id).delete()
+                session.query(_BMM).filter_by(block_id=block_id).delete()
 
                 meta_path = block_dir / "mesh.meta.json"
                 if meta_path.exists():
@@ -404,12 +454,14 @@ def ingest_mesh_metadata(session: Session, output: Path, stem_to_id: dict[str, i
                             lod_alternatives=json_for_pg(entry.get("lod_alternatives")),
                             mesh_group_id=entry.get("mesh_group_id"),
                             mesh_draw_index=entry.get("mesh_draw_index"),
+                            model_hash=entry.get("model_hash"),
                             prmt_draw_index=entry.get("prmt_draw_index"),
                             texture_diffuse=entry.get("texture_diffuse"),
                             texture_normal=entry.get("texture_normal"),
                             texture_specular=entry.get("texture_specular"),
                             hier_node_idx=entry.get("hier_node_idx"),
                             damage_state=entry.get("damage_state"),
+                            switch_group=entry.get("switch_group"),
                             instanced_from=entry.get("instanced_from"),
                             bbox_min_x=bbox[0] if bbox and len(bbox)==6 else None,
                             bbox_min_y=bbox[1] if bbox and len(bbox)==6 else None,
@@ -444,6 +496,92 @@ def ingest_mesh_metadata(session: Session, output: Path, stem_to_id: dict[str, i
 
     session.commit()
     log.info("Ingested %d mesh metas, %d submeshes", count_meta, count_sub)
+
+
+# ---------------------------------------------------------------------------
+# Havok collision from review/ trees (havok/manifest.json)
+# ---------------------------------------------------------------------------
+
+def ingest_havok(session: Session, output: Path, stem_to_id: dict[str, int]) -> None:
+    """Walk review/ trees and ingest havok/manifest.json → havok_slices +
+    havok_hulls. Only the exact decoder's output (schema "mercs2_havok/2", from
+    mercs2_formats::havok / havok_extract) is ingested; legacy heuristic
+    manifests (no "schema" key, only "convex_heuristic") are skipped so the
+    garbage hulls never reach the DB. Re-ingest is idempotent per block."""
+    review_root = output / "extracted" / "review"
+    if not review_root.is_dir():
+        return
+    n_blocks = n_slices = n_hulls = 0
+
+    for batch_dir in sorted(review_root.iterdir()):
+        if not batch_dir.is_dir() or batch_dir.name.startswith("."):
+            continue
+        for block_dir in sorted(batch_dir.iterdir()):
+            if not block_dir.is_dir():
+                continue
+            block_id = stem_to_id.get(block_dir.name)
+            if block_id is None:
+                continue
+            man_path = block_dir / "havok" / "manifest.json"
+            if not man_path.exists():
+                continue
+            try:
+                man = json.loads(man_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if man.get("schema") != "mercs2_havok/2":
+                continue  # legacy heuristic manifest — skip
+            slices = man.get("havok_slices", [])
+            if not slices:
+                continue
+
+            try:
+                # idempotent: clear any prior havok rows for this block
+                session.query(HavokHull).filter_by(block_id=block_id).delete()
+                session.query(HavokSlice).filter_by(block_id=block_id).delete()
+
+                for si, sl in enumerate(slices):
+                    shapes = sl.get("shapes", []) or []
+                    cc = sl.get("class_counts", {}) or {}
+                    convex = [sh for sh in shapes if sh.get("kind") == "convex"]
+                    session.add(HavokSlice(
+                        block_id=block_id,
+                        slice_index=si,
+                        file_offset=sl.get("offset"),
+                        size_written=sl.get("size_written"),
+                        preview_text=sl.get("preview"),
+                        has_convex_hull=bool(convex),
+                        convex_hull_filename=sl.get("convex_hull_filename"),
+                        havok_version=sl.get("version"),
+                        class_counts=json_for_pg(cc),
+                        convex_hull_count=len(convex),
+                        box_count=int(cc.get("hkpBoxShape", 0)),
+                        mopp_count=int(cc.get("hkpMoppBvTreeShape", 0)),
+                        mesh_count=int(cc.get("WpMeshShape16", 0)),
+                    ))
+                    n_slices += 1
+                    for sh in convex:
+                        session.add(HavokHull(
+                            block_id=block_id,
+                            slice_index=si,
+                            hull_index=sh.get("index"),
+                            vertex_count=len(sh.get("vertices") or []),
+                            plane_count=len(sh.get("planes") or []),
+                            obj_filename=sh.get("obj"),
+                        ))
+                        n_hulls += 1
+                n_blocks += 1
+                session.flush()
+            except Exception:
+                log.warning("Skipping bad havok manifest: %s", block_dir.name, exc_info=True)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                continue
+
+    session.commit()
+    log.info("Ingested havok: %d blocks, %d slices, %d hulls", n_blocks, n_slices, n_hulls)
 
 
 # ---------------------------------------------------------------------------
@@ -1259,8 +1397,8 @@ def main() -> None:
         "--skip",
         nargs="*",
         default=[],
-        help="Steps to skip (wads, mesh, dialog, placements, ecs, aset, textures, "
-             "cells, animations, lua, precache, variants)",
+        help="Steps to skip (wads, mesh, havok, dialog, placements, ecs, aset, "
+             "textures, cells, animations, lua, precache, variants)",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
@@ -1300,6 +1438,10 @@ def main() -> None:
         if "mesh" not in skip:
             log.info("=== Ingesting mesh metadata + submeshes ===")
             ingest_mesh_metadata(session, output, stem_to_id)
+
+        if "havok" not in skip:
+            log.info("=== Ingesting Havok collision (slices + hulls) ===")
+            ingest_havok(session, output, stem_to_id)
 
         if "dialog" not in skip:
             log.info("=== Ingesting dialog fragments ===")

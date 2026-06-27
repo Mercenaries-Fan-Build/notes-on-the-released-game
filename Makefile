@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-wad-crates wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-havok-extract build-destruction-extract wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native winsock-redirect-asi dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings build-wad-crates
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -674,6 +674,17 @@ build-wad-crates:
 	@echo "Building all Rust WAD crates (workspace: ucfx_byteswap, wad_simulator, mercs2_formats, dlc_port, loadprobe)..."
 	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release --workspace
 	@echo "  Built workspace binaries in tools/wad_simulator/target/release/"
+build-havok-extract:
+	@echo "Building Rust havok_extract binary (exact LE Havok packfile decoder)..."
+	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p havok_extract
+	@echo "  Built: tools/wad_simulator/target/release/havok_extract"
+	@echo "  (stage2_parallel.sh uses it automatically when present; else falls back to tools/havok_extractor.py)"
+
+build-destruction-extract:
+	@echo "Building Rust destruction_extract binary (HIER/SWIT destruction-state decoder)..."
+	cd "$(REPO_ROOT)/tools/wad_simulator" && cargo build --release -p destruction_extract
+	@echo "  Built: tools/wad_simulator/target/release/destruction_extract"
+	@echo "  (stage2_parallel.sh runs it per block; orchestrator blocks emit destruction.json)"
 
 # Build + run the engine-consumption simulator over a WAD. Includes the
 # texture buffer-too-small validator (BODY shorter than the engine's
@@ -980,6 +991,16 @@ dlc-asi-native:
 	@echo ""
 	@echo "Install: copy $(OUTPUT)/scripts/dlc_enable.asi to <game>/scripts/"
 	@echo "Verify: log Build: VZ_LOAD; see docs/dlc_pc_activation_checklist.md"
+
+winsock-redirect-asi:
+	@mkdir -p "$(OUTPUT)/scripts"
+	$(MAKE) -C "$(REPO_ROOT)/tools/winsock_redirect_asi" mingw
+	@cp "$(REPO_ROOT)/tools/winsock_redirect_asi/winsock_redirect.asi" "$(OUTPUT)/scripts/winsock_redirect.asi"
+	@test -f "$(OUTPUT)/scripts/winsock_redirect.ini" || cp "$(REPO_ROOT)/tools/winsock_redirect_asi/winsock_redirect.ini" "$(OUTPUT)/scripts/winsock_redirect.ini"
+	@echo ""
+	@echo "Install: copy $(OUTPUT)/scripts/winsock_redirect.asi (+ .ini) to <game>/scripts/"
+	@echo "Set modkit_ip in winsock_redirect.ini, then run: docker compose up coopserver"
+	@echo "See docs/coop_capture_server.md"
 
 dlc-asi-native-nobootstrap:
 	@mkdir -p "$(OUTPUT)/scripts"

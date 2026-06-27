@@ -25,6 +25,8 @@ from app.models import (
 )
 from app.routers.animations import router as animations_router
 from app.routers.blocks import router as blocks_router
+from app.routers.models import router as models_router
+from app.routers.network_captures import router as network_captures_router
 from app.routers.ecs import router as ecs_router
 from app.routers.misc import (
     aset_router,
@@ -64,6 +66,7 @@ app.add_middleware(
 api_prefix = "/api"
 
 app.include_router(blocks_router, prefix=api_prefix)
+app.include_router(models_router, prefix=api_prefix)
 app.include_router(placements_router, prefix=api_prefix)
 app.include_router(overlay_router, prefix=api_prefix)
 app.include_router(cat_router, prefix=api_prefix)
@@ -84,6 +87,7 @@ app.include_router(lua_router, prefix=api_prefix)
 app.include_router(havok_router, prefix=api_prefix)
 app.include_router(save_router, prefix=api_prefix)
 app.include_router(validation_router, prefix=api_prefix)
+app.include_router(network_captures_router, prefix=api_prefix)
 
 
 @app.get("/api/health", response_model=HealthResponse)

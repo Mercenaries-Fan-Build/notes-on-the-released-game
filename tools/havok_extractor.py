@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Slice Havok binary tags (hkxp / packfile snippets) from Mercenaries 2 blobs."""
+"""Slice Havok binary tags (hkxp / packfile snippets) from Mercenaries 2 blobs.
+
+DEPRECATED: the convex-hull output here is a `longest_vec3_run` byte-scan heuristic
+that yields denormal-garbage vertices, and slices are capped at a fixed 262144 B.
+The exact little-endian packfile decoder now lives in Rust
+(`mercs2_formats::havok` → `tools/wad_simulator/crates/havok_extract`); stage-2
+(`scripts/stage2_parallel.sh`) prefers that binary and only falls back here if it
+isn't built (`make build-havok-extract`). Kept for that fallback / offline use.
+"""
 
 from __future__ import annotations
 

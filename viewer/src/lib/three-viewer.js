@@ -10,6 +10,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DDSLoader } from 'three/examples/jsm/loaders/DDSLoader.js'
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { VertexNormalsHelper } from 'three/examples/jsm/helpers/VertexNormalsHelper.js'
 import {
@@ -438,11 +439,69 @@ export function initThreeViewer(container, setStatus) {
     }
   }
 
+  // Destruction state from the orchestrator join (SWIT/HIER): the engine never
+  // co-renders a destructible's intact body and its break pieces. mode:
+  //   'intact'   — static + intact (default; the whole undamaged object)
+  //   'destroyed'— static + break_piece (the shattered state)
+  //   'all'      — everything (the overlapping raw view)
+  // No-op when no submesh carries destruction_state (non-destructible / not
+  // joined), leaving visibility to the other filters.
+  function applyDestructionState(mode) {
+    _filterState.destructionMode = mode
+    const hasData = partMeta.some((e) => e && e.destruction_state)
+    if (!hasData) return
+    for (let i = 0; i < partGroups.length; i++) {
+      const entry = partMeta[i]
+      if (!entry) continue
+      const st = entry.destruction_state || 'static'
+      let vis
+      if (mode === 'all') vis = true
+      else if (mode === 'destroyed') vis = st !== 'intact'
+      else vis = st !== 'break_piece' // 'intact'
+      partGroups[i].visible = vis
+    }
+  }
+
+  // --- Collision-hull overlay: grounded PHY2 hulls (model space) as wireframe ---
+  let hullGroup = null
+  function clearHulls() {
+    if (!hullGroup) return
+    hullGroup.traverse((o) => {
+      if (o.geometry) o.geometry.dispose()
+      if (o.material) o.material.dispose?.()
+    })
+    scene.remove(hullGroup)
+    hullGroup = null
+  }
+  function setHulls(hulls) {
+    clearHulls()
+    if (!hulls || !hulls.length) return
+    hullGroup = new THREE.Group()
+    const palette = [0xff5252, 0x40c4ff, 0x69f0ae, 0xffd740, 0xe040fb, 0x18ffff, 0xff6e40, 0xb2ff59]
+    hulls.forEach((h, i) => {
+      const pts = (h.vertices || [])
+        .filter((v) => Array.isArray(v) && v.length === 3 && v.every((c) => Number.isFinite(c)))
+        .map((v) => new THREE.Vector3(v[0], v[1], v[2]))
+      if (pts.length < 4) return
+      let geo
+      try { geo = new ConvexGeometry(pts) } catch { return }
+      const col = palette[i % palette.length]
+      hullGroup.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color: col, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false,
+      })))
+      hullGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: col })))
+    })
+    scene.add(hullGroup)
+  }
+  function setHullsVisible(v) { if (hullGroup) hullGroup.visible = v }
+  function hasHulls() { return !!hullGroup }
+
   // --- Core loading ---
 
   function disposeRoot() {
     deselectAll()
     clearNormalHelpers()
+    clearHulls()
     for (const m of models) {
       if (m.root) {
         m.root.traverse((o) => {
@@ -472,7 +531,7 @@ export function initThreeViewer(container, setStatus) {
     partGroups = []
     partMeta = []
     lodRefMaxDim = 1
-    _filterState = { lodRank: null, preferDamaged: false, showBoth: true }
+    _filterState = { lodRank: null, preferDamaged: false, showBoth: true, destructionMode: 'intact' }
     _channelIsolation = null
   }
 
@@ -528,6 +587,9 @@ export function initThreeViewer(container, setStatus) {
   }
 
   function firePartsLoaded() {
+    // Default to the intact state so destructibles don't render the intact body
+    // and its break pieces on top of each other.
+    applyDestructionState(_filterState.destructionMode || 'intact')
     for (const cb of _partsLoadedCallbacks) {
       cb(partGroups, partMeta)
     }
@@ -708,7 +770,7 @@ export function initThreeViewer(container, setStatus) {
   const ro = new ResizeObserver(() => syncSize())
   ro.observe(container)
 
-  async function loadManifest(manifestUrl) {
+  async function loadManifest(manifestUrl, opts = {}) {
     disposeRoot()
     setStatus('Loading manifest\u2026')
     const baseUrl = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1)
@@ -716,7 +778,12 @@ export function initThreeViewer(container, setStatus) {
     try {
       const res = await fetch(manifestUrl)
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const entries = parseManifestJsonArray(await res.text())
+      let entries = parseManifestJsonArray(await res.text())
+      // Model-centric loading: a block's manifest holds many models; keep only
+      // the submeshes of the requested one.
+      if (opts.modelHash) {
+        entries = entries.filter((e) => e.model_hash === opts.modelHash)
+      }
 
       root = new THREE.Group()
       let loaded = 0
@@ -1097,6 +1164,11 @@ export function initThreeViewer(container, setStatus) {
 
     applyLodFilter,
     applyDamageFilter,
+    applyDestructionState,
+    setHulls,
+    setHullsVisible,
+    clearHulls,
+    hasHulls,
     setAllPartsVisible(visible) {
       for (const pg of partGroups) pg.visible = visible
     },

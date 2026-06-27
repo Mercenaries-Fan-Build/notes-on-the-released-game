@@ -46,7 +46,12 @@ MESH_FORMAT="${MESH_FORMAT:-obj}"
 UCFX="$REPO_ROOT/tools/ucfx_parser.py"
 MESH="$REPO_ROOT/tools/mesh_extractor.py"
 TEX="$REPO_ROOT/tools/texture_extractor.py"
-HAV="$REPO_ROOT/tools/havok_extractor.py"
+HAV="$REPO_ROOT/tools/havok_extractor.py"  # legacy heuristic (fallback only)
+# Exact LE Havok packfile decoder (mercs2_formats::havok). Preferred over the
+# Python heuristic; falls back to $HAV if the binary isn't built.
+HAVOK_BIN="${HAVOK_BIN:-$REPO_ROOT/tools/wad_simulator/target/release/havok_extract}"
+# Destruction-state extractor (HIER/SWIT -> intact/break_piece/static per model).
+DESTRUCTION_BIN="${DESTRUCTION_BIN:-$REPO_ROOT/tools/wad_simulator/target/release/destruction_extract}"
 GLTF="$REPO_ROOT/tools/gltf_exporter.py"
 DIALOG="$REPO_ROOT/tools/dialog_extractor.py"
 LEVEL="$REPO_ROOT/tools/level_extractor.py"
@@ -136,8 +141,20 @@ process_one() {
     HAVARGS=()
     [[ "${HAVOK_CONVEX_OBJ:-1}" == "1" ]] && HAVARGS+=(--emit-convex-obj)
     if [[ "${STAGE2_SKIP_HAVOK:-0}" != "1" ]]; then
-      if "$PYTHON" "$HAV" "$binf" --out-dir "$out/havok" "${HAVARGS[@]}"; then
-        :; else echo "FAILED havok $binf" >>"$FAIL"; ec=1; fi
+      if [[ -x "$HAVOK_BIN" ]]; then
+        if "$HAVOK_BIN" "$binf" --out-dir "$out/havok" "${HAVARGS[@]}"; then
+          :; else echo "FAILED havok $binf" >>"$FAIL"; ec=1; fi
+      else
+        if "$PYTHON" "$HAV" "$binf" --out-dir "$out/havok" "${HAVARGS[@]}"; then
+          :; else echo "FAILED havok $binf" >>"$FAIL"; ec=1; fi
+      fi
+    fi
+
+    # Destruction state machine (HIER/SWIT -> intact/break_piece/static per model).
+    # Orchestrator blocks emit real data; others write {"orchestrated": false}.
+    if [[ "${STAGE2_SKIP_DESTRUCTION:-0}" != "1" ]] && [[ -x "$DESTRUCTION_BIN" ]]; then
+      if "$DESTRUCTION_BIN" "$binf" --out-dir "$out"; then
+        :; else echo "FAILED destruction $binf" >>"$FAIL"; ec=1; fi
     fi
 
     if [[ "${STAGE2_DIALOG:-1}" != "0" ]]; then
