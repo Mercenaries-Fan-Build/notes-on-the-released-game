@@ -19,6 +19,34 @@ import struct
 HEADER_LEN = 12
 
 
+def _quote(v) -> str:
+    # FESL escapes '=' in values as %3d (matches loganw234/Mercenaries2 server.py).
+    return str(v).replace("=", "%3d")
+
+
+def _unquote(v: str) -> str:
+    return v.replace("%3d", "=")
+
+
+def _flatten(name, obj) -> dict:
+    """Flatten nested dicts/lists into FESL dotted keys, e.g.
+    {'entitledGameFeatureWrappers':[{'gameFeatureId':6014}]} ->
+    {'entitledGameFeatureWrappers.[]':1,'entitledGameFeatureWrappers.0.gameFeatureId':6014}.
+    Lists emit a '<name>.[]'=len marker. Ported from Logan's server.py."""
+    out: dict = {}
+    if isinstance(obj, dict):
+        for k, sub in obj.items():
+            key = f"{name}.{k}" if name else k
+            out.update(_flatten(key, sub))
+    elif isinstance(obj, (list, tuple)):
+        out = {f"{name}.[]": len(obj)}
+        for i, e in enumerate(obj):
+            out.update(_flatten(f"{name}.{i}", e))
+    else:
+        out = {name: obj}
+    return out
+
+
 def parse_kv(payload: bytes) -> dict[str, str]:
     text = payload.split(b"\x00", 1)[0].decode("latin-1", "replace")
     out: dict[str, str] = {}
@@ -27,13 +55,14 @@ def parse_kv(payload: bytes) -> dict[str, str]:
         if not line or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        out[k] = v
+        out[k] = _unquote(v)
     return out
 
 
-def build_payload(fields: dict[str, str]) -> bytes:
-    s = "".join(f"{k}={v}\n" for k, v in fields.items())
-    return s.encode("latin-1") + b"\x00"
+def build_payload(fields: dict) -> bytes:
+    flat = _flatten(None, fields)
+    s = "\n".join(f"{k}={_quote(v)}" for k, v in flat.items()) + "\x00"
+    return s.encode("latin-1")
 
 
 def encode_frame(type4: str, msg_id: int, fields: dict[str, str]) -> bytes:
