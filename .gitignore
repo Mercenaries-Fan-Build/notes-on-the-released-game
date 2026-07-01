@@ -20,7 +20,7 @@ tools/lua51-mercs2/build/
 tools/lua51-mercs2/src/lua
 tools/lua51-mercs2/src/luac
 tools/lua51-mercs2/src/liblua.a
-tools/lua51-mercs2/src/*.o
+tools/lua51-mercads2/src/*.o
 
 analysis/*
 tools/bin/
@@ -85,3 +85,6 @@ build/
 
 tools/wad_simulator/
 tools/pmc_blackbox/
+
+# registry backups contain the ergc registration code — keep out of git
+backups/registry/
