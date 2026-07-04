@@ -314,7 +314,11 @@ identity fit for placed meshes (§3); streamed-mip texture decode (§6); wavelet
 placement rotation; the vz_state ABSOLUTE vs layers_static RELATIVE COMP-offset handling.
 
 ## 12. Open / TODO (honest gaps)
-- Interior hall/floor SHELL mesh (unnamed hash) — geometric ID or actor-template table (§7).
+- ~~Interior hall/floor SHELL mesh (unnamed hash) — geometric ID or actor-template table (§7).~~
+  RESOLVED 2026-07-03: the `HqInterior` actor mesh = `pmcoutpost_interior_hq` → **0x39AF17DC** (a
+  non-primary type-19 model, 96,784v/131,834t — the ornate columned hall). Same `pmcoutpost_interior_<room>`
+  naming as the recruit bays. NOT `_pmcoutpost_bld_hq_livedin` (that's the EXTERIOR building; see
+  wifpmcinterior.lua:563-567 uRealPmc vs uFakePmc). Placed at actor origin (3750,450,-3840).
 - High-mip texture streaming/upgrade (§6).
 - Actor-template registry (SpawnActor `sTemplate` → asset) if we can locate it in the data.
 - ~790 of 1,771 model hashes are unreversed (rainbow-table gap) — spatial/geometric ID covers most.
