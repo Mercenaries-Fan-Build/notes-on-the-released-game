@@ -154,10 +154,19 @@ resident `all_mips` = **2,728 B = exactly sum(mips 3..7)**; 512² Bc3 = 1,360 B 
 - **Decode fix (DONE in `make_bc_view`):** when full mip 0 is absent, find the largest RESIDENT mip
   level L where `sum(mip_bytes(L..mip_count)) == all_mips.len()`, and build the texture at
   `(w>>L, h>>L)`. Result: low-res but textured (not white). This un-whites ALL streamed props/cells.
-- **High-mip streaming is a TODO** for the streamer: on-demand upgrade of near textures to full res
-  from the global texture registry. Textures resolve via GLOBAL registries (`FUN_008242b0` cap
-  0x100/5000; `FUN_00873140`) — see `per-model-distinct-texture-cap-trace`. Formats: BC1/BC3
-  (`TextureData{width,height,format,mip0,all_mips,mip_count}`).
+- **High-mip streaming — BUILT 2026-07-03** (`wad::extract_texture_hires` + `texture::assemble_hires`).
+  MECHANISM (proven via `--tex-audit`/`--tex-locate`): the higher mips are NOT a separate global
+  store — they live in the FINER c3-cell LOD blocks of the texture's OWN cell subtree. The resident
+  ASET block is `cXXXXX_P000_Q3` (coarse tail); each finer block `cXXXXX-…_P00N_Q(3-N)` carries a
+  **lone `BODY` UCFX chunk = exactly ONE finer mip level** (no INFO/NAME). Example: hall texture
+  0x6523B88D → 4 blocks, BODY sizes 2885/8240/32816/131120 B = resident tail(mips3-7) / mip2 / mip1 /
+  mip0. Assembly: gather every BODY the hash carries across its subtree (blocks whose cell prefix ==
+  or starts-with the resident prefix), order by size DESCENDING, concatenate → full mip0..N chain (the
+  geometric 4× ratio guarantees size-order == mip-order). `make_bc_view` uploads the full chain;
+  sampler `mipmap_filter=Linear`. The game's global registry "last write wins on hash collision" =
+  the finest streamed-in copy overwriting the coarse resident one (user's insight). Currently wired
+  into the interior SHELL loader (always-visible); extend to near/visible world cells with a
+  view-dependent trigger (only upgrade what the camera can see). Formats: BC1/BC3.
 
 ---
 
@@ -319,7 +328,8 @@ placement rotation; the vz_state ABSOLUTE vs layers_static RELATIVE COMP-offset 
   non-primary type-19 model, 96,784v/131,834t — the ornate columned hall). Same `pmcoutpost_interior_<room>`
   naming as the recruit bays. NOT `_pmcoutpost_bld_hq_livedin` (that's the EXTERIOR building; see
   wifpmcinterior.lua:563-567 uRealPmc vs uFakePmc). Placed at actor origin (3750,450,-3840).
-- High-mip texture streaming/upgrade (§6).
+- ~~High-mip texture streaming/upgrade (§6).~~ BUILT 2026-07-03 (`extract_texture_hires`); remaining:
+  a view-dependent trigger so only near/visible world cells assemble hi-res (interior shells done).
 - Actor-template registry (SpawnActor `sTemplate` → asset) if we can locate it in the data.
 - ~790 of 1,771 model hashes are unreversed (rainbow-table gap) — spatial/geometric ID covers most.
 
