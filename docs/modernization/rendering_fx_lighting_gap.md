@@ -87,15 +87,31 @@ StopEmitter`, `global_particle_*` templates). None of this exists in-engine.
   machine** (e.g. the villa's `CollapseState`). A runtime gameplay feature (buildings collapse), not a
   render filter — do NOT gate draw groups on it.
 
-## Suggested order (visual impact ÷ effort)
-1. **Dynamic point lights from `LightObject`** — the interior reads flat/dark without them; high impact,
-   moderate effort (parse the ECS component, forward-accumulate N nearest lights). Add specular (slot 1)
-   alongside — cheap.
-2. **Multi-pass architecture (z-prepass + a color pass that consumes the light list)** — enables 3-5.
-3. **Particles/FX** — largest system; start with `fxdict` + a single billboard emitter honouring
-   `ObjectState.StartEmitter`, then forces/gradients/ribbons.
-4. **Shadows** (blob first, then shadow-buffer).
-5. **Sky/atmosphere + HDR/bloom post**.
-6. **Decals**, **prop anim clips**, **LOD imposters**, then the **ECS destruction** state machine.
+## Dependency graph — these are mostly PARALLEL, not a ladder
+Almost every subsystem is independent; the only real couplings are noted. Do them in any order / concurrently.
 
-Everything here is "implement per their description"; this file is the checklist. Update status as we go.
+**Independent workstreams (no hard deps):**
+- **Specular (MTRL slot 1)** — shader/material only.
+- **Dynamic lights (`LightObject`)** — forward multi-light accumulates in the *existing* single pass; no
+  multi-pass required. (Pairs naturally with specular since both touch the shader.)
+- **Particles/FX** — separate billboard/additive path rendered in/after the forward pass; `fxdict`
+  parsing is standalone data work.
+- **Prop anim clips (`TRCK/VALU/KEYS` → `LoadedModel.clips`)** — animation-data work; reuses the
+  character skeletal system.
+- **Sky/atmosphere + HDR/bloom** — a post pass over the color target.
+- **Decals** — projected quads (depth-test + polygon-offset) work in forward.
+- **LOD imposters (`MESH/TINY`)**, **ECS destruction state machine** — independent.
+
+**Soft couplings (helpful-before, not blocking):**
+- **Shadows** want a depth/z-prepass + a light to cast from → nicer *after* lights + a z-prepass exist,
+  but can be prototyped against the current directional light.
+- **Multi-pass (z→color→shadow→reflection)** is not a prerequisite for lights/particles/specular/decals;
+  it's the clean home for shadows + correct transparency ordering once several of the above land.
+
+**Practical caveat for concurrency:** these are independent in *design* but several touch the same render
+files (`scene.rs`, `shader.wgsl`, pipeline/bind-group setup). Concurrent edits want either one hand
+interleaving them or isolated branches/worktrees to avoid churn in those shared files. The *data* parsers
+(`fxdict`, `LightObject` ECS, anim clips, decal defs) are cleanly separable and conflict-free.
+
+Highest visual impact for least effort: **dynamic lights + specular** (villa/interiors read flat without
+real lights). But pick freely — nothing blocks. This file is the checklist; update status as we go.
