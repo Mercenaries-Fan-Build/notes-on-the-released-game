@@ -8,11 +8,23 @@ discovering the gap piecemeal. Cross-referenced to `docs/ucfx_tag_registry.md` (
 
 Status legend: ✅ done · 🟡 partial · ❌ not started.
 
-## Where we are today (baseline)
-`shader.wgsl` = textured + tangent-space normal map + **one fixed directional light** (`L=(0.4,0.7,-0.5)`,
-ambient 0.35) + placeholder exponential fog. A **single forward pass**, no z-prepass, no shadow pass, no
-reflection pass, no post. `LoadedModel.clips` empty (props don't animate). No lights, particles, decals,
-sky, or water code in the engine at all.
+## Where we are today (updated 2026-07-04 after the parallel fan-out)
+A 4-lane worktree fan-out landed (commits ede029f/b47fdff/701ed96/314e36d), all merged + game green:
+- **Dynamic lighting + specular** 🟡: `LightObject` (0x97e8ee92) parser + forward up-to-32 point lights
+  (radius attenuation) + preserved sun/ambient + Blinn-Phong specular from MTRL slot 1 (`_sm`). SPEC:
+  light_type enum + spot-cone floats not decoded (all treated as point); per-material gloss not threaded.
+- **Particles/FX** 🟡: `fxdict` + EMTR/EFCT/COLR/FRCE/POFF/TRFM/PTYP/TEXT parser (18 tests) + a wgpu
+  billboard CPU-sim (`Scene::fx_start`/`fx_stop`, mirrors Lua StartEmitter). SPEC: EffectTemplate→
+  EmitterDesc auto-map (EMIT/FRCE/COLR float roles unpinned in decomp) — game feeds explicit descriptors.
+- **Sky/atmosphere + HDR/bloom** 🟡: `atmosphere` model + scattering sky + HDR Rgba16Float target →
+  bright-pass/blur/ACES-Reinhard tone-map + bloom; Option fallback to direct present. SPEC: auto-exposure
+  approximated (not the real adaptive-luminance feedback loop).
+- **Prop anim clips** 🟡: clip-selection + populate `LoadedModel.clips`. NOTE: retail vz.wad props ship no
+  Havok clips (RE-verified), so nothing animates on retail data — the layer is correct for when clips exist.
+- render() reconciled across lanes: `draw_geometry` binds group-3 lights; HDR-vs-direct path chosen by
+  `sky_enabled`+post availability; particles draw in a separate swapchain pass over the final image.
+- ⚠ NOT visually tested yet — needs a `cargo run` to confirm (esp. the HDR path; it's gated + falls back).
+Still ❌: shadows, multi-pass z-prepass/reflection, decals, LOD imposters, ECS destruction, real exposure.
 
 ## The subsystems
 
