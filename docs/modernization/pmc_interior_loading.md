@@ -50,9 +50,9 @@ simply `pandemic_hash_m2("pmcoutpost_interior_hq")`.) Verified base structure pa
 | Mesh name | hash | verts / draws | note |
 |---|---|---|---|
 | `pmcoutpost_interior_hq` | 0x39AF17DC | 96784 / 80 | the main ornate hall (prelit) |
-| `pmcoutpost_interior_sickbay` | 0x757EAE95 | 5183 / 13 | **not loaded today** |
-| `pmcoutpost_interior_scaffold` | 0x1FBFBB4B | 825 / 4 | **not loaded today** |
-| `proutpost_interior_job` | 0xCE8165DE | 367 KB / 16 | prelit room — **not loaded today** |
+| `pmcoutpost_interior_sickbay` | 0x757EAE95 | 5183 / 13 | now loaded (base) |
+| `pmcoutpost_interior_scaffold` | 0x1FBFBB4B | 825 / 4 | now loaded (base) |
+| `proutpost_interior_job` | 0xCE8165DE | 9977 / 16 | prelit room — now loaded (base) |
 | `pmcoutpost_interior_recruitmechanic` | 0xE8EB75D7 | 19197 / 23 | Eva bay (unlock) |
 | `pmcoutpost_interior_recruitjet` | 0x86D7CF92 | 8970 / 10 | Misha bay (unlock) |
 | `pmcoutpost_interior_recruitheli` | 0x634F1F65 | 10247 / 14 | Ewen bay (unlock) |
@@ -74,7 +74,7 @@ stockpile-category path (`pmc::stockpile_mesh`), not the plain name hash.
 | Base game | Engine today (`pmc.rs`) |
 |---|---|
 | Layers via `PTHS` + `_GetStarterLayers` gating | **hardcoded** `state_blocks = [667, 461/291, 703, 711]` |
-| Structure = `HqInterior` actor's base `pmcoutpost_interior_*` parts | **hardcoded** `interior_actor_meshes = [hall, 3 recruit bays]` — **missing sickbay, scaffold, job** |
+| Structure = `HqInterior` actor's base `pmcoutpost_interior_*` parts | name-resolved base parts (hall + sickbay + scaffold + job) + recruit bays by unlock — **DONE** (was: hall + recruit bays only) |
 | Money/stockpile by amount | money tier-gated (partial); **stockpile absent** |
 
 That missing sickbay/scaffold/job (and stockpile) is why the interior reads incomplete — not a render
