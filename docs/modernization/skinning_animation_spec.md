@@ -118,36 +118,61 @@ stream 0 unchanged.
 Weight decode: `w_i = byte_i / 255.0`. Up to 4 influences/vertex. Unused influences
 have weight byte 0 (their index byte is then don't-care; treat as bone 0).
 
-### 1.4 Bone-palette resolution — the "high-risk trap", RESOLVED
+### 1.4 Bone-palette resolution — CORRECTED 2026-07-01: PER-GROUP palette-relative
 
-**FINDING (CONFIRMED, 2 independent sources): BLENDINDICES are GLOBAL HIER node
-indices — direct indexing into the model's own bone array. There is NO per-draw-group
-bone palette / matrix-palette remap, and SEGM is NOT a bone palette.**
+> **⚠️ SUPERSEDED.** The previous text of this section claimed BLENDINDICES are
+> **global** HIER indices ("CONFIRMED, 2 independent sources"). **That was WRONG.**
+> A screenshot-verified RCA on 2026-07-01 (memory `blendindices-per-group-palette`)
+> proved BLENDINDICES are **per-draw-group palette-relative**. The old claim is
+> preserved only as a caution at the bottom of this section.
 
-- `skeleton_status.md` states explicitly: *"Joint indices = HIER node index
-  (0 … hier_bytes/176 − 1), NOT animation track index."*
-- `mannequin.rs` and `collect_donor_skin_vertices` both use raw global 95/90-bone
-  indices with the note *"direct global BLENDINDICES … no palette/remap"* — and this
-  is proven to render/animate in-game (obama in the wardrobe).
+**FINDING (CORRECTED, screenshot-verified 2026-07-01): BLENDINDICES are PER-DRAW-GROUP
+palette-relative. Each PRMG group has its own bone palette = the concatenation of a
+range table stored in the group's `INFO(56)` leaf. Vertex joints index that palette,
+NOT the global HIER array.**
 
-So the resolution is trivial:
+Per-group palette layout (`INFO(56)` leaf):
 ```
-skeleton_bone_index = BLENDINDICES[k]        // 0-based HIER node index, verbatim
-bone_matrix         = pose_matrix[ BLENDINDICES[k] ]
++20  u32  range_count
++24  range_count × { u16 hier_base, u16 count }
 ```
-There is no indirection table between the vertex and the skeleton.
+The group's palette is `concat over ranges of [hier_base .. hier_base+count)`. A vertex
+joint `j` maps to a global HIER index by walking the ranges and accumulating:
+```
+// oracle: FUN_00479d90 uploads pose + hier_base*0x30 for count*3 rows per range,
+// accumulating dest offset — i.e. it lays the ranges out contiguously into the palette.
+global_hier_index = resolve_palette(group.ranges, j)
+bone_matrix       = pose_matrix[ global_hier_index ]
+```
 
-**What SEGM actually is (correction for downstream readers):** SEGM is a 64-byte
-segment/LOD table (16 records × 4B: `00 00 seg_id lod_or_count`), paired 1:1 with a
-`GEOM`→`INDX` segment→sub-mesh map. It groups draw calls by LOD/segment; it does **not**
-remap bone indices. (Confirmed in `donor_geometry_format.md` §5.) The prompt's phrase
-"per-group bone palette (SEGM remap)" describes a scheme this asset format does **not**
-use; do not implement a palette remap.
+**Why the old "global" reading looked right but was wrong:** it is invisible at bind
+(identity palette), so obama-in-the-wardrobe rendered fine at rest. It only diverges
+once a clip drives the bones — mis-indexed verts blend whatever bones the clip happens
+to move. This single root cause produced **two** long-standing symptoms: the idle
+(`0x24F8C8E6`) hand-claw and the walk (`0x53682784`) head-fan. One fix in
+`model_cubeize.rs` (expand the INFO range table, remap joints→global at read; gated
+1≤rc≤8, count>0, base+count≤4096, total≤256) killed both — fingers render correctly for
+the first time. Evidence: Mattias `0xA3C1FABC` has no vertex index >45 yet rig=100 bones
+(fingers 63–99 unreachable as-global); arm group `rc=4 [(4,1),(21,4),(58,26),(85,15)]`;
+post-fix mean vertex→bone distance 0.04–0.22 m (was up to 6344 far-verts/group).
 
-> Consequence for the mesh reader: read BLENDINDICES as-is and index the pose array
-> directly. The `model_inject`/`retarget` code's remapping is a *kitbash authoring*
-> concern (remap FOREIGN glb joints onto donor HIER indices at build time) — it is not
-> a runtime skinning step and must not be replicated in the renderer.
+**SEGM is still not a bone palette.** SEGM is the 64-byte segment/LOD table (16 records
+× 4B: `00 00 seg_id lod_or_count`) paired 1:1 with the `GEOM`→`INDX` segment→sub-mesh
+map; it groups draw calls by LOD/segment. The bone palette lives in the per-group
+`INFO(56)` range table above, not in SEGM.
+
+**Kitbash-pipeline consequence (audit needed):** `mannequin.rs` /
+`collect_donor_skin_vertices` and the `model_inject`/`retarget` code authored verts
+assuming **global** indices. That assumption is invalid — audit the donor-injection
+kitbash path (relates to the sarah/obama DLC skin ports).
+
+<details><summary>Historical (DISPROVEN) claim, kept for context</summary>
+
+The section originally read: *"BLENDINDICES are GLOBAL HIER node indices … There is NO
+per-draw-group bone palette … `skeleton_status.md`: 'Joint indices = HIER node index' …
+`mannequin.rs` uses raw global 95/90-bone indices … proven in-game (obama)."* This was
+disproven by decomp oracle FUN_00479d90 + the screenshot-verified fix above.
+</details>
 
 ### 1.5 The LBS math
 
@@ -254,6 +279,16 @@ Vehicles/humans in the shipped game predominantly use **wavelet** clips (the
 fully-implemented path). Common shape: per-clip `duration`, `numTransformTracks`
 (60 human / 22 vehicle), `numPoses` frames; each frame yields a TRS per track.
 
+> **Authoritative decoder (2026-07-01):** the maintained wavelet decoder is the Rust
+> port in `tools/wad_simulator/crates/mercs2_formats/src/anim.rs` (the Python
+> `hk_anim/wavelet.py` is legacy). It is **numerically validated against a live x32dbg
+> capture** — 660/660 recompose floats ≤1e-4, 246/246 decompress coeffs ≤1e-3, 64/64
+> oracle rotations. Full method, the 4 fixed bugs, and the fixture manifest are in
+> `docs/modernization/wavelet_decode_verification.md`. Note the original Python decoder
+> carried 4 subtle bugs (frame-vs-time, entropy-advance count, dequant bias, mult/addend
+> swap) that only surfaced under live-capture diffing — do not treat the Python as ground
+> truth.
+
 ### 2.4 Runtime sample + apply pipeline
 
 From `animation-skeleton.md` (Pangea on top of Havok Animation `hka` + Behavior `hkb`).
@@ -320,7 +355,9 @@ no controllers/IK; controllers, blending, IK, ragdoll are later gated phases.
 - HIER node stride: **176 B**; parent @+8 u16 (0xFFFF=root); local @+16; InvBind @+80.
 - Vertex blend: **BLENDINDICES @+16 (UBYTE4)**, **BLENDWEIGHT @+20 (UBYTE4N, Σ=255)**.
 - Skinned strides: **32** (no tangent) / **40** (tangent); f16 pos/normal/tangent.
-- BLENDINDICES = **global HIER index** (no palette, no SEGM remap).
+- BLENDINDICES = **per-group palette-relative** (index the group's `INFO(56)` range
+  table `{u16 hier_base, u16 count}×rc` at +24, concatenated → global HIER). **NOT** a
+  global HIER index — see §1.4 (corrected 2026-07-01).
 - `Skin_b = InvBind_M[b] @ WorldPose_M[b]`, row-vector (`p' = [p,1] @ Skin`).
 - IBUF = u16 **triangle strip** (degenerate-stitched; odd triangles reversed).
 - Clips: separate **animgroup** block, Havok-5.5.0-r1 packfile, hkQsTransform = **48 B**
@@ -331,22 +368,27 @@ no controllers/IK; controllers, blending, IK, ragdoll are later gated phases.
 
 ## 5. OPEN QUESTIONS (need manual review / verification)
 
-1. **[HIGH] Mesh-HIER bone order vs animgroup hkaSkeleton bone order.** BLENDINDICES
-   index the mesh HIER; clips index the hkaSkeleton via `hkaAnimationBinding`. These are
-   *assumed* alignable by name-hash but NOT proven identical in index order. If they
-   diverge, a track→HIER remap (by name-hash) is required at runtime. **Verify:** parse
-   one animgroup `hkaSkeleton` `m_bones` and compare its name-hash order against the
-   paired model's HIER name-hash order. `heli_rig_dissection.md` open item #2 flags that
-   the Mi-26 hkaSkeleton bone names did not surface as clean strings (may be hash-only) —
-   settle with a proper `hkaSkeleton` parse of block 03310.
+1. **[RESOLVED 2026-07-01] Mesh-HIER bone order vs animgroup hkaSkeleton bone order.**
+   The track→bone binding (trnm resolve) was fully EXONERATED: 60/60 + 64/64 tracks
+   resolve, and decoded track locals match bind-locals to <5e-5. The head-fan / hand-claw
+   that were suspected here were actually the per-group BLENDINDICES bug (see §1.4). No
+   runtime track→HIER remap divergence remains for the tested human rig (Mattias
+   `0xA3C1FABC`, idle + walk). (Heli/vehicle rigs not separately re-verified.)
 
-2. **[HIGH] `hkaWavelet` decoder fidelity vs the live engine.** `wavelet.py` is a
-   from-scratch reimplementation (inverse-Haar lifting, quant offset/scale/bitWidth). It
-   has not been diffed against the original exe's actual sampled `BoneMatrixArray` at a
-   known `t`. **Verify (Surface A):** x32dbg-dump the engine's model-space bone transforms
-   for a specific clip+frame and byte/epsilon-compare against the Rust port. The Xbox
-   sample/blend math is VMX128 and does not decompile, so the oracle must be the *running*
-   exe, not the decomp.
+2. **[RESOLVED 2026-07-01] `hkaWavelet` decoder fidelity vs the live engine.** The decoder
+   was re-ported from the decomp and validated numerically against a matched
+   `(raw clip → coefficients → pose)` triple captured live from the running game via
+   x32dbg (breakpoints at `LtSampleWave` FUN_009f5e40 entry and the `StRecomposeW` call
+   site 0x9f6396). Results: Stage-2 StRecomposeW **660/660 pose floats ≤1e-4**; Stage-1
+   decompress+dequant+wavelet+interp **246/246 coeffs ≤1e-3**; 64-track oracle clip
+   **64/64 rotations**. Fixtures:
+   `tools/wad_simulator/crates/mercs2_formats/tests/fixtures/wavelet_capture_2p567s/`;
+   gates: `tests/wavelet_{decompress,recompose}.rs`. Four decode bugs were fixed (frame/
+   frac is TIME not frame units; entropy-advance counts PRESENT not all codes; dequant
+   `+0.5`/dc-sign hack removed; mult/addend arrays were swapped). See §2.3 and
+   `docs/modernization/wavelet_decode_verification.md`.
+   *Still UNVERIFIED:* the `blockSize≠8` and `preserved>0` decode paths (no fixture
+   exercises them); delta-compressed clips (see #3 below).
 
 3. **[MED] Delta-compressed clips.** `delta.py` is header-only (emits identity TRS). If
    any shipped human/vehicle clip is delta-compressed (not wavelet/interleaved), Phase B

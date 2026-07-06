@@ -1,0 +1,795 @@
+{
+ "_meta": {
+  "description": "PC code map of 3 Mercenaries 2 render subsystems: #5 sky/atmosphere/HDR-post, #6 decals, #7 water. Reversed from the unpacked SecuROM image via a 4-agent fan-out. Companion docs: docs/reverse_engineer/{sky_post_hdr_code_map,decal_code_map,water_code_map}.md.",
+  "image": "output/_ghidra/securom_dump/mercs2_unpacked.exe, base 0x400000",
+  "method": "Xbox PDB names (rendering-shaders.md / world-streaming.md) bound to PC addresses via .sho shader strings, PC source paths (PgCloudsWin32.cpp/PgWaterWin32.cpp), 'CREATED SURFACE' RT-creator logs, Graphics.Atmosphere Lua setters, and reflection/tunable strings + callgraph. Setup (shader reg, RT creation, reflection, Lua setters, tunable parse) high/med conf; per-frame draw is vtable/handle-dispatched → confirm-live.",
+  "counts": {
+   "functions": 97,
+   "sky_atmosphere": 51,
+   "hdr_post": 15,
+   "decal": 9,
+   "water": 22,
+   "high": 60,
+   "med": 32,
+   "low": 5
+  }
+ },
+ "functions": [
+  {
+   "addr": "0x00466670",
+   "ghidra_name": "FUN_00466670",
+   "system": "hdr_post",
+   "stage": "screeneffect.owner",
+   "confidence": "med",
+   "evidence": "constructs/owns the shimmer/screen-FX renderable (FUN_0046d290) and emits its fullscreen composite; part of the PgFX screen-effect apply path"
+  },
+  {
+   "addr": "0x00466d40",
+   "ghidra_name": "FUN_00466d40",
+   "system": "water",
+   "stage": "render_driver",
+   "confidence": "high",
+   "evidence": "2679B water frame driver = Water::Render (Xbox 0x15f1c); orders wake gen -> occlusion -> reflection scene -> water prep -> main scene -> surface passes; camera-underwater flag via FUN_00480440 -> param+0x1c0"
+  },
+  {
+   "addr": "0x004677d0",
+   "ghidra_name": "FUN_004677d0",
+   "system": "water",
+   "stage": "reflection_pass",
+   "confidence": "high",
+   "evidence": "builds MIRRORED view matrices (D3DXMatrixMultiply of camera against water plane +0xab0/0xb70) and re-renders scene renderables = Water::RenderReflections (Xbox 0x15f00); called via FUN_00486fa0@0x48743e"
+  },
+  {
+   "addr": "0x0046a440",
+   "ghidra_name": "FUN_0046a440",
+   "system": "water",
+   "stage": "system_registrar",
+   "confidence": "high",
+   "evidence": "static water-system init: calls FUN_00484380 (shaders) then registers 6 water update-action classes (hashes 0xcb414134/0x5d9a2c1a/0x5f2080d1/0x17d1eda3/0xe4fbf71f/0x156bbfa2) into dispatch table &PTR_LAB_019f904c; = WaterAction/WaterSplash/etc classes"
+  },
+  {
+   "addr": "0x0046ae10",
+   "ghidra_name": "FUN_0046ae10",
+   "system": "hdr_post",
+   "stage": "composite.atmo_scatter_consts",
+   "confidence": "med",
+   "evidence": "1047B; builds atmosphere/scatter shader constants consumed by the tonemap/composite pass (called at 0x7505dd inside FUN_0074f8d0); feeds fog/inscatter into final composite"
+  },
+  {
+   "addr": "0x0046d290",
+   "ghidra_name": "FUN_0046d290",
+   "system": "hdr_post",
+   "stage": "screeneffect.shimmer_renderable",
+   "confidence": "high",
+   "evidence": "ScreenEffect/Shimmer screen-space renderable ctor; builds \"ShimmerTex_%X\"(0xbaae10) 64x64 fmt0x33 procedural distortion map (4096 texel displacement noise * DAT_00bea9c0), vtable PTR_FUN_00baae74, refs s_WaterGradiant(0xbaae20 underwater); 4 material sub-slots (+0x10) via FUN_0084eab0; applies PgShimmerFP/PgRainFP/PgUnderwaterFP as screen overlay; caller FUN_00466670"
+  },
+  {
+   "addr": "0x0047ba70",
+   "ghidra_name": "FUN_0047ba70",
+   "system": "sky_atmosphere",
+   "stage": "cloud_setup",
+   "confidence": "med",
+   "evidence": "1880B; called by PgClouds Init (FUN_0047d430); cloud geometry / layer (cQuad0..5) build"
+  },
+  {
+   "addr": "0x0047c740",
+   "ghidra_name": "FUN_0047c740",
+   "system": "sky_atmosphere",
+   "stage": "cloud_render_prep",
+   "confidence": "low",
+   "evidence": "first call inside PgClouds::Render (FUN_0047e7f0); per-frame cloud prep"
+  },
+  {
+   "addr": "0x0047c980",
+   "ghidra_name": "FUN_0047c980",
+   "system": "sky_atmosphere",
+   "stage": "cloud_layer_init",
+   "confidence": "med",
+   "evidence": "inits cloud-quad sub-object (vtable 0xbab3a0, \"cQuad0\"..\"cQuad5\" layer billboards); called by FUN_0047f2f0"
+  },
+  {
+   "addr": "0x0047d430",
+   "ghidra_name": "FUN_0047d430",
+   "system": "sky_atmosphere",
+   "stage": "cloud_init",
+   "confidence": "high",
+   "evidence": "PgClouds ctor/Init: sets vtable PTR_FUN_00bab5b4, calls FUN_0047d710 (create RTs), FUN_0047ba70, FUN_0047efd0, registers cloud-shader FNV handles via FUN_00824270"
+  },
+  {
+   "addr": "0x0047d710",
+   "ghidra_name": "FUN_0047d710",
+   "system": "sky_atmosphere",
+   "stage": "cloud_rt_create",
+   "confidence": "high",
+   "evidence": "\"CREATED SURFACE: mCloudSurfRT\"(0xbab4ac)+\"mCloudOutRT\"(0xbab504); PgCloudsWin32.cpp(0xbab460); creates mCloudSurfRT 512x512 fmt0x15(A8R8G8B8) tex->param+0x6b4 surf->+0x6b8, mCloudOutRT half-res fmt0x71(R32F) tex->+0x6c0 surf->+0x6c4; PgClouds vtable slot4 (device-reset/create-RT); analog of shadow creator FUN_00755d90"
+  },
+  {
+   "addr": "0x0047da10",
+   "ghidra_name": "FUN_0047da10",
+   "system": "sky_atmosphere",
+   "stage": "cloud_rt_release",
+   "confidence": "high",
+   "evidence": "releases cloud RTs param+0x6b8/+0x6c4 and +0x6b4/+0x6c0 surfaces; PgClouds vtable slot5 (ReleaseRenderTargets)"
+  },
+  {
+   "addr": "0x0047e7f0",
+   "ghidra_name": "FUN_0047e7f0",
+   "system": "sky_atmosphere",
+   "stage": "cloud_render",
+   "confidence": "high",
+   "evidence": "PgClouds::Render/Update (PgFxCloud::BeginRender/UpdateRender, Xbox 0x14f20/0x14f08): fills cloud constant buffers at DAT_00ff46c8, D3DXMatrixMultiply, reads live atmosphere struct *(PTR_PTR_00e7adfc+0x104)+0x20/0x28/0x40/0x70/0x7c (colors/sun/scatter); PgClouds vtable slot6"
+  },
+  {
+   "addr": "0x0047efd0",
+   "ghidra_name": "FUN_0047efd0",
+   "system": "sky_atmosphere",
+   "stage": "cloud_setup",
+   "confidence": "med",
+   "evidence": "587B; called by PgClouds Init; cloud sub-setup"
+  },
+  {
+   "addr": "0x0047f2f0",
+   "ghidra_name": "FUN_0047f2f0",
+   "system": "sky_atmosphere",
+   "stage": "cloud_subsystem_init",
+   "confidence": "med",
+   "evidence": "1015B; clouds subsystem init: calls FUN_0047c980 + PgClouds ctor path"
+  },
+  {
+   "addr": "0x00480440",
+   "ghidra_name": "FUN_00480440",
+   "system": "water",
+   "stage": "waterline_query",
+   "confidence": "med",
+   "evidence": "SecuROM island thunk (*_DAT_0244fcd8)(); global water/underwater query used by driver (camera-underwater -> param+0x1c0) AND ~30 callers across weapon/vehicle/fx code; = UpdateRay::CheckWater / IsUnderwater (Xbox 0x217f0); confirm-live for exact semantics"
+  },
+  {
+   "addr": "0x00480570",
+   "ghidra_name": "FUN_00480570",
+   "system": "water",
+   "stage": "lod_clip",
+   "confidence": "high",
+   "evidence": "clips water tessellation triangles against height band [param_5,param_6] with edge interpolation, builds AABB; = OWater::LOD / water surface LOD-band clip (Xbox 0x15ec3)"
+  },
+  {
+   "addr": "0x00482a80",
+   "ghidra_name": "FUN_00482a80",
+   "system": "water",
+   "stage": "rt_creator_height",
+   "confidence": "high",
+   "evidence": "creates water sim RTs: 2x pHeightS (80x80 fmt-0x74 ping-pong height), pNormalS (128x128 fmt-0x74 normal-from-height), pFoamMas (128x128 fmt-0x74 foam mask); CREATED SURFACE logs @0xbab748/0xbab7a0/0xbab7f8/0xbab850; R2VB-bit recreate path"
+  },
+  {
+   "addr": "0x00482e40",
+   "ghidra_name": "FUN_00482e40",
+   "system": "water",
+   "stage": "rt_free",
+   "confidence": "high",
+   "evidence": "releases pHeightS/pNormalS/pFoamMas RT handles (offsets 0/1/3/4/6/7/9/0xa/0xc/0xd) mirroring FUN_00482a80 creator"
+  },
+  {
+   "addr": "0x00482fa0",
+   "ghidra_name": "FUN_00482fa0",
+   "system": "water",
+   "stage": "occlusion_pass",
+   "confidence": "med",
+   "evidence": "driver call FUN_00482fa0(water+0xa30) gated by +0xca4; builds fmt-0x1a texture (FUN_0085cbd0), refs WaterClip; = Water::RenderOcclusion (Xbox 0x15ee8)"
+  },
+  {
+   "addr": "0x004834d0",
+   "ghidra_name": "FUN_004834d0",
+   "system": "water",
+   "stage": "waterclip_build",
+   "confidence": "med",
+   "evidence": "2481B, no static callers (vtable-reached); refs WaterClip, builds fmt-0x1a clip texture (FUN_0085cbd0); WaterClip map builder (Xbox 0x160c4)"
+  },
+  {
+   "addr": "0x00483f50",
+   "ghidra_name": "FUN_00483f50",
+   "system": "water",
+   "stage": "clip_sub",
+   "confidence": "low",
+   "evidence": "649B, caller FUN_00482fa0; command-buffer sub for occlusion/clip pass (thunk_FUN_024bb2a0 draw submit)"
+  },
+  {
+   "addr": "0x00484380",
+   "ghidra_name": "FUN_00484380",
+   "system": "water",
+   "stage": "shader_subloader",
+   "confidence": "high",
+   "evidence": "1060B water shader sub-loader; callers FUN_0046a440 + FUN_0084f130@0x8522ca; registers whole PgWater* family via FUN_0085ac90(name,.sho,0); branches on DAT_01176288+0x5e4 bits 2/3 to pick _R2VB vs plain vs _NVT"
+  },
+  {
+   "addr": "0x00484840",
+   "ghidra_name": "FUN_00484840",
+   "system": "water",
+   "stage": "object_create",
+   "confidence": "med",
+   "evidence": "2263B water object create; calls FUN_004821e0 + FUN_00485940 + FUN_00485b90 (reflection RT alloc); allocates full water sub-resource set"
+  },
+  {
+   "addr": "0x00485120",
+   "ghidra_name": "FUN_00485120",
+   "system": "water",
+   "stage": "object_init",
+   "confidence": "med",
+   "evidence": "2045B water init/resize; calls FUN_004860b0 (resource destructor) + FUN_00485940; caller FUN_00466850 + 0xaff80a"
+  },
+  {
+   "addr": "0x00485b90",
+   "ghidra_name": "FUN_00485b90",
+   "system": "water",
+   "stage": "rt_alloc_reflect",
+   "confidence": "high",
+   "evidence": "allocates reflection RT handles sized screen*scale/3, fmt-0x15, hash 0xf011157a; + 256x1 gradient tex (fmt-0x15); calls FUN_00482350 + FUN_00485da0"
+  },
+  {
+   "addr": "0x00485da0",
+   "ghidra_name": "FUN_00485da0",
+   "system": "water",
+   "stage": "rt_creator_reflect",
+   "confidence": "high",
+   "evidence": "creates pReflect color + pReflect depth (fmt-0x15/0x4b) + pWaterDe(pth) RTs; CREATED SURFACE @0xbac078/0xbac0bc/0xbac108; src path D:\\Projects\\Mercs2\\PC\\mercs2\\Pan... = PgWaterWin32.cpp"
+  },
+  {
+   "addr": "0x004860b0",
+   "ghidra_name": "FUN_004860b0",
+   "system": "water",
+   "stage": "resource_free",
+   "confidence": "high",
+   "evidence": "releases all water RT/buffer handles (reflection, height, normal, foam, wake) then calls FUN_00482e40; = Water resource teardown"
+  },
+  {
+   "addr": "0x00486390",
+   "ghidra_name": "FUN_00486390",
+   "system": "water",
+   "stage": "wake_map_pass",
+   "confidence": "med",
+   "evidence": "called FIRST in driver on water obj (DAT_00d6af80), gated by visible flag +0xca4; generates wake/height into water RTs = Water::RenderWakeMap (Xbox 0x15ed0)"
+  },
+  {
+   "addr": "0x00486fa0",
+   "ghidra_name": "FUN_00486fa0",
+   "system": "water",
+   "stage": "reflection_driver",
+   "confidence": "med",
+   "evidence": "post-reflection water pass; calls FUN_004677d0 (reflection render); mirrors FUN_00487540 vertex/index buffer binds (water tiles +0xa30/0xa3c/0xa60, wake +0x9a8/0x9b0)"
+  },
+  {
+   "addr": "0x00487540",
+   "ghidra_name": "FUN_00487540",
+   "system": "water",
+   "stage": "surface_draw_main",
+   "confidence": "med",
+   "evidence": "2085B main water-surface draw; binds water tile VB/IB (+0xa30/0xa34/0xa3c/0xa60) + wake buffers (+0x9a8/0x9b0); two driver calls (above/underwater ordering)"
+  },
+  {
+   "addr": "0x00487dd0",
+   "ghidra_name": "FUN_00487dd0",
+   "system": "water",
+   "stage": "surface_draw_pass2",
+   "confidence": "med",
+   "evidence": "1833B second water-surface pass (transparency/foam/underwater); same tile-buffer binds; paired with FUN_00487540 in driver"
+  },
+  {
+   "addr": "0x004bef00",
+   "ghidra_name": "FUN_004bef00",
+   "system": "decal",
+   "stage": "aset_typeclass_registrar",
+   "confidence": "med",
+   "evidence": "2336B ASET/class-type registrar (caller of FUN_004cb1b0 @0x4bf4f1) installing the resident type-class family incl decaltable(0x3b0aabf8); each entry vtable+init@+4 then FUN_008242b0(hash)."
+  },
+  {
+   "addr": "0x004cb1b0",
+   "ghidra_name": "FUN_004cb1b0",
+   "system": "decal",
+   "stage": "decaltable_gettypehash",
+   "confidence": "high",
+   "evidence": "returns 0x3b0aabf8 (decaltable ASET type_id) - the class GetTypeHash vfn; caller 0x004bf4f1 inside the ASET registrar FUN_004bef00."
+  },
+  {
+   "addr": "0x004cb1f0",
+   "ghidra_name": "FUN_004cb1f0",
+   "system": "decal",
+   "stage": "decaltable_resolve",
+   "confidence": "med",
+   "evidence": "decaltable ASET instance resolver: type-match vs (*this+4), pool-hash FUN_008242b0(0x400), sets resident flag |0x4000 at obj+0x16. Gives decaltable its resident singleton block."
+  },
+  {
+   "addr": "0x004ec370",
+   "ghidra_name": "FUN_004ec370",
+   "system": "sky_atmosphere",
+   "stage": "interp_apply",
+   "confidence": "high",
+   "evidence": "End-time interpolation kickoff: FUN_004ed630(&PTR_PTR_00df5b60)/FUN_004ed6f0/FUN_004ec8b0; commits DAT_00df5b74 into interp target"
+  },
+  {
+   "addr": "0x004eee90",
+   "ghidra_name": "FUN_004eee90",
+   "system": "sky_atmosphere",
+   "stage": "named_value_apply",
+   "confidence": "high",
+   "evidence": "FNV(key) via FUN_00824270 -> binary-search -> writes one of ~80 atmosphere global floats DAT_00df5b74..DAT_00df66e0 (the fBloom*/Scatter* KVP store); called by SetValue + End"
+  },
+  {
+   "addr": "0x005b1150",
+   "ghidra_name": "FUN_005b1150",
+   "system": "sky_atmosphere",
+   "stage": "lua_getvalue",
+   "confidence": "med",
+   "evidence": "GetValue (binding tbl 0xb9a660)"
+  },
+  {
+   "addr": "0x005b1200",
+   "ghidra_name": "FUN_005b1200",
+   "system": "sky_atmosphere",
+   "stage": "lua_setvalue",
+   "confidence": "high",
+   "evidence": "SetValue(\"fKey\",v): FUN_0059fa40 read key -> FUN_004eee90 apply; requires Begin() batch (DAT_01175e53)"
+  },
+  {
+   "addr": "0x005b12a0",
+   "ghidra_name": "FUN_005b12a0",
+   "system": "sky_atmosphere",
+   "stage": "lua_getcolorvalue",
+   "confidence": "med",
+   "evidence": "GetColorValue (binding tbl 0xb9a670)"
+  },
+  {
+   "addr": "0x005b1430",
+   "ghidra_name": "FUN_005b1430",
+   "system": "sky_atmosphere",
+   "stage": "lua_setcolorvalue",
+   "confidence": "high",
+   "evidence": "SetColorValue(\"uiKey\",r,g,b,a): packs RGBA8 -> thunk_FUN_024f0460 apply; requires Begin() batch"
+  },
+  {
+   "addr": "0x005b15f0",
+   "ghidra_name": "FUN_005b15f0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setintvalue",
+   "confidence": "med",
+   "evidence": "SetIntValue (binding tbl 0xb9a688)"
+  },
+  {
+   "addr": "0x005b16d0",
+   "ghidra_name": "FUN_005b16d0",
+   "system": "sky_atmosphere",
+   "stage": "lua_atmo_begin",
+   "confidence": "med",
+   "evidence": "Graphics.Atmosphere.Begin (binding tbl 0xb9a578); sets batch/interp flag DAT_01175e53=1; body not in decomp (SecuROM island)"
+  },
+  {
+   "addr": "0x005b16f0",
+   "ghidra_name": "FUN_005b16f0",
+   "system": "sky_atmosphere",
+   "stage": "lua_atmo_end",
+   "confidence": "high",
+   "evidence": "Graphics.Atmosphere.End (tbl 0xb9a580); clears DAT_01175e53, on batch calls FUN_004eee90 (apply) + FUN_004ec370 (interp start)"
+  },
+  {
+   "addr": "0x005b1750",
+   "ghidra_name": "FUN_005b1750",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetTime: writes *(PTR_PTR_00e7adfc+0x104)+0x10 <- DAT_017ba9d0 (immediate) or stages for interp"
+  },
+  {
+   "addr": "0x005b17c0",
+   "ghidra_name": "FUN_005b17c0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetTimeSpeed: struct+0x14 <- DAT_017ba9d4"
+  },
+  {
+   "addr": "0x005b1830",
+   "ghidra_name": "FUN_005b1830",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetLightIntensity: struct+0xe0 <- DAT_017baa60"
+  },
+  {
+   "addr": "0x005b18a0",
+   "ghidra_name": "FUN_005b18a0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetLightModifier: struct+0x124 <- DAT_017baa84"
+  },
+  {
+   "addr": "0x005b1970",
+   "ghidra_name": "FUN_005b1970",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "med",
+   "evidence": "SetLightAngle (binding tbl 0xb9a5a8)"
+  },
+  {
+   "addr": "0x005b19e0",
+   "ghidra_name": "FUN_005b19e0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetAmbientColor: reads 3 floats -> DAT_017ba9f0..9f8 (+1.0 alpha DAT_00b9b664)"
+  },
+  {
+   "addr": "0x005b1a80",
+   "ghidra_name": "FUN_005b1a80",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetAmbientCube: loops 6 faces -> DAT_017baa08.. up to 0x17baa68 (24 floats)"
+  },
+  {
+   "addr": "0x005b1b20",
+   "ghidra_name": "FUN_005b1b20",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetRimColor -> DAT_017baa70"
+  },
+  {
+   "addr": "0x005b1b70",
+   "ghidra_name": "FUN_005b1b70",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetTurbinity: struct+0x124 <- DAT_017baa84"
+  },
+  {
+   "addr": "0x005b1be0",
+   "ghidra_name": "FUN_005b1be0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetInscatteringMultiplier: struct+0x128 <- DAT_017baa88"
+  },
+  {
+   "addr": "0x005b1c50",
+   "ghidra_name": "FUN_005b1c50",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetExtinctionMultiplier: struct+0x12c <- DAT_017baa8c (between inscatter 0x128 and betaray 0x130)"
+  },
+  {
+   "addr": "0x005b1cc0",
+   "ghidra_name": "FUN_005b1cc0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetBetaRayMultiplier: struct+0x130 <- DAT_017baa90 (Rayleigh coeff)"
+  },
+  {
+   "addr": "0x005b1d30",
+   "ghidra_name": "FUN_005b1d30",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetBetaMieMultiplier: struct+0x134 <- DAT_017baa94 (Mie coeff)"
+  },
+  {
+   "addr": "0x005b1da0",
+   "ghidra_name": "FUN_005b1da0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetHenyeyGreensteinConst: struct+0x120 <- DAT_017baa80 (Mie phase asymmetry g)"
+  },
+  {
+   "addr": "0x005b1e10",
+   "ghidra_name": "FUN_005b1e10",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "high",
+   "evidence": "SetAtmosphere: two-arg named preset; writes struct+0x138(count) / +0x13c(ptr to str)"
+  },
+  {
+   "addr": "0x005b1ed0",
+   "ghidra_name": "FUN_005b1ed0",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "med",
+   "evidence": "SetHaze (binding tbl 0xb9a600)"
+  },
+  {
+   "addr": "0x005b1f90",
+   "ghidra_name": "FUN_005b1f90",
+   "system": "sky_atmosphere",
+   "stage": "lua_setter",
+   "confidence": "med",
+   "evidence": "SetWindDirection (binding tbl 0xb9a608)"
+  },
+  {
+   "addr": "0x005b2090",
+   "ghidra_name": "FUN_005b2090",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetBlurRadius (Bloom sub-namespace, binding tbl 0xb9a6b0)"
+  },
+  {
+   "addr": "0x005b20e0",
+   "ghidra_name": "FUN_005b20e0",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetThreshold"
+  },
+  {
+   "addr": "0x005b2130",
+   "ghidra_name": "FUN_005b2130",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetMultiplier"
+  },
+  {
+   "addr": "0x005b2180",
+   "ghidra_name": "FUN_005b2180",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetAmount"
+  },
+  {
+   "addr": "0x005b21f0",
+   "ghidra_name": "FUN_005b21f0",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetTargetLuminance"
+  },
+  {
+   "addr": "0x005b2260",
+   "ghidra_name": "FUN_005b2260",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetAdaptiveLuminancePercent"
+  },
+  {
+   "addr": "0x005b22d0",
+   "ghidra_name": "FUN_005b22d0",
+   "system": "sky_atmosphere",
+   "stage": "lua_bloom_setter",
+   "confidence": "med",
+   "evidence": "Bloom.SetAdaptiveLuminanceScale"
+  },
+  {
+   "addr": "0x006395e0",
+   "ghidra_name": "FUN_006395e0",
+   "system": "water",
+   "stage": "buoyancy_component",
+   "confidence": "high",
+   "evidence": "Buoyancy ECS comp (m2 0xb9659f7b, stride 0x14=20B, ~5 floats: waterline offset + up-force + damping); applies flotation up-force vs waterline for boats/floating debris (docs/mercs2-ecs/03_controllers_physics.md)"
+  },
+  {
+   "addr": "0x0063d060",
+   "ghidra_name": "FUN_0063d060",
+   "system": "decal",
+   "stage": "DisableDecals_deserializer",
+   "confidence": "high",
+   "evidence": "stream->Read(buf,4,0) then commit for DisableDecals tag component."
+  },
+  {
+   "addr": "0x0063d0d0",
+   "ghidra_name": "FUN_0063d0d0",
+   "system": "decal",
+   "stage": "Disable3DDecals_deserializer",
+   "confidence": "high",
+   "evidence": "stream->Read(buf,4,0) then commit for Disable3DDecals tag component."
+  },
+  {
+   "addr": "0x00643bd0",
+   "ghidra_name": "FUN_00643bd0",
+   "system": "decal",
+   "stage": "reflection_registrar_DisableDecals",
+   "confidence": "high",
+   "evidence": "installs DisableDecals component (name-hash 0xff4533e5): PTR_s_DisableDecals_00bc5588, CopyFromStream vtable PTR_00bc18d8, stride 4, seed 0x9e3779b9. 4B tag component (suppress decal render on entity). caller 0x00a7b830."
+  },
+  {
+   "addr": "0x00643c80",
+   "ghidra_name": "FUN_00643c80",
+   "system": "decal",
+   "stage": "reflection_registrar_Disable3DDecals",
+   "confidence": "high",
+   "evidence": "installs Disable3DDecals component (name-hash 0x69a0e0e4): PTR_s_Disable3DDecals_00bc5598, CopyFromStream vtable PTR_00bc1928, stride 4. 4B tag (disables projected/3D decal pass on entity). caller 0x00a7b850."
+  },
+  {
+   "addr": "0x00663890",
+   "ghidra_name": "FUN_00663890",
+   "system": "hdr_post",
+   "stage": "screeneffect.reflection_defaults",
+   "confidence": "high",
+   "evidence": "AtmosphereBase reflection default-value builder; registers 7 ScreenEffect slots each defaulting SCREEN_EFFECT_ADDITIVE (s_ScreenEffectType_00bcb9e8 / s_SCREEN_EFFECT_ADDITIVE_00bcb9d0) with Speed/Density/DirX/DirY/Texture/Color float+int fields (FUN_00656320 float / FUN_00656210 int / FUN_00656720 enum); also AmbientEffectType. This is the ScreenEffect0-6 rain/underwater/shimmer tunable model"
+  },
+  {
+   "addr": "0x006d5640",
+   "ghidra_name": "FUN_006d5640",
+   "system": "sky_atmosphere",
+   "stage": "lua_setsky",
+   "confidence": "low",
+   "evidence": "SetSky(\"afternoon\"|\"Maracaibo\"): binding tbl 0xb9a698; body not in decomp; loads named sky preset; CONFIRM-LIVE"
+  },
+  {
+   "addr": "0x007492d0",
+   "ghidra_name": "FUN_007492d0",
+   "system": "hdr_post",
+   "stage": "init.renderer_ctor",
+   "confidence": "high",
+   "evidence": "PgLtiRenderer(Win32) ctor; calls FUN_00749f70 (main HDR RTs), FUN_0084f130 (shader registry), and the bloom/lum RT creators; sole caller of shader registry. Renderer singleton PTR_PTR_00dfc2fc vtable 0xbd3940 (shadow_code_map.md)"
+  },
+  {
+   "addr": "0x00749f70",
+   "ghidra_name": "FUN_00749f70",
+   "system": "hdr_post",
+   "stage": "rt_create.hdr_scene",
+   "confidence": "high",
+   "evidence": "\"CREATED SURFACE: FrontColor/BackDepth/MainColor/DepthBuffer/Downsample\" strs @0xbd36ac-0xbd38c0; path PgLtiRendererPc.cpp 0xbd3660; MainColor RT created with D3DFMT 0x71 (=A16B16G16R16F HDR), luminance surf fmt 0x4b; +0xfa4/+0xfa5 color, +0xfa8 half-res downsample"
+  },
+  {
+   "addr": "0x0074dc90",
+   "ghidra_name": "FUN_0074dc90",
+   "system": "hdr_post",
+   "stage": "rt_create.bloom_lum_pyramid",
+   "confidence": "high",
+   "evidence": "\"CREATED SURFACE: BlurVSurface/DownSample/Luminance/Adaptive/pPrevAdaptive/g_pAdaptiveDest\" @0xbd4820-0xbd4a38; builds BlurH/BlurVSurface[4] pyramid (renderer+0x22a0/+0x22b0), BloomCombinerSurface(+0x22c8), DownSampleSurf[3](+0x22d4), LuminanceSurface(+0x227c), AdaptiveLuminanceSurface(+0x22e4), PrevAdaptiveLumTex/Surf(+0x22c0/+0x22c4), g_pAdaptiveDest=DAT_0117629c(1x1 fmt0x71 history feedback), _DAT_011762a0=prev; caller FUN_0074dc10"
+  },
+  {
+   "addr": "0x0074e920",
+   "ghidra_name": "FUN_0074e920",
+   "system": "hdr_post",
+   "stage": "rt_release",
+   "confidence": "high",
+   "evidence": "release counterpart of FUN_0074dc90/FUN_00749f70: frees +0x22a0..+0x22e4 pyramid, +0x22c0/+0x22c4/+0x22c8, DAT_0117629c, luminance +0x227c, downsample +0x22d4; called on device-lost"
+  },
+  {
+   "addr": "0x0074eb60",
+   "ghidra_name": "FUN_0074eb60",
+   "system": "hdr_post",
+   "stage": "adaptive.history_swap+readback",
+   "confidence": "high",
+   "evidence": "luminance history swap: opcode 0x15 (StretchRect/resolve) copies luminance surf (+0x2274) -> prevAdaptive (+0x22c0) and (+0x227c) gated by +0x22d0 flag; then locks adaptive-lum surf and swizzle-copies 0x100 texels to CPU history buf (param+0x3a); triple-buffers composite material +0x1ef0 via +0x454 %% 3; FUN_0084eab0(+0x1ef0,3)"
+  },
+  {
+   "addr": "0x0074ed00",
+   "ghidra_name": "FUN_0074ed00",
+   "system": "hdr_post",
+   "stage": "quad.clear_setup",
+   "confidence": "med",
+   "evidence": "fullscreen-quad vertex setup helper; device vcall (*PTR_PTR_00dfc2f8+0x2c)(quad,4,shader,1); 4 corner verts with DAT_00b9b664(=1.0) uv"
+  },
+  {
+   "addr": "0x0074edd0",
+   "ghidra_name": "FUN_0074edd0",
+   "system": "hdr_post",
+   "stage": "flare.sun_occlusion",
+   "confidence": "high",
+   "evidence": "PgHDRFlareFP driver: D3DXVec4Transform sun world pos (PTR_PTR_00e7adfc+0x104) by view-proj (PTR_PTR_00dfc2f8+..+0xab0), screen-space flare/occlusion query on state DAT_019957d0/DAT_01995bd0; called by FUN_0074f8d0 before luminance downsample"
+  },
+  {
+   "addr": "0x0074f8d0",
+   "ghidra_name": "FUN_0074f8d0",
+   "system": "hdr_post",
+   "stage": "driver.post_chain",
+   "confidence": "high",
+   "evidence": "MAIN post driver; builds fullscreen-quad command list via FUN_00853710. Order: (1) 4-level separable-gaussian bloom blur pyramid [downsample mat+0x460 reads +0x22a0; blurH mat+0xaa0 const DAT_01972e4c; blurV mat+0x10e0 const DAT_0197082c] (2) FUN_0074edd0 HDR-flare occlusion (3) downsample-to-luminance mat+0x1720 64x64 reads +0x22d4 (4) log-luminance downsample chain 16->4->1 mat+0x18b0/+0x1bd0 reads +0x22d8/+0x22e0 const DAT_0127c154/DAT_0127c04c (5) adaptive-luminance mat+0x1d60 opcode0x16 dual-tex (+0x22e4 cur,+0x22c4 prev) const DAT_0127c45c/DAT_0127c464 exp-avg over DAT_01175a90 dt (6) bloom combine mat+0x2080 reads +0x22c8 half-res (7) tonemap+composite mat+0x1ef0 vtable PTR_PTR_0127c6b0 full-res, binds main color +8, bloom, adaptive-lum, atmosphere consts via FUN_0046ae10 + PTR_PTR_00dfc2fc+0x3e94/3e98, __libm_sse2_pow gamma, consts DAT_0127c56c..DAT_0127c5a8. Gated on view singleton PTR_PTR_00dfc2f8+0x2b90<3. callers=[] (indirect dispatch) -> confirm-live"
+  },
+  {
+   "addr": "0x00824270",
+   "ghidra_name": "FUN_00824270",
+   "system": "sky_atmosphere",
+   "stage": "fnv_hash",
+   "confidence": "high",
+   "evidence": "FNV-1a of shader/key name -> handle; used by cloud handle resolve and FUN_004eee90 named-value dispatch"
+  },
+  {
+   "addr": "0x00826820",
+   "ghidra_name": "FUN_00826820",
+   "system": "decal",
+   "stage": "disabledecals_config_token",
+   "confidence": "low",
+   "evidence": "name-hash 0xff4533e5 also consumed as a config/command token (line 99623): FUN_00826820(0xff4533e5,0)+FUN_00826990 -> sets global bool DAT_01175c37; parallel cmdline/config decal-disable switch, not the ECS instance."
+  },
+  {
+   "addr": "0x0084f130",
+   "ghidra_name": "FUN_0084f130",
+   "system": "sky_atmosphere",
+   "stage": "shader_registry",
+   "confidence": "high",
+   "evidence": "shared shader registry; registers PgAtmosphereVP/PgCloudRenderVP1/FP1/VP2/FP2/PgCloudGenFP1/PgSkyVP/PgSunVP/PgSkyFP/PgSkyReflectFP/PgSunFP consecutively via FUN_0085ac90 (dump line 640927-640946)"
+  },
+  {
+   "addr": "0x00853710",
+   "ghidra_name": "FUN_00853710",
+   "system": "hdr_post",
+   "stage": "quad.draw_emit",
+   "confidence": "high",
+   "evidence": "fullscreen-quad draw-command emitter (w,h,vtable,material_slot,color); called 8x by FUN_0074f8d0 (one per post stage) with generic quad vtable PTR_PTR_0196fef8 or composite vtable PTR_PTR_0127c6b0"
+  },
+  {
+   "addr": "0x0085a570",
+   "ghidra_name": "FUN_0085a570",
+   "system": "hdr_post",
+   "stage": "support.rt_dims",
+   "confidence": "low",
+   "evidence": "returns RT width/height for the post pass (called at start of FUN_0074f8d0)"
+  },
+  {
+   "addr": "0x0085a9e0",
+   "ghidra_name": "FUN_0085a9e0",
+   "system": "water",
+   "stage": "render_dispatch",
+   "confidence": "high",
+   "evidence": "per-frame water render entry; calls FUN_00466d40(view+0x2b94); reached from water render-action LAB_0046a260 (0x46a27f)"
+  },
+  {
+   "addr": "0x0085ac90",
+   "ghidra_name": "FUN_0085ac90",
+   "system": "sky_atmosphere",
+   "stage": "shader_register_helper",
+   "confidence": "high",
+   "evidence": "FUN_0085ac90(name,name.sho,light_class) inserts each Pg* shader into pool; ground truth"
+  },
+  {
+   "addr": "0x0085aff0",
+   "ghidra_name": "FUN_0085aff0",
+   "system": "hdr_post",
+   "stage": "shader_resolve",
+   "confidence": "high",
+   "evidence": "shader-handle FNV resolve (callers = per-shader SecuROM-island stubs FUN_0046e/0047/0048/0049/004a...); resolves post shader names to draw-time handles"
+  },
+  {
+   "addr": "0x00b9a570",
+   "ghidra_name": "Atmosphere_lua_table",
+   "system": "sky_atmosphere",
+   "stage": "lua_binding_table",
+   "confidence": "high",
+   "evidence": "Graphics.Atmosphere luaL_Reg-style table: 8B {name_ptr,fn_ptr} entries 0xb9a570-0xb9a700; 0xffffffff=namespace open 0xfffffffe=close; nests Bloom+MotionBlur sub-namespaces"
+  },
+  {
+   "addr": "0x00bab3a0",
+   "ghidra_name": "CloudQuad_vtable",
+   "system": "sky_atmosphere",
+   "stage": "cloud_vtable",
+   "confidence": "high",
+   "evidence": "4 methods [0]0047cba0 [1]00848e30 [2]0047cf80 [3]0047cfa0; followed by \"cQuad0..5\" layer name strings"
+  },
+  {
+   "addr": "0x00bab5b4",
+   "ghidra_name": "PgClouds_vtable",
+   "system": "sky_atmosphere",
+   "stage": "cloud_vtable",
+   "confidence": "high",
+   "evidence": "7 methods: [0]0047d630 dtor [1]0047dab0 [2]0047efc0 [3]0047de00 [4]0047d710 CreateRT [5]0047da10 ReleaseRT [6]0047e7f0 Render"
+  },
+  {
+   "addr": "0x00bad69a",
+   "ghidra_name": "AtmosphereBase_refl",
+   "system": "sky_atmosphere",
+   "stage": "reflection_class",
+   "confidence": "high",
+   "evidence": "reflection class registry string \"AtmosphereBase 160 32\" (size 160, align 32) @0xbad69a in the ClassName-SIZE-ALIGN table; reflected serialized atmosphere component"
+  },
+  {
+   "addr": "0x00e7adfc",
+   "ghidra_name": "AtmosphereMgr_singleton",
+   "system": "sky_atmosphere",
+   "stage": "state_singleton",
+   "confidence": "high",
+   "evidence": "PTR_PTR_00e7adfc = atmosphere manager; +0x104 -> active atmosphere params struct (read by cloud render FUN_0047e7f0, written by all typed setters)"
+  },
+  {
+   "addr": "0x02475bc0",
+   "ghidra_name": "FUN_02475bc0",
+   "system": "decal",
+   "stage": "shader_register",
+   "confidence": "high",
+   "evidence": "SecuROM 0x024 island; body = FUN_0085ac90(s_PgDecalVP_00bac4f0, s_PgDecalVP_sho_00bac4e0, 0). Registers decal VP shader. callers=[] -> reached via the data-driven .sho descriptor table (dup table @0x0103xxxx) like PgFX, not a direct call."
+  }
+ ]
+}

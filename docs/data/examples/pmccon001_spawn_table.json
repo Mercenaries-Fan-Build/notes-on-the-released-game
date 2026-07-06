@@ -1,0 +1,66 @@
+{
+  "$comment": "Starter rows for PmcCon001 vertical slice — entity names from vz_state overlays documented in docs/gameplay_data_ue5_mapping.md and rainbow_table.json.",
+  "Allied_Soldier_Villa": {
+    "EntityNamePattern": "Allied Soldier",
+    "SpawnCategory": "NPC",
+    "BlueprintPath": "/Game/Mercs2/Characters/BP_AlliedSoldier",
+    "DefaultFaction": "PMC",
+    "OverlayLayer": "vz_state_pmccon001_villasoldiers",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnLayerActivate",
+    "bSpawnOnAccept": true,
+    "bDespawnOnComplete": true,
+    "Notes": "Villa assault allies — placed when investigate-villa overlay activates"
+  },
+  "VZ_Soldier_Villa": {
+    "EntityNamePattern": "VZ Soldier",
+    "SpawnCategory": "NPC",
+    "BlueprintPath": "/Game/Mercs2/Characters/BP_VZSoldier",
+    "DefaultFaction": "VZ",
+    "OverlayLayer": "vz_state_pmccon001_villasoldiers",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnLayerActivate",
+    "bSpawnOnAccept": true,
+    "SpawnerApi": "Ai.TweakAttachedSpawners",
+    "Notes": "Hostile villa garrison"
+  },
+  "VZ_Heavy_Villa": {
+    "EntityNamePattern": "Allied Heavy (Light MG)",
+    "SpawnCategory": "NPC",
+    "BlueprintPath": "/Game/Mercs2/Characters/BP_VZHeavyMG",
+    "DefaultFaction": "VZ",
+    "OverlayLayer": "vz_state_pmccon001_villasoldiers",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnLayerActivate"
+  },
+  "SpawnerSpam_Waves": {
+    "EntityNamePattern": "*spawner*",
+    "SpawnCategory": "SpawnerLogic",
+    "BlueprintPath": "/Game/Mercs2/Spawning/BP_SimpleSpawner",
+    "DefaultFaction": "Neutral",
+    "OverlayLayer": "vz_state_pmccon001_spawnerspam",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnMissionActivated",
+    "SpawnerApi": "PopulationSimpleSpawner",
+    "Notes": "Wave spawner entities in spawnerspam overlay — logic actor, not mesh"
+  },
+  "HijackTutorial_Vehicle": {
+    "EntityNamePattern": "*jeep*",
+    "SpawnCategory": "Vehicle",
+    "BlueprintPath": "/Game/Mercs2/Vehicles/BP_VZJeep",
+    "DefaultFaction": "VZ",
+    "OverlayLayer": "vz_state_pmccon001_actionhijacktutorial",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnLayerActivate",
+    "Notes": "Hijack tutorial — EnterVehicle objective target"
+  },
+  "Ammo_Pickup_Rocket": {
+    "EntityNamePattern": "Ammo Pickup (Rocket)",
+    "SpawnCategory": "Pickup",
+    "BlueprintPath": "/Game/Mercs2/Pickups/BP_AmmoPickup_Rocket",
+    "DefaultFaction": "Neutral",
+    "OverlayLayer": "vz_state_pmccon001",
+    "MissionId": "PmcCon001",
+    "SpawnTrigger": "OnLayerActivate"
+  }
+}

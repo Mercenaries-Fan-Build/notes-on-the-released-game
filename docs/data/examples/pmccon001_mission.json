@@ -1,0 +1,60 @@
+{
+  "$comment": "Example vertical-slice contract — Fiona tutorial mission after VzaCon001. Sources: docs/vanilla_mission_lifecycle_analysis.md, docs/contract_analysis_pmc_jet_mec.md, docs/dlc_mission_loading.md (PmcCon033 reward pattern).",
+  "PmcCon001": {
+    "sModuleName": "pmccon001",
+    "sFactionId": "Pmc",
+    "sStarter": "PmcBoss",
+    "bContract": true,
+    "bCriticalPathMission": true,
+    "bPlayerVisibleMission": true,
+    "bRepeatable": false,
+    "sTitle": "[PmcCon001.Title]",
+    "scriptHash": "0x97DFCCC2",
+    "tLayers": [
+      "vz_state_pmccon001",
+      "vz_state_pmccon001_investigatevilla",
+      "vz_state_pmccon001_villasoldiers",
+      "vz_state_pmccon001_actionhijacktutorial",
+      "vz_state_pmccon001_spawnerspam"
+    ],
+    "tStartLocations": {
+      "PmcCon001_Start1": "PmcCon001_Start1"
+    },
+    "tMilestones": [
+      {
+        "nMilestone": 1,
+        "sKey": "PmcCon001_Milestone1"
+      }
+    ],
+    "ueFlow": {
+      "prerequisiteKey": "VzaCon001",
+      "unlockMissionIds": ["PmcCon001"],
+      "layerAdditions": ["vz_state_pmccon001"]
+    },
+    "ueReward": {
+      "nWagerMin": 5000,
+      "nWagerMax": 50000,
+      "sFactionId": "Pmc",
+      "nWager": 5000,
+      "sMissionId": "PmcCon001"
+    },
+    "ueObjectives": [
+      {
+        "sKey": "oc001_go_to",
+        "sTaskModule": "MrxTaskObjectiveDeliver",
+        "vDestLoc": "Region_PmcCon001_VillaWideRegion",
+        "sDspShortDesc": "[PmcCon001.Objectives.001]"
+      },
+      {
+        "sKey": "oc001_destroy",
+        "sTaskModule": "MrxTaskObjectiveDestroy",
+        "sDspShortDesc": "[PmcCon001.Objectives.002]"
+      },
+      {
+        "sKey": "oc001_hijack",
+        "sTaskModule": "MrxTaskObjectiveEnterVehicle",
+        "sDspShortDesc": "[PmcCon001.Objectives.004]"
+      }
+    ]
+  }
+}

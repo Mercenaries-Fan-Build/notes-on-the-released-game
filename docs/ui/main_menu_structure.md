@@ -334,7 +334,11 @@ _G.Marker.HaltPulse          = Gui._MarkerHaltPulse
 
 ### GFx Exports (from mercenaries2.exe symbol table)
 
-The EXE exports 63+ Scaleform GFx class methods (confirmed GFx 3.x SDK):
+The EXE exports 63 Scaleform GFx class methods. The SDK is **GFx 2.0.48** — proven by the
+`gfxVersion` ActionScript property returning the literal `"2.0.48"` (FUN_007676d0 in the unpacked
+decomp), the loader error string `"incompatible GFX file, version 2.x expected"`, and the AS2-only
+built-in class table (Flash 8, `$version` = `"WIN 8,0,0,0"`). (An earlier revision of this doc said
+"confirmed GFx 3.x SDK" — wrong: GFx 3.0 shipped in 2009, after this game.)
 
 | Class | Key Methods | Notes |
 |-------|-------------|-------|
