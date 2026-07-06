@@ -1,0 +1,666 @@
+{
+ "_meta": {
+  "description": "PC-side code map of the Mercenaries 2 PgFX particle/effect subsystem and the shadow subsystem, reversed from the unpacked SecuROM image decomp via a 7-agent fan-out. Companion docs: docs/reverse_engineer/particle_fx_code_map.md, docs/reverse_engineer/shadow_code_map.md.",
+  "image": "output/_ghidra/securom_dump/mercs2_unpacked.exe, base 0x400000",
+  "method": "Anchored on retail-exe strings (.sho shader names, reflection class descriptors, the PC source path PgLtiRendererShadowPc.cpp, cvar names) + callgraph/vtable analysis. Xbox PDB names (docs/mercs2-pdb-analysis/rendering-shaders.md) bound to PC addresses by semantics.",
+  "caveat": "The retail PC build STRIPS the PgFX/PgScene profiler-marker strings, and the per-frame render/emit/simulate passes are vtable-dispatched (no static callers). Those functions are recorded with their vtable address+slot and marked confirm-live (x32dbg); they are not guessed. Static anchors (reflection registration, binary-format parsers, shader registry, shadow-RT setup, cvars) are high/med confidence.",
+  "counts": {
+   "functions": 72,
+   "fx": 53,
+   "shadow": 19,
+   "high": 51,
+   "med": 20,
+   "low": 1
+  }
+ },
+ "functions": [
+  {
+   "addr": "0x00464780",
+   "ghidra_name": "FUN_00464780",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "generic UCFX chunk-stream cursor: bounds-checks chunk index, invokes stream vtable +0x28, returns stream-obj+0x18 (read ptr @+0x10, guard @+0x14, base @+0x18); shared across many parsers",
+   "confidence": "high",
+   "evidence": "shared reader (12+ callers); used by every fx parse fn to walk chunk payload"
+  },
+  {
+   "addr": "0x00466d40",
+   "ghidra_name": "FUN_00466d40",
+   "subsystem": "shadow",
+   "stage": "shadow.collect",
+   "role": "Scene render-command-list builder; contains the render-time shadow gate `if (DAT_0117507f==0 && DAT_00dfc360!=0)` (DAT_00dfc360=EnableShadows, DAT_0117507f=shadow-suppress flag). Inside the gate it iterates renderables (thunk_FUN_024bbd20(4,...) = phase-4 shadow list), skips flagged ones (renderable+0x12&1), distance-classifies each caster via FUN_00858150 and frustum-culls via FUN_00857c00, then enqueues shadow-pass packets into the DAT_018c5620 command arrays. Best static candidate for CollectShadowCasters.",
+   "confidence": "med",
+   "evidence": "line 51730 gate; calls FUN_00858150@0x467067 + FUN_00857c00@0x467084; caller FUN_0085a9e0; confirm-live: exact PDB \"CollectShadowCasters\" binding"
+  },
+  {
+   "addr": "0x00477c60",
+   "ghidra_name": "FUN_00477c60",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "FRCE direction-vector build/normalize (cross-product) helper for directional force chunk (tag 0x45435246, force-mode -0xb27a5b7)",
+   "confidence": "med",
+   "evidence": "callers include 0x0049224c(FUN_00491920) FRCE branch that computes cross product then calls it"
+  },
+  {
+   "addr": "0x00484380",
+   "ghidra_name": "FUN_00484380",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "Water-shader sub-registration (PgWaterVP0/2/3/5[Occ]/PgWaterZFull*/PgWaterFP/PgUnderwater/PgWaterWake/PgWaterHeightMap). 3-way branch on DAT_01176288+0x5e4 bits (R2VB vs NVT vs base decl). Called from FUN_0084f130 line 1047 + FUN_0046a440.",
+   "confidence": "high",
+   "evidence": "decomp read; callers=[0x0046a46b,0x008522ca(FUN_0084f130)]"
+  },
+  {
+   "addr": "0x0048a170",
+   "ghidra_name": "FUN_0048a170",
+   "subsystem": "fx",
+   "stage": "fx.fxdict",
+   "role": "PgFX subsystem bootstrap: requests fxdict (hash 0x86bf6c5b / type 0xfa46d8a8) and effect (0xd2e54786 / type 0x5608bd5a) via async asset-load thunk_FUN_0248d520; allocs 3x FX runtime pools via FUN_004937d0",
+   "confidence": "high",
+   "evidence": "literal type hashes 0xfa46d8a8+0x5608bd5a match docs/fxdict_format.md ASET table; callers=[] (system init tick)"
+  },
+  {
+   "addr": "0x0048cc30",
+   "ghidra_name": "FUN_0048cc30",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "EMIT chunk handler: populates emitter runtime data at effect+0x20 using the EMTR count array [effect+0x98]; drives FUN_00493150 for animation curves",
+   "confidence": "med",
+   "evidence": "callers=[0x00492726(FUN_00491920)]; EMIT tag branch call FUN_0048cc30(stream,effect+0x20,[effect+0x98])"
+  },
+  {
+   "addr": "0x004910a0",
+   "ghidra_name": "FUN_004910a0",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "sub-emitter field initializer (per-slot defaults: ptr=0, handle=0xffffffff, flags&=0xfb) invoked by FUN_00492870",
+   "confidence": "med",
+   "evidence": "callers=[0x00492875(FUN_00492870)]"
+  },
+  {
+   "addr": "0x00491170",
+   "ghidra_name": "FUN_00491170",
+   "subsystem": "fx",
+   "stage": "fx.fxdict",
+   "role": "effect asset type-hash getter (returns 0x5608bd5a)",
+   "confidence": "med",
+   "evidence": "returns 0x5608bd5a = effect type hash (docs/fxdict_format.md)"
+  },
+  {
+   "addr": "0x004911a0",
+   "ghidra_name": "FUN_004911a0",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "TEXT keyframe fill: for each param hash resolves via fxdict FUN_00491510, packs 4 values through FUN_004a4530 (f32->f16) into stream; 100-sample resample when flag(param_4)==0 else raw count",
+   "confidence": "high",
+   "evidence": "calls FUN_00491510 + FUN_004a4530; callers = FUN_00492af0 TEXT branch (0x00493097,0x004930d6)"
+  },
+  {
+   "addr": "0x00491320",
+   "ghidra_name": "FUN_00491320",
+   "subsystem": "fx",
+   "stage": "fx.fxdict",
+   "role": "fxdict binary loader: parses INFO (u32 entry_count -> obj+0x1c, allocs count*0x20 runtime array -> obj+0x18) and DICT (per-record). Sets obj+0x14=2 (loaded). Tags 0x4f464e49 INFO, 0x54434944 DICT",
+   "confidence": "high",
+   "evidence": "tag literals decode to INFO/DICT; alloc stride 0x20; matches docs/fxdict_format.md sec3 (INFO count + DICT records); callers=[] vtable asset load-cb"
+  },
+  {
+   "addr": "0x00491510",
+   "ghidra_name": "FUN_00491510",
+   "subsystem": "fx",
+   "stage": "fx.fxdict",
+   "role": "fxdict lookup: binary search over obj+0x18 array (stride 0x20) keyed by name_hash at rec+0, returns rec+0x10 (the 16-byte value block); default record &DAT_019c6130 on miss",
+   "confidence": "high",
+   "evidence": "stride 0x20 + key@+0 + return+0x10 mirror FUN_00491320 layout"
+  },
+  {
+   "addr": "0x00491920",
+   "ghidra_name": "FUN_00491920",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "effect-block driver / per-effect template parser: reads EFCT header (u16 counts -> effect+0x80, sub-count -> +0x88 allocs +0x8c array stride 0x140; emitter pool sized by [+0x80] stride 0x210 -> +0x84), then iterates chunks: EMTR/FRCE/PTYP/EMIT. Sets effect+0x14=2",
+   "confidence": "high",
+   "evidence": "tag literals EMTR 0x52544d45, FRCE 0x45435246, PTYP 0x50595450, EMIT 0x54494d45; calls FUN_00492af0 for emitter sub-chunks; callers=[] vtable asset load-cb"
+  },
+  {
+   "addr": "0x00492870",
+   "ghidra_name": "FUN_00492870",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "emitter-struct template initializer (0x210 bytes): zeroes/defaults 15 sub-slots (each ~0x14: ptr=0, handle=0xffffffff, flags&=0xfb); passed as init-fn to FUN_00401860 for the +0x84 emitter pool",
+   "confidence": "high",
+   "evidence": "called via FUN_00401860(local_174,0x210,count,FUN_00492870) in FUN_00491920"
+  },
+  {
+   "addr": "0x00492af0",
+   "ghidra_name": "FUN_00492af0",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "per-emitter sub-chunk loader: ATRB (0x42525441 -> param-hash dispatch to island attr-setters + FUN_004934f0/FUN_00493550), TEXT (0x54584554 -> stream table push + FUN_004911a0), COLR (0x524c4f43 -> 200-entry/800B descriptor push). COLR/TEXT append into effect[+0x60] table indexed by [+0x70], data ptr [+0x64], running offset [+0x74]",
+   "confidence": "high",
+   "evidence": "tag literals; corpus docs/spatial_hash_crash_analysis.md confirms COLR append; callers=[0x00491c33(FUN_00491920)]"
+  },
+  {
+   "addr": "0x00493102",
+   "ghidra_name": "(FUN_00492af0 COLR)",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "CRASH SITE: COLR branch `mov edx,[edi+0x70]; add edx,[edi+0x60]; mov [edx+0x4],ecx` — writes descriptor.offset. If [effect+0x60] descriptor array is NULL (EFCT sub-count zeroed by wrong u16-vs-u32 byteswap) -> WRITE to 0x00000004 AV",
+   "confidence": "high",
+   "evidence": "docs/spatial_hash_crash_analysis.md 2026-06-01c exact disasm + fault addr 0x00493102"
+  },
+  {
+   "addr": "0x00493150",
+   "ghidra_name": "FUN_00493150",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "ANIM/AKEY curve reader: reads flag bits (7/8/9/10 -> param_3+2 render/blend flags) + f32 key pairs; builds interpolated 100-sample track or raw key array into the effect stream table [+0x60]/[+0x64]",
+   "confidence": "high",
+   "evidence": "callers=[0x0048d01f(FUN_0048cc30)]; time-interp loop over DAT_00b92870"
+  },
+  {
+   "addr": "0x004934f0",
+   "ghidra_name": "FUN_004934f0",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "ATRB single-f32 reader (sub-tag 0xbe968d3b): reads float -> *ESI, sets enabled byte @ESI+5 (0 if !=sentinel)",
+   "confidence": "high",
+   "evidence": "callers=[0x00492e86(FUN_00492af0)]; uses FUN_00464780 stream reader"
+  },
+  {
+   "addr": "0x00493550",
+   "ghidra_name": "FUN_00493550",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "ATRB f32+flag reader (sub-tag 0x70653182): reads flag u32 (bit7 -> ESI+4) and float -> *ESI, enabled byte @ESI+5",
+   "confidence": "high",
+   "evidence": "callers=[0x00492d56(FUN_00492af0)]"
+  },
+  {
+   "addr": "0x004937d0",
+   "ghidra_name": "FUN_004937d0",
+   "subsystem": "fx",
+   "stage": "fx.fxdict",
+   "role": "FX runtime pool object ctor (vtable PTR_FUN_00bac2b8): 40000/15000 particle arrays, two 720000-byte double buffers, 0x1dd90 total — the global particle/effect store effects render from",
+   "confidence": "med",
+   "evidence": "called by FUN_0048a170 with 0x1dd90 alloc; sizes 40000/15000 = particle capacities"
+  },
+  {
+   "addr": "0x004a4530",
+   "ghidra_name": "FUN_004a4530",
+   "subsystem": "fx",
+   "stage": "fx.loader",
+   "role": "f32->f16 pack converter (SecuROM-thunked jumptable) used to compress resolved TEXT/param stream values",
+   "confidence": "med",
+   "evidence": "callers=[FUN_004911a0 x7]; 18B thunk to _DAT_0244fbbc"
+  },
+  {
+   "addr": "0x005c1240",
+   "ghidra_name": "FUN_005c1240",
+   "subsystem": "shadow",
+   "stage": "shadow.cvar",
+   "role": "Advanced-video apply/commit: maps widget action code local_4 to pending+live globals. 0x28-0x31: DAT_00df6740=(local_4==0x29); DAT_00dfc360=DAT_00df6740 -> commits EnableShadows live. (0x32-0x3b -> DAT_00df6741/DAT_00dfc361; 0x3c-0x45 -> DAT_00df6742/DAT_00dfc362.)",
+   "confidence": "high",
+   "evidence": "body lines 228232-228236; writes DAT_00dfc360 from DAT_00df6740"
+  },
+  {
+   "addr": "0x005c37e0",
+   "ghidra_name": "FUN_005c37e0",
+   "subsystem": "shadow",
+   "stage": "shadow.cvar",
+   "role": "Advanced-video menu: advvideoEnableShadowsVar / advvideoTreeShadowsVar / advvideoModelShadowsVar toggles (separate model vs tree shadow enables).",
+   "confidence": "high",
+   "evidence": "Refs the three advvideo*ShadowsVar strings (shadow_anchor_fns.tsv)."
+  },
+  {
+   "addr": "0x00642690",
+   "ghidra_name": "FUN_00642690",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "ParticleEmitter class registrar (builder): fills 0x50B descriptor @descbase 0x017bddf8; sets CopyFromStream vtable &PTR_00bc0730, stride +0x24=0x10, hashseed 0x9e3779b9, name ptr s_ParticleEmitter_00bc52c8; tail FUN_0064a770",
+   "confidence": "high",
+   "evidence": "body read; matches docs/mercs2-ecs/05 registry row; hash 0xe595ab2f"
+  },
+  {
+   "addr": "0x00642fb0",
+   "ghidra_name": "FUN_00642fb0",
+   "subsystem": "fx",
+   "stage": "shadow.blob",
+   "role": "BlobShadow registrar (shared FX/shadow): descbase 0x017be208, vtable &PTR_00bc0e10, stride +0x24=0x24(36), name s_BlobShadow_00bc53cc",
+   "confidence": "high",
+   "evidence": "body read; hash 0x40349618"
+  },
+  {
+   "addr": "0x00643330",
+   "ghidra_name": "FUN_00643330",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "RedEffectComponent registrar: descbase 0x017be398, vtable &PTR_00bc1090, stride +0x24=0x38(56), name s_RedEffectComponent_00bc5420",
+   "confidence": "high",
+   "evidence": "body read; hash 0x60a13e3e; stride 56 = 14 fields"
+  },
+  {
+   "addr": "0x006433f0",
+   "ghidra_name": "FUN_006433f0",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "EffectTemplate registrar: descbase 0x017be3e8, vtable &PTR_00bc10e0, stride 4, name s_EffectTemplate_00bc5434",
+   "confidence": "high",
+   "evidence": "body read; hash 0xabaa1f3c"
+  },
+  {
+   "addr": "0x006434b0",
+   "ghidra_name": "FUN_006434b0",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "EffectAiOccluder registrar: descbase 0x017be438, vtable &PTR_00bc11a8, stride 4, name s_EffectAiOccluder_00bc5454",
+   "confidence": "high",
+   "evidence": "body read; hash 0x20e89c9d"
+  },
+  {
+   "addr": "0x00643e00",
+   "ghidra_name": "FUN_00643e00",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "Ribbon registrar: descbase 0x017be898, vtable &PTR_00bc1ab8, stride +0x24=0x2c(44), name s_Ribbon_00bc55e8",
+   "confidence": "high",
+   "evidence": "body read; hash 0x059b95b9"
+  },
+  {
+   "addr": "0x00646920",
+   "ghidra_name": "FUN_00646920",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "RtRedEffect (runtime-instance) registrar: descbase 0x017bfb58, vtable &PTR_00bc34e8, stride +0x1c=0x20(32), name s_RtRedEffect_00bc5ba8; note layout variant (size field at +0x1c not +0x24)",
+   "confidence": "high",
+   "evidence": "body read; hash 0x9b2daf6f"
+  },
+  {
+   "addr": "0x006469e0",
+   "ghidra_name": "FUN_006469e0",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "RtVFX (runtime-instance) registrar: descbase 0x017bfba8, vtable &PTR_00bc3538, stride 0x10, name s_RtVFX_00bc5bb4",
+   "confidence": "high",
+   "evidence": "body read; hash 0x757b2069"
+  },
+  {
+   "addr": "0x00648430",
+   "ghidra_name": "FUN_00648430",
+   "subsystem": "fx",
+   "stage": "fx.ribbon",
+   "role": "RtRibbon RUNTIME-instance registrar. Class descriptor @0x017c0648, stream vtable &PTR_CopyFromStream_00bc45a8, stride DAT_017c066c=0x20(32B), name s_RtRibbon_00bc5ee8, hash 0x9ab86eb3. No schema builder (runtime-computed). \"RtRibbon 16 16\" pool = 16 init/16 grow.",
+   "confidence": "high",
+   "evidence": "decomp read; corpus doc mercs2-ecs/05 line 83"
+  },
+  {
+   "addr": "0x00649180",
+   "ghidra_name": "FUN_00649180",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED field-register into reflection schema descriptor (hash-keyed insert, grows pool). Called by enum handlers to bind field into class schema",
+   "confidence": "high",
+   "evidence": "body read; called by FUN_006614b0/FUN_00661530"
+  },
+  {
+   "addr": "0x0064a600",
+   "ghidra_name": "FUN_0064a600",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED component pool-insert: memcpy record (size at desc+0xc) into open-addressed pool slot keyed by hash; used to instantiate a deserialized component. Called at end of every schema template",
+   "confidence": "high",
+   "evidence": "body read; called by FUN_00661190; 12+ callers"
+  },
+  {
+   "addr": "0x0064a770",
+   "ghidra_name": "FUN_0064a770",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED registry tail: appends descriptor* into global reflection-class array PTR_PTR_00edbec8[DAT_01176058], increments count, writes assigned class-id into descriptor+6. Called by all ~232 class registrars",
+   "confidence": "high",
+   "evidence": "body read; 12+ registrar callers; core reflection-registry primitive"
+  },
+  {
+   "addr": "0x0064a782",
+   "ghidra_name": "FUN_0064a782",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED registry tail variant: appends into second registry array PTR_PTR_00edbac8 (count DAT_0117605c). Sibling of FUN_0064a770",
+   "confidence": "high",
+   "evidence": "body read"
+  },
+  {
+   "addr": "0x0064aa70",
+   "ghidra_name": "FUN_0064aa70",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "Reflection-system bootstrap: InitializeCriticalSection + allocate reflection arena, then calls FUN_0064ac50 (enum registry) and FUN_0064ee60 (method registry). Entry for whole reflection init",
+   "confidence": "high",
+   "evidence": "body read; callers=[FUN_00672e20]; calls both master tables"
+  },
+  {
+   "addr": "0x0064ac50",
+   "ghidra_name": "FUN_0064ac50",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "MASTER enum-type registry (16897B): allocates + fills 65 enum descriptor tables (hash/index pairs via FUN_00824270) and registers each via thunk_FUN_004935d1. Includes FX enums: ParticleKeyEnum, MaterialTypeEnum, SoundKeyEnum, AmbientEffectType, EmissionShapeEnum, EmissionControlEnum, ChunkTrailEnum, DebrisTypeEnum, DamageKeyEnum, TerrainKeyEnum",
+   "confidence": "high",
+   "evidence": "body read; 65 thunk_FUN_004935d1 calls; enum name strings enumerated"
+  },
+  {
+   "addr": "0x0064ee60",
+   "ghidra_name": "FUN_0064ee60",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "MASTER reflection method/accessor registry (23111B): registers per-class deserialize/accessor fn-ptrs (incl FUN_00661190 ParticleEmitter, FUN_006614b0, FUN_00661260) into a hash-keyed table via FUN_00593c60 keyed by FUN_00824270",
+   "confidence": "high",
+   "evidence": "body read; contains local_4=FUN_00661190 registration"
+  },
+  {
+   "addr": "0x00656210",
+   "ghidra_name": "FUN_00656210",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED field-read primitive: reads a typed field (int8/16/32, float, enum, ref) from stream buffer per switch on field type-tag; advances cursor. Used by all schema templates",
+   "confidence": "high",
+   "evidence": "body read; 12+ callers across schema templates"
+  },
+  {
+   "addr": "0x00656320",
+   "ghidra_name": "FUN_00656320",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED float-field read primitive (default from float-DAT global)",
+   "confidence": "med",
+   "evidence": "docs/mercs2-ecs/05 field-registrar table; called by FUN_00661190"
+  },
+  {
+   "addr": "0x00656720",
+   "ghidra_name": "FUN_00656720",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SHARED enum-field read: resolves enum table by name-hash, reads stored int index; used by ParticleKeyEnum/SoundKeyEnum handlers",
+   "confidence": "high",
+   "evidence": "body read; called by FUN_006614b0"
+  },
+  {
+   "addr": "0x00661190",
+   "ghidra_name": "FUN_00661190",
+   "subsystem": "fx",
+   "stage": "fx.ecs",
+   "role": "ParticleEmitter CopyFromStream/deserialize+load (vtable schema template): reads 3 ints (FUN_00656210) + 1 float (FUN_00656320), pool-inserts record via FUN_0064a600 into descbase 0x017bddf8 pool; on new instance bumps _DAT_017bde40 and re-indexes via FUN_00665590. stride 0x10",
+   "confidence": "high",
+   "evidence": "body read; touches ParticleEmitter descbase globals; registered as fn-ptr in FUN_0064ee60 @line306476; matches doc schema"
+  },
+  {
+   "addr": "0x006614b0",
+   "ghidra_name": "FUN_006614b0",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "ParticleKeyEnum enum-field reflection handler: reads field, resolves enum table via FUN_00656720(s_ParticleKeyEnum_00bc6b58), registers field into schema via FUN_00649180(&PTR_PTR_00df8710,...). NOT a component; an enum-typed field emitter",
+   "confidence": "high",
+   "evidence": "body read; refs s_ParticleKeyEnum_00bc6b58"
+  },
+  {
+   "addr": "0x00661530",
+   "ghidra_name": "FUN_00661530",
+   "subsystem": "fx",
+   "stage": "fx.reflection",
+   "role": "SoundKeyEnum enum-field handler (sibling of FUN_006614b0); registers into &PTR_PTR_00df8790",
+   "confidence": "high",
+   "evidence": "body read; refs s_SoundKeyEnum_00bc71cc"
+  },
+  {
+   "addr": "0x00661fe0",
+   "ghidra_name": "FUN_00661fe0",
+   "subsystem": "fx",
+   "stage": "shadow.blob",
+   "role": "BlobShadow deserialize/schema (id + 2 rgb colors + enable flag + size float), stride 0x24",
+   "confidence": "med",
+   "evidence": "docs/mercs2-ecs/05 registry"
+  },
+  {
+   "addr": "0x00662720",
+   "ghidra_name": "FUN_00662720",
+   "subsystem": "fx",
+   "stage": "fx.ecs",
+   "role": "Flammable deserialize (1 opaque flammability dword), stride 4",
+   "confidence": "low",
+   "evidence": "docs/mercs2-ecs/05 registry; adjacent, destruction-linked not pure FX"
+  },
+  {
+   "addr": "0x00662b20",
+   "ghidra_name": "FUN_00662b20",
+   "subsystem": "fx",
+   "stage": "fx.ecs",
+   "role": "RedEffectComponent deserialize/schema template (14 fields incl EmissionShapeEnum/EmissionControlEnum), stride 0x38",
+   "confidence": "med",
+   "evidence": "docs/mercs2-ecs/05 registry; not re-read this pass but consistent with descbase 0x017be398"
+  },
+  {
+   "addr": "0x00662d40",
+   "ghidra_name": "FUN_00662d40",
+   "subsystem": "fx",
+   "stage": "fx.ecs",
+   "role": "EffectTemplate deserialize (1 opaque dword, no field reads), stride 4",
+   "confidence": "med",
+   "evidence": "docs/mercs2-ecs/05 registry"
+  },
+  {
+   "addr": "0x00662e50",
+   "ghidra_name": "FUN_00662e50",
+   "subsystem": "fx",
+   "stage": "fx.ecs",
+   "role": "EffectAiOccluder deserialize (1 int occluder flag), stride 4",
+   "confidence": "med",
+   "evidence": "docs/mercs2-ecs/05 registry"
+  },
+  {
+   "addr": "0x00664dd0",
+   "ghidra_name": "FUN_00664dd0",
+   "subsystem": "fx",
+   "stage": "fx.ribbon",
+   "role": "Ribbon component schema builder (stride 0x2c): 4x int (FUN_00656210 = texture/segment/material ids), 6x float (FUN_00656320 = width/lifetime/uv-scroll), 1x BoolEnum (enabled/world-space). callers=[] (invoked via reflection registry table).",
+   "confidence": "high",
+   "evidence": "decomp read; corpus doc mercs2-ecs/05 line 190"
+  },
+  {
+   "addr": "0x00749060",
+   "ghidra_name": "FUN_00749060",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "renderer init — binds device into renderer slot +0x2d28 from RenderSystem singleton DAT_01176288+0x5bc",
+   "confidence": "high",
+   "evidence": "sets +0x2d28 = *(DAT_01176288+0x5bc); +0x2d28 is the device slot used by FUN_00755d90"
+  },
+  {
+   "addr": "0x007490b0",
+   "ghidra_name": "FUN_007490b0",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "PgLtiRenderer destructor — assigns vtable &PTR_FUN_00bd3940 (identifies the class vtable)",
+   "confidence": "high",
+   "evidence": "`*param_1 = &PTR_FUN_00bd3940`; that vtable slot 18 (+0x48) = FUN_00755d90"
+  },
+  {
+   "addr": "0x007492d0",
+   "ghidra_name": "FUN_007492d0",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "PgLtiRenderer(Win32) constructor (this=renderer object, vtable 0xbd3940) — calls FUN_00749060 (init) then FUN_00749f70 (RT create)",
+   "confidence": "high",
+   "evidence": "__thiscall, calls FUN_00749060; caller 0x004c00d7; owns the object whose +0x43f4..+0x4444 are the shadow slots"
+  },
+  {
+   "addr": "0x00749f70",
+   "ghidra_name": "FUN_00749f70",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "CreateRenderTargets (PgLtiRendererPc.cpp) — creates main RTs (FrontColor/MainColor/DepthBuffer/Downsample) then invokes vtable +0x48 → FUN_00755d90",
+   "confidence": "high",
+   "evidence": "path str 0xbd3660 PgLtiRendererPc.cpp; body ends with `(**(code**)(*this + 0x48))()`; sole caller of the shadow-RT vtable slot; called by ctor FUN_007492d0"
+  },
+  {
+   "addr": "0x0074a640",
+   "ghidra_name": "FUN_0074a640",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "ReleaseRenderTargets — releases shadow slots +0x4404/+0x43fc/+0x43f4 (and blob-shadow VBs +0x3e90..+0x3eb0); the create/release counterpart of FUN_00755d90",
+   "confidence": "high",
+   "evidence": "clears the same shadow struct offsets FUN_00755d90 fills; called on device-lost via FUN_0074cfa0 and dtor-wrapper FUN_0074a870"
+  },
+  {
+   "addr": "0x0074a870",
+   "ghidra_name": "FUN_0074a870",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "renderer clear-device wrapper (vtable slot 7) — zeroes +0x2d28, calls FUN_0074a640",
+   "confidence": "med",
+   "evidence": "vtable slot 7 = 0x0074a870; sets +0x2d28=0 then releases RTs"
+  },
+  {
+   "addr": "0x0074a890",
+   "ghidra_name": "FUN_0074a890",
+   "subsystem": "shadow",
+   "stage": "shadow.pass",
+   "role": "BeginSubmit/BeginScene (vtable slot 15) — device BeginScene (+0xa4) + SetRenderTarget-list bind (device +0x1d8)",
+   "confidence": "med",
+   "evidence": "\"BeginSubmit called when already...\"; device +0x1d8 loop binds RT slots; per-frame RT-bind machinery that the shadow pass rides on"
+  },
+  {
+   "addr": "0x0074c7ac",
+   "ghidra_name": "FUN_0074c7ac",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "RenderSystem::ApplySettings — device create/reset entry (allocs 0x5ec cfg singleton, FUN_00754850 init)",
+   "confidence": "med",
+   "evidence": "logs \"cr dev %i\", \"Device Identifier\"; drives device create → renderer ctor → RT create"
+  },
+  {
+   "addr": "0x0074cec0",
+   "ghidra_name": "FUN_0074cec0",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "OnDeviceReset / create-resources — allocs RenderSystem cfg, calls FUN_00754e90 (recreate), FUN_007490e0 (resize)",
+   "confidence": "med",
+   "evidence": "device-change gate; part of ApplySettings device (re)create path that re-runs the ctor RT-create chain"
+  },
+  {
+   "addr": "0x0074cfa0",
+   "ghidra_name": "FUN_0074cfa0",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "OnDeviceLost teardown (Dx9_State.h) — releases device resources incl. FUN_0074a640",
+   "confidence": "med",
+   "evidence": "references LTI\\src\\Dx9_State.h; calls FUN_0074a640 at 0x0074d1e3"
+  },
+  {
+   "addr": "0x00753280",
+   "ghidra_name": "FUN_00753280",
+   "subsystem": "shadow",
+   "stage": "shadow.cvar",
+   "role": "Reads Mercs2.ini [Render] section: EnableShadows + ParticleDetailLevel cvars (advanced-video). Master shadow enable gate.",
+   "confidence": "high",
+   "evidence": "Refs s_EnableShadows_00bb6ff0 + Mercs2.ini path 0xf7f048."
+  },
+  {
+   "addr": "0x00755d90",
+   "ghidra_name": "FUN_00755d90",
+   "subsystem": "shadow",
+   "stage": "shadow.rt_setup",
+   "role": "CreateShadowRenderTargets (PgLtiRendererShadowPc.cpp) — builds the shadow-map atlas surfaces: _ShadowMapCombined (1024x4096 ARGB8888/RGB565 RT), _ShadowMapColorTex/Surf, _ShadowMapDepthTex/Surf (DF24 or D24S8); writes atlas rects",
+   "confidence": "high",
+   "evidence": "only fn referencing path str 0xbd61f4 (PgLtiRendererShadowPc.cpp); logs \"CREATED SURFACE: _ShadowMap*\"; device vcalls +0x70/+0x5c/+0x48/+0x74; is vtable slot 18 (+0x48) of renderer vtable 0xbd3940 (image.bin fileoff 0x7d3988)"
+  },
+  {
+   "addr": "0x00824270",
+   "ghidra_name": "FUN_00824270",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "Name->handle hash entry: returns 0 for empty else FUN_004bdfb6 (which tail-calls FUN_0082427f). The registry key = this hash.",
+   "confidence": "high",
+   "evidence": "body; FUN_0082427f is FNV-1a: (h ^ (c|0x20))*0x1000193, seed folded, final ^0x2a"
+  },
+  {
+   "addr": "0x0082427f",
+   "ghidra_name": "FUN_0082427f",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "FNV-1a case-folded string hash (prime 0x1000193). Produces the shader-name handle key used as the Rosetta lookup at draw time.",
+   "confidence": "high",
+   "evidence": "loop *0x1000193, lowercased via |0x20"
+  },
+  {
+   "addr": "0x0084f130",
+   "ghidra_name": "FUN_0084f130",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "Master shader-registry init: hardcodes ~700 FUN_0085ac90(name,sho,variant) registrations covering PgMesh*/PgSkin*/PgDiff*/all Pg*Shadow*/PgBlobShadow*/PgRibbon*/post/sky/terrain. Single caller FUN_007492d0. Reads device feature bits at DAT_01176288+0x5e4 (bit2=ambient-wind/HDR path, bit3), DAT_00dfc345=per-pixel-light path enabled.",
+   "confidence": "high",
+   "evidence": "decomp read in full (1122 lines); calls=[0x0074957a]; string literals s_Pg*ShadowVP/FP visible per call"
+  },
+  {
+   "addr": "0x00857c00",
+   "ghidra_name": "FUN_00857c00",
+   "subsystem": "shadow",
+   "stage": "shadow.bounds",
+   "role": "Frustum/plane-cull test: dot-products a plane set (param_2, stride 12 floats = groups of 4 planes) against a point/sphere at param_1+0xb4/+0xd0, returns in/out/partial classification. Called from the shadow-caster gate in FUN_00466d40. Candidate ShadowBounds visibility test.",
+   "confidence": "med",
+   "evidence": "callers 0x00467084(FUN_00466d40), 0x00857bf1(FUN_00857a90); plane-dot structure"
+  },
+  {
+   "addr": "0x00858150",
+   "ghidra_name": "FUN_00858150",
+   "subsystem": "shadow",
+   "stage": "shadow.bounds",
+   "role": "Caster distance/LOD classifier: D3DXVec3TransformCoord(point) then magnitude (FUN_00401740 of x^2+y^2+z^2); return code 0/1/2 drives shadow selection in FUN_00466d40 (2=full in-range -> skip frustum test; 1=partial -> run FUN_00857c00; 0=cull). This distance test is where the shadow base-distance / real-vs-blob LOD decision lands.",
+   "confidence": "med",
+   "evidence": "callers 0x00467067(FUN_00466d40), 0x004a661c(FUN_004a6590); confirm-live: which threshold global = SetShadowBaseDistance storage"
+  },
+  {
+   "addr": "0x0085abd0",
+   "ghidra_name": "FUN_0085abd0",
+   "subsystem": "shadow",
+   "stage": "shadow.vp_select",
+   "role": "Shader name->u16 index allocator into registry container (DAT_01977a38). Hashes into bucket table +0x6010, appends record ptr at +0x6810+count*4, returns count as the u16 shader index stored at rec+2. This u16 is how draw/RenderShadow code references a shadow VP (index, not name, at draw time).",
+   "confidence": "high",
+   "evidence": "FUN_008242b0(0x100) hash; writes rec ptr to +0x6810[+0x6008]; returns +0x6008 as u16. Called from FUN_0085af00."
+  },
+  {
+   "addr": "0x0085ac90",
+   "ghidra_name": "FUN_0085ac90",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "Shader register/load helper. Args(name,sho,lightclass): mints handle id = FNV1a(name) via FUN_00824270, stores lightclass at slot+0x8c, copies .sho name into slot+0xb, then vtable (*slot+8)(sho,0) compiles. lightclass: 0=base,1=_pl point,2=_sl spot,3=_pl_sl.",
+   "confidence": "high",
+   "evidence": "body: FUN_00824270 result -> [1]; param_4 -> [0x23]; strcpy to +0xb; vtable+8 call"
+  },
+  {
+   "addr": "0x0085ace0",
+   "ghidra_name": "FUN_0085ace0",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": "Shader-slot object constructor: vtable=&PTR_LAB_00be89ec, id=+2=0xffff, zeroes fields [0x24..0x3e]. Slot is a ~0xFC-byte shader record in the pool.",
+   "confidence": "med",
+   "evidence": "body; vtable PTR_LAB_00be89ec matches slot used by FUN_0085ac90"
+  },
+  {
+   "addr": "0x0085af00",
+   "ghidra_name": "FUN_0085af00",
+   "subsystem": "shadow",
+   "stage": "shadow.vp_select",
+   "role": "Shader load-complete handler: builds the D3D vertex/pixel shader (vtable+0x10), D3DXGetShaderConstantTable->rec[0x43], assigns u16 index via FUN_0085abd0, registers with device resource mgr (PTR_PTR_00cfda1c+0x1c).",
+   "confidence": "high",
+   "evidence": "D3DXGetShaderConstantTable + FUN_0085abd0(&DAT_01977a38,rec) + rec[2]=idx."
+  },
+  {
+   "addr": "0x0085b3f0",
+   "ghidra_name": "FUN_0085b3f0",
+   "subsystem": "fx",
+   "stage": "fx.shader_registry",
+   "role": ".sho file loader: builds path (strcpy into +0x6c10), GetFileSizeEx, allocs via FUN_0084ac20, reads into pool under CriticalSection DAT_00ff4570, dest buffer at +0x6c90. Called 5x at registry entry to warm the pool (DAT_01977a38).",
+   "confidence": "high",
+   "evidence": "body: GetFileSizeEx/CancelIo/CloseHandle/EnterCriticalSection; callers all in FUN_0084f130"
+  }
+ ]
+}
