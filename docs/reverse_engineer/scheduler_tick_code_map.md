@@ -105,8 +105,18 @@ over that dt (integer sim steps + fractional carry). Frame-rate cap/vsync in `FU
 |---|---|
 | update-fn list `DAT_82c215c8 / 2160c / 21610` | `DAT_00dceb80 / DAT_00dcebc4 / DAT_00dcebc8` (reclassified **per-object**) |
 | `PgGameSystem::Update` (never located) | master tick `FUN_004c14f0 → FUN_004c15e0` (5-layer stack, order 0→4) |
-| `PgSysPopulation::Update FUN_82364058` | `FUN_006b7720` / `FUN_006c4eb0` |
+| ~~`PgSysPopulation::Update FUN_82364058` → `FUN_006b7720`/`FUN_006c4eb0`~~ **WRONG — see below** | — |
+| `PgSysPopulation::Update` = Xbox `FUN_82368008` (via game-systems master tick `FUN_822ff9b0`) | **`FUN_00502510`** (in the layer-4 list `FUN_004c9740`) |
 | PgSysRender quartet | render-view singleton `0x00DFC2F8` vtable +0x14 / +0x10 / +0x34 |
+
+**Correction (2026-07-06, from `population_spawner_code_map.md`):** the old row above was doubly
+wrong. Xbox `FUN_82364058` is `PgSysPopulation::OnEntityDeleted` (an on-delete callback), not
+`::Update`; and PC `FUN_006b7720`/`FUN_006c4eb0` are 11-byte stubs inside SceneObject-pool
+registrars, not population. The real `PgSysPopulation::Update` is Xbox `FUN_82368008` ↔ PC
+**`FUN_00502510`**, and the **layer-4 intra-order is statically resolved** as the literal call
+sequence of **`FUN_004c9740`** (1448 B, reached via `FUN_004c0ec0`) — population sits mid-list, the
+spawn-queue drain `FUN_004b4590` later in the same list. This closes confirm-live item #1 for the
+population slot (order is a direct call list there, not vtable-dispatched).
 
 ## 8. Confirm-live inventory
 

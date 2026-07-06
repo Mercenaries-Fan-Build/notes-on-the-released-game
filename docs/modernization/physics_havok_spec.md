@@ -159,11 +159,13 @@ descriptors out of the WADs and feed them to `rapier3d` (already a Rust crate; a
    need the same PHY2/SEGM/HIER extraction. Adopting rapier means the *only* net-new work vs. "just parse the
    data" is the tuning/parity loop, not writing a rigid-body solver, MOPP VM, TOI/CCD, constraint solver,
    and a vehicle SDK from scratch.
-5. **Vehicles: rapier has no drop-in `hkpVehicle` equivalent** — this is the one area with real reimpl risk.
-   But Mercenaries 2's vehicle *tuning* is not in reflection defaults (it's data-driven, §2 OPEN), the
-   arcade-y handling has wide behavioral tolerance, and a raycast-vehicle controller on top of rapier
-   (mirroring `hkpVehicleRaycastWheelCollide`) is a well-trodden pattern. Gate on behavioral milestones
-   (can traverse terrain, climb the same grades, flip on the same impacts), not on numeric wheel forces.
+5. **Vehicles: NOT a Havok-vehicle problem at all** (CORRECTED 2026-07-06). Mercenaries 2 does **not**
+   use the Havok vehicle SDK — there are **zero `hkpVehicle*`** on PC; the shipped drive model is
+   **Pandemic's own custom raycast sim** (nine `hkpUnaryAction`-derived actors: `CarPhysicsV2` etc.),
+   **now fully decoded** — per-axle raycast friction + linear torque falloff to MaxSpeed + donut LUT
+   ([`../reverse_engineer/vehicle_code_map.md`] §4). So the reimpl mirrors **that decoded algorithm**,
+   not `hkpVehicleRaycastWheelCollide`, which lowers the risk (we have the real math, not a black box).
+   The tuning defaults are still data-driven (§2 OPEN). Gate on behavioral milestones for parity.
 
 ### Why NOT reimplement Havok (weighing parity vs effort)
 - **Parity gain is illusory without an oracle.** A hand-written HK550 solver would *look* faithful but
@@ -215,9 +217,11 @@ should land earlier (Phase 1–2) because it is pure asset→struct (Surface A) 
   (ball-socket/hinge/ragdoll limits → rapier joints); wire `SWIT` destruction state switching to swap
   colliders between intact/break-piece. Gate: perceptual/statistical parity (render-golden with tolerance).
 
-- **P4 — Vehicles.** Raycast-wheel vehicle controller on rapier mirroring `hkpVehicleRaycastWheelCollide`
-  (engine/transmission/brake/steering/suspension as data-driven params). Gate: behavioral milestones
-  (traversal, top-speed band, roll thresholds). Wire grappling hook / winch / anchors as rapier joints last.
+- **P4 — Vehicles.** Port the game's **decoded custom raycast sim** ([`../reverse_engineer/vehicle_code_map.md`]
+  §4 — `CarPhysicsV2`/`TankPhysics`/`BoatPhysics`/heli as `hkpUnaryAction`-style per-frame actors),
+  NOT the Havok vehicle SDK (which the game doesn't use). Wheels = per-axle raycasts against the rapier
+  world; suspension/friction/torque per the decoded algorithm. Gate: behavioral milestones (traversal,
+  top-speed band, roll thresholds). Wire grappling hook / winch / anchors as rapier joints last.
 
 - **Throughout:** fixed timestep + seeded RNG from day one (charter record/replay gate). Physics runs on the
   PIMP-equivalent job path; simulation-island size alerts preserved as diagnostics.
@@ -238,8 +242,10 @@ should land earlier (Phase 1–2) because it is pure asset→struct (Surface A) 
    `docs/mercs2-pdb-analysis/vehicles.md` (`EngineTorque`, `GearRatio1–5`, `SpringStrength`, `WheelRadius`,
    boat `WaterDrag*`, heli `MaxFwdSpeed`/`PitchAccel`, etc.). What is **OPEN** is the *numeric defaults per
    vehicle*: they are stream-loaded per-instance from vehicle-definition assets, not baked constants. Must be
-   located/dumped before P4 (candidate: a vehicle-definition WAD reflection blob, or `hkpVehicleData` in a
-   packfile). These named fields map cleanly onto a rapier raycast-vehicle controller's parameters.
+   located/dumped before P4 (candidate: a vehicle-definition WAD reflection blob; the per-class stream
+   sizes are known — [`../reverse_engineer/vehicle_code_map.md`] §2). **Note (2026-07-06):** `hkpVehicleData`
+   is **dead SDK payload** on this title (the drive model is custom, not Havok), so it is not the source.
+   These named fields map onto the decoded custom sim's actor fields, not a Havok controller.
 4. **`PgPhysicsSystemDroplet` fluid model.** Single-source (debug counters only); the linked-particle reading
    is inference. Decide whether fuel/liquid physics needs faithful replication or can be a cosmetic modern
    particle system.

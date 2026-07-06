@@ -14,9 +14,14 @@ Per the source docs:
 - **`[FACT]`** = a symbol/string provably exists (and, where noted, a decompiled body was read).
   **`[INFERRED]`** = behavior/architecture the source doc itself labels inferred. This doc keeps that
   distinction; do not promote an inference to fact downstream.
-- **VMX128 math does not decode.** The per-frame numeric cores (physics step, vehicle drive model,
-  damage solver, anim sample/blend/IK, shader math, audio mix/pan, water) are undecoded in both
-  builds. Their *behavior* is the exe's job to gate — we do not claim to have it.
+- **VMX128 math does not decode — Xbox only; several PC cores DO decode.** The per-frame numeric
+  cores (Havok physics step, damage solver, anim sample/blend/IK, shader math, audio mix/pan, water)
+  are undecoded on **Xbox** (VMX128). **CORRECTION (2026-07-06):** on **PC** these are x86/SSE, and a
+  Ghidra defect — a false `noreturn` on the x87 `sqrt`/`abs` helpers (`FUN_00401740`/`FUN_00401750`)
+  that truncated every float-heavy function at its first sqrt — had made them *look* undecoded. With
+  it cleared, the **vehicle drive model is fully decoded** (custom raycast sim, NOT the Havok vehicle
+  kit — [`../reverse_engineer/vehicle_code_map.md`]). Other PC cores (`hkpWorld::step`, damage/anim)
+  are worth re-checking under the same fix, not assumed undecoded. Gate on the exe where not yet read.
 - **Address spaces don't mix:** PC VAs (`FUN_00…`) and Xbox VAs (`@82…`) are different builds.
 - **Pool-count strings are budgets, not `sizeof`** (e.g. `HibernationControl 14080` = pool count +
   alignment, not bytes).
@@ -111,7 +116,7 @@ Layer legend: **E**=engine service · **F**=engine framework/kernel · **G**=gam
 | havok-physics | **M** | external (rapier/custom behind the seam); `mercs2_formats` reads packfiles | Havok **5.5.0-r1** — the capability contract our backend must satisfy (world/shapes/MOPP/heightfields/constraints/character/**vehicle SDK**/packfile serialization). |
 | camera | **E** | `mercs2_engine::camera` | `PgSysCamera` → view/proj + `cameraPos`/`InvViewport` constants, collision cast (≤5 viewports = split-screen). Camera-mode blocks = ECS components (**F**), tuning = **G**. |
 | jobs-threading | **E**(F) | `mercs2_core` (job/scheduler) + `mercs2_engine` (worker pool, GPU fence) | Pimp = worker pool / bounded `a64` queue / per-CPU timers / Jobtypes. **Entirely string-only** in decomp — internals inferred. `MassiveThread` ≠ Pimp. |
-| vehicles | **G** on E | `mercs2_game::vehicles` (+ `mercs2_core` for the ring) | Bounded **command-ring** transport + per-class controller singletons + reflection stream-load = engine mechanism (Keystone A). Action classes, control verbs, tuning fields, physics actors, AI driving states, parts = **G**. Drive model **undecoded**. |
+| vehicles | **G** on E | `mercs2_game::vehicles` (+ `mercs2_core` for the ring) | Bounded **command-ring** transport + per-class controller singletons + reflection stream-load = engine mechanism (Keystone A). Action classes, control verbs, tuning fields, physics actors, AI driving states, parts = **G**. Drive model **DECODED on PC** (2026-07-06): custom raycast sim (nine `hkpUnaryAction` actors), NOT the Havok vehicle kit — [`../reverse_engineer/vehicle_code_map.md`]. |
 | weapons-combat | **G** on E | `mercs2_game::weapons` (+ `mercs2_core`) | Same Keystone-A registry; homing lock = event-dispatch FSM; `DamagePerson` = event **authoring**, not the hit solver. All `Weapon*/Projectile*/Homing*/Damage*/Explosion*` + tunables + `wpn_*` = **G**. Ballistics/damage math **undecoded**. |
 | ai | **E**(F)+G | `mercs2_core`/`mercs2_engine` (framework) + `mercs2_game`/`mercs2_script` | `PgSysAi` host + `DirectAction` bus + component registry = engine. Goal verbs, cover FSM, squad, pedestrian chatter, `Ai.Goal` Lua = **G**. **Pathfinding algorithm unnamed/unrecovered** (`PathFind` is a debug-color registrar). |
 | game-systems | **G** (+E spine) | `mercs2_game::*` + `mercs2_core` (save/serialize mechanism) | Save versioning/hash/corruption/critical-section dispatch = engine mechanism; economy, missions/contracts, factions, achievements, profile content = **G**. Stats/leaderboards/entitlement = EA Blaze/Nucleus online back-end (**M/G-online**). |
@@ -142,9 +147,11 @@ Layer legend: **E**=engine service · **F**=engine framework/kernel · **G**=gam
 Do not let synthesis assert any of these:
 
 1. **All Pangea behavior is inference** — no `Pg*` RTTI; class layouts/hierarchies unknown.
-2. **VMX128 numeric cores are undecoded** — physics step, vehicle drive model, damage/ballistics
-   solver, anim sample/blend/IK, shader pixel/vertex math, audio mix/3D-pan, water. Behavior-gate
-   against the exe; never state the math.
+2. **VMX128 numeric cores are undecoded on Xbox** — physics step, damage/ballistics solver, anim
+   sample/blend/IK, shader pixel/vertex math, audio mix/3D-pan, water. Behavior-gate against the exe;
+   never state the math. **EXCEPT (PC, 2026-07-06):** the **vehicle drive model IS decoded** (custom
+   raycast sim — [`../reverse_engineer/vehicle_code_map.md`]); the old "undecoded" was a Ghidra
+   noreturn-on-sqrt truncation, not VMX128. Re-check other PC cores under that fix before asserting.
 3. **Pipeline orderings are inferred from profiler labels, not traced control flow** — render pass
    order, anim pipeline, streaming pre/post-load, physics step order, master `PgGameSystem` tick.
 4. **Pimp job system internals are string-only** (0 decomp hits) — worker pool, lock-free queue,

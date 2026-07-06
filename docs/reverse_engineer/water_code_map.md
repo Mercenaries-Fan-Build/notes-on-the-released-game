@@ -99,7 +99,8 @@ with edge interpolation → water-surface LOD banding. *(high)*
   submits (`thunk_FUN_024bb2a0`) + vtables; the opaque/transparent/underwater role of each is inferred
   from buffer-offset binds.
 - `FUN_00486390` WakeMap-vs-HeightMap target — not string-pinned.
-- `FUN_00480440` semantics (waterline height vs boolean underwater) — SecuROM island body not in dump.
+- `FUN_00480440` semantics (waterline height vs boolean underwater) — the SecuROM-island target is
+  **read live in the unpacked image** ([[securom-decompiled-not-a-blocker]]), not a permanent gap.
 - `Water::Begin`/`BeginFrame` (Xbox 0x14c10/0x14a70) — best candidates `FUN_00466670`/`FUN_00466850`
   (water-object init), not asserted.
 

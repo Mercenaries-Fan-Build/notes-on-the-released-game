@@ -1,0 +1,79 @@
+{
+  "_meta": {
+    "doc": "docs/reverse_engineer/road_graph_ai_driving_code_map.md",
+    "binary": "output/_ghidra/securom_dump/mercs2_unpacked.exe",
+    "decomp": "output/_ghidra/mercs2_unpacked.exe_decomp.txt",
+    "base": "0x400000",
+    "xbox_oracle": "docs/mercs2-pdb-analysis/vehicles.md",
+    "confidence_key": "high = body read/verified; med = call-site/shape; gap = cadence/vtable/SecuROM -> confirm-live",
+    "generated": "2026-07-06"
+  },
+  "correction": {
+    "target_doc": "docs/mercs2-ecs/06_world_terrain_roads_streaming.md",
+    "claim": "FUN_0063d4b0 is the RoadIntersection consumer",
+    "reality": "FUN_0063d4b0 is the RoadIntersection CopyFromStream LOADER (reads 0x7c bytes via stream vtable +0x14, commits via FUN_0064a600); registered in reflection dispatcher FUN_0064ee60. The runtime consumer is FUN_004fd9f0."
+  },
+  "runtime_graph_rebuilder": {
+    "fn": "FUN_004fd9f0",
+    "size": 1818,
+    "caller": "0x004b9ad7",
+    "adjacency_builder": "FUN_004fe750",
+    "adjacency_call_site": "0x004fe0ee",
+    "hash_insert": "FUN_00874150",
+    "insert_lock": "DAT_01174ffc",
+    "per_element_cb": "FUN_00532de0",
+    "road_pool": "PTR_PTR_017bd910",
+    "road_index_table": "DAT_017c03ac",
+    "road_index_size": "DAT_017c0398",
+    "road_gen": "_DAT_017c03c0",
+    "road_record_stride": "0x14",
+    "road_record_dst": "param_1+0x10",
+    "road_hash_key": "0xbcfe6314",
+    "intersection_pool": "PTR_PTR_017be9f0",
+    "intersection_index_table": "DAT_017c03fc",
+    "intersection_index_size": "DAT_017c03e8",
+    "intersection_gen": "_DAT_017c0410",
+    "graph_counts": ["param_1+0x13890", "param_1+0x13894"],
+    "cadence": "UNPROVEN - per-frame vs region-event; confirm-live bp 0x004fd9f0",
+    "conf": "high (body read); cadence gap",
+    "corpus_ref": "docs/engine_optimization_function_reference.md#3a"
+  },
+  "reflection_components": [
+    {"component": "Road", "stride": 44, "entities": 2441, "pool_cap": 4608, "registrar": "in FUN_0064ee60"},
+    {"component": "RoadIntersection", "stride": "0x7c", "entities": 883, "pool_cap": 2304, "descriptor_registrar": "FUN_006602c0", "loader": "FUN_0063d4b0", "fields": "7 INT + 6 VEC3 (approach/corner pos) + 6 INT (links)"},
+    {"component": "LaneData", "stride": "0x40", "registrar": "FUN_006606b0", "fields": "x4 lanes {LaneTypeEnum, LaneOffsetEnum, float, float}"},
+    {"component": "LaneZeroDirection", "registrar": "FUN_00660620", "fields": "LaneDirectionEnum"},
+    {"component": "IntersectionToIntersection", "registrar": "FUN_00660580", "fields": "2 INT (graph edge)"}
+  ],
+  "ai_driving_states": {
+    "xbox_registry": "837e9bf8",
+    "xbox_bulk_registrar": "FUN_823b76e0",
+    "xbox_register_helper": "FUN_823f9250",
+    "pc_producer_cluster": "0x544xxx-0x561xxx",
+    "pc_producers_sampled": ["FUN_00544a70", "FUN_005445b0", "FUN_005446d0", "FUN_00544c90", "FUN_00545370", "FUN_005454d0", "FUN_00545550", "FUN_00546980", "FUN_00546c20", "FUN_0054eff0"],
+    "pc_composite_driver": "FUN_00546ce0",
+    "lcg_dither": "DAT_00DFCBAC*0x19660D+0x3C6EF35F",
+    "vehicle_quat_field": "+0x290",
+    "vehicle_vel_field": "+0x37C",
+    "feeds": "vehicle command rings (see vehicle_code_map.json control_rings) via verbs FUN_0056b590 etc.",
+    "road_following_states": ["CarDriveRoads", "TankDriveRoads"],
+    "conf": "med",
+    "note": "specific PC fn for CarDriveRoads + PC AI-state registrar twin NOT pinned this pass"
+  },
+  "traffic_population": {
+    "code_map": "docs/reverse_engineer/population_spawner_code_map.md",
+    "density_fns": ["FUN_006420d0", "FUN_0066f300"],
+    "config_keys": ["PopulationDensity", "PopulationFlow", "PopulationDynamicRoad"],
+    "enums": ["TrafficControlEnum", "RtSpeedLimit", "SpawnerRadiusTypeEnum"],
+    "civilian_flags": ["_vehcivilian", "_flagcivilian"],
+    "spawn_in_gate": "HibernationControl (per-entity distance)",
+    "unresolved": ["VehicleSpawnList consumer", "VehiclesOnScreen on-screen cap"]
+  },
+  "confirm_live": [
+    "bp 0x004fd9f0 count calls/sec vs region loads -> graph rebuild cadence",
+    "bp 0x544xxx cluster while AI vehicle follows road; correlate read of PTR_PTR_017bd910 / DAT_017c03ac -> CarDriveRoads/TankDriveRoads fn",
+    "find PC AI-state registrar (Xbox FUN_823b76e0 twin, ~58 two-arg calls) + registry global",
+    "decode FUN_00660xxx lane enum members + speed limits",
+    "decode FUN_004fe750 adjacency (which RoadIntersection dwords: VEC3 approaches + link indices)"
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "_meta": {
+    "doc": "docs/reverse_engineer/vehicle_code_map.md",
+    "binary": "output/_ghidra/securom_dump/mercs2_unpacked.exe",
+    "decomp": ["output/_ghidra/mercs2_unpacked.exe_decomp.txt", "output/_ghidra/vehicle_phys_decomp.txt", "output/_ghidra/vehicle_phys_decomp2.txt"],
+    "base": "0x400000",
+    "xbox_oracle": "docs/mercs2-pdb-analysis/vehicles.md",
+    "confidence_key": "high = in-body hash const / verified code shape / body read; med = call-site/shape; low = vtable-slot position only; gap = SecuROM thunk or vtable-gated → confirm-live",
+    "generated": "2026-07-06",
+    "headlines": [
+      "Drive model is a CUSTOM raycast sim, NOT the Havok Vehicle Kit (zero hkpVehicle* on PC).",
+      "Ghidra noreturn flag on FUN_00401740 (sqrt) / FUN_00401750 (abs) had truncated every vehicle-physics fn at its first sqrt; fixed by scripts/ghidra_scripts/DecompileVehiclePhysics.java. Global decomp exports should be regenerated."
+    ]
+  },
+  "control_rings": [
+    {"id": 1, "role": "seat/enter-exit/driver-assignment", "count": "DAT_011CA560", "recs": "DAT_011CA5B0", "lock": "DAT_011CB480", "rec_bytes": "0x24", "cap": 160, "fetch": "FUN_00406540", "enqueue": "SecuROM", "applier": "FUN_0053f110", "conf": "med"},
+    {"id": 2, "role": "vehicle state/hijack", "count": "DAT_012476A8", "recs": "DAT_012476F0", "lock": "DAT_0124AEF0", "rec_bytes": "0xc", "cap": 1024, "fetch": "FUN_004ceba0", "enqueue": "SecuROM", "applier": "FUN_0053f400", "ids": ["0xB6741F78", "0xD6F04A29"], "conf": "med"},
+    {"id": 3, "role": "per-entity ECS command fan-out", "fetch": "FUN_004b2230", "fetch_thunk": "_DAT_0244F7B8", "applier": "FUN_0053f6a0", "registries": ["PTR_PTR_00DF8188", "PTR_PTR_00DF8408"], "conf": "gap"},
+    {"id": 4, "role": "CAR/TANK control", "ring_obj": "0x011C0230", "recs": "DAT_011C0258", "subscriber_bytes": "DAT_011C2258", "lock": "DAT_011C2458", "cs": "DAT_011C2460", "rec_bytes": "0x10", "cap": 512, "fetch": "FUN_0040ea90", "fetch_thunk": "_DAT_02455C94", "enqueue": "FUN_00538c90", "xbox": "830ff930 / FUN_8239cd98", "conf": "high"},
+    {"id": 5, "role": "BOAT+HELI control", "ring_obj": "0x011C2478", "recs": "DAT_011C24A0", "lock": "DAT_011C2B44", "cs": "DAT_011C2B4C", "rec_bytes": "0x10", "cap": 100, "fetch": "FUN_0040ec20", "enqueue": "FUN_00538d20", "xbox": "830feb30 / 83101b88 / FUN_8239ce50", "conf": "high"},
+    {"id": 6, "role": "TURRET control (6-word=aim vector)", "ring_obj": "0x0122ECC0", "recs": "DAT_0122ECE8", "subscriber_bytes": "DAT_01234CE8", "lock": "DAT_012350E8", "rec_bytes": "0x18", "cap": 1024, "fetch": "FUN_00406780", "enqueue": "thunk_FUN_024ba1a0", "bit_alloc": "FUN_004068d0", "xbox": "83103158 / FUN_823a4878", "conf": "med"}
+  ],
+  "control_pump": {
+    "tick_path": ["FUN_00630ef0", "FUN_004c14f0", "FUN_004c15e0", "FUN_004c09c0", "FUN_004c0ec0", "FUN_004c9740", "FUN_00532f80"],
+    "pump": "FUN_00532f80",
+    "call_site": "0x004c990c",
+    "layer": "game (idx 4) of 5-layer master tick",
+    "channel_ids_global": "DAT_00D6CB70",
+    "car_turn_feedback": "FUN_005402b0",
+    "boat_heli_turn": "FUN_00540370",
+    "local_vehicle_thunk": "thunk_FUN_024e5180",
+    "turret_applier_thunk": "thunk_FUN_024e9260"
+  },
+  "handle_command": [
+    {"fn": "FUN_00437300", "class": "car/tank", "drive_obj": "this[0x56]", "conf": "high",
+     "cases": {"0x3483DBF1": "+0x28 = clamp(1-payload) Turn", "0x0490757F": "+0x2C/+0x30 fwd accel by reverse flag", "0x460C5913": "combined accel/brake (1-v swap)", "0x55B8E0A1": "+0x30 Brake", "0x574220AC": "+0x38 Handbrake", "0x37086E0A": "+0x34 (open)", "0x7D3B632C": "accel", "0x6C5F1491": "zero +0x28..+0x38 ClearControls", "0x262E1E47": "world-pos ping FUN_008d5ba0/b70"},
+     "sibling_monitor": {"fn": "FUN_00437740", "emits": "0x9EAEC21D skid/burnout", "threshold": "DAT_00B9B700"}},
+    {"fn": "FUN_00435790", "class": "helicopter", "drive_obj": "this+0x140", "conf": "high",
+     "cases": {"0x7D3B632C": "+0xF8", "0x0490757F": "+0xFC", "0x3483DBF1": "+0x100", "0x37086E0A": "+0x104", "0x6C5F1491": "zero all 4"}},
+    {"fn": "FUN_00441900", "class": "boat", "drive_obj": "this+0x140", "conf": "high",
+     "cases": {"0x7D3B632C": "+0x28", "0x3483DBF1": "+0x2C as 1-v (BoatTurn reuses CarTurn id)", "0x6C5F1491": "zero both"}}
+  ],
+  "command_ids": {
+    "0x3483DBF1": "Turn/steer", "0x55B8E0A1": "Brake", "0x0490757F": "Accel channel A",
+    "0x7D3B632C": "Accelerate", "0x460C5913": "Combined accel/brake axis", "0x574220AC": "Handbrake",
+    "0x37086E0A": "5th car channel / heli 4th axis", "0x6C5F1491": "ClearControls",
+    "0x262E1E47": "Position/focus ping", "0x30FBBF64": "SpinHeli (Lua)", "0x9EAEC21D": "Skid/burnout",
+    "0xB6741F78": "ring2 state-advance", "0xD6F04A29": "ring2 hijack",
+    "hash_fn": "UNKNOWN - negative vs pandemic_hash/m2, CRC32, FNV-1/1a, 0x9E3779B9-chain"
+  },
+  "lua_vehicle_table": {
+    "table_va": "0xB98918",
+    "fns": [
+      {"api": "Vehicle.StartTankHijackMotion", "fn": "FUN_005e8dd0", "id": "0x3483DBF1"},
+      {"api": "Vehicle.StopTankHijackMotion", "fn": "FUN_005e8ea0", "id": "0x3483DBF1"},
+      {"api": "Vehicle.SpinHeli", "fn": "FUN_005e8f70", "id": "0x30FBBF64", "gate": "vt+0xE0()==4"},
+      {"api": "Vehicle.ClearControls", "fn": "FUN_005e9c40"},
+      {"api": "Vehicle.SetTurretPitch", "fn": "FUN_005e8970", "conf": "gap"},
+      {"api": "Vehicle.SetTurretYaw", "fn": "FUN_005e8ac0", "conf": "gap"}
+    ]
+  },
+  "physics_registrars": [
+    {"class": "PhysicsPropertyUncrushable", "fn": "FUN_0063e470", "string_va": "0x00bc4b20", "descriptor": "0x017bc098", "stream_size": "0x4"},
+    {"class": "PhysicsPropertyGravityScaler", "fn": "FUN_0063e520", "string_va": "0x00bc4b3c", "descriptor": "0x017bc0e8", "stream_size": "0x4"},
+    {"class": "_PropPhysics", "fn": "FUN_0063e5d0", "string_va": "0x00bc4b5c", "descriptor": "0x017bc138", "stream_size": "0x10"},
+    {"class": "_DebrisPhysics", "fn": "FUN_0063e680", "string_va": "0x00bc4b6c", "descriptor": "0x017bc188", "stream_size": "0xc"},
+    {"class": "_BoatPhysics", "fn": "FUN_0063e730", "string_va": "0x00bc4b7c", "descriptor": "0x017bc1d8", "stream_size": "0x114"},
+    {"class": "_HumanPhysics", "fn": "FUN_0063e7f0", "string_va": "0x00bc4b8c", "descriptor": "0x017bc228", "stream_size": "0x84"},
+    {"class": "_CarPhysicsV2", "fn": "FUN_0063e8b0", "string_va": "0x00bc4b9c", "descriptor": "0x017bc278", "stream_size": "0x18c"},
+    {"class": "_TankPhysics", "fn": "FUN_0063e980", "string_va": "0x00bc4bb8", "descriptor": "0x017bc2c8", "stream_size": "0x78"},
+    {"class": "_HelicopterPhysics", "fn": "FUN_0063ea40", "string_va": "0x00bc4bc8", "descriptor": "0x017bc318", "stream_size": "0x58"},
+    {"class": "_HelicopterPhysicsAi", "fn": "FUN_0063eb00", "string_va": "0x00bc4bdc", "descriptor": "0x017bc368", "stream_size": "0x54"},
+    {"class": "_JetPhysics", "fn": "FUN_0063ebc0", "string_va": "0x00bc4bf4", "descriptor": "0x017bc3b8", "stream_size": "0x4"},
+    {"class": "_BuildingPhysics", "fn": "FUN_0063ec70", "string_va": "0x00bc4c00", "descriptor": "0x017bc408", "stream_size": "0x8"}
+  ],
+  "stream_loaders": {
+    "commit_helper": "FUN_0064a600",
+    "raw_block": {"car": "FUN_00638f80", "boat": "FUN_00638e80", "human": "FUN_00638f00", "prop": "FUN_00638da0", "debris": "FUN_00638e10"},
+    "field_default": {"car": "FUN_00658f60", "boat": "FUN_006584a0", "human": "FUN_00658ba0", "tank": "FUN_00659a80", "jet": "FUN_00659df0", "heli": "FUN_00659e80", "heli_ai": "FUN_0065a120", "building": "FUN_0065a3a0", "debris": "FUN_006583d0"},
+    "field_writers": {"float": "FUN_00656320", "vec3": "FUN_00656610", "int_bool": "FUN_00656210", "enum": "FUN_00656720"},
+    "note": "tuning field NAMES stripped on PC; identify by stream order + default fingerprints vs Xbox registrars"
+  },
+  "physics_actors": [
+    {"tag": "A", "class": "BoatPhysics", "vtable": "0xba9340", "dtor": "FUN_00435300", "applyAction": "FUN_00447260", "ctor": "FUN_004465e0", "activate": "FUN_00435660", "size": "0x244", "owner_slot": "entity+0x140", "conf": "high"},
+    {"tag": "B", "class": "HelicopterPhysics/HelicopterPhysicsAi", "vtable": "0xba9858", "dtor": "FUN_004391f0", "applyAction": "FUN_00453760", "setup": "FUN_00439850", "activate": "FUN_00439540", "size": "0xe8", "owner_slot": "entity[0x50]", "conf": "high"},
+    {"tag": "C", "class": "CarPhysicsV2", "vtable": "0xbaa360", "dtor": "FUN_004493a0", "applyAction": "FUN_0044db60", "ctor": "FUN_00449460", "activate": "FUN_00437080", "bike_test": "FUN_00437260", "size": "0x284", "owner_slot": "entity+0x158", "conf": "high"},
+    {"tag": "D", "class": "world-boundary keep-in plane", "vtable": "0xbaa388", "dtor": "FUN_00450240", "applyAction": "FUN_00450280", "factory": "FUN_00432280", "size": "0x70", "conf": "med"},
+    {"tag": "E", "class": "CCD anti-tunneling sweep", "vtable": "0xbaa3b0", "dtor": "FUN_00450860", "applyAction_slot9": "FUN_004508a0", "ctor": "FUN_004507e0", "raycast_filter": "0x22376f6e", "size": "0x44", "conf": "med"},
+    {"tag": "F", "class": "gravity-scaler (TtPgGravityScalerAction)", "vtable": "0xbaa400", "dtor": "FUN_00453ca0", "applyAction": "FUN_00453ce0", "factory": "FUN_00433530", "size": "0x2c", "conf": "med"},
+    {"tag": "G", "class": "TankPhysics", "vtable": "0xbaa470", "dtor": "FUN_00454a70", "applyAction": "FUN_00454d80", "track_raycast": "FUN_00456250", "side_query": "FUN_00455210", "size": ">=0x3d4", "conf": "high"},
+    {"tag": "H", "class": "yaw/heading-servo", "vtable": "0xbaa4c4", "dtor": "FUN_004573d0", "applyAction": "FUN_004574f0", "user": "FUN_00512e90", "conf": "med"},
+    {"tag": "I", "class": "buoyancy/floating (vehicleSinking)", "vtable": "0xbaa4ec", "dtor": "FUN_004577c0", "applyAction": "FUN_00458ac0", "init": "FUN_00457800", "waterline_query": "FUN_00480440", "size": ">=0x2cc", "conf": "high"}
+  ],
+  "hkp_unary_action_base": {"dtor": "FUN_008e83e0", "ctor": "FUN_008e83a0", "applyAction_slot": 3, "addref": "0x88c5b0", "release": "0x88c600", "slot4": "0x8e8410"},
+  "car_drive_model": {
+    "applyAction": "FUN_0044db60",
+    "ground_normal_avg": "FUN_0044cc90",
+    "wheel_raycast_scheduler": "FUN_0044d9b0",
+    "per_wheel_raycast": "FUN_0044e2c0",
+    "owner_raycast": "FUN_00432a30",
+    "suspension_friction": "FUN_00449dc0",
+    "wheel_spring": "FUN_0044f680",
+    "axle_friction_solve": "FUN_004571b0",
+    "drive_impulse": "FUN_0044a970",
+    "drive_impulse_bike": "FUN_0044a6a0",
+    "grounded_count": "FUN_0044a550",
+    "donut_sine_lut": "DAT_00cf2900",
+    "speed_ratio": "clamp01((vmax - v) / (vmax * K)) -> linear torque falloff to zero at MaxSpeed",
+    "fields": {"accel": "+0x2c", "brake": "+0x30", "handbrake": "+0x34", "donut_heat": "+0x40", "donut_boost": "+0x44", "wheel_ptrs": "+0x54", "reverse_flag": "+0x98", "raycast_rr_idx": "+0x170", "fwd_speed": "+0x174", "drive_blend": "+0x178", "max_speed": "+0x180", "max_speed_rev": "+0x184", "num_wheels": "+0x208", "gear_engine_table": "+0x218..+0x254 (16 dwords, consumer UNKNOWN)", "moving_fwd_flag": "+0x280"},
+    "wheel_size": "0x130", "wheel_pool": "DAT_017d50b0"
+  },
+  "confirm_live": [
+    "bp FUN_00538c90/FUN_00538d20, dump ESI record while USER steers/brakes -> per-verb command IDs + player input call sites",
+    "bp FUN_00437300/FUN_00435790/FUN_00441900, capture stack -> CarAction/HeliAction/BoatAction vtables",
+    "read SecuROM islands _DAT_02455C94, _DAT_0244F7B8, thunk_FUN_024ba1a0, thunk_FUN_024e9260, thunk_FUN_024e5180",
+    "bp 0x00449460 dump 0x18c tuning block, diff vs authored stats to name fields; bp 0x0044a970 confirm speedRatio vs +0x180"
+  ]
+}
