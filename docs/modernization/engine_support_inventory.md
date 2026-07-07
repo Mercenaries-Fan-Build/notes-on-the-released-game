@@ -283,3 +283,134 @@ engine" is really **~20k functions**:
 
 **Re-run** `cargo run -p mercs2_reassemble --release` after any new code map, RTTI/FID export, or game
 trace lands (it wipes+rebuilds `out_dir`); these counts refresh from `CLASSIFICATION.csv`.
+
+---
+
+## 6. Cross-system seam gaps (the connection backlog) — 2026-07-07
+
+§1's scoreboard rates each subsystem **in isolation** (is the mechanism built?). This section rates the
+**edges between subsystems** — the interconnected links an actual playthrough depends on. It is the
+output of a systematic 5-cluster read-only audit (boot/persistence · world/streaming · actors ·
+render/FX · infra), every claim grep-verified against the source, not the mechanism crates' self-reports.
+
+**Governing finding.** The reimpl is a set of correct, individually-tested **mechanism islands**. The
+*edges between them are mostly unwired*, and — decisively — the path the player actually runs
+(`mercs2_game::world::run_scene_world_loading`, reached by the menu boot and the direct `.profile`
+boot) is where the wiring is thinnest. The **decode/mechanism layer runs far ahead of the
+consume/wire layer**: contract, missions, flow-state, vz_state overlays, spot-light cones, and swim are
+all decoded/built and even printed in the boot banner, yet nothing consumes them. The archetype the
+audit was seeded with — *"the save encodes the player's position/contract but the game boots to a
+hardcoded spawn"* — is not a one-off; it is the **shape of ~30 edges**.
+
+### 6.1 The three keystone gaps (each gates many others)
+
+Most individual gaps below collapse into three missing connectors. Close these and a large fraction of
+the table closes with them.
+
+- **K1 — no persistent mission-Lua host in the game loop.** `run_scene_world_loading` calls
+  `run_interior_boot()` **once** to harvest spawn intents, then drops the `GameScriptHost` and runs
+  **zero script** thereafter. So in the running game there is no `Event.__pump`, no `Event.Post`, no
+  `TimerRelative`, no mission Lua, no runtime `Pg.Spawn`, and the Lua `Sound.*` cues hit a throwaway
+  audio engine instead of the audible one. *Gates:* boot seams (mission flow, spawns), infra seams
+  (event pump, audible Lua sound), and the AI action ring's only real driver. The `take_new_spawns()` /
+  `realize_spawns()` / `GameScriptHost::audio()` methods built this session are the **half-wired sockets
+  waiting for exactly this** — make the host loop-resident and pump it each frame.
+- **K2 — two disconnected world paths; the playable one bypasses streaming.** `run_game_world`
+  (`--stream`) drives `StreamingManager` but is free-fly (no player/collision/gameplay). The default
+  `run_scene_world_loading` has the player + fleet tick but does a **one-shot 400 m `load_world_data`
+  bubble** and never instantiates `StreamingManager`. *Gates:* world streaming during play (walk out →
+  empty world), vz_state overlays in the playable path, streamed collision, and terrain-height→physics.
+- **K3 — the actor-realization archetype is missing.** `SpawnResolver` (`spawn.rs`) only builds
+  `Prop` (bare `Transform`) or `Vehicle`; there is no `Character` archetype. A spawned NPC therefore
+  carries **none** of `Perception`/`Stimulus`/`Target`/`AiFaction`/`AiBehavior`/`Health`/`Inventory`/
+  `HumanAnimationSet`, and `SpawnRequest.faction` is silently dropped. *Gates:* AI perception, the
+  faction loop, combat death, and animation for every population/`Pg.Spawn` actor at once.
+
+Two cross-cutting **anti-patterns** also recur and are worth naming:
+- **EventBus with no subscribers.** Combat posts `DestroyMsg`/`DamageMsg`; `GameplaySystems`
+  `dispatch_all()` drains them; **zero subscribers are registered** in-game. Kills fire into the void →
+  no body retire, no faction hit, no `PerceptionRecord.attackers` (hardcoded `0`), no Lua
+  `Event.ObjectDeath` (the two buses are disjoint — `fire_object_death` is called only from the
+  `Object.Kill` binding, never from the damage solver).
+- **Mechanism ticks wired to nothing on both ends.** `runtime.decal.update` ages an always-empty pool
+  (no combat producer, no render pass consumer); `runtime.water.tick` no-ops forever (`set_watermap`
+  never called); `mercs2_jobs` and `mercs2_net` are **orphan crates** (not a dependency of anything).
+
+### 6.2 Master seam-gap table (gap rows; WIRED edges omitted)
+
+Status: **⛔ MISSING** (not connected) · **⚠ PARTIAL** (one side / dev-path only / starved). "K" = the
+keystone (6.1) it collapses into.
+
+| Cluster | Seam (Producer → Consumer) | Status | K | Gap / player-visible consequence |
+|---|---|---|---|---|
+| Boot | Save → player spawn **transform** | ⛔ | — | Player world pos+yaw **not even decoded** from the SaveSingleton Lua; `spawn_pos` is a constant. Every save boots to the same spot. |
+| Boot | Save contract/missions → **mission flow** | ⛔ | K1 | Fully decoded + printed, **no consumer**; no mission system → no objectives/triggers. World is a diorama. |
+| Boot | Save `vz_state` layers → **world-state** | ⚠ | K2 | Applied only on `--stream`; the playable boot takes no overlays arg (`add_layers` is a `{}` stub). No destruction/faction/act staging in-game. |
+| Boot | In-game state → **autosave/quicksave OUT** | ⛔ | — | `save_write` can stamp a valid `.profile` but is **never called**. Persistence is read-only; progress never saved. |
+| Boot | New Game → char-select → first mission | ⛔ | K1 | New Game hardcodes Mattias/tier-0, boots the diorama; no character-select, no opening contract. |
+| Boot | Save costume byte → wardrobe look | ⚠ | — | Costume file byte unlocated → `costume_byte=0`; wardrobe override never fires (cosmetic). |
+| World | Streaming manager → **playable world** | ⚠ | K2 | Streaming runs only in free-fly `--stream`; gameplay boot is a static bubble. |
+| World | Placement → **gameplay components** | ⚠ | K3 | Placements realize render-only (`Transform+ModelRef`); `SpawnResolver.by_template` is empty. Nothing streamed becomes a vehicle/destructible/actor. |
+| World | Terrain heightmap → **fleet physics** | ⚠ | — | `StaticSoupPhysics` gets `set_collision(tris)` but **never `set_heightmap`**; vehicles/raycasts have no terrain → cars on open ground fall through. |
+| World | Streaming → **collision** → physics | ⚠ | K2 | `collision_tris` built once at boot, excludes terrain+props; two parallel collision reps (player `Vec` vs fleet `StaticSoupPhysics`) can desync. |
+| World | LOD-budget governor → streaming | ⚠ | — | `GlobalLodGovernor` built but `set_lod_budget` **never called** → tier always 0, dead code. |
+| World | Destruction state → **mesh swap** | ⛔ | — | SEGM `state_mask` selected with a hardcoded bit; no state→mesh swap. Nothing can be destroyed. |
+| Actors | Population/`Pg.Spawn` → **actor archetype** | ⛔ | K3 | No `Character` archetype; NPCs spawn as inert factionless props (see K3). |
+| Actors | Combat damage → **faction** (infraction→attitude→pursuit) | ⛔ | — | `mercs2_faction` is an empty scaffold. Shooting a faction never makes it hostile; no wanted/price/HUD/music. |
+| Actors | Combat death → **population retire / perception** | ⛔ | — | EventBus has no subscribers → killed NPCs never enter `DeathQueue` (budget leak); `attackers` stays 0. |
+| Actors | AI driving → **vehicle command rings** | ⛔ | — | No `AiDriving` component; `pump_car_ring`/`pump_boat_heli_ring` never called. No AI-driven traffic/enemies. |
+| Actors | AI stance/action → **animation** | ⛔ | K3 | `animation_system` never ticked; `HumanAnimationSet` never attached. NPCs don't animate via the picker. |
+| Actors | AI action ring → **actuation** | ⛔ | K1 | `AiActionBus::drain()` called only in tests. `Ai.Goal("Attack")` accumulates and is never actuated → AI does nothing. |
+| Render | Combat impact → **decal spawn** → decal pass | ⛔ | — | Combat never calls `decal.spawn`; there is **no decal render pass**. No bullet holes/scorch/blood; the pool tick is dead weight. |
+| Render | Combat/explosion → **particle emit** | ⛔ | — | `ParticleSystem`+`fx_start` built + drawn, but no combat/explosion path calls it. No muzzle flash / fireball / impact puff. |
+| Render | Watermap → swim FSM; water → **render pass** | ⚠/⛔ | — | `set_watermap` never called (swim no-ops); no water surface drawn at all → the sea is absent on Maracaibo. |
+| Render | Buoyancy → vehicle/prop physics | ⛔ | — | `Buoyancy`+`WaterDrag*` math exists; **no physics system applies it**. Boats sink. |
+| Render | Placement → **spot/cone lights** | ⛔ | — | Cone data decoded then dropped; every light collapses to omni. Searchlights/headlights are blobs. |
+| Render | Placement → **light animation** | ⛔ | — | `Rt*Animation` sub-records never decoded; torches/pulsing lights are static. |
+| Render | Clock → **time-of-day** (sun/atmo) | ⛔ | — | `sun_dir` + atmosphere are hardcoded; sun never moves, no dawn/dusk. |
+| Infra | Native combat death → **Lua `Event.ObjectDeath`/proximity** | ⛔ | K1 | The native and Lua event buses are disjoint; proximity is never fed (confirmed RED hook). Real kills/proximity can't trigger missions. |
+| Infra | Per-frame **Lua event pump** → mission logic | ⛔ | K1 | No persistent host → no `__pump`, `Event.Post`, or `TimerRelative` in the running game. |
+| Infra | Input → **vehicle controls** (enter/drive) | ⛔ | — | No enter-vehicle path; `VehicleControls` set only in tests. Player can't drive; spawned cars are scenery. |
+| Infra | Gameplay state → **GFx/HUD** | ⛔ | — | No in-game HUD; `Hud`/`Gui` bindings auto-stubbed. No health/cash/fuel/minimap/objectives on screen. |
+| Infra | Lua `Sound.*` → **audible engine** | ⚠ | K1 | Loop's `AudioEngine` is ticked, but Lua cues hit a throwaway host engine → no scripted sound is audible. |
+| Infra | Attitude → **dynamic music** | ⛔ | — | `transition_music` exists; nothing drives it from combat/faction. No stinger on contact. |
+| Infra | `mercs2_net` / `mercs2_jobs` → consumers | ⛔ | — | Orphan crates (depended on by nothing). No replication; anim/streaming run inline (no job fork/join). |
+| Infra | Schedule (layer-4 ordered spine) → systems | ⚠ | — | Only `"animation"` is registered on the ordered `Schedule`; the rest is inlined in `runtime.tick` — order asserted in comments, not enforced. |
+
+**Cleanly WIRED edges (for contrast):** hero+upgrade → player look; recruits/cash → PMC state; input →
+on-foot locomotion; point-light inventory → forward shader; environmental `global_particle_*`
+placements → FX pass; static sky/HDR-post chain; one directional shadow cascade; and — verified as a
+non-gap — the AI/faction relation matrix is **single-source** (`mercs2_ai::RelationMatrix`; `mercs2_faction`
+does not duplicate it).
+
+### 6.3 The connection backlog (ranked)
+
+**Tier 0 — the keystone connectors (unblock the most):**
+1. **K1** Make `GameScriptHost` loop-resident in `run_scene_world_loading`: pump `Event.__pump(dt)`,
+   drain `take_new_spawns → runtime.realize_spawns` each frame, share its audio `Rc` with the fleet.
+2. **K3** Add `Archetype::Character` to `SpawnResolver` — attach the full AI/faction/health/anim/inventory
+   component set and map `SpawnFaction → AiFaction`.
+3. **K2** Route `run_scene_world_loading` through `StreamingManager` (per-step `mgr.update(player.pos)` +
+   incremental collision) instead of the one-shot bubble.
+
+**Tier 1 — high player-visible impact, mostly independent of the keystones:**
+4. Combat-death **EventBus subscribers**: `DestroyMsg → DeathQueue` + `DamageMsg → perception.attackers`
+   + bridge to Lua `fire_object_death`.
+5. Combat→**faction loop** (`mercs2_faction`: `AddInfraction` → mood → `SetRelation` → `Attitude` event).
+6. **Particle emit** on explosions/weapon-fire; **decal spawn** on impact + a decal render pass.
+7. **Water**: load `Watermap` (`set_watermap`) + a water-surface `RenderNode`; apply **buoyancy** in physics.
+8. **Drive**: enter/exit-vehicle state routing `Input → VehicleControls`.
+9. **HUD**: 2D pass reading live cash/health/fuel/objectives (reuse the menu bitmap-text overlay).
+
+**Tier 2 — fidelity / lower urgency:**
+10. Terrain `set_heightmap` → fleet physics; destruction state→mesh-swap; spot/cone + light-animation
+    decode; time-of-day; `set_lod_budget` wiring; tick the anim picker + AI action-ring actuation +
+    vehicle-ring pump; autosave-out; give `mercs2_jobs`/`mercs2_net` real consumers (or defer explicitly).
+
+### 6.4 The archetype, generalized
+
+The user's example — *a new save must spawn the player at the right place; a loaded save at its saved
+position* — is **seam "Save → player spawn transform"** (6.2, row 1) and is the worst case: the data is
+neither decoded **nor** consumed. But the same **producer-exists / consumer-missing** shape recurs ~30×
+above. The reimpl's next phase is not more mechanisms — it is **the connection layer**: wire the edges,
+starting with the three keystones, and most of this table closes behind them.
