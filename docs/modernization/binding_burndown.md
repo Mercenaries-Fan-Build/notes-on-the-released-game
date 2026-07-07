@@ -58,9 +58,13 @@ Region creation, alarms, model-spawn-by-asset, install-manager, dev asset dumps.
 asset-DB host seam (`world_streaming_spec.md`). The `Dump*` family mirrors retail dev stubs and can
 stay no-ops (genuinely-stripped class).
 
-### 6. Vehicle depth — `Vehicle` residue (hijack FSM, turret articulation) — MEDIUM
-Seat/driver/flying getters are backed; the hijack state machine + turret aiming need
-`mercs2_vehicle` FSM extension (`vehicle_road_ai` map has the drive model).
+### 6. Vehicle depth — `Vehicle` residue (seat transfer, ammo) — MOSTLY DONE
+✅ **Backed** (`mercs2_vehicle::HijackFsm`/`TurretAim`, held per-vehicle on the host): the whole hijack
+lifecycle (`HijackStart`/tank-motion/`SetHijackSuccess`/`HijackComplete`/`HijackAbort`/`HijackAbortDone`/
+`CancelHijack`/`SetHijackState`), turret+rotor aim (`SetTurretPitch`/`SetTurretYaw`/`SpinHeli`), and
+`RestoreHealth`. Behavioral test `game_lua_vehicle_hijack_and_turret`.
+Residue (unbacked): `EnterBySeatGuid`/`TransferToSeat` need the seat-guid resolution seam; `RestoreAmmo`
+needs a per-object ammo store.
 
 ### 7. Sound depth — `Sound` residue (bank load/unload callbacks, DSP reverb/lowpass) — MEDIUM
 Cue/category/music are backed against `mercs2_audio`; residency-bank callbacks and DSP effects need
