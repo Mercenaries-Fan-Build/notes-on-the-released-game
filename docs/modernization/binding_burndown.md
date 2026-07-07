@@ -43,11 +43,14 @@ Screen fades, bloom/HDR knobs, atmosphere/sky params, dynamic lights, camera sha
 render-graph carve (see `rendering_fx_lighting_gap.md`): post pipeline, light objects, fade compositor.
 Back these as those render passes land.
 
-### 3. Object gameplay actions — `object_filter` (~12+), `object_state` (~8), `Object` residue, `Fire`, `Airstrike` (~11), `Weapon`, `Inventory` — HIGH
-Damage/state transitions, filters/queries over live objects, fire propagation, airstrike delivery,
-weapon fire/reload, inventory. Back against the ECS `World` + `mercs2_physics`/`mercs2_combat`. The
-getters already read host state; the *actions* need the ECS write seam + combat solver (note: the
-damage/explosion solver itself is still a reverse-engineering wall — see `rows-26-29` memory).
+### 3. Object gameplay actions — `object_state` (~8), `Object` residue, `Fire`, `Airstrike` (~11), `Weapon`, `Inventory` — HIGH
+✅ **Backed**: `ObjectFilter.*` — the label boolean-expression query (`"Hero||(China&&Vehicle)"`,
+recursive-descent evaluator in `mercs2_core::object_filter`) + explicit include/exclude sets + a real
+per-object **label store** on the host (`Object.AddLabel`/`RemoveLabel`/`HasLabel` now actually work).
+Tests: `mercs2_core::object_filter` (parser/sets/registry) + `game_lua_object_filter_evaluates_real_predicate`.
+Residue: damage/state transitions, fire propagation, airstrike delivery, weapon fire/reload, inventory —
+need the ECS write seam + `mercs2_combat`. The damage/explosion **solver** itself is still a
+reverse-engineering wall (see `rows-26-29` memory); `ObjectFilter` association/relation edges unbacked.
 
 ### 4. VO / dialogue / faces — `Vo` (~10), `Face` (~7) — MEDIUM
 Voice-over cue playback, subtitle routing, facial animation. Needs a VO/dialogue director over
