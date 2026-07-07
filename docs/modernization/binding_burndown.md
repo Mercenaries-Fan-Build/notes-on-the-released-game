@@ -66,9 +66,14 @@ lifecycle (`HijackStart`/tank-motion/`SetHijackSuccess`/`HijackComplete`/`Hijack
 Residue (unbacked): `EnterBySeatGuid`/`TransferToSeat` need the seat-guid resolution seam; `RestoreAmmo`
 needs a per-object ammo store.
 
-### 7. Sound depth — `Sound` residue (bank load/unload callbacks, DSP reverb/lowpass) — MEDIUM
-Cue/category/music are backed against `mercs2_audio`; residency-bank callbacks and DSP effects need
-audio-engine extension.
+### 7. Sound depth — `Sound` residue (dynamic-music model, DSP reverb/lowpass) — PARTLY DONE
+✅ **Backed** against `mercs2_audio`: cue/category volume/master/music-FSM (prior), plus category
+**pitch** and the whole **bank residency** family (`LoadBank`/`LoadSoundBank`/`LoadWaveBank`/
+`LoadTempBank`/`LoadBankWithCallback` + the `Unload*` mirror + `RequestAmbienceBank`) → the real
+`BankManager` slot table. Behavioral test in `game_lua_sound_drives_real_audio_engine`.
+Residue (unbacked): the dynamic **faction/action/source-music** model (`AddFactionMusic`/`SetSourceMusic`/
+playlists — needs `music.rs` extension), **EAX reverb + low-pass DSP** (no portable analog, `backend.rs`),
+bank-load **completion callbacks** back into Lua (async streaming seam), and misc mode toggles.
 
 ### 8. Net / session — `Net` residue, `Socket`, `Report` — LOW (SP correct today)
 Session/matchmaking/telemetry. The SP-correct defaults are already faithful (`Net.IsActive`→false path);
