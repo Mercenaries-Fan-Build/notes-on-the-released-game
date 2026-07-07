@@ -11,6 +11,7 @@ Sibling docs this consolidates (does not replace):
 - [`pangea_engine_alignment.md`](pangea_engine_alignment.md) — subsystem→crate mapping + evidence discipline (its guard rails apply here too)
 - [`rendering_fx_lighting_gap.md`](rendering_fx_lighting_gap.md) — the *detailed* rendering/FX/lighting checklist; this doc only summarizes it
 - [`world_streaming_spec.md`](world_streaming_spec.md) — authoritative streaming spec
+- **[§5 Reassembly cross-check](#5-reassembly-cross-check-2026-07-06)** — full-corpus function-count coverage per row + non-engine substrate (from `mercs2_reassemble`)
 
 Status legend: ✅ **BUILT** (works on retail data) · 🟡 **PARTIAL** (exists, limited — the note says how) ·
 ⭕ **STUB** (placeholder/no-op) · ❌ **ABSENT** (no code at all).
@@ -43,12 +44,12 @@ Status legend: ✅ **BUILT** (works on retail data) · 🟡 **PARTIAL** (exists,
 | 20 | Animation | Havok hka/hkb: MT sampling w/ CPU budget, bone controllers, IK, ragdoll blend, FaceFX, GPU skin · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | wavelet/Havok clip decode + faithful `hkQsTransform` compose + GPU 4-influence LBS + nlerp crossfade (fn exists, loop plays single clip) + data-driven clip index + root-motion strip | 🟡 (sampling/skinning ✅; controllers/IK/ragdoll/FaceFX ❌) |
 | 21 | Audio (Pal) | voices w/ priority steal, 16-state instance FSM, ducking, dynamic faction/action music, banks, 3D · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none (but fully mapped: DirectSound8 + EAX backend, software mixer thread, dual-deck music FSM, sounddb/banks, 88-fn Lua surface) | ❌ (impl) / ✅ (mapped) |
 | 22 | Physics | Havok 5.5 world/MOPP/constraints/character proxy + `PgPhysicsActor*` bridge family, grapple, winch · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | terrain heightmap `height_at` sampling only; no rigid bodies/character/casts | ❌ (sim) |
-| 23 | AI | percept→context→goal planner (~30 verbs), cover FSM, squads, pedestrians, AI driving; pathfinding algorithm unrecovered · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** (AI driving + road graph) | none (`Ai.Enable` no-op) | ❌ |
+| 23 | AI | percept→context→goal planner (~30 verbs), cover FSM, squads, pedestrians, AI driving; pathfinding algorithm unrecovered · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** (AI driving + road graph) | none (`Ai.Enable` no-op) — **⚠ only the driving sub-graph is code-mapped; the planner/cover/squad native code is unclustered ([§5.2](#52-the-one-under-mapped-system-ai-row-23))** | ❌ |
 | 24 | Population / spawners | `PgSysPopulation`: faction spawn lists, traffic/window/path/hardpoint spawners, cache-in/out. **FULLY CODE-MAPPED Xbox↔PC** · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** — Update = Xbox `FUN_82368008` ↔ PC `FUN_00502510` (~24-call fan-out); 4 simple-spawner families (`FUN_004e4100`→quartet, cap-128 queues, terminal state 5); death check/compute (`FUN_00500b40`/`ac0`); region cache msg-pump (types 3/7/0xB, `FUN_005017b0`); spawn drain `FUN_004b4590`; full Lua surface (`Ai.TweakAttachedSpawners`, `Set/GetSpawnList`, `Pg.StartHeliWaveSpawner`, skirmish) with cfunc VAs | none (streaming wakes pre-placed entities only) — **but the reimpl target is now specified** | ❌ (design ✅) |
 | 25 | Vehicles | **CUSTOM raycast drive model (NOT Havok Vehicle SDK — zero `hkpVehicle*` on PC)**, 6 command-broadcast rings, turrets, huge tuning surface. **CODE-MAPPED Xbox↔PC** (`docs/reverse_engineer/vehicle_code_map.md`): nine `hkpUnaryAction` actor classes (Car `FUN_0044db60`/Boat `FUN_00447260`/Heli `FUN_00453760`/Tank `FUN_00454d80` applyActions), drive math decoded (per-axle raycast friction + linear torque falloff to MaxSpeed + donut sine-LUT), control pump `FUN_00532f80`, per-class HandleCommand `FUN_00437300`/`435790`/`441900`. **Ghidra `noreturn` on sqrt helper had truncated all physics fns — fixed, global decomp exports need regen** · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none (`Vehicle.EnableTurret` no-op) — **but drive model + rings now specified** | ❌ (design ✅) |
 | 26 | Weapons / combat | data-driven `Weapon*` ECS family, projectile lifecycle, homing FSM, damage/explosion taxonomy (solver undecoded) · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none | ❌ |
 | 27 | GUI / HUD | Scaleform GFx + `_GuiInternal` widget backend + per-player `Gui*Update` events, PDA, minimap · **[Scaleform code map ↓](#1a-pc-reverse-engineering-code-maps)** | loading screen (shell.wad plate + spinner) + 2D UI pass (`ui.rs`/`ui.wgsl`: instanced quads + 8x8 bitmap-font text over the shell pass) + GAME shell menu (`mercs2_game::menu`: main menu w/ retail option set `autoContinue`/`newGame`/load/`quitGame` + save browser over `SaveGames\*.profile`, boots the picked save; KB + gamepad nav) | 🟡 (shell menu ✅ native; Scaleform/HUD/PDA ❌) |
-| 28 | Networking | Keystone-B replication (`NetSubCat*`/`NetSafe*`/`NetClient*`), join-time module pull, LIVE/XLSP | none in-engine (online-restore mod is a separate exe patch) | ❌ |
+| 28 | Networking | Keystone-B replication (`NetSubCat*`/`NetSafe*`/`NetClient*`), join-time module pull, LIVE/XLSP · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none in-engine (online-restore mod is a separate exe patch) | ❌ |
 | 29 | Save / serialize | versioned save w/ hash + corruption handling; `SetLuaSaveVersion` · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | read-side only: `.profile` header + SaveState parse (`mercs2_formats::save`) drives boot + the shell save browser; no write/versioning | 🟡 (read ✅ / write ❌) |
 | 30 | Entity state machines | `PgModelStateMachine` + ECS STAT/SWIT destruction graph (`CollapseState`) · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | DATA LAYER DONE (2026-07-05, `docs/destruction_orchestrator_format.md`): `orchestrator::parse_state_machine` parses the engine's named-state machine (recovered from `FUN_004cf340`); `decode_script` reads the Enter/Exit command scripts (SHOW/Hide/SetState/SetStateOnMsg/StartEmitter/StopEmitter/CreateObject/KillObjectsLinkedToHP/DisableConstraint/SetRootNode/StartAnim/SetNodePhysicsModelKeyframed); `machine_group_visibility` EXECUTES SHOW/Hide → per-group visibility (workshop-proven, interactive). Missing: ECS component + tick system, message routing (SetStateOnMsg ← damage events), CreateObject/emitter/physics command execution | 🟡 (formats ✅ / runtime ❌) |
 | 31 | Destruction | `BuildingDestruction`/`DestructionLink`, pristine/ruined vz_state, debris · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | SEGM state-mask tier selection + #30's default-visibility execution (per-node init states → SHOW/Hide). NOTE: the ENGINE world path still renders ALL SWIT subtrees — spawned vehicles show floating break pieces in-game; first wiring step = apply `machine_group_visibility` defaults wherever `build_indexed_*` models reach `Scene::load_model` (prop wake + game loaders), then the runtime graph (damage msgs → SetStateOnMsg transitions → StartEmitter via the existing particle system, CreateObject debris) | 🟡 |
@@ -99,6 +100,7 @@ change the "Our engine" status above (which tracks what `mercs2_engine` implemen
 | 19 | Camera | [`camera_code_map.md`](../reverse_engineer/camera_code_map.md) | — | **Render seam fully in the clear**: render-view singleton `PTR_PTR_00dfc2f8` (obj `0x017CFAF0`) holds a **≤5-slot camera array, stride `0xE80`**, indexed by active-viewport `view+0x2B92`; per-viewport loop **`FUN_0085a9e0`** (render-view vtable +4) builds each view/proj from the camera **source transform `cam+0x10`** (SecuROM builder `FUN_00858f30`, read live) then drives the scene pass `FUN_00466d40`. **Two `PgSysCamera` sub-systems reconciled**: the gameplay side is a *second* ≤5-viewport array (**stride `0x620`, cap 5**, selector `FUN_0070f560` = byte-for-byte Xbox `CameraCollisionCastRay @825ea110`'s 5×0x620 loop); post-render notify `FUN_0062ef00` → two cam/shake writers `FUN_0060f6d0`/`FUN_0060fee0` (= Xbox sub-objs @owner+0x1ec0/+0x1ec4). **Full camera-struct offset map** (`+0x10` src xform / `+0x48` FOV / `+0xab0` view / `+0xaf0` proj / `+0xb20` world pos) — **live-confirmed from the freecam capture**. Modes = ECS components (CameraCarPreset/Tank/Turret/Helicopter/HumanCameraModifier/CameraShake); `Camera.*` cfuncs via pose accessor `FUN_0042ee10`. Open: the sim-side `cam+0x10` pose writer + the collision-cast caller → confirm-live. Row 19 = 🟡 |
 | 20 | Animation | [`animation_code_map.md`](../reverse_engineer/animation_code_map.md) | [`animation_code_map.json`](../data/animation_code_map.json) | **PC keeps full RTTI on the Havok anim classes** (`0x0087xxxx–0x009fxxxx`) → runtime pinned first-hand, no SecuROM chase: `hkaAnimatedSkeleton` ctor `FUN_00884190`, `hkaRagdollInstance FUN_0088c000`, `hkaSkeletonMapper::createMapping FUN_0087c560`, **foot-IK `hkaFootPlacementIkSolver` ctor `FUN_009ef650`**, **FaceFX face-graph evaluator `FUN_00686ce0`** (src `…\mercs2\fxs`), catch-fall/getUp binder `FUN_008a7280`, referencePose builder `FUN_0089d280` (48-B hkQsTransform/bone), Human anim reflection registrars `FUN_0065ade0`/`FUN_0065af90`. **Consolidated the SOLVED anchors (cited)**: clip picker ActionTable `0x6802C321`→AnimationLookup `0xE00B080C`→`ASTO[idx]`→clip (e2e-validated); wavelet/delta/spline codec (168/168); BLENDINDICES per-group palette; HIER `trnm` track→bone. **Open**: the per-frame VMX/SSE sample-and-blend math (vtable-dispatched in layer 4), the MT `AnimCpu*Job` dispatch, the FaceFX curve solver → confirm-live. Row 20 = 🟡 (sampling/skinning ✅; controllers/IK/ragdoll/FaceFX ❌) |
 | 22 | Physics | [`physics_code_map.md`](../reverse_engineer/physics_code_map.md) | — | **Highest-confidence map in the set** — `hk*` RTTI survives on BOTH builds, so `symbol-map.md`'s Xbox-RTTI→PC-ctor pairing is vtable-proven (204/287 classes). Full **Havok 5.5** stack embedded. World spine: `hkpWorld FUN_008d8340`, MT sim `FUN_008f75e0`, `addAction FUN_008dae30` (READ), deferred-op queue `FUN_008f8af0` (READ), broadphase `hkp3AxisSweep FUN_009347e0`. **Character controller fully decoded** (the biggest recovery): on-foot = a real `hkpCharacterProxy` (ctor `FUN_0094f2c0`) + **5-state machine** (OnGround `FUN_0094ce90` / InAir `FUN_0094d7b0` / Jumping `FUN_00951ef0`) via `hkpCharacterContext FUN_0094d2e0`; game builder `FUN_004255c0` (`HumanPhysics::Activate`, 7 capsules + phantom + proxy). Query layer `getClosestPoints FUN_008db880`/`getPenetrations FUN_008dba60` (READ). Shapes/MOPP/heightfield mapped (real terrain = `hkpSampledHeightFieldShape FUN_00a0e3d0`); ragdoll builder `FUN_009463a0` + `RagdollController FUN_00648130`; vehicle actors cited to the vehicle map. **Open**: the per-frame integrator (`hkpWorld::step`) is VMX128/SSE, does not decode on either build (outputs only); grapple/winch tow is constraint-driven but the 44-B `Winch` layout → confirm-live. Row 22 = ❌ sim (engine has a terrain-heightmap capsule only) — this map = the reimpl target |
+| 28 | Networking | [`networking_code_map.md`](../reverse_engineer/networking_code_map.md) | — | **The final map — completes the 32-row scoreboard.** 3-layer stack married Xbox↔PC. **(1) Game-side `Net*` replication = the event-bus wire branch**: marshal core `FUN_005a0cc0` (READ) → SecuROM-VM encode/emit (`thunk_FUN_02935000`/`024f28e0`, read live) + remote islands `FUN_007002d0`→`_DAT_0244fb3c` / `FUN_0059ddb0`→`_DAT_0245dc0c`; **on-wire packet format recovered** from the Xbox receive decoder `NetEventCallback @825d3ce8` = `{u32 name-hash}{4 arg type-tags}{header byte: category<<4 \| argc}{argc words}` — **closes pangea_alignment's "wire protocol not known"**; category registrar `NetCategoryInfo FUN_00644510` (`NetPrimaryCategory` + 8 `NetSubCat*`); join-time module pull `SynchNetImportModule @825ce918` (module-hash `0x762c8f61` gate). **(2) Session/transport**: `CNetworkManager` `FUN_009e010a`/`FUN_009dff40`, matchmaking `FUN_009ba4b0`, Havok `hkBsdSock` Winsock-2.2 peer mesh (`FUN_009cf970`/`FUN_009cfa10`/WSAStartup `FUN_0089c710`) + NETAPI32 LAN. **(3) FESL** (the working online-restore reference): B-version `FUN_008445d0` (ver ^ `0x6B3C35EB`), CA key `.rdata 0x768378` (128B, patch-proven), tlsterm. **★TLS verdict (§7)**: the game's FESL client is a **statically-linked OpenSSL 0.9.8d** (SSLv3/RC4, ClientHello `03 00`) — **SSLv3/TLS-1.0-locked by the library** (no TLS 1.2/1.3 code to enable, no constant to flip); the game↔proxy leg is **loopback** so SSLv3 is harmless → correct architecture = keep SSLv3 on loopback + modern TLS on the proxy↔internet upstream (tlsterm can do this today). Boundaries: Massive ad-net + LIVE/XLSP = dead services (replace-don't-port); the `Net*` replication payloads = the Keystone-B reimpl target. Row 28 = ❌ in-engine; the online-restore mod is the separate working reference |
 
 **Common method + caveats** (shared across these maps): the retail PC build strips most profiler-marker
 symbol strings and dispatches per-frame render/tick through vtables, so *setup* code (shader/RT/
@@ -180,3 +182,78 @@ rather than crash — the corpus can already be *executed* for coverage measurem
 - **Retail-data realities:** props ship essentially no Havok clips (prop-anim layer is correct but
   idle on retail data) and ~no alternate LOD meshes (2/446) — so rows 10 and 20's "partial" is
   partly the *data's* fault, not the code's.
+
+---
+
+## 5. Reassembly cross-check (2026-07-06)
+
+Generated by `tools/wad_simulator/crates/mercs2_reassemble` (memory `mercs2-reassemble-tool`), which
+joins every attribution source we have — the §1a code maps, Ghidra **RTTI** vtables/namespaces
+(`ExportFuncClass.java`), **FID** byte-signatures (MSVC/openssl via `FidApplyExport.java`), the **Lua
+binding surface** (`binding_map.json`), and `scripts/mercs2_annotations.json` — onto the
+27,077-function decomp **by virtual address**, then propagates the residue by address-locality +
+call-graph. Output: `output/engine_reassembled/` (gitignored) — per-subsystem `<module>.c`,
+`MANIFEST.json/.csv`, `CLASSIFICATION.md/.csv`, `UTILITY_REPORT.md`, `HARDCORE_UNCLASSIFIED.csv`.
+
+**Evidence is graded — never conflate a propagated guess with a decompiled fact:**
+
+| Tier | Meaning | Count | % |
+|---|---|---|---|
+| **evidence** | code map / annotation / recovered symbol / RTTI / FID / Lua-binding | 7,036 | 26.0% |
+| **signal** | decisive in-body string/import/class token | 217 | 0.8% |
+| **inferred** | address-locality / call-graph / securom-region (**probabilistic scaffold**) | 18,405 | 68.0% |
+| **artifact** | Ghidra bad-disassembly (data-as-code) — excluded | 85 | 0.3% |
+| **unclassified** | real code, no signal — the deeper-RE core | 1,334 | 4.9% |
+
+**4,229 functions carry a real recovered name** (was ~1,614 from headers alone). 94.8% of the corpus
+carries a subsystem label; the honest hard core is the **1,334 unclassified** (mostly Havok
+free-functions reached only through vtables — `HARDCORE_UNCLASSIFIED.csv` + a ready x32dbg coverage
+script await a runtime trace). *Trust the `verified+signal` column below as the floor; `total`
+includes probabilistic inference.*
+
+### 5.1 Per-row function counts (`verified+signal / total`)
+
+| Row | Module(s) | v+s / total | Row | Module(s) | v+s / total |
+|---|---|---|---|---|---|
+| 1 Render core | `render_core` | 118 / 1453 | 17 (w/16) | — | — |
+| 2 Lighting | `lighting` | 16 / 71 | 18 Input | `input` | 7 / 31 |
+| 3 Shadows | `shadow` | 5 / 20 | 19 Camera | `camera` | 25 / 231 |
+| 4 Particles/FX | `particle_fx` | 46 / 163 | 20 Animation | `animation` | 115 / 508 |
+| 5 Sky/post/HDR | `sky_post_hdr` | 47 / 186 | 21 Audio | `audio` | 117 / 787 |
+| 6 Decals | `decal` | 7 / 139 | 22 Physics | `physics` | 947 / 2902 |
+| 7 Water | `water` | 23 / 123 | 23 AI | `road_graph_ai_driving` | **14 / 76 ⚠** |
+| 8 World streaming | `world_streaming` | 37 / 388 | 24 Population | `population_spawner` | 65 / 776 |
+| 9 Region cache | `region_cache` | 5 / 23 | 25 Vehicles | `vehicles` | 122 / 872 |
+| 10 Prop LOD | `prop_lod_imposter` | 9 / 38 | 26 Weapons | `weapons_combat` | 117 / 866 |
+| 11 Assets/formats | `asset_formats`+`asset_load` | 77 / 578 | 27 GUI/HUD | `gui_hud_scaleform` | 2391 / 2618 |
+| 12 ECS/reflection | `ecs_reflection_registry` | 10 / 61 | 28 Networking | `networking` | 133 / 1981 |
+| 13 Event bus | `event_bus` | 13 / 165 | 29 Save | `save_serialize` | 15 / 392 |
+| 14 Scheduler | `scheduler_tick` | 33 / 612 | 30/31 State/Destruction | `state_machine_destruction` | 23 / 360 |
+| 15 Jobs/Pimp | `pimp_job_system` | 21 / 369 | 32 Diagnostics | — | 0 / 0 |
+| 16/17 Scripting | `scripting_host_binding` | 692 / 1419 | ★ Faction (cross-cut) | `faction_reputation` | 7 / 146 |
+
+### 5.2 The one under-mapped system: AI (row 23)
+
+All 32 rows are represented **except AI**: only the driving sub-graph (`road_graph_ai_driving`, 76 fns)
+clustered. The **percept→goal planner / cover FSM / squads / pedestrians have no native cluster** —
+there is no `ai_code_map.md`, AI carries no RTTI class family, and the `Ai.*` bindings folded into
+scripting (§3). This is the next code map to write. *(Row 32 Diagnostics reads 0/0 but that is
+**expected**, not a miss — PC retail stripped the debug menu to the shared `0x6D5640` return-0 stub,
+per row 32.)*
+
+### 5.3 Non-engine substrate (~7,300 fns ≈ 27% — not Pangea engine, absent from the scoreboard)
+
+The reassembly surfaced the third-party/runtime layers beneath the 32 game subsystems. These are **not
+missing engine work** (you'd link the real libraries), but they account for ~27% of the 27k, so "the
+engine" is really **~20k functions**:
+
+| Module | v+s / total | What it is |
+|---|---|---|
+| `crt` | 1176 / 2577 | MSVC C runtime |
+| `cpp_runtime` | 481 / 2001 | C++ EH / RTTI / STL runtime |
+| `havok` | 247 / 1200 | Havok **base library** (hk* math/mem/containers) — distinct from the physics *sim* (row 22, hkp*) |
+| `securom_drm` | 0 / 1250 | SecuROM DRM / VM / crypto (address-region label ≥0x01000000) |
+| `scaleform_gfx` | 92 / 276 | Scaleform GFx **base library** (G* classes) — distinct from the GUI/HUD *integration* (row 27) |
+
+**Re-run** `cargo run -p mercs2_reassemble --release` after any new code map, RTTI/FID export, or game
+trace lands (it wipes+rebuilds `out_dir`); these counts refresh from `CLASSIFICATION.csv`.
