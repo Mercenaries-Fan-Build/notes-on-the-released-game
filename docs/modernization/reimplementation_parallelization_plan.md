@@ -194,3 +194,29 @@ render-graph carve, Lua-binding harness) plus the leaf-crate carve; **~5 start i
 open per-enabler; run **6–8 at a time in 3 waves**, each closing its Tier-2 seams before the next. The
 fidelity bar — exe-as-oracle, zero-stub Lua, no flags, improvements deferred to `DEFERRED.md` — is the
 same in every silo.
+
+---
+
+## 8. Status log
+
+**Wave 0 — LANDED (2026-07-06, all 6 merged to `main` @ `ba7e884`; integrated workspace builds + full
+test suite green).** Six agents, isolated worktrees off `main`:
+- **carve** — 9 leaf crates (`mercs2_{physics,anim,vehicle,combat,ai,faction,audio,ui,net}`) + the
+  `mercs2_core::PhysicsQuery` seam. Wave-1 sim silos now have homes.
+- **E1** — `schm` field-schema deserializer BUILT (`mercs2_formats::schema` + `registry::register_with_fields`);
+  **fixed the retail-LE byte-offset bug** (`docs/schm_type_codes.md` `>>16` was DLC-converter residue).
+  Scoreboard row 12 field-schema deser ✅.
+- **E2** — `render_graph` carve: `SCENE_ORDER` = the `FUN_00466d40` pass order, `RenderNode`/`PassCtx`
+  seam for Band-A; byte-identical (unimplemented canonical nodes are no-op seams). Public `Scene` API held.
+- **E3** — 35-namespace modular binding harness + the **zero-stub coverage gate** (`binding_coverage.json`,
+  baseline **1075 remaining / 575 called-missing** — the number Band-C/D drive down).
+- **S5** — `RegionCache` (row 9) + global LOD governor (`FUN_0084ae70`); c3-building residency left
+  disabled with a precise confirm-live RCA (declined to fabricate Y).
+- **S6** — save WRITE path + **ProfileHash DERIVED = CRC-32/BZIP2 over `[4:]`** (byte-exact vs all 8
+  retail saves). Scoreboard row 29 → write ✅.
+
+Env note: subagents authenticate as read-only `headless-rebase`, so they cannot push/PR — integration
+is **local merges to `main`**; pushing `main` needs a write credential.
+
+**Next:** Wave 1 (7 Physics [start first — stabilizes `PhysicsQuery`], 1 Render core, 2 Lighting/shadows,
+14 Audio, + continued Band B), then its Tier-2 seam pass. AI (11) needs its `ai_code_map.md` RE prelude.
