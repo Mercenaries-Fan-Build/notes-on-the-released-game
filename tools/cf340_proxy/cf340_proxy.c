@@ -22,6 +22,8 @@
  *
  * Modes (env CF340_MODE): "fix" (default) bumps; "measure" counts only. Env CF340_HEADROOM = extra
  * bytes (default 0x400). Watcher logs running stats to cf340_proxy.log every ~1.5 s.
+ * 
+ * NOTE: THIS DOES NOT FIX THE ISSUE - it's present state causes the game to hang just after the main menu.
  */
 
 #define WIN32_LEAN_AND_MEAN

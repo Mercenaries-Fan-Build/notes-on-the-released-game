@@ -1,8 +1,8 @@
 services:
   db:
-    image: imresamu/postgis-arm64:16-3.5
+    image: postgis/postgis:16-3.5
     container_name: mercs2-db
-    platform: linux/arm64/v8
+    #platform: linux/arm64/v8
     restart: unless-stopped
     environment:
       POSTGRES_USER: mercs2
@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: mercs2-api
     restart: unless-stopped
-    platform: linux/arm64/v8
+    #platform: linux/arm64/v8
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +39,68 @@ services:
       - ./output:/data/output:ro
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  # Modkit coop / network-capture server — emulates the dead EA online endpoints
+  # the game reaches for and logs every request (like httpbin). Captures land in
+  # ./output/captures/*.jsonl and are POSTed to the api for the viewer's
+  # "Network Captures" page. Point the game here with the winsock_redirect.asi
+  # plugin (or a hosts-file entry) — see docs/coop_capture_server.md.
+  coopserver:
+    build:
+      context: ./coopserver
+      dockerfile: Dockerfile
+    container_name: mercs2-coopserver
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      MODKIT_API_URL: http://api:8000
+      COOP_CAPTURE_DIR: /data/captures
+      # IP this Modkit host is reachable at from the game machine — handed back
+      # to the game as the theater/messaging host. Override for LAN/WAN play.
+      COOP_ADVERTISE_HOST: "127.0.0.1"
+      # Catch-all DNS resolves every name the game looks up to this IP. Set it to
+      # the Modkit host's LAN IP if the game runs on a different machine.
+      COOP_DNS_RESOLVE_IP: "127.0.0.1"
+      # 18710 = the real Mercenaries 2 PC FESL port. The game speaks SSLv3+RC4
+      # there, which modern OpenSSL can't terminate — so the 'tlsterm' sidecar
+      # decrypts it and forwards PLAINTEXT FESL here to coopserver:18710 (hence
+      # 18710 is in COOP_PLAIN_PORTS and is NOT published by coopserver itself).
+      COOP_TLS_PORTS: "443 18300"
+      COOP_PLAIN_PORTS: "80 18840 18710"
+      COOP_UDP_PORTS: "1900"
+    ports:
+      # 53/udp NOT published — conflicts with host systemd-resolved, and Proton's
+      # pressure-vessel uses its own resolv.conf so host DNS won't catch the game
+      # anyway. The in-process ASI gethostbyname hook is the redirect path. If you
+      # want host-DNS capture, bind to a specific IP, e.g. "127.0.0.1:5354:53/udp".
+      #- "53:53/udp"
+      - "80:80"        # ad-serving HTTP + generic HTTP client
+      - "443:443"      # generic HTTPS (messaging.ea.com etc.)
+      - "18300:18300"  # FESL auth (TLS) — legacy/fallback port
+      # 18710 is published by the tlsterm sidecar (SSLv3 termination), not here.
+      - "18840:18840"  # Theater (matchmaking)
+      - "1900:1900/udp"  # UPnP / SSDP
+    volumes:
+      - ./output/captures:/data/captures
+
+  # Legacy-TLS terminator: the game's FESL client uses SSLv3 + RC4 (EA's 2008
+  # OpenSSL), which modern OpenSSL refuses. This sidecar runs stunnel built
+  # against OpenSSL 1.0.2 (SSLv3 + weak ciphers), terminates the handshake on
+  # :18710, and forwards decrypted plaintext FESL to coopserver. See
+  # docs/coop_capture_server.md.
+  tlsterm:
+    build:
+      context: ./tlsterm
+      dockerfile: Dockerfile
+    container_name: mercs2-tlsterm
+    restart: unless-stopped
+    depends_on:
+      - coopserver
+    ports:
+      - "18710:18710"  # SSLv3 FESL from the game -> decrypted -> coopserver:18710
+    volumes:
+      - ./output/tlsterm-certs:/certs
 
 volumes:
   mercs2_pgdata:

@@ -20,7 +20,7 @@ tools/lua51-mercs2/build/
 tools/lua51-mercs2/src/lua
 tools/lua51-mercs2/src/luac
 tools/lua51-mercs2/src/liblua.a
-tools/lua51-mercs2/src/*.o
+tools/lua51-mercads2/src/*.o
 
 analysis/*
 tools/bin/
@@ -42,8 +42,6 @@ docs/**plan*.md
 *.iso
 *.wad
 *.bin
-*.json
-*.csv
 *.txt
 *.log
 *.err
@@ -82,3 +80,22 @@ tools/external/
 build/
 # agent worktrees are embedded git repos — never commit them
 .claude/worktrees/
+
+tools/wad_simulator/
+tools/pmc_blackbox/
+
+# registry backups contain the ergc registration code — keep out of git
+backups/registry/
+
+# online-restore runtime artifacts (regenerated / secrets / capture spool)
+tlsterm/selfsigned.crt
+tlsterm/selfsigned.key
+coopserver/profiles.json
+coopserver/logs/
+data/captures/
+
+# corpus index: DB is derived data; un-ignore the mcp config jsons
+storage/corpus_lancedb/
+!.mcp.json
+!tools/corpus_mcp/package.json
+!tools/corpus_mcp/package-lock.json

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mercs2://data/spawn_table_schema.json",
+  "title": "Mercenaries 2 spawn table (entity name → Blueprint)",
+  "description": "DataTable schema for overlay-driven spawning. Entity names come from placement records and rainbow_table.json resolution of type_hash / entity_id. Spawner placements currently skipped in populate_world.py; this table drives a future SpawnManager subsystem.",
+  "version": 1,
+  "$defs": {
+    "SpawnTrigger": {
+      "type": "string",
+      "enum": [
+        "OnLayerActivate",
+        "OnLayerDeactivate",
+        "OnMissionActivated",
+        "OnScriptEvent",
+        "Manual"
+      ]
+    },
+    "SpawnCategory": {
+      "type": "string",
+      "enum": [
+        "NPC",
+        "Vehicle",
+        "Pickup",
+        "Fortification",
+        "SpawnerLogic",
+        "Particle",
+        "Trigger"
+      ]
+    },
+    "FactionTag": {
+      "type": "string",
+      "enum": ["PMC", "VZ", "AN", "UP", "Pirates", "Neutral"]
+    },
+    "SpawnTableRow": {
+      "type": "object",
+      "required": ["EntityNamePattern", "SpawnCategory", "BlueprintPath"],
+      "properties": {
+        "EntityNamePattern": {
+          "type": "string",
+          "description": "Exact entity name or glob (case-insensitive match against placement entity_name)"
+        },
+        "EntityNameHash": {
+          "type": "string",
+          "pattern": "^0x[0-9A-Fa-f]{8}$",
+          "description": "Optional pandemic_hash_m2(entity_name) when name is canonical"
+        },
+        "SpawnCategory": { "$ref": "#/$defs/SpawnCategory" },
+        "BlueprintPath": {
+          "type": "string",
+          "description": "Soft object path to UE5 actor Blueprint, e.g. /Game/Mercs2/Characters/BP_VZSoldier"
+        },
+        "DefaultFaction": { "$ref": "#/$defs/FactionTag" },
+        "OverlayLayer": {
+          "type": "string",
+          "description": "vz_state layer stem that owns this spawn (Data Layer name)"
+        },
+        "MissionId": {
+          "type": "string",
+          "description": "Optional contract gate, e.g. PmcCon001"
+        },
+        "SpawnTrigger": { "$ref": "#/$defs/SpawnTrigger" },
+        "bSpawnOnAccept": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, spawn when mission Accepted() fires (second streaming phase)"
+        },
+        "bDespawnOnComplete": {
+          "type": "boolean",
+          "default": true
+        },
+        "SpawnerApi": {
+          "type": "string",
+          "description": "Vanilla Lua API used to toggle this spawner group (from lua_call_sites_from_scripts.md)"
+        },
+        "Notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/SpawnTableRow"
+  },
+  "ue5_mapping": {
+    "content_root": "/Game/Mercs2/Data",
+    "row_struct": "/Game/Mercs2/Data/Structs/FSpawnTableRow",
+    "data_table": "/Game/Mercs2/Data/Tables/DT_SpawnRegistry",
+    "spawn_manager": "/Game/Mercs2/Blueprints/BP_SpawnManager",
+    "lookup_order": [
+      "Exact EntityNamePattern match on placement entity_name",
+      "Case-insensitive substring match (e.g. '*Soldier*')",
+      "type_hash via rainbow_table.json → EntityNamePattern",
+      "Fallback: skip with warning (current populate_world behavior)"
+    ],
+    "runtime_flow": [
+      "MissionSubsystem activates vz_state Data Layer from FMissionData.tLayers",
+      "SpawnManager reads DT_SpawnRegistry rows where OverlayLayer matches",
+      "For each placement in active layer with matching entity_name, spawn BlueprintPath at game_to_ue transform",
+      "On layer deactivate or mission cleanup, despawn tracked actors"
+    ]
+  },
+  "field_mapping_to_ue_struct": {
+    "EntityNamePattern": "FString (row name + match key)",
+    "EntityNameHash": "uint32 (optional fast path)",
+    "SpawnCategory": "byte:ESpawnCategory",
+    "BlueprintPath": "TSoftClassPtr<AActor>",
+    "DefaultFaction": "byte:EFaction",
+    "OverlayLayer": "FName",
+    "MissionId": "FName",
+    "SpawnTrigger": "byte:ESpawnTrigger",
+    "bSpawnOnAccept": "bool",
+    "bDespawnOnComplete": "bool",
+    "SpawnerApi": "FString (debug / parity trace)",
+    "Notes": "FString"
+  }
+}

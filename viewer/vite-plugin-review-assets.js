@@ -143,6 +143,9 @@ function buildStemAsset(pack, stem, dir) {
     havokManifestJson: fileExists(path.join(dir, 'havok', 'manifest.json'))
       ? reviewAssetUrl(pack, stem, 'havok/manifest.json')
       : null,
+    destructionJson: fileExists(path.join(dir, 'destruction.json'))
+      ? reviewAssetUrl(pack, stem, 'destruction.json')
+      : null,
     texturesManifestJson: fileExists(path.join(dir, 'textures', 'manifest.json'))
       ? reviewAssetUrl(pack, stem, 'textures/manifest.json')
       : null,
@@ -154,6 +157,16 @@ function buildStemAsset(pack, stem, dir) {
       ? reviewAssetUrl(pack, stem, 'shared_textures.json')
       : null,
   }
+
+  // Per-piece convex collision hulls (exact decode: havok/convex_hull_*.obj).
+  const havokDir = path.join(dir, 'havok')
+  const havokHulls = fileExists(havokDir)
+    ? fs
+        .readdirSync(havokDir)
+        .filter((f) => /^convex_hull_\d+\.obj$/.test(f))
+        .sort()
+        .map((f) => reviewAssetUrl(pack, stem, `havok/${f}`))
+    : []
 
   const shortStem = stem.length > 56 ? `${stem.slice(0, 53)}…` : stem
   const artifactTokens = [
@@ -178,6 +191,7 @@ function buildStemAsset(pack, stem, dir) {
     glb: hasGlb ? reviewAssetUrl(pack, stem, 'mesh_scene.glb') : null,
     dds: firstDds ? firstDds.url : firstPng ? firstPng.url : null,
     manifest: hasSubmesh ? reviewAssetUrl(pack, stem, 'submeshes/index.json') : null,
+    havokHulls,
     textureFiles,
     sidecars,
     /** Lowercase blob for client-side filter (paths, texture names, sidecar keys). */

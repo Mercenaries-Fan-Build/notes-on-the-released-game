@@ -56,6 +56,11 @@ const routes = [
     name: 'search',
     component: () => import('./views/SearchView.vue'),
   },
+  {
+    path: '/network-captures',
+    name: 'network-captures',
+    component: () => import('./views/NetworkCapturesView.vue'),
+  },
 ]
 
 const router = createRouter({

@@ -658,15 +658,28 @@ def _extract_structured_parts(data: bytes, blob_path: Path | None = None) -> tup
         match_all_prmg_to_hier_nodes,
     )
 
+    from texture_streaming_index import iter_block_entries
+
     parts: list[tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]] = []
     submeta: list[dict[str, object]] = []
     touched: list[int] = []
     mtrl_records: list[dict[str, object]] = []
     sibling_hier: list[dict[str, object]] | None = None
 
+    # Map each UCFX container back to its block-entry asset hash (the model the
+    # submesh belongs to) so the workbench can organise by model, not block.
+    block_entries = iter_block_entries(data)
+
+    def _model_hash_for(ucfx_off: int) -> str | None:
+        for asset_hash, _type, body_off, size in block_entries:
+            if body_off <= ucfx_off < body_off + size:
+                return f"0x{asset_hash:08X}"
+        return None
+
     for container in iter_ucfx_containers(data):
         before = len(parts)
         db = int(container["data_base"])
+        model_hash = _model_hash_for(int(container["ucfx_off"]))
 
         hier_nodes = None
         damage_branches: dict[int, str] | None = None
@@ -716,6 +729,7 @@ def _extract_structured_parts(data: bytes, blob_path: Path | None = None) -> tup
             sm["transparency_flag"] = info_flags.get("transparency_flag", 0.0)
 
             for sv, sf, smeta in _split_by_prmt(data, db, sub, verts, faces, sm):
+                smeta["model_hash"] = model_hash
                 parts.append((sv, sf))
                 submeta.append(smeta)
 
@@ -935,6 +949,8 @@ def write_per_submesh_objs(
                 entry["mesh_group_id"] = sm["mesh_group_id"]
             if "mesh_draw_index" in sm:
                 entry["mesh_draw_index"] = sm["mesh_draw_index"]
+            if sm.get("model_hash"):
+                entry["model_hash"] = sm["model_hash"]
             if "hier_source" in sm:
                 entry["hier_source"] = sm["hier_source"]
             if "inherited_hier_from_mesh_group" in sm:

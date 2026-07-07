@@ -1,0 +1,674 @@
+{
+ "_meta": {
+  "description": "PC code map of three Mercenaries 2 engine 'Keystone' infrastructure systems left unrecovered by the prior Xbox-based analysis: the event/RPC bus (Keystone B, #13), the scheduler/tick (Keystone C, #14), and the Pimp job/threading system (#15). Companion docs: docs/reverse_engineer/{event_bus_code_map,scheduler_tick_code_map,pimp_job_system_code_map}.md.",
+  "image": "output/_ghidra/securom_dump/mercs2_unpacked.exe, base 0x400000",
+  "method": "Bridge from the Xbox decomp/PDB oracle (names + structure, docs/mercs2-pdb-analysis/*, pangea_engine_alignment.md) to the PC unpacked decomp (full bodies, symbol-stripped). Matched by behaviour/struct-offset/call-graph, not by name. The PC build recovers what Xbox stubbed; the residual gaps are SecuROM-virtualized indirect branches + a few stripped profiler-name strings, marked confirm-live.",
+  "counts": {
+   "functions": 82,
+   "event_bus": 14,
+   "scheduler": 44,
+   "pimp": 24,
+   "high": 51,
+   "med": 22,
+   "low": 9
+  }
+ },
+ "functions": [
+  {
+   "addr": "0x0046a3c0",
+   "ghidra_name": "FUN_0046a3c0",
+   "system": "scheduler",
+   "role": "worker_render — render worker: sets render-view+0x2b94 = active-scene ptr then calls view vtable+4 (render-view resolve/begin); gated by FUN_0074cc80 (worker-ready)",
+   "confidence": "med",
+   "evidence": "body; the parallel render-thread entry that rides the same render-view singleton as the main tick"
+  },
+  {
+   "addr": "0x0046a440",
+   "ghidra_name": "FUN_0046a440",
+   "system": "pimp",
+   "role": "Jobtype registration cluster — appends {handler,hash} into dispatch table 019f9048/019f904c (+mirror 019f9170/9178) at index DAT_00d2d6f0",
+   "confidence": "high",
+   "evidence": "writes (&PTR_LAB_019f904c)[idx*2]=handler and [idx*2]=hash for hashes 0xcb414134/0x5d9a2c1a/0x5f2080d1/0x17d1eda3 -> LAB_0046a210/230/260/2a0; matches oracle Jobtype registry ('Too many Jobtypes')"
+  },
+  {
+   "addr": "0x004c00e0",
+   "ghidra_name": "FUN_004c00e0",
+   "system": "pimp",
+   "role": "ENQUEUE (into ring1 DAT_00ff45e8) + Jobtype-register: installs handler LAB_004c00c0 as type DAT_0117663c, builds 0x60 elem, EnterCriticalSection(+0x18), memcpy-into-slot ring push with wrap, spin-commit, advance head/tail",
+   "confidence": "high",
+   "evidence": "classic packed head/tail (DAT_00ff45f8/fc) ring push under CS DAT_00ff4600; writes handler table PTR_LAB_019f904c[type*2]"
+  },
+  {
+   "addr": "0x004c1170",
+   "ghidra_name": "FUN_004c1170",
+   "system": "scheduler",
+   "role": "layer_stack_init — sets PTR_PTR_017bbccc=0xd6c22c, DAT_017bbcf4=5, DAT_017bbcfc=4, cur=0 (boots from layer0, climbs to layer4=game)",
+   "confidence": "high",
+   "evidence": "body; establishes the 5-layer order and array base"
+  },
+  {
+   "addr": "0x004c14f0",
+   "ghidra_name": "FUN_004c14f0",
+   "system": "scheduler",
+   "role": "MASTER UPDATE entry (called per frame with dt) — fixed-sim accumulator _DAT_0198dc48 += dt*DAT_00dfddc8, integer steps→DAT_011765cc, keep remainder; FUN_0084ae70; FUN_004c15e0(dt); update counter DAT_011765bc",
+   "confidence": "high",
+   "evidence": "body; sole per-frame consumer of dt; drives the layer-stack tick"
+  },
+  {
+   "addr": "0x004c15e0",
+   "ghidra_name": "FUN_004c15e0",
+   "system": "scheduler",
+   "role": "layer_stack_tick — walks the 5-slot app layer stack (array @0xd6c22c, count DAT_017bbcf4=5, cur DAT_017bbcf8, target DAT_017bbcfc=4); slides cur→target; each layer vtable +8(enter-down)/+4(enter-up)/+0xc(Update(dt)); top layer(idx4) Update ticks the game/ECS systems",
+   "confidence": "high",
+   "evidence": "body; state-transition stepper over ordered layer array; layer idx = fixed order 0..4"
+  },
+  {
+   "addr": "0x004c16e0",
+   "ghidra_name": "FUN_004c16e0",
+   "system": "scheduler",
+   "role": "timestep_compute — calls FUN_004f5530(timer,prevFrameTime DAT_01176048,...); writes fixed sim dt DAT_01175a90 = *(float*)(timer+0x1c) and DAT_00d26394 = timer+0x20 (audio dt)",
+   "confidence": "high",
+   "evidence": "body; reads prev-frame real time, publishes the dt consumed by the update"
+  },
+  {
+   "addr": "0x004f2a90",
+   "ghidra_name": "FUN_004f2a90",
+   "system": "scheduler",
+   "role": "update-fn list DISPATCHER/iterator: for i in [0,count): (*array[i])(objectHandle); the master per-object PgSys tick (never located on Xbox)",
+   "confidence": "high",
+   "evidence": "body: puVar5=&DAT_00dceb80; loop calls (*(code*)*puVar4)(*in_EAX) while iVar3<DAT_00dcebc4. Called from object-processing paths FUN_00673070 (5398B) and FUN_00654940 (4616B). Not the 116B WinMain pump directly — full master-tick chain to be completed by #14b."
+  },
+  {
+   "addr": "0x004f5530",
+   "ghidra_name": "FUN_004f5530",
+   "system": "scheduler",
+   "role": "timestep_policy — 3 modes via DAT_0175186c/0x1751870: mode0 variable-with-clamp [min DAT_00b977f8 .. max DAT_00b92b58], mode1 fixed-step (FUN_004f4bc0), mode2 variable-substep loop; writes dt to timer+0x1c/+0x20",
+   "confidence": "high",
+   "evidence": "body; explicit min/max clamp = frame-time cap; mode switch = fixed vs variable policy"
+  },
+  {
+   "addr": "0x004f59a0",
+   "ghidra_name": "FUN_004f59a0",
+   "system": "scheduler",
+   "role": "vsync_framecap / flip — computes present flag from headroom (param dt vs frametime DAT_01176048), calls render-view vtable+0x34 (device flip w/ vsync bool), busy-spins on QueryPerformanceCounter to hold the frame cap",
+   "confidence": "high",
+   "evidence": "body; QPC spin-wait + view+0x34; runs between RENDER and PRESENT"
+  },
+  {
+   "addr": "0x0050b730",
+   "ghidra_name": "FUN_0050b730",
+   "system": "scheduler",
+   "role": "update-fn list REMOVE (deregister): scans array for fn, swap-with-last, count--; PC equiv of Xbox FUN_8235dde0",
+   "confidence": "high",
+   "evidence": "body matches Xbox teardown FUN_823642b8->FUN_8235dde0. callers = the two update-system destructors (0x006c4b90, 0x006b6ed7) + 0x00532f77."
+  },
+  {
+   "addr": "0x005204d0",
+   "ghidra_name": "FUN_005204d0",
+   "system": "scheduler",
+   "role": "SIBLING 32-slot registry allocator over mask DAT_011b5124 (different system family)",
+   "confidence": "med",
+   "evidence": "same bit-scan-return-~slot shape as FUN_0060cf90; confirms Xbox 'each family owns its own 32-entry registry' (Xbox PgSysNetworking used DAT_8318a8a4). Distinct mask."
+  },
+  {
+   "addr": "0x0059dd70",
+   "ghidra_name": "FUN_0059dd70",
+   "system": "event_bus",
+   "role": "Reset/clear the bus event frame (rewind value-stack top +8 to base +0xc, zeroing type tags) ~ Xbox FUN_8241d458 allocate-frame",
+   "confidence": "med",
+   "evidence": "operates on +8 top/+0xc end 8-byte-slot frame; hundreds of callers = shared bus primitive; paired with FUN_005a0cc0 in senders"
+  },
+  {
+   "addr": "0x0059ddb0",
+   "ghidra_name": "FUN_0059ddb0",
+   "system": "event_bus",
+   "role": "SecuROM island stub (*_DAT_0245dc0c)(): virtualized VM/bus dispatch helper",
+   "confidence": "low",
+   "evidence": "indirect jump island; called from Event.Create body and many senders; local-vs-wire decision lives here (unrecoverable statically)"
+  },
+  {
+   "addr": "0x005a0cc0",
+   "ghidra_name": "FUN_005a0cc0",
+   "system": "event_bus",
+   "role": "Build-and-dispatch VM frame op (router marshal entry): capacity check on frame slots then dispatch via island thunks ~ Xbox FUN_82420690",
+   "confidence": "med",
+   "evidence": "same frame struct; called right after FUN_0059dd70 in every sender; core routing behind SecuROM thunk_FUN_02xxxxxx"
+  },
+  {
+   "addr": "0x005ead10",
+   "ghidra_name": "FUN_005ead10",
+   "system": "event_bus",
+   "role": "Event registry ctor: zeroes singleton, inits 18 active-list heads(+0x04..) + 18 deferred-list heads(+0x4c..), id counter u16 @+0xd8, epoch u8 @+0xda; stores DAT_00edaf88",
+   "confidence": "high",
+   "evidence": "loop count 0x12=18 buckets; parallel arrays at +4 and +0x4c matches FUN_005eb480/FUN_005ed070/FUN_005ed1a0 offsets; xref DAT_00edaf88"
+  },
+  {
+   "addr": "0x005eb480",
+   "ghidra_name": "FUN_005eb480",
+   "system": "event_bus",
+   "role": "Event.Create registrar (subscriber-table insert): bucket=DAT_00d12278[type*0xc]; reuse-or-alloc node via factory PTR_LAB_00d12274[type*3]; sets cb@+0x10, ctx@+0x14, flags@+0x1c(bit0 persist,bit1,bit2=dead), type@+0x1a; vcall vt[0](filter) installs predicate; link active head +0x04+bucket*4; id16=FUN_005ed1a0; returns handle=(bucket<<16)|id16",
+   "confidence": "high",
+   "evidence": "only caller FUN_005f6660 (Lua Event.Create); node/list offsets consistent across the family; oracle: Event.Create internal"
+  },
+  {
+   "addr": "0x005ed030",
+   "ghidra_name": "FUN_005ed030",
+   "system": "event_bus",
+   "role": "Dispatch ONE matched subscriber: if node not dead(bit2) vcall vt[1](registry)=handler, then set dead bit2 and stamp node epoch +0x1b=registry+0xda (arms deferred free)",
+   "confidence": "high",
+   "evidence": "called by FUN_005f6a10 fire path; node vtable[1]=handler, flags/epoch offsets match registrar+sweeper"
+  },
+  {
+   "addr": "0x005ed070",
+   "ghidra_name": "FUN_005ed070",
+   "system": "event_bus",
+   "role": "Deferred GC sweep over all 18 buckets: move dead(bit2) nodes active->deferred, then free stale deferred nodes (epoch age >0xb ticks) via vt[4](1); 11-tick safe-delete window",
+   "confidence": "high",
+   "evidence": "loops 0x12 buckets on +0x4c; reads +0xda epoch, +0x1b node stamp, +0x1c flags; callers FUN_005eb410/FUN_005eb560"
+  },
+  {
+   "addr": "0x005ed1a0",
+   "ghidra_name": "FUN_005ed1a0",
+   "system": "event_bus",
+   "role": "Unique 16-bit id allocator within a bucket: bump +0xd8 (skip 0), reject collisions across active(+4) and deferred(+0x4c) lists",
+   "confidence": "high",
+   "evidence": "called only by FUN_005eb480; uses +0xd8 counter set by ctor FUN_005ead10"
+  },
+  {
+   "addr": "0x005f6660",
+   "ghidra_name": "FUN_005f6660",
+   "system": "event_bus",
+   "role": "Lua Event.Create / Event.CreatePersistent internal (param_2 = persistence bool); pops name-hash+cb+ctx off VM value-stack, then FUN_005eb480(DAT_00edaf88,...)",
+   "confidence": "high",
+   "evidence": "two callers (Create vs CreatePersistent wrappers) passing 0/1; oracle exe_analysis_agent_b: \"Event.Create/CreatePersistent both call 0x5F6660 with a persistence boolean\""
+  },
+  {
+   "addr": "0x005f6a10",
+   "ghidra_name": "FUN_005f6a10",
+   "system": "event_bus",
+   "role": "Lua fire-event-by-handle: bucket=id>>16, walk active list matching node id16 @+0x18, call FUN_005ed030 to fire; push bool result to VM stack",
+   "confidence": "high",
+   "evidence": "direct DAT_00edaf88 bucket walk (id>>16, (short)id); calls FUN_005ed030"
+  },
+  {
+   "addr": "0x005f6a90",
+   "ghidra_name": "FUN_005f6a90",
+   "system": "event_bus",
+   "role": "Lua Event.Post/Signal-by-name: hashes name arg (FUN_00824270 Hash_String) then routes/dispatches on VM frame",
+   "confidence": "med",
+   "evidence": "oracle: Event.Post @0x5F6A90 dispatches events; body calls Hash_String(0x824270) + VM frame ops"
+  },
+  {
+   "addr": "0x0060cf90",
+   "ghidra_name": "FUN_0060cf90",
+   "system": "scheduler",
+   "role": "PgSys 32-slot ID allocator: scans 32-bit mask DAT_0124af14 for a free bit, claims it (mask|=1<<n), returns ~slot",
+   "confidence": "high",
+   "evidence": "Xbox PgSysVehicle @82373600 inline bit-scan over DAT_830f982c returning ~uVar2; PC factors it into this shared helper. Fan-in of 14 system ctors, all callers=[] (static-constructed). Returns ~slot exactly like Xbox."
+  },
+  {
+   "addr": "0x00630ea0",
+   "ghidra_name": "FUN_00630ea0",
+   "system": "scheduler",
+   "role": "accumulator_reset / watchdog — when frame accumulator DAT_00dfdcc4<=0: reset to DAT_00b9b700 and SendInput a synthetic nudge (keep message pump / screensaver alive)",
+   "confidence": "high",
+   "evidence": "body; called from RunFrame accumulator branch"
+  },
+  {
+   "addr": "0x00630ef0",
+   "ghidra_name": "FUN_00630ef0",
+   "system": "scheduler",
+   "role": "per_frame_driver / RunFrame — QPC start; one-time device-reinit gate (DAT_01175a94==1→FUN_004c0730); FUN_004c16e0 timestep; accumulator DAT_00dfdcc4-=dt; FUN_004c14f0(dt) UPDATE; view+0x14 RENDER; QPC end→DAT_01176048 frametime; FUN_004f59a0 vsync; view+0x10 PRESENT",
+   "confidence": "high",
+   "evidence": "body read in full; ordered stage sequence; corroborated by render_view_handle_crash_analysis.md (main tick @0x00630FC7 derefs view+0x14/+0x10)"
+  },
+  {
+   "addr": "0x006315f0",
+   "ghidra_name": "FUN_006315f0",
+   "system": "scheduler",
+   "role": "message_pump — PeekMessageA/TranslateMessage/DispatchMessageA; on WM_QUIT(0x12) sets quit flag DAT_01175fff=1 and DAT_01176020=wParam. Registered as a thread/idle callback (LAB table @0x19f9178)",
+   "confidence": "high",
+   "evidence": "briefing seed; sole PeekMessage pump; sets the loop's quit flag"
+  },
+  {
+   "addr": "0x00631670",
+   "ghidra_name": "FUN_00631670",
+   "system": "scheduler",
+   "role": "frame_loop / WinMain — creates Mercenaries2 mutex, checks Data/vz.wad, then `while(DAT_01175fff==0){ FUN_00630ef0(); pump }` (the master frame loop); returns exit code DAT_01176020",
+   "confidence": "high",
+   "evidence": "sole caller of RunFrame FUN_00630ef0 @0x00631938; owns quit-flag loop; classic WinMain shape"
+  },
+  {
+   "addr": "0x00654940",
+   "ghidra_name": "FUN_00654940",
+   "system": "scheduler",
+   "role": "object-population driver (calls per-object system dispatch FUN_004f2a90); large ECS spawn/populate fn",
+   "confidence": "med",
+   "evidence": "caller of FUN_004f2a90; passes object handle → confirms per-object (not per-frame) semantics of DAT_00dceb80"
+  },
+  {
+   "addr": "0x00673070",
+   "ghidra_name": "FUN_00673070",
+   "system": "scheduler",
+   "role": "object-process driver (calls FUN_004f2a90 with object handle); 5.4KB ECS object fn",
+   "confidence": "med",
+   "evidence": "caller of the array iterator; object-arg context"
+  },
+  {
+   "addr": "0x006b4250",
+   "ghidra_name": "FUN_006b4250",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x1c/+0x20/+0x24/+0x28 (4 copies); paired update FUN_006b4650 reads profile singleton PTR_PTR_01176054+0x3708 (economy/cash)",
+   "confidence": "med",
+   "evidence": "FUN_0060cf90 slot; sibling FUN_006b4650 touches profile object 0x1176054 + DAT_017c0bc8/017c0dea flags -> player/profile-linked gameplay system. callers=[]."
+  },
+  {
+   "addr": "0x006b4a70",
+   "ghidra_name": "FUN_006b4a70",
+   "system": "scheduler",
+   "role": "post_update_guard — tail of FUN_004c14f0 (thunk_FUN_006b4a70); gated readiness checks (DAT_00d8a3ac/c0/ec streaming-state bits); mostly a no-op unless streaming-state transitions",
+   "confidence": "med",
+   "evidence": "body; small guard after the layer tick"
+  },
+  {
+   "addr": "0x006b6e40",
+   "ghidra_name": "FUN_006b6e40",
+   "system": "scheduler",
+   "role": "PgSys ctor #1 (APPENDS update fn): claims slot->+0x3038, caches handle->+0x18, inlines already-registered scan + append of FUN_006b7720",
+   "confidence": "high",
+   "evidence": "FUN_0060cf90() at +0x3038; FUN_006b87b0() at +0x18; then the exact Xbox PgSysPopulation append pattern with inlined scan. callers=[] (static init)."
+  },
+  {
+   "addr": "0x006b7720",
+   "ghidra_name": "FUN_006b7720",
+   "system": "scheduler",
+   "role": "registered update fn #1 (->FUN_005531f3->FUN_006b772b): recurses an object's child-component sub-tree, registering each node; population/spawn object-hierarchy registrar (PgSysPopulation-family)",
+   "confidence": "high",
+   "evidence": "body FUN_006b772b walks 5 child-list types (df8408/df9110/df9190/df8208/...) via tree iters FUN_006499f0/FUN_00649a80 under crit-sec DAT_00edbaa4, free-list PTR_DAT_00edbac0, Hash_Probe FUN_008242b0. Analog of Xbox PgSysPopulation::Update FUN_82364058."
+  },
+  {
+   "addr": "0x006b9250",
+   "ghidra_name": "FUN_006b9250",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x7024 on a large (~0x7000+B) object; destructor FUN_006b9860",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot at high offset -> large manager object (pool-backed system). Role not pinned."
+  },
+  {
+   "addr": "0x006b9df0",
+   "ghidra_name": "FUN_006b9df0",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x18; memsets two 0x900-byte tables DAT_00f78918/DAT_00f78018 + flag globals 0x1176192/93/107/188/189",
+   "confidence": "med",
+   "evidence": "two parallel 0x900 tables + global state flags -> a global bookkeeping/registry system. callers=[]."
+  },
+  {
+   "addr": "0x006c0f60",
+   "ghidra_name": "FUN_006c0f60",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x20 (+0x24/+0x28 dup), sets +0x30=1, gated on DAT_00dfbd77",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot; DAT_00dfbd77 same gate used by the population update fn -> spawn/streaming-adjacent. Role not pinned."
+  },
+  {
+   "addr": "0x006c18f0",
+   "ghidra_name": "FUN_006c18f0",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x1c/+0x20; destructor FUN_006c1910 (thunk_024f0560 + release)",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot; minimal init. callers=[]."
+  },
+  {
+   "addr": "0x006c23e0",
+   "ghidra_name": "FUN_006c23e0",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x1c/+0x20; FUN_006c4180(6); large field-block (dtor FUN_006c2420 clears ~0x2aa bytes)",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot + sizeable state object. callers=[]."
+  },
+  {
+   "addr": "0x006c4bf0",
+   "ghidra_name": "FUN_006c4bf0",
+   "system": "scheduler",
+   "role": "PgSys ctor #2 (APPENDS update fn): claims slot->+0x1c, inlines already-registered scan + append of FUN_006c4eb0",
+   "confidence": "high",
+   "evidence": "FUN_0060cf90() at +0x1c; identical inlined append pattern; then FUN_0060cf90() again at +0x1c after LAB. callers=[] (static init)."
+  },
+  {
+   "addr": "0x006c4eb0",
+   "ghidra_name": "FUN_006c4eb0",
+   "system": "scheduler",
+   "role": "registered update fn #2 (->FUN_004d9546->FUN_006c4ebb): near-identical object child-tree registrar (add/activate variant of #1)",
+   "confidence": "high",
+   "evidence": "FUN_006c4ebb body is structurally identical to FUN_006b772b (same child lists, crit-sec, free-list). Second population/spawn object-hierarchy update fn."
+  },
+  {
+   "addr": "0x006c7f90",
+   "ghidra_name": "FUN_006c7f90",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x20/+0x24; sibling FUN_006c80c0 does strncpy(english lang) + FUN_009ddb7c(0x99000) network/IO buffer",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot; associated code touches language table + a 0x99000 buffer (net/stream). callers=[]."
+  },
+  {
+   "addr": "0x006cd100",
+   "ghidra_name": "FUN_006cd100",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x18/+0x1c; destructor FUN_006cd120 runs a FUN_006b3cf0 teardown loop + FUN_006cd6d0",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot; iterates/frees a collection on shutdown. callers=[]."
+  },
+  {
+   "addr": "0x006cdd70",
+   "ghidra_name": "FUN_006cdd70",
+   "system": "scheduler",
+   "role": "PgSys ctor: calls sub-object vtable[+4] at +0x18 (init), claims slot->+0x58",
+   "confidence": "low",
+   "evidence": "FUN_0060cf90 slot; owns one vtable-driven sub-object. dtor FUN_006cdd90 calls vtable[+8]. callers=[]."
+  },
+  {
+   "addr": "0x006ce2c0",
+   "ghidra_name": "FUN_006ce2c0",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x1c; memset(+0x20, 0, 0x100) 256-byte table + +0x120/+0x124",
+   "confidence": "med",
+   "evidence": "FUN_0060cf90 slot + a 256-entry inline table -> a fixed 256-slot per-system registry/cache. callers=[]."
+  },
+  {
+   "addr": "0x006cebc0",
+   "ghidra_name": "FUN_006cebc0",
+   "system": "scheduler",
+   "role": "PgSys ctor: claims slot->+0x20; builds a 0x24-byte-record handle-table pool via FUN_00842e70(count,stride) with free-list FUN_00840840; hostname default",
+   "confidence": "med",
+   "evidence": "FUN_00842e70 allocates DAT_0117641c records of 0x24B (DAT_01176414 base) + free-list -> the system's entity/handle DB. strncpy(s_hostname) + DAT_01176347 flag suggest net/session-scoped object DB. callers=[]."
+  },
+  {
+   "addr": "0x006f4f80",
+   "ghidra_name": "FUN_006f4f80",
+   "system": "event_bus",
+   "role": "NetSafe-style sender: builds bus event on frame *(PTR_PTR_01175f30+0x18), event hash 0x51ee8f14, marshals 5 dword args via FUN_006b4fa0, FUN_0059dd70 reset + FUN_005a0cc0 dispatch",
+   "confidence": "high",
+   "evidence": "BRIDGE: PC analog of Xbox NetSafeAreBriefingAssetsLoaded(0x51ee8f14) using DAT_837fe3a0+0x18 -> PTR_PTR_01175f30+0x18"
+  },
+  {
+   "addr": "0x006f6380",
+   "ghidra_name": "FUN_006f6380",
+   "system": "scheduler",
+   "role": "PgSys ctor: COMPOSITE — inits 6 sub-objects via vtable[+4] at +0x58/+0x60/+0x18/+0xb0/+0xbc/+0xc8, then claims slot->+0x108",
+   "confidence": "med",
+   "evidence": "dtor FUN_006f6400 calls vtable[+8] (shutdown) on the same 6 sub-objects -> an aggregate system owning 6 sub-systems (pipeline root / multi-pass e.g. PgSysRender family). callers=[]."
+  },
+  {
+   "addr": "0x007002d0",
+   "ghidra_name": "FUN_007002d0",
+   "system": "event_bus",
+   "role": "SecuROM island stub for shared bus query/dispatch: tail (*_DAT_0244fb3c)(); real body virtualized",
+   "confidence": "low",
+   "evidence": "single indirect jump; called with literal event hashes (0x51ee8f14) = router path behind SecuROM"
+  },
+  {
+   "addr": "0x00824270",
+   "ghidra_name": "FUN_00824270",
+   "system": "event_bus",
+   "role": "Hash_String (FNV) event-name -> 32-bit event id (identity is the name hash)",
+   "confidence": "high",
+   "evidence": "briefing PC hash primitive Hash_String@0x824270; called by FUN_005f6a90 to derive event id"
+  },
+  {
+   "addr": "0x0082427f",
+   "ghidra_name": "FUN_0082427f",
+   "system": "pimp",
+   "role": "FNV core loop: hash=(hash ^ (c|0x20))*0x1000193, final ^0x2a — case-insensitive name hash",
+   "confidence": "high",
+   "evidence": "body: multiply-by-0x1000193 FNV-1a variant"
+  },
+  {
+   "addr": "0x008242b0",
+   "ghidra_name": "FUN_008242b0",
+   "system": "pimp",
+   "role": "Hash_Probe — key%bucketcount + 8-way linear probe over table in ESI; returns slot or 0xffffffff. Called with 0x100 (256 buckets) = profiler-zone/registry mechanism",
+   "confidence": "high",
+   "evidence": "ghidra_knowledge_inventory B.1; PC realization of Xbox 256-bucket zone table (0x83cb28f4)"
+  },
+  {
+   "addr": "0x008243a0",
+   "ghidra_name": "FUN_008243a0",
+   "system": "pimp",
+   "role": "Timer frequency init: QueryPerformanceFrequency -> DAT_017d40c0/c4 (freq), /1000 -> DAT_017d40c8/cc (ms scale), /1000000 -> DAT_017d40d0/d4 (us scale)",
+   "confidence": "high",
+   "evidence": "body reads QPF + __aulldiv by 1000/1000000; caller 0x00a7dee0"
+  },
+  {
+   "addr": "0x00826f20",
+   "ghidra_name": "FUN_00826f20",
+   "system": "pimp",
+   "role": "Spawns the timer thread FUN_008271c0 (prio 1), inits CS 00fc2fb0/00fc2f98 + event 00fc2f94 + 11-slot index array",
+   "confidence": "high",
+   "evidence": "seed; single CreateThread(FUN_008271c0); called from engine-core init FUN_004bef00"
+  },
+  {
+   "addr": "0x00826f90",
+   "ghidra_name": "FUN_00826f90",
+   "system": "pimp",
+   "role": "Timer-node insert (sorted by priority byte+0x28 then value+0x10); SetEvent to wake timer thread",
+   "confidence": "high",
+   "evidence": "inserts into the list drained by FUN_008271c0; SetEvent(DAT_00fc2f94)"
+  },
+  {
+   "addr": "0x008271c0",
+   "ghidra_name": "FUN_008271c0",
+   "system": "pimp",
+   "role": "Pimp TIMER thread proc (pimp_timer.c): waits event 00fc2f94, pulls priority-sorted timer node, QPC scheduling+Sleep to target, runs callback (FUN_00827060), reinserts sorted",
+   "confidence": "high",
+   "evidence": "single CreateThread from FUN_00826f20; priority-ordered linked list keyed by byte+0x28; QueryPerformanceCounter + __aulldiv timebase; = per-CPU timer worker (timer detail = #15b)"
+  },
+  {
+   "addr": "0x00831e20",
+   "ghidra_name": "FUN_00831e20",
+   "system": "scheduler",
+   "role": "NOT pimp — spawns PalSoundEngine mixer thread FUN_00831ee0 (per-object, event+0x43c)",
+   "confidence": "high",
+   "evidence": "worker loop FUN_00831ee0 polls 50ms and calls FUN_00836610 = PalSoundEngine::MixSources (string s_PalSoundEngine__MixSources_00be1f58); audio, not job pool"
+  },
+  {
+   "addr": "0x00831ee0",
+   "ghidra_name": "FUN_00831ee0",
+   "system": "scheduler",
+   "role": "NOT pimp — sound mixer thread proc (WaitForSingleObject 5ms loop -> MixSources)",
+   "confidence": "high",
+   "evidence": "calls FUN_00836610 (MixSources); one-off audio thread"
+  },
+  {
+   "addr": "0x0084ac20",
+   "ghidra_name": "FUN_0084ac20",
+   "system": "pimp",
+   "role": "Pool_AllocFast — CS-guarded (lock DAT_00ff4570) size-class alloc; DAT_00ff458c = per-class max-block table",
+   "confidence": "high",
+   "evidence": "ghidra_knowledge_inventory B.1"
+  },
+  {
+   "addr": "0x0084ae70",
+   "ghidra_name": "FUN_0084ae70",
+   "system": "scheduler",
+   "role": "streaming_LOD_budget_notify — on memory-tier change (0..3 by free-mem thresholds PTR_FUN_00ce8de0/PTR_DAT_00ce8ddc/DAT_00ce8dd8) walks list PTR_LOOP_00dfd140 calling each node vtable+4(tier). Runs inside UPDATE before layer tick",
+   "confidence": "med",
+   "evidence": "body; tier hysteresis + linked-list notify; not a dt tick (fires only on tier transition)"
+  },
+  {
+   "addr": "0x0084af70",
+   "ghidra_name": "FUN_0084af70",
+   "system": "pimp",
+   "role": "PimpQueueInit — allocates 3 ring-buffer job queues (stride 0x60 job record; cap 0x10/0x1000/0x400) each w/ named 'pimpQueue' mutex + CRITICAL_SECTION; wires CPU0 queue ptrs 019f9044/019f9048",
+   "confidence": "high",
+   "evidence": "seed; references s_pimpQueue_00be33c4; Pool_Alloc FUN_0084d760(0x600/0x60000/0x18000); sets PTR_DAT_019f9044=&queue(cap1024), PTR_DAT_019f9048=&queue(cap4096); queue struct offsets match drain readers"
+  },
+  {
+   "addr": "0x0084b290",
+   "ghidra_name": "FUN_0084b290",
+   "system": "pimp",
+   "role": "ENQUEUE (into ring2 DAT_00ff4618, cap 0x1000): builds 0x60 elem, EnterCriticalSection(DAT_00ff4630), slot=head+tail mod cap, memcpy w/ wraparound, in-CS spin do{}while(published!=reserved), advance head/tail; bumps pending count DAT_00ff4684",
+   "confidence": "high",
+   "evidence": "identical ring-push shape to 004c00e0 on ring2 fields (DAT_00ff461c/20/24/28/2c)"
+  },
+  {
+   "addr": "0x0084d760",
+   "ghidra_name": "FUN_0084d760",
+   "system": "pimp",
+   "role": "Pool_Alloc — backs ring buffer storage (arg2=byte size); allocator obj DAT_017d50b0 stride 0xb/class",
+   "confidence": "high",
+   "evidence": "ghidra_knowledge_inventory B.1; called by init 0084af70 for each ring buffer"
+  },
+  {
+   "addr": "0x0084dce0",
+   "ghidra_name": "FUN_0084dce0",
+   "system": "pimp",
+   "role": "Pool_FreeListPop — O(1) bucket free-list pop (fast path of alloc)",
+   "confidence": "high",
+   "evidence": "ghidra_knowledge_inventory B.1"
+  },
+  {
+   "addr": "0x0084ddf0",
+   "ghidra_name": "FUN_0084ddf0",
+   "system": "pimp",
+   "role": "Pool free/push — returns block to size-class free list",
+   "confidence": "high",
+   "evidence": "pushes param into bucket list at DAT_00dfd108; sibling of 0084dce0"
+  },
+  {
+   "addr": "0x00873530",
+   "ghidra_name": "FUN_00873530",
+   "system": "pimp",
+   "role": "Streaming node tree scan + QPC timing (per-node aging over param+0x828 list)",
+   "confidence": "med",
+   "evidence": "QPC + node tree walk; sibling of 00873cf0"
+  },
+  {
+   "addr": "0x00873cf0",
+   "ghidra_name": "FUN_00873cf0",
+   "system": "pimp",
+   "role": "Streaming node timing/aging: walks node linked-list tree (param+0x20f), QPC->ms stamps, ages/retires nodes",
+   "confidence": "med",
+   "evidence": "QPC + __aulldiv(DAT_017d40c8); node tree with +0x5a class idx, +0x30 timestamp"
+  },
+  {
+   "addr": "0x00876330",
+   "ghidra_name": "FUN_00876330",
+   "system": "pimp",
+   "role": "Per-CPU drain-family variant (help-drain by cpu index)",
+   "confidence": "med",
+   "evidence": "same 0x19f9040+cpu*300 busy-flag + per-CPU queue drain shape as FUN_00876400/765cf; adjacent in code"
+  },
+  {
+   "addr": "0x008763c0",
+   "ghidra_name": "FUN_008763c0",
+   "system": "pimp",
+   "role": "Time_NowMs helper: QueryPerformanceCounter -> __aulldiv by DAT_017d40c8 -> writes ms timestamp into obj+0x28; ~40 call sites (streaming node timestamping)",
+   "confidence": "med",
+   "evidence": "uses the ms-scale freq global from 008243a0; near worker 00876400"
+  },
+  {
+   "addr": "0x00876400",
+   "ghidra_name": "FUN_00876400",
+   "system": "pimp",
+   "role": "Pimp worker-thread proc (pimpWorkerThread) — takes cpuIndex, marks self pimp-thread via TLS(+8)=cpu, infinite loop draining per-CPU queue A(hi) then B(lo), dispatches job[0] via handler table, InterlockedExchangeAdd(job[1],1) fence",
+   "confidence": "high",
+   "evidence": "callers=[] => launched only as CreateThread proc from SecuROM-island pimpInit; body = classic spin+Sleep(0) worker over the same per-CPU queue struct FUN_0084af70 builds; TLS+8 install = pimp-thread registry (oracle 'can't use pimpCriticalSections for non-pimp threads')"
+  },
+  {
+   "addr": "0x008765cf",
+   "ghidra_name": "FUN_008765cf",
+   "system": "pimp",
+   "role": "Cooperative drain / join-help (pimpSync): single-pass pop+dispatch draining until caller work-descriptor {head,tail} empties; lets submitting/primary thread run jobs",
+   "confidence": "high",
+   "evidence": "identical pop/dispatch/fence logic to FUN_00876400 but bounded by unaff_EBP+8 list; reached via SecuROM thunk 0x004db2d0->_DAT_0245f134; matches oracle SyncCPUGPU/primary-thread flush"
+  },
+  {
+   "addr": "0x008767b0",
+   "ghidra_name": "FUN_008767b0",
+   "system": "pimp",
+   "role": "pimpGetNumCpus — GetProcessAffinityMask + 32-bit popcount => usable CPU count => worker count",
+   "confidence": "high",
+   "evidence": "GetCurrentProcess/GetProcessAffinityMask then popcount loop returning bit count; feeds pool sizing (one worker per affinity bit)"
+  },
+  {
+   "addr": "0x009df990",
+   "ghidra_name": "FUN_009df990",
+   "system": "pimp",
+   "role": "RequestQueue / CRequestManager ctor (NOT the pimp ring): installs vtable PTR_FUN_00b69028, zeroes head/tail/count fields [5..8], flag[9]=1; name RequestQueue@0xb69018",
+   "confidence": "high",
+   "evidence": "matches Xbox RequestQueue @8277f038 field shape (+5..+10, flag=1); streaming-request client, consumer of job system"
+  },
+  {
+   "addr": "0x00dceb80",
+   "ghidra_name": "DAT_00dceb80",
+   "system": "scheduler",
+   "role": "update-fn list ARRAY BASE (16 slots, base+0x40=dcebc0 end-guard); PC equiv of Xbox DAT_82c215c8",
+   "confidence": "high",
+   "evidence": "Xbox PgSysPopulation appends (&DAT_82c215c8)[count]=FUN_82364058; PC append (&DAT_00dceb80)[DAT_00dcebc4]=FUN_006b7720/FUN_006c4eb0. 16-slot matches Xbox FUN_822073b8 16-slot comment."
+  },
+  {
+   "addr": "0x00dcebc4",
+   "ghidra_name": "DAT_00dcebc4",
+   "system": "scheduler",
+   "role": "update-fn list COUNT; PC equiv of Xbox DAT_82c2160c",
+   "confidence": "high",
+   "evidence": "guard DAT_00dcebc4 < DAT_00dcebc8 then (&DAT_00dceb80)[DAT_00dcebc4]=fn; DAT_00dcebc4++. Identical to Xbox count/cap pattern."
+  },
+  {
+   "addr": "0x00dcebc8",
+   "ghidra_name": "DAT_00dcebc8",
+   "system": "scheduler",
+   "role": "update-fn list CAP (=16); PC equiv of Xbox DAT_82c21610",
+   "confidence": "high",
+   "evidence": "only referenced in the two append guards DAT_00dcebc4 < DAT_00dcebc8; never assigned in code (static .data init). Array base+0x40 confirms 16."
+  },
+  {
+   "addr": "0x00dfc2f8",
+   "ghidra_name": "PTR_PTR_00dfc2f8",
+   "system": "scheduler",
+   "role": "RENDER-VIEW / RenderSystem singleton slot (runtime obj 0x017CFAF0). Master render frame phases = its vtable: +0x14 RenderFrame, +0x10 SubmitFrame/Present, +0x34 flip(vsync), +0x4/+0x8/+0xc device resolve/reset. Camera: cam = view + (*(u16*)(view+0x2B92))*0xE80",
+   "confidence": "high",
+   "evidence": "render_view_handle_crash_analysis.md + freecam sessions; concrete slot uses in FUN_00630ef0/FUN_004c09c0/FUN_0046a3c0"
+  },
+  {
+   "addr": "0x011b5124",
+   "ghidra_name": "DAT_011b5124",
+   "system": "scheduler",
+   "role": "sibling family 32-slot allocation bitmask",
+   "confidence": "med",
+   "evidence": "claimed by FUN_005204d0; parallel to DAT_0124af14 for a second system family."
+  },
+  {
+   "addr": "0x0124af14",
+   "ghidra_name": "DAT_0124af14",
+   "system": "scheduler",
+   "role": "the 32-bit PgSys allocation bitmask (one bit per registered system, cap 32)",
+   "confidence": "high",
+   "evidence": "AND/OR-tested in FUN_0060cf90 bit-scan loop; PC equivalent of Xbox DAT_830f982c. Name-string parallel table (Xbox DAT_830f98b0) is STRIPPED on PC — shared allocator takes no name arg."
+  },
+  {
+   "addr": "0x01b986ea",
+   "ghidra_name": "FUN_01b986ea",
+   "system": "pimp",
+   "role": "CPU feature detection (pimp_cpu.c-analog): per-CPU CPUID via SetThreadAffinityMask, 0x56-byte per-CPU records; single-CPU fast path",
+   "confidence": "med",
+   "evidence": "GetSystemInfo dwNumberOfProcessors + GetProcessAffinityMask + per-CPU SetThreadAffinityMask loop; middleware CPUID lib, not the worker pool"
+  },
+  {
+   "addr": "0x024e2780",
+   "ghidra_name": "thunk_FUN_024e2780",
+   "system": "scheduler",
+   "role": "PgSys slot RELEASE (clears the mask bit); destructor counterpart of FUN_0060cf90",
+   "confidence": "med",
+   "evidence": "Called in every paired destructor (FUN_006b9260/006c1910/006cd120/006cec90/006f6400) on the stored slot field; SecuROM island thunk, body not in dump."
+  },
+  {
+   "addr": "0x03280000",
+   "ghidra_name": "FUN_03280000",
+   "system": "pimp",
+   "role": "SecuROM island stub -> FUN_0084af70 (PimpQueueInit); real caller is engine pool-presize init (thunk_FUN_03280000 @line99367, '_presize_ BoatPhysics' context)",
+   "confidence": "med",
+   "evidence": "1-line island forwarding param_1 to FUN_0084af70"
+  }
+ ]
+}

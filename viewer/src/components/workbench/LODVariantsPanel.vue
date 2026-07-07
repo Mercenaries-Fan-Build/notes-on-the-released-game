@@ -5,6 +5,22 @@
     </div>
 
     <div class="flex-1 overflow-auto p-2 space-y-3">
+      <!-- Destruction state (intact body vs break pieces, from the SWIT/HIER join) -->
+      <div v-if="hasDestruction" class="space-y-1.5">
+        <label class="block text-[10px] uppercase tracking-wide text-gray-500">Destruction State</label>
+        <div class="flex gap-1">
+          <button
+            v-for="opt in destructionOptions"
+            :key="opt.value"
+            class="rounded px-2 py-1 text-[11px] transition-colors"
+            :class="destructionMode === opt.value
+              ? 'bg-blue-700 text-white'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+            @click="setDestructionMode(opt.value)"
+          >{{ opt.label }}</button>
+        </div>
+      </div>
+
       <!-- LOD Control -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between">
@@ -102,6 +118,7 @@ const props = defineProps({
 const autoLod = ref(false)
 const currentLod = ref(0)
 const damageMode = ref('both')
+const destructionMode = ref('intact')
 const isolatedCategory = ref(null)
 
 const damageOptions = [
@@ -109,6 +126,16 @@ const damageOptions = [
   { value: 'damaged', label: 'Damaged' },
   { value: 'both', label: 'Both' },
 ]
+
+const destructionOptions = [
+  { value: 'intact', label: 'Intact' },
+  { value: 'destroyed', label: 'Destroyed' },
+  { value: 'all', label: 'All' },
+]
+
+const hasDestruction = computed(() =>
+  props.partMeta.some((e) => e && e.destruction_state)
+)
 
 const maxRank = computed(() => {
   const ranks = lodGroupMaxRank(props.partMeta)
@@ -131,6 +158,7 @@ watch(() => props.partMeta, () => {
   currentLod.value = 0
   autoLod.value = false
   damageMode.value = 'both'
+  destructionMode.value = 'intact'
   isolatedCategory.value = null
 })
 
@@ -160,6 +188,11 @@ function setDamageMode(mode) {
   const preferDamaged = mode === 'damaged'
   const showBoth = mode === 'both'
   props.viewer?.applyDamageFilter?.(preferDamaged, showBoth)
+}
+
+function setDestructionMode(mode) {
+  destructionMode.value = mode
+  props.viewer?.applyDestructionState?.(mode)
 }
 
 function showAll() {

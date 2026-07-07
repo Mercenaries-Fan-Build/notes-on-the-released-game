@@ -132,6 +132,8 @@ class SubmeshBase(BaseModel):
     texture_specular: str | None = None
     hier_node_idx: int | None = None
     damage_state: str | None = None
+    switch_group: int | None = None
+    model_hash: str | None = None
     instanced_from: int | None = None
     bbox_min_x: float | None = None
     bbox_min_y: float | None = None

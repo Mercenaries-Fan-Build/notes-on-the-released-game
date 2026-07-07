@@ -41,21 +41,32 @@ export function ensureNormals(geometry) {
   return geometry
 }
 
+// Generic, model-agnostic part taxonomy (these submeshes can be from ANY model,
+// not just vehicles). Categories describe the submesh's role/shape only:
+//   lod    — a whole-object LOD/simplified mesh (is_vehicle_lod flag)
+//   glass  — transparent draw
+//   shell  — thin slab/panel (one axis << others): crate face, wall, lid, plate
+//   large  — full-object-scale mesh (likely the intact whole body)
+//   medium / small — sub-pieces (break pieces, fittings, detail)
+// The real "which model" discriminator is mesh_group_id, surfaced separately in
+// the Parts panel; classification is just a descriptive hint.
 export function classifyPart(entry) {
-  if (entry.is_vehicle_lod) return 'vehicle_lod'
+  // Authoritative role from the orchestrator join (SWIT/HIER): intact body,
+  // break_piece (destroyed-state fragment), or static (never swaps).
+  if (entry.destruction_state) return entry.destruction_state
+  if (entry.is_vehicle_lod) return 'lod'
   if (entry.transparent) return 'glass'
   const bb = entry.decoded_bbox
-  if (!bb || bb.length < 6) return 'other'
+  if (!bb || bb.length < 6) return 'mesh'
   const ex = bb[3] - bb[0],
     ey = bb[4] - bb[1],
     ez = bb[5] - bb[2]
   const maxE = Math.max(ex, ey, ez)
   const minE = Math.min(ex, ey, ez)
-  const cy = (bb[1] + bb[4]) / 2
-  if (maxE < 0.9 && minE > 0.15 && Math.abs(ey - ez) < 0.15 && cy < 0.6) return 'wheel'
-  if (maxE > 3.0) return 'body'
-  if (maxE > 1.5) return 'panel'
-  return 'accessory'
+  if (minE < 0.15 && maxE > 0.6) return 'shell'
+  if (maxE > 3.0) return 'large'
+  if (maxE > 1.0) return 'medium'
+  return 'small'
 }
 
 export function getDamageState(entry) {

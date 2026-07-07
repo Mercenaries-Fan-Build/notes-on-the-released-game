@@ -6,7 +6,18 @@
       :style="{ width: leftWidth + 'px', minWidth: '180px', maxWidth: '50vw' }"
     >
       <div class="shrink-0 p-3 pb-1">
-        <h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assets</h2>
+        <div class="mb-2 flex gap-1">
+          <button
+            class="flex-1 rounded px-2 py-1 text-[11px]"
+            :class="browseMode === 'models' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+            @click="browseMode = 'models'"
+          >Models</button>
+          <button
+            class="flex-1 rounded px-2 py-1 text-[11px]"
+            :class="browseMode === 'blocks' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+            @click="browseMode = 'blocks'"
+          >Blocks</button>
+        </div>
         <label class="mb-1 block text-[11px] text-gray-500">Pack</label>
         <select
           v-model="packFilter"
@@ -20,12 +31,42 @@
           ref="searchInputEl"
           v-model="searchQuery"
           type="text"
-          placeholder="Name / path substring..."
+          placeholder="Name / hash substring..."
           class="mb-2 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-gray-200"
         />
-        <div class="text-[10px] text-gray-500">{{ displayedAssets.length }} results</div>
+        <label v-if="browseMode === 'models'" class="mb-2 flex items-center gap-1.5 text-[11px] text-gray-400">
+          <input v-model="onlyDestructible" type="checkbox" class="h-3 w-3 accent-blue-500" />
+          Destructible only
+        </label>
+        <label v-if="browseMode === 'models'" class="mb-2 flex items-center gap-1.5 text-[11px] text-gray-400">
+          <input v-model="showHulls" type="checkbox" class="h-3 w-3 accent-blue-500" />
+          Collision hulls (overlay)
+        </label>
+        <div class="text-[10px] text-gray-500">
+          {{ browseMode === 'models' ? displayedModels.length + ' models' : displayedAssets.length + ' results' }}
+        </div>
       </div>
-      <ul ref="assetListEl" class="min-h-0 flex-1 overflow-auto px-2 pb-2 text-[11px]">
+
+      <!-- Models: browse by entity (asset hash), cross-block -->
+      <ul v-if="browseMode === 'models'" class="min-h-0 flex-1 overflow-auto px-2 pb-2 text-[11px]">
+        <li
+          v-for="(m, i) in displayedModels"
+          :key="m.model_hash"
+          class="cursor-pointer rounded px-1.5 py-1 leading-snug break-all"
+          :class="selectedModel?.model_hash === m.model_hash ? 'bg-blue-900/60 text-gray-100' : 'hover:bg-gray-800 text-gray-300'"
+          :title="m.model_hash + '  ·  ' + m.stem"
+          @click="selectModel(m, i)"
+        >
+          {{ m.canonical_name || m.model_hash }}
+          <span v-if="m.has_destruction" class="ml-1 rounded bg-red-900/40 px-1 text-[9px] text-red-300">destruct</span>
+          <span class="ml-1 text-[9px] text-gray-600">{{ m.submesh_count }} sm · {{ m.block_count }} blk</span>
+        </li>
+        <li v-if="modelsStore.loading" class="px-1.5 py-2 text-gray-500">Loading…</li>
+        <li v-else-if="!displayedModels.length" class="px-1.5 py-2 text-gray-600">No models (run the ingest)</li>
+      </ul>
+
+      <!-- Blocks: raw FFCS block files -->
+      <ul v-else ref="assetListEl" class="min-h-0 flex-1 overflow-auto px-2 pb-2 text-[11px]">
         <li
           v-for="(a, i) in displayedAssets"
           :key="a.key"
@@ -98,6 +139,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, shallowRef } from 'vue'
 import { useReviewAssetsStore } from '../stores/reviewAssets.js'
+import { useModelsStore } from '../stores/models.js'
 import { useWorkbenchStore } from '../stores/workbenchState.js'
 import { initThreeViewer, disposeThreeViewer } from '../lib/three-viewer.js'
 import { classifyPart } from '../lib/submesh-inspect.js'
@@ -106,7 +148,15 @@ import StatusBar from '../components/workbench/StatusBar.vue'
 import InspectorTabs from '../components/workbench/InspectorTabs.vue'
 
 const store = useReviewAssetsStore()
+const modelsStore = useModelsStore()
 const wb = useWorkbenchStore()
+
+// 'models' = browse by entity (asset hash, cross-block); 'blocks' = raw blocks.
+const browseMode = ref('models')
+const selectedModel = ref(null)
+const selectedModelIndex = ref(-1)
+const onlyDestructible = ref(false)
+const showHulls = ref(false)
 
 const viewportEl = ref(null)
 const searchInputEl = ref(null)
@@ -188,6 +238,49 @@ function selectAsset(a, idx, additive = false) {
   viewer.loadAsset(a)
   wb.addModel({ key: a.key, stem: a.stem || a.key, pack: a.pack || '' })
 }
+
+// --- Model-centric browsing ---
+const displayedModels = computed(() => modelsStore.models)
+
+function selectModel(m, idx) {
+  selectedModel.value = m
+  selectedModelIndex.value = idx
+  selectedPartIndex.value = -1
+  if (!viewer) return
+  partMeta.value = []
+  partGroups.value = []
+  Object.keys(partVisibility).forEach((k) => delete partVisibility[k])
+  wb.clearHistory()
+  wb.loadedModels = []
+  // a block's manifest holds many models — loadManifest filters by model_hash.
+  const base = `/__review__/${encodeURIComponent(m.pack)}/${encodeURIComponent(m.stem)}`
+  viewer.loadManifest(`${base}/submeshes/index.json`, { modelHash: m.model_hash })
+  wb.addModel({ key: m.model_hash, stem: m.stem, pack: m.pack })
+  // grounded PHY2 collision hulls for the overlay (from the block's destruction.json)
+  fetch(`${base}/destruction.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((dj) => {
+      const md = dj?.orchestrated_models?.find((x) => x.model_hash === m.model_hash)
+      viewer.setHulls(md?.hulls || [])
+      viewer.setHullsVisible(showHulls.value)
+    })
+    .catch(() => viewer.setHulls([]))
+}
+
+watch(showHulls, (v) => viewer?.setHullsVisible(v))
+
+let _modelFetchTimer = null
+watch([browseMode, packFilter, searchQuery, onlyDestructible], () => {
+  if (browseMode.value !== 'models') return
+  clearTimeout(_modelFetchTimer)
+  _modelFetchTimer = setTimeout(() => {
+    modelsStore.fetchModels({
+      q: searchQuery.value,
+      pack: packFilter.value,
+      destructible: onlyDestructible.value,
+    })
+  }, 200)
+}, { immediate: true })
 
 function syncPartsFromViewer() {
   if (!viewer) return

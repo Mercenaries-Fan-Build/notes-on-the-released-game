@@ -54,6 +54,12 @@ class HavokSliceBase(BaseModel):
     has_convex_hull: bool | None = None
     convex_hull_filename: str | None = None
     havok_version: str | None = None
+    # Structured census from the exact decoder (mercs2_formats::havok).
+    class_counts: dict | None = None
+    convex_hull_count: int | None = None
+    box_count: int | None = None
+    mopp_count: int | None = None
+    mesh_count: int | None = None
 
 
 class HavokSliceCreate(HavokSliceBase):
@@ -63,6 +69,17 @@ class HavokSliceCreate(HavokSliceBase):
 class HavokSliceRead(HavokSliceBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+class HavokHullRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    block_id: int
+    slice_index: int | None = None
+    hull_index: int | None = None
+    vertex_count: int | None = None
+    plane_count: int | None = None
+    obj_filename: str | None = None
 
 
 class DialogFragmentBase(BaseModel):

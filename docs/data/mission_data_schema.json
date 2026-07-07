@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mercs2://data/mission_data_schema.json",
+  "title": "Mercenaries 2 tMissionData (UE5 recreation subset)",
+  "description": "Minimal JSON schema mirroring wifmissiondata.tMissionData entries documented in docs/vanilla_mission_lifecycle_analysis.md and docs/dlc_mission_loading.md. Used by UE5 mission subsystem and vertical-slice contract authoring.",
+  "version": 1,
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/MissionEntry"
+  },
+  "$defs": {
+    "MissionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{3}(Con|Job)[0-9]{3}[a-z]?$",
+      "description": "Mission registry key, e.g. PmcCon001, OilJob011, DlcCon004a"
+    },
+    "FactionId": {
+      "type": "string",
+      "enum": ["All", "Chi", "Gur", "Oil", "Pir", "Pmc", "Vza"],
+      "description": "sFactionId from wifmissiondata"
+    },
+    "StarterId": {
+      "type": "string",
+      "description": "sStarter — key into wifstarterdata (e.g. PmcBoss, OilStarter0)"
+    },
+    "Milestone": {
+      "type": "object",
+      "required": ["nMilestone", "sKey"],
+      "properties": {
+        "nMilestone": { "type": "integer", "minimum": 1 },
+        "sKey": {
+          "type": "string",
+          "description": "Progression key awarded on milestone (HasKey/AwardKey)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "StartLocationMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Named world marker / region ref (e.g. PmcCon001_Start1)"
+      }
+    },
+    "LayerList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "vz_state overlay layer stem (lower-case in WAD paths)"
+      },
+      "minItems": 1
+    },
+    "FlowBinding": {
+      "type": "object",
+      "description": "Optional UE-side mirror of wifmissionflow fPrereq/fConseq (not stored in vanilla tMissionData)",
+      "properties": {
+        "prerequisiteKey": {
+          "type": "string",
+          "description": "HasKey() gate, e.g. VzaCon001"
+        },
+        "unlockMissionIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MissionId" }
+        },
+        "layerRemovals": { "$ref": "#/$defs/LayerList" },
+        "layerAdditions": { "$ref": "#/$defs/LayerList" }
+      },
+      "additionalProperties": false
+    },
+    "RewardEntry": {
+      "type": "object",
+      "description": "Mirror of MrxRewardData._tRewards[sMissionId] (separate table in vanilla)",
+      "required": ["nWagerMin", "nWagerMax", "sFactionId", "nWager", "sMissionId"],
+      "properties": {
+        "nWagerMin": { "type": "integer", "minimum": 0 },
+        "nWagerMax": { "type": "integer", "minimum": 0 },
+        "sFactionId": { "$ref": "#/$defs/FactionId" },
+        "nWager": { "type": "integer", "minimum": 0 },
+        "sMissionId": { "$ref": "#/$defs/MissionId" }
+      },
+      "additionalProperties": false
+    },
+    "MissionEntry": {
+      "type": "object",
+      "required": ["sModuleName", "sFactionId", "sStarter"],
+      "properties": {
+        "sModuleName": {
+          "type": "string",
+          "description": "Lua module / dynamic_import name (usually lower-case, e.g. pmccon001)"
+        },
+        "sFactionId": { "$ref": "#/$defs/FactionId" },
+        "sStarter": { "$ref": "#/$defs/StarterId" },
+        "bContract": {
+          "type": "boolean",
+          "default": true,
+          "description": "true for *Con* contracts; false or omitted for *Job* side activities"
+        },
+        "bCriticalPathMission": { "type": "boolean" },
+        "bPlayerVisibleMission": {
+          "type": "boolean",
+          "default": true,
+          "description": "PDA visibility; only explicitly false on hidden missions in retail"
+        },
+        "bRepeatable": { "type": "boolean" },
+        "bCompletable": { "type": "boolean" },
+        "bCompleteable": {
+          "type": "boolean",
+          "description": "Alternate spelling used in some retail entries"
+        },
+        "bSkipInitialNotifications": { "type": "boolean" },
+        "bSuppressPdaDisplay": { "type": "boolean" },
+        "nLevels": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Multi-level bounty/challenge depth"
+        },
+        "nPdaSortOrder": { "type": "integer" },
+        "sPdaTexture": { "type": "string" },
+        "sTitle": {
+          "type": "string",
+          "description": "Localization key, e.g. [PmcCon001.Title]"
+        },
+        "tLayers": { "$ref": "#/$defs/LayerList" },
+        "tMilestones": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Milestone" }
+        },
+        "tStartLocations": { "$ref": "#/$defs/StartLocationMap" },
+        "tMaterielScale": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "scriptHash": {
+          "type": "string",
+          "pattern": "^0x[0-9A-Fa-f]{8}$",
+          "description": "pandemic_hash_m2(sModuleName) — cross-ref script_hash_map.json"
+        },
+        "ueFlow": { "$ref": "#/$defs/FlowBinding" },
+        "ueReward": { "$ref": "#/$defs/RewardEntry" },
+        "ueObjectives": {
+          "type": "array",
+          "description": "Vertical-slice objective stubs (not in vanilla tMissionData; derived from contract Lua)",
+          "items": {
+            "type": "object",
+            "required": ["sKey", "sTaskModule"],
+            "properties": {
+              "sKey": { "type": "string" },
+              "sTaskModule": {
+                "type": "string",
+                "enum": [
+                  "MrxTaskObjectiveDeliver",
+                  "MrxTaskObjectiveDestroy",
+                  "MrxTaskObjectiveEnterVehicle",
+                  "MrxTaskObjectiveVerify",
+                  "MrxTaskObjectiveAction",
+                  "MrxTaskRace"
+                ]
+              },
+              "vDestLoc": { "type": "string" },
+              "sDspShortDesc": { "type": "string" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "ue5_mapping": {
+    "content_root": "/Game/Mercs2/Data",
+    "row_struct": "/Game/Mercs2/Data/Structs/FMissionData",
+    "data_table": "/Game/Mercs2/Data/Tables/DT_MissionRegistry",
+    "objective_table": "/Game/Mercs2/Data/Tables/DT_MissionObjectives",
+    "notes": [
+      "One DT_MissionRegistry row per mission ID (row name = PmcCon001).",
+      "tLayers maps to Data Layer asset names under /Game/Mercs2/DataLayers/.",
+      "ueFlow / ueReward are recreation-only extensions; populate from flow analysis, not retail Lua tables.",
+      "Accept contract → activate tLayers + run BP_MissionContract::Activated logic."
+    ]
+  }
+}

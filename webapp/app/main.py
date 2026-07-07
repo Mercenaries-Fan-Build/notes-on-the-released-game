@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pathlib
+
 from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +28,8 @@ from app.models import (
 )
 from app.routers.animations import router as animations_router
 from app.routers.blocks import router as blocks_router
+from app.routers.models import router as models_router
+from app.routers.network_captures import router as network_captures_router
 from app.routers.ecs import router as ecs_router
 from app.routers.misc import (
     aset_router,
@@ -64,6 +69,7 @@ app.add_middleware(
 api_prefix = "/api"
 
 app.include_router(blocks_router, prefix=api_prefix)
+app.include_router(models_router, prefix=api_prefix)
 app.include_router(placements_router, prefix=api_prefix)
 app.include_router(overlay_router, prefix=api_prefix)
 app.include_router(cat_router, prefix=api_prefix)
@@ -84,6 +90,17 @@ app.include_router(lua_router, prefix=api_prefix)
 app.include_router(havok_router, prefix=api_prefix)
 app.include_router(save_router, prefix=api_prefix)
 app.include_router(validation_router, prefix=api_prefix)
+app.include_router(network_captures_router, prefix=api_prefix)
+
+_STATIC = pathlib.Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/inspector", include_in_schema=False)
+async def inspector() -> FileResponse:
+    """The Wireshark-like network inspector — a live view of every FESL / Theater
+    / GameSpy / TLS / DNS / HTTP event the game makes, streamed over SSE."""
+    return FileResponse(_STATIC / "inspector.html")
 
 
 @app.get("/api/health", response_model=HealthResponse)
