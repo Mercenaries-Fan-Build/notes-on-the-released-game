@@ -24,7 +24,7 @@ Status legend: ✅ **BUILT** (works on retail data) · 🟡 **PARTIAL** (exists,
 |---|-----------|----------------------|------------|--------|
 | 1 | Render core (geometry, materials, textures) | Pimp-job frame pipeline → **one shared per-viewport scene driver `FUN_00466d40`** (collect → z → 4× shadow cascade → reflection → color → water → mirror), `Mtrl_Parse` 10-slot multi-sub-material models, page-based texture streaming w/ mip swap, precompiled `.sho` registry (FP16 HDR + R32F/D24S8 RTs) · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | Forward pass, per-PRMT multi-material, BC1/BC3 + hi-mip streaming, baked vertex lighting | ✅ core / 🟡 overall |
 | 2 | Lighting | Placed `LightObject` (0x97e8ee92; 0x34 = type + rgb + 9 floats) point/spot + `_pl`/`_sl`/`_pl_sl` per-pixel-light shader permutations (light-class = 4th arg to `FUN_0085ac90`, gated by `ShaderLevel`/`DAT_00dfc345`), sun/day-night (atmosphere struct), `LightAnimation` + runtime `Rt{Light,Color,Scale,Alpha}Animation` (dispatcher `FUN_00675e50`) · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | 32 forward point lights from `LightObject` + fixed sun + Blinn-Phong spec (`_sm` slot 1) | 🟡 |
-| 3 | Shadows | `ShadowBuffer` depth maps + per-mesh-type shadow VPs + `BlobShadow` · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none | ❌ |
+| 3 | Shadows | `ShadowBuffer` depth maps + per-mesh-type shadow VPs + `BlobShadow` · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | single 2048² directional depth map + PCF (`scene.rs`: chars/props cast onto baked geometry, `set_shadow`); no 4-tile atlas / cascades / per-mesh-type VP / BlobShadow | 🟡 |
 | 4 | Particles / FX | PgFX job-parallel, `fxdict` 630 effect params, EFCT/EMTR templates, ECS spawners, ribbons · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | CPU billboard sim + COLR gradients + glow cards; templates must be fed by game code (no fxdict auto-map) | 🟡 |
 | 5 | Sky / post / HDR | PgSky/PgSun/PgCloud, adaptive-luminance tone-map, bloom, motion blur, rain/underwater · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | Scattering-gradient sky + HDR → bright-pass/blur → ACES/Reinhard + bloom; exposure approximated | 🟡 |
 | 6 | Decals | Projected decals as parallel job, "super decal" · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none | ❌ |
@@ -35,7 +35,7 @@ Status legend: ✅ **BUILT** (works on retail data) · 🟡 **PARTIAL** (exists,
 | 11 | Assets / formats | WAD/UCFX, MTRL, Havok packfiles, wavelet/delta/spline anim · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | WAD/ASET/container extraction, mesh de-strip + POFF + SEGM state-mask, MTRL, wavelet decode (168/168 tests) | ✅ |
 | 12 | ECS / reflection registry (Keystone A) | 232 stream-deserialized component classes, `0x9e3779b9` seed, cdbsizes pools · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | hecs world + descriptor table w/ cdbsizes budgets; **field-schema deserialization not implemented**; 4 native hot-path components vs 231 documented classes | 🟡 |
 | 13 | Event/RPC bus (Keystone B) | name-hash + typed-TLV (≤7 args), shared GUI/Net/AI/audio; wire router unrecovered on Xbox · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | in-memory pub/sub, hash + ≤7 typed args, 2048 deferred cap | ✅ (in-memory; wire N/A) |
-| 14 | Scheduler / tick (Keystone C) | `PgSys*` 32-slot registry + framerate policies; master tick order was unknown even in exe · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | fixed-timestep `Schedule` + `run_fixed`; **not used by the streaming loop** (own dt loop) | 🟡 |
+| 14 | Scheduler / tick (Keystone C) | `PgSys*` 32-slot registry + framerate policies; master tick order was unknown even in exe · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | fixed-timestep `Schedule`/`Time` + `run_fixed` + **`frame::LayerStack`** (5-slot app stack, 0→4 climb + enter transitions). **BOTH live boot loops now run the recovered RunFrame 9-stage order on the `LayerStack`**: `run_game_world` (`--stream`, layers loading→GAME) + `run_scene_world_loading` (default full-world, layers frontend/menu→loading→GAME). Sim drains the **decoupled fixed-sim clock** (`Time::advance_frame`/`run_fixed`, `timescale`). Remaining seam: the **layer-4 per-system order** is still host-inline (camera→streaming→animation), not a registered list mirroring `FUN_004c9740` | 🟡→ |
 | 15 | Jobs / threading (Pimp) | worker pool, lock-free a64 queue, per-CPU timers, Havok MT glue · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | none (candidate: rayon) | ❌ |
 | 16 | Scripting host | Lua 5.1.2 VM, `Sys.*` table, import/inherit module system, console/debugger · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | Lua 5.4 (mlua) + compat prelude + import/dynamic_import/inherit + EngineHost seam + auto-stub tracer | ✅ host |
 | 17 | Script binding surface | ~53 namespaces / ~1216 fns (Surface-B trace); see §3 · **[PC code map ↓](#1a-pc-reverse-engineering-code-maps)** | boot/PMC-spawn slice: `Debug`, partial `Sys`/`Pg`/`Object`, fake `Event.Create`; `Ai`/`Vehicle` no-ops | 🟡 (thin slice) |
@@ -175,10 +175,17 @@ rather than crash — the corpus can already be *executed* for coverage measurem
   SEGM byte-3 is treated as a state mask but the registry calls it `group` (reconcile vs the SEGM
   consumer decomp before building on it); the HDR path is gated on `sky_enabled` and falls back to
   direct present.
-- **Two loops today:** `game_world::run_game_world` runs its own dt loop with hardcoded free-fly
-  input; the `Schedule`/`Time` fixed tick and the `input.rs` action layer are built but consumed by
-  `mercs2_game`/tests, not by the streaming loop. Unifying these is cheap and unblocks Keystone-C
-  fidelity.
+- **Loop unification (2026-07-06):** BOTH live boot loops now run on the recovered Keystone-C spine —
+  `mercs2_core::frame::LayerStack` (the 5-slot 0→4 application stack, `FUN_004c15e0`) with the per-frame
+  body in RunFrame's 9-stage order (`FUN_00630ef0` §2). `game_world::run_game_world` (`--stream`) maps
+  its old `loading` bool onto layers loading→GAME and drains its streaming+animation sim on the shared
+  `Time` accumulator (dropped the private `anim_dt`). `world::run_scene_world_loading` (the default
+  full-world boot) maps its three phases — shell menu / loading / in-game — onto the frontend→loading
+  →GAME layers (its `menu.is_some()` + `loading` bool gates are gone), keeping its `Schedule::run_fixed`
+  animation tick. **Still open:** (1) the **layer-4 per-system order** (camera → streaming → animation)
+  is host-inline, not yet a registered system list mirroring `FUN_004c9740`; (2) the free-fly cam in
+  `run_game_world` still reads hardcoded keys, not the `input.rs` action layer (`world.rs` already
+  uses it).
 - **Retail-data realities:** props ship essentially no Havok clips (prop-anim layer is correct but
   idle on retail data) and ~no alternate LOD meshes (2/446) — so rows 10 and 20's "partial" is
   partly the *data's* fault, not the code's.
