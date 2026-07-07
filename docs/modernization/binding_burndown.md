@@ -79,9 +79,15 @@ bank-load **completion callbacks** back into Lua (async streaming seam), and mis
 Session/matchmaking/telemetry. The SP-correct defaults are already faithful (`Net.IsActive`→false path);
 back against `mercs2_net` when co-op restore is wired into the reimpl.
 
-### 9. Sys / settings / profile — `Sys` residue, `Player` profile residue — LOW
-Config getters/setters and profile fields. Needs a small settings+profile store (retail-PC defaults
-today). Cheap to back; low gameplay impact.
+### 9. Sys / settings / profile — `Player` profile residue — PARTLY DONE
+✅ **Backed**: the `Sys.*` engine-config store on the host — `SetTimeScale`/`SetLevelName`/
+`SetMasterScriptName`/`SetTutorialsEnabled`/`SetAutosaveEnabled`/`SetLuaSaveVersion`/
+`SetNumberOfViewports`/`SetAssetRequestMax`/`StartSingleplayer`/`WriteToConsole`, with `Set*`↔`Get*`
+real roundtrips (`GetMasterScriptName`/`TutorialsEnabled` now read the store). Test
+`game_lua_sys_settings_roundtrip`.
+Residue (unbacked): asset-preload/streaming controls (`RequiredAsset`/`DisableAssetPreload`/`FlushAssets`),
+`AddStringDb`/`ClearStringDb` (localization DB), `PlayIntroMovies`, `SetSkipMission`; plus `Player`
+profile fields. `time_scale` is stored but not yet read by the fixed-tick — wire that next.
 
 ### 10. Ai residue — perception subjects, spawn-list channels, exclusion zones, road/lane spawning (~20) — LOW
 `AddSubject`/`RemoveSubject`/`ThreatPerception` (perception subject list), `SetSpawnList`/spawn-list
