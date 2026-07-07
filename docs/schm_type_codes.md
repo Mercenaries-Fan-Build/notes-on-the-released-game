@@ -20,11 +20,19 @@ Cross-referenced against documented component field layouts.
 
 ## Offset Field Encoding
 
-The `field_offset` u32 in schm entries is packed:
-- **Upper 16 bits** (>> 16): byte offset within the payload
-- **Lower 16 bits** (& 0xFFFF): sub-field flags (bit position for type 1; otherwise 0 or metadata)
+The `field_offset` u32 in schm entries is packed, and **which half holds the byte offset depends on
+the container's endianness** (the word is byte-swapped between builds):
+- **Retail PC (little-endian schm):** `byte_offset = offset_word & 0xFFFF` (**LOW** 16 bits);
+  `bit_index = (offset_word >> 16) & 0xFF` selects the bit for sub-byte type-1 fields; the remaining
+  high byte is metadata.
+- **Xbox / BE-converted (big-endian schm):** `byte_offset = offset_word >> 16` (**HIGH** 16 bits).
 
-Example: offset value 0x00240004 → byte_offset = 36, flags = 4
+> ⚠ **CORRECTION (2026-07, Wave-0 E1).** Earlier revisions stated `>> 16` unconditionally. That was
+> derived from **converted DLC data carrying a converter bug** (byte-offset left in the high 16).
+> Verified against **real retail vz.wad LE bytes**, the retail rule is the LOW 16 bits — Transform
+> 32,36,38…50 · HibernationControl 0,2,3,4,5,5 · Road 0,4,8,12,16,28 · RoadIntersection 0,4…120.
+> Authoritative endian-aware implementation: `mercs2_formats::schema::from_schm_body`. See also
+> `spatial_hash_crash_analysis.md`.
 
 ## Byte-Swap Rules (derived)
 
