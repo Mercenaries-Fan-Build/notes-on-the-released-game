@@ -49,6 +49,11 @@ public class DecompileAllFunctions extends GhidraScript {
     private static final String OUT_DIR =
         "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\";
 
+    // x87 math helpers (sqrt/abs/…) were falsely marked noreturn, truncating every
+    // float-heavy function at its first sqrt call. Clear the flag so the export is
+    // correct regardless of whether the fix was persisted to the project DB.
+    private static final long[] FALSE_NORETURN = {0x401740L, 0x401750L, 0x4017a0L, 0x401630L};
+
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -56,6 +61,16 @@ public class DecompileAllFunctions extends GhidraScript {
 
     private Address addr(long v) {
         return currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(v);
+    }
+
+    private void clearFalseNoReturn() {
+        for (long a : FALSE_NORETURN) {
+            Function f = getFunctionAt(addr(a));
+            if (f != null && f.hasNoReturn()) {
+                f.setNoReturn(false);
+                println("cleared noreturn on " + f.getName());
+            }
+        }
     }
 
     private String callersOf(Function f) {
@@ -89,6 +104,7 @@ public class DecompileAllFunctions extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        clearFalseNoReturn();
         String outPath = OUT_DIR + (CLUSTER_ONLY ? "texloader_cluster_decomp.txt"
                                                   : "all_functions_decomp.txt");
         new File(OUT_DIR).mkdirs();

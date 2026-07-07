@@ -1,0 +1,83 @@
+{
+  "scoreboard_row": 20,
+  "system": "Animation & Skeleton (Havok hka/hkb, IK, ragdoll, FaceFX, GPU skin)",
+  "binary": {
+    "pc_unpacked": "output/_ghidra/mercs2_unpacked.exe_decomp.txt",
+    "pc_base": "0x00400000",
+    "xbox_base": "0x82000000",
+    "xbox_oracle": "docs/mercs2-pdb-analysis/animation-skeleton.md"
+  },
+  "structural_finding": "PC build retains MSVC RTTI on the Havok animation classes; the hka runtime is directly recoverable by address (cluster 0x0087xxxx-0x009fxxxx), unlike the string-only Xbox analysis.",
+  "havok_runtime_pc": {
+    "hkaAnimatedSkeleton": { "ctor": "FUN_00884190", "dtor": "FUN_008841d0", "setup": "FUN_0067b320", "notes": "also hkaAnimationControlListener (2nd base @+2); skeleton ptr @+7; setup called from human runtime FUN_005d0bd0", "married_by": "vftable", "conf": "H", "read": true },
+    "hkaRagdollInstance": { "ctors": ["FUN_0088c000", "FUN_0088c0a0"], "dtor": "FUN_0088c180", "base_ctor": "FUN_0088be90", "game_setup": "FUN_0043d800", "married_by": "vftable", "conf": "H", "read": true },
+    "hkaSkeletonMapper": { "dtor": "FUN_0087c540", "createMapping": "FUN_0087c560", "typeinfo": "FUN_009ef4d0", "married_by": "vftable+string", "conf": "H", "read": true },
+    "hkaFootPlacementIkSolver": { "ctor": "FUN_009ef650", "setup": "FUN_00744c20", "control_data_init": "FUN_009ef750", "married_by": "vftable", "conf": "H", "read": true },
+    "hkaWaveletSkeletalAnimation": { "typeinfo": "FUN_009ef540", "scalar_dtor": "FUN_009ef550", "helper": "FUN_009f54b0", "obj_size": "0x38", "married_by": "vftable", "conf": "H", "read": true },
+    "hkaSplineSkeletalAnimation": { "typeinfo": "FUN_009ef610", "scalar_dtor": "FUN_009ef620", "obj_size": "0x38", "married_by": "vftable", "conf": "H", "read": true },
+    "hkaDeltaCompressedSkeletalAnimation": { "note": "same cluster ~0x009ef4xx", "married_by": "vftable", "conf": "M", "read": false },
+    "hkaDefaultAnimatedReferenceFrame": { "typeinfo": "FUN_009ef460", "married_by": "vftable", "conf": "H", "read": true },
+    "hka_track_analysis_dof_report": { "fn": "FUN_009fa860", "note": "Static/Dynamic/Clear position/rotation/scale/float DOFs; 'Animation Util/hkaTrackAnalysis'", "married_by": "string", "conf": "M", "read": true }
+  },
+  "schema_field_binders_pc": {
+    "referencePose_builder": { "fn": "FUN_0089d280", "note": "hierarchy->parentIndices,bones,referencePose; copies poseCount x 0x30 (48B hkQsTransform) per bone", "conf": "M-H" },
+    "numberOfPoses": ["FUN_0089ce90", "FUN_008a4550"],
+    "numberOfBoneTracks": "FUN_0089cd40",
+    "animationBoneInfo_ragdollBoneInfo": "FUN_008a5dd0",
+    "keyframedBones": "FUN_008a5ac0",
+    "catchFall_getUp": { "fn": "FUN_008a7280", "note": "catchFallDirectionRagdollBone(Index), velocityRagdollBoneIndex, handIndex/leftHand, ragdollShoulder/AnkleIndex; defaults 0xffff", "conf": "M-H", "read": true },
+    "reach_bone_length_limits": "FUN_008a7690",
+    "field_copy_primitives": ["FUN_0089c0c0", "FUN_00957240", "FUN_0089c1a0", "FUN_0089c260"]
+  },
+  "component_registrars_pc": {
+    "HumanAnimationSystem": { "reflection_registrar": "FUN_0065ade0", "descriptor_registrar": "FUN_0063fee0", "fields": "3 int + 10 float" },
+    "HumanAnimationSet": { "reflection_registrar": "FUN_0065af90", "descriptor_registrar": "FUN_0063ff90", "fields": "2 int" },
+    "VehicleAnimationSet": { "descriptor_registrar": "FUN_00640040" },
+    "AnimationController": "FUN_00647640",
+    "BoneControllerRuntime": "FUN_006477c0",
+    "BoneCtrlPhysicsActor": "FUN_0063e250"
+  },
+  "facefx_pc": {
+    "face_graph_evaluate": { "fn": "FUN_00686ce0", "size": 2871, "note": "walks fg-node list, evaluates each via vcall (node+0x18), writes value container; asserts FxActorInstance.h; src d:/projects/mercs2_pc/mercs2/fxs", "conf": "M-H", "read": true },
+    "face_tick_advance": "FUN_00686c60",
+    "asset_types": { "facefxactor": "0x1CF649BB", "facefxanimationset": "0x665EF13E" }
+  },
+  "clip_picker_solved": {
+    "ActionTable": "0x6802C321",
+    "AnimationLookup": "0xE00B080C",
+    "TransitionGraph": "0xAB8FE34B",
+    "animationtable_type": "0x207359C7",
+    "chain": "state -> ActionTable -> Handle -> AnimationLookup(CharacterName=pandemic_hash_m2(merc)+equipment) -> Animation idx -> ASTO[idx] -> clip hash",
+    "validation": "Chris idle ASTO -> 0xED37BC56 matches live LtSampleWave capture",
+    "doc": "docs/modernization/human_animation_selection.md",
+    "tool": "action_table_probe"
+  },
+  "sample_codec_solved": {
+    "note": "Wavelet/Delta/Spline decode matches live capture 168/168 tests",
+    "crate": "mercs2_formats (animgroup.rs/havok.rs)",
+    "track_to_bone": "Pandemic 'trnm' chunk by HIER node name-hash (no hkaSkeleton in shipped data, 0/190)",
+    "memory": "wavelet-decode-solved-live-capture, blendindices-per-group-palette, model-hier-bone-naming"
+  },
+  "animation_asset_type_hash": "0x18166555",
+  "tick_placement": {
+    "master": "FUN_004c14f0 -> FUN_004c15e0 (5-layer 0->4)",
+    "layer4_animation_slot": "vtable-dispatched Update(+0xc) -> confirm-live",
+    "cpu_budget": "AnimCpuCapEnabled (PC=1) / AnimCpuCapUpdatePhaseMilliseconds / AnimCpuCapTotalMilliseconds; AnimCpuSampleJob/AnimCpuUpdateJob via Pimp pool"
+  },
+  "gpu_skin": {
+    "palette": "BoneMatrixArray / rotateBonesForSkinning",
+    "shaders": ["PgSkinMorphVP", "PgSkinMorphNoColorVP", "PgMeshMorphVP", "PgSkinMorphShadowVP"],
+    "model": "4-influence linear-blend skin",
+    "upload_fn": "positional (render-view vtable) -> open"
+  },
+  "open_unlocated": [
+    "per-frame VMX/SSE sample+blend math (HumanSamplePose/SampleMt/hkAnimation::samplePose/BuildModelSpaceTransforms/HACKRenormalizeQuats)",
+    "MT AnimCpu*Job dispatch endpoint (SecuROM-relocated Pimp ring)",
+    "FaceFX Fx*LinkFn transfer-function solver numerics + morph apply",
+    "IK/ragdoll runtime blend weights (referencePoseWeightThreshold, powered-ragdoll motor gains)",
+    "individual PC BoneCtrl* apply methods (vtable-gated, positional)",
+    "skin-palette upload fn",
+    "hkaDeltaCompressedSkeletalAnimation ctor (not read this pass)"
+  ],
+  "engine_reconciliation_row20": "🟡 sampling+skinning ✅ (mercs2_formats decode + mercs2_engine 4-influence LBS SkinPalette); data-driven clip index ✅ (anim_select); controllers/IK/ragdoll/FaceFX ❌"
+}

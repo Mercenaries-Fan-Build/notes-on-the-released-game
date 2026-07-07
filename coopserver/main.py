@@ -18,6 +18,7 @@ from fesl_handler import handle_fesl
 from http_handler import handle_http
 from protocol_detect import BufferedConn, classify
 from raw_handler import UDPLogger, handle_raw
+from relay import GameSpyResponder
 from sink import log, sink
 
 HEAD_PEEK = 16
@@ -108,6 +109,13 @@ async def main() -> None:
             lambda p=port: UDPLogger(p), local_addr=(config.bind_host, port),
         )
         log(f"listening (udp)   on {config.bind_host}:{port}")
+
+    if config.gamespy_port:
+        await loop.create_datagram_endpoint(
+            lambda: GameSpyResponder(config.gamespy_port, sink),
+            local_addr=(config.bind_host, config.gamespy_port),
+        )
+        log(f"listening (gamespy) on {config.bind_host}:{config.gamespy_port} (UDP availability)")
 
     if config.dns_port:
         await loop.create_datagram_endpoint(

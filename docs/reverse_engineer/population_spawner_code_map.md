@@ -7,6 +7,10 @@
 here **structurally**, by shared constants, call-tree shape, message-type switches, and the Lua
 binding tables.
 
+**Companion JSON:** `docs/data/population_spawner_code_map.json` — the machine-readable marriage
+table (66 functions: `{addr, ghidra_name, system, stage, confidence, xbox, evidence}` + `_meta`
+with corrections and confirm-live list), same schema as the other `docs/data/*_code_map.json`.
+
 **Sources.** Xbox oracle: `docs/mercs2-pdb-analysis/world-streaming.md` (symbol inventory),
 `output/_ghidra_x360/xenon_decomp_named.c` + raw PPC scan of `mercs2_xenon_p.pe_ghidra.bin`
 (base `0x82000000`). PC: `output/_ghidra/all_functions_decomp.txt`, binding tables walked in
@@ -185,8 +189,10 @@ Xbox component ctor `PopulationSimpleSpawner@0x8251dda0` (vtable `0x82040678`). 
 **`FUN_004b4590`** (3600 B) is the QueuedSpawning/SpawningUnits drain: view-edge transform
 (`FUN_004b3d90` atan2), 0x58-byte request filled by `FUN_004b53c0` (LCG), allocated from request
 pool `PTR_DAT_00edbac0`, name→registry via `DAT_00df6b24/28` (the `0xDF6B88` family →
-[[name-registry-spawn-by-hash]]), request vtable `&PTR_PTR_00df8910`. **The terminal spawn worker is
-SecuROM-thunked (`0x24F3200`)** — same wall as `Pg.Spawn`; confirm-live only.
+[[name-registry-spawn-by-hash]]), request vtable `&PTR_PTR_00df8910`. **The terminal spawn worker
+`0x24F3200` routes through the SecuROM VM dispatcher `FUN_02a30028`** — but the `Pg.Spawn` driver
+`FUN_005d5d20` (739 B) is **fully decompiled**; only the terminal commit is VM-dispatched, **read live
+in the unpacked image** ([[securom-decompiled-not-a-blocker]]), NOT a wall.
 
 ---
 

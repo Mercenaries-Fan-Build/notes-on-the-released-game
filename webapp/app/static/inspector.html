@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercs2 Net Inspector</title>
+<style>
+  :root {
+    --bg:#1b1e24; --bg2:#22262e; --bg3:#2b303a; --line:#3a404c;
+    --fg:#d8dee9; --dim:#8b93a3; --accent:#88c0d0; --sel:#3b4252;
+    --tls:#b48ead; --fesl:#88c0d0; --theater:#a3be8c; --http:#ebcb8b;
+    --https:#d08770; --dns:#81a1c1; --gamespy:#bf616a; --udp:#6b7280;
+    --tcp:#6b7280; --empty:#4c566a;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--fg); font:13px/1.4 "Segoe UI",system-ui,sans-serif;
+         display:flex; flex-direction:column; }
+  header { background:var(--bg2); border-bottom:1px solid var(--line); padding:8px 12px;
+           display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:14px; margin:0; font-weight:600; letter-spacing:.3px; }
+  header h1 .dot { color:var(--accent); }
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-left:auto; }
+  input,select,button { background:var(--bg3); color:var(--fg); border:1px solid var(--line);
+           border-radius:4px; padding:5px 8px; font:inherit; }
+  input:focus,select:focus { outline:1px solid var(--accent); border-color:var(--accent); }
+  button { cursor:pointer; }
+  button:hover { background:var(--sel); }
+  button.on { background:var(--accent); color:#11141a; border-color:var(--accent); font-weight:600; }
+  .stat { color:var(--dim); font-size:12px; }
+  .stat b { color:var(--fg); }
+  #live-dot { width:8px; height:8px; border-radius:50%; background:var(--empty); display:inline-block; }
+  #live-dot.on { background:#a3be8c; box-shadow:0 0 6px #a3be8c; }
+  main { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .list-wrap { flex:1 1 55%; overflow:auto; min-height:0; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { position:sticky; top:0; background:var(--bg2); color:var(--dim); text-align:left;
+             font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+             padding:6px 8px; border-bottom:1px solid var(--line); z-index:1; }
+  tbody td { padding:3px 8px; border-bottom:1px solid #2a2f38; white-space:nowrap;
+             overflow:hidden; text-overflow:ellipsis; max-width:340px; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:#252a33; }
+  tbody tr.sel { background:var(--sel); }
+  tbody tr.new { animation:flash .8s ease-out; }
+  @keyframes flash { from { background:#3b4a52; } to { background:transparent; } }
+  .proto { display:inline-block; padding:1px 7px; border-radius:3px; font-size:11px; font-weight:700;
+           color:#11141a; text-transform:uppercase; letter-spacing:.3px; }
+  .num { color:var(--dim); font-variant-numeric:tabular-nums; }
+  .mono { font-family:"Cascadia Code",Consolas,monospace; }
+  .detail { flex:0 0 45%; border-top:2px solid var(--line); background:var(--bg2);
+            overflow:auto; display:flex; }
+  .detail .col { flex:1; min-width:0; padding:10px 12px; overflow:auto; border-right:1px solid var(--line); }
+  .detail .col:last-child { border-right:0; }
+  .detail h3 { font-size:11px; text-transform:uppercase; color:var(--dim); letter-spacing:.5px;
+               margin:0 0 8px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-size:12px; }
+  .kv dt { color:var(--dim); white-space:nowrap; }
+  .kv dd { margin:0; word-break:break-word; }
+  .params { font-family:"Cascadia Code",Consolas,monospace; font-size:12px; }
+  .params .row { display:grid; grid-template-columns:minmax(120px,40%) 1fr; gap:12px;
+                 padding:1px 0; border-bottom:1px solid #2a2f38; }
+  .params .k { color:var(--accent); word-break:break-all; }
+  .params .v { color:var(--fg); word-break:break-all; white-space:pre-wrap; }
+  .hex { font-family:"Cascadia Code",Consolas,monospace; font-size:12px; white-space:pre;
+         line-height:1.35; color:var(--fg); }
+  .hex .off { color:var(--dim); }
+  .hex .asc { color:var(--theater); }
+  .empty-note { color:var(--dim); padding:20px; text-align:center; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:var(--line); border-radius:5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="dot">▩</span> Mercs2 Net Inspector</h1>
+  <div class="controls">
+    <select id="f-proto" title="Protocol">
+      <option value="">all protocols</option>
+      <option value="tls">tls</option><option value="fesl">fesl</option>
+      <option value="theater">theater</option><option value="http">http</option>
+      <option value="https">https</option><option value="dns">dns</option>
+      <option value="gamespy">gamespy</option><option value="udp">udp</option>
+      <option value="tcp">tcp</option>
+    </select>
+    <input id="f-host" placeholder="host / peer" size="12">
+    <input id="f-txn" placeholder="txn / type" size="10">
+    <input id="f-search" placeholder="search…" size="14">
+    <button id="live" class="on"><span id="live-dot" class="on"></span> Live</button>
+    <button id="clear" title="Clear the capture log">Clear</button>
+    <span class="stat"><b id="count">0</b> / <span id="total">0</span> shown</span>
+  </div>
+</header>
+<main>
+  <div class="list-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:44px">#</th><th style="width:96px">Time</th>
+        <th style="width:78px">Proto</th><th style="width:150px">Peer</th>
+        <th style="width:52px">Port</th><th style="width:150px">Type / Txn</th>
+        <th>Summary</th><th style="width:60px">Len</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty-note">Waiting for traffic… start tlsterm + coopserver and launch the game.</div>
+  </div>
+  <div class="detail" id="detail">
+    <div class="col"><h3>Packet</h3><dl class="kv" id="meta"></dl></div>
+    <div class="col"><h3>Decoded fields</h3><div class="params" id="params"></div></div>
+    <div class="col"><h3>Hex</h3><div class="hex" id="hex"></div></div>
+  </div>
+</main>
+<script>
+const PROTO_COLOR = {tls:'--tls',fesl:'--fesl',theater:'--theater',http:'--http',
+  https:'--https',dns:'--dns',gamespy:'--gamespy',udp:'--udp',tcp:'--tcp'};
+const css = getComputedStyle(document.documentElement);
+const color = p => css.getPropertyValue(PROTO_COLOR[p] || '--empty').trim();
+
+const state = { rows: [], byId: new Map(), selected: null, live: true, CAP: 5000 };
+const $ = id => document.getElementById(id);
+const filt = { proto:'', host:'', txn:'', search:'' };
+
+function passes(r) {
+  if (filt.proto && r.protocol !== filt.proto) return false;
+  const hay = s => (s||'').toLowerCase();
+  if (filt.host && !(hay(r.host).includes(filt.host) || hay(r.peer_addr).includes(filt.host))) return false;
+  if (filt.txn && !(hay(r.fesl_txn).includes(filt.txn) || hay(r.fesl_type).includes(filt.txn)
+                    || hay(r.method).includes(filt.txn))) return false;
+  if (filt.search) {
+    const blob = hay(JSON.stringify([r.path, r.body_text, r.fesl_txn, r.response_summary, r.params, r.notes]));
+    if (!blob.includes(filt.search)) return false;
+  }
+  return true;
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return isNaN(d) ? '' : d.toLocaleTimeString('en-GB', {hour12:false}) +
+         '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function rowHtml(r) {
+  const typ = [r.fesl_type, r.fesl_txn].filter(Boolean).join(' ') || r.method || '';
+  const summ = r.response_summary || r.path || r.notes || '';
+  return `<td class="num">${r.id}</td>`
+    + `<td class="num">${fmtTime(r.created_at)}</td>`
+    + `<td><span class="proto" style="background:${color(r.protocol)}">${r.protocol||'?'}</span></td>`
+    + `<td class="mono">${esc(r.peer_addr)}</td>`
+    + `<td class="num">${r.server_port ?? ''}</td>`
+    + `<td class="mono">${esc(typ)}</td>`
+    + `<td>${esc(summ)}</td>`
+    + `<td class="num">${r.body_len ?? ''}</td>`;
+}
+const esc = s => (s==null?'':String(s)).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function render() {
+  const tb = $('rows'); tb.innerHTML = '';
+  let shown = 0;
+  for (const r of state.rows) {
+    if (!passes(r)) continue;
+    shown++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = rowHtml(r);
+    tr.dataset.id = r.id;
+    if (r.id === state.selected) tr.classList.add('sel');
+    tr.onclick = () => select(r.id);
+    tb.appendChild(tr);
+  }
+  $('count').textContent = shown;
+  $('total').textContent = state.rows.length;
+  $('empty').style.display = shown ? 'none' : 'block';
+}
+
+function prepend(r, isNew) {
+  if (state.byId.has(r.id)) return;
+  state.byId.set(r.id, r);
+  state.rows.unshift(r);
+  if (state.rows.length > state.CAP) { const old = state.rows.pop(); state.byId.delete(old.id); }
+  if (!passes(r)) { $('total').textContent = state.rows.length; return; }
+  if (!state.live) { render(); return; }
+  const tb = $('rows'), tr = document.createElement('tr');
+  tr.innerHTML = rowHtml(r); tr.dataset.id = r.id;
+  if (isNew) tr.classList.add('new');
+  tr.onclick = () => select(r.id);
+  tb.insertBefore(tr, tb.firstChild);
+  $('count').textContent = tb.children.length;
+  $('total').textContent = state.rows.length;
+  $('empty').style.display = 'none';
+}
+
+function select(id) {
+  state.selected = id;
+  document.querySelectorAll('#rows tr').forEach(tr =>
+    tr.classList.toggle('sel', +tr.dataset.id === id));
+  const r = state.byId.get(id); if (!r) return;
+  // Meta
+  const meta = [
+    ['id', r.id], ['time', fmtTime(r.created_at)], ['protocol', r.protocol],
+    ['direction', r.direction], ['peer', r.peer_addr], ['server port', r.server_port],
+    ['host / SNI', r.host], ['method', r.method], ['path', r.path],
+    ['fesl type', r.fesl_type], ['fesl txn', r.fesl_txn], ['fesl id',
+      r.fesl_id!=null ? '0x'+(r.fesl_id>>>0).toString(16).padStart(8,'0') : null],
+    ['body len', r.body_len], ['response', r.response_summary], ['notes', r.notes],
+  ].filter(([,v]) => v!=null && v!=='');
+  $('meta').innerHTML = meta.map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  // Params + headers
+  const entries = Object.entries(r.params||{});
+  const hdr = Object.entries(r.headers||{});
+  let ph = '';
+  if (hdr.length) ph += hdr.map(([k,v]) => `<div class="row"><span class="k">H:${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('');
+  ph += entries.map(([k,v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(typeof v==='object'?JSON.stringify(v):v)}</span></div>`).join('');
+  $('params').innerHTML = ph || '<span class="empty-note">no decoded fields</span>';
+  // Hex
+  $('hex').innerHTML = r.body_hex ? hexdump(r.body_hex) : '<span class="empty-note">no body</span>';
+}
+
+function hexdump(hexstr) {
+  const bytes = [];
+  for (let i=0; i+2<=hexstr.length; i+=2) bytes.push(parseInt(hexstr.substr(i,2),16));
+  let out = '';
+  for (let o=0; o<bytes.length; o+=16) {
+    const slice = bytes.slice(o, o+16);
+    const hex = slice.map(b => b.toString(16).padStart(2,'0')).join(' ').padEnd(47,' ');
+    const asc = slice.map(b => (b>=32 && b<127) ? String.fromCharCode(b) : '.').join('');
+    out += `<span class="off">${o.toString(16).padStart(4,'0')}</span>  ${hex}  <span class="asc">${esc(asc)}</span>\n`;
+  }
+  return out;
+}
+
+async function loadInitial() {
+  try {
+    const res = await fetch('/api/network-captures?limit=500&offset=0');
+    const data = await res.json();
+    // API returns newest-first; keep that order (unshift reverses, so iterate reversed)
+    for (const r of data.items.slice().reverse()) prepend(r, false);
+    render();
+  } catch (e) { console.error('initial load failed', e); }
+}
+
+let es = null;
+function connectSSE() {
+  es = new EventSource('/api/network-captures/stream');
+  es.onmessage = ev => { try { prepend(JSON.parse(ev.data), true); } catch {} };
+  es.onerror = () => { /* EventSource auto-reconnects */ };
+}
+
+// --- controls ---
+$('f-proto').onchange = e => { filt.proto = e.target.value; render(); };
+['f-host','f-txn','f-search'].forEach(id => {
+  const key = id.slice(2);
+  $(id).oninput = e => { filt[key] = e.target.value.trim().toLowerCase(); render(); };
+});
+$('live').onclick = () => {
+  state.live = !state.live;
+  $('live').classList.toggle('on', state.live);
+  $('live-dot').classList.toggle('on', state.live);
+  if (state.live) render();
+};
+$('clear').onclick = async () => {
+  if (!confirm('Clear the capture log (deletes stored captures)?')) return;
+  await fetch('/api/network-captures', {method:'DELETE'});
+  state.rows = []; state.byId.clear(); state.selected = null;
+  $('meta').innerHTML=''; $('params').innerHTML=''; $('hex').innerHTML='';
+  render();
+};
+
+loadInitial();
+connectSSE();
+</script>
+</body>
+</html>
