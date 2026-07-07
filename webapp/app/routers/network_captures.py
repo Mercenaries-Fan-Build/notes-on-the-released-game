@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import Text, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import PaginationParams
+from app.events import broker
 from app.models import NetworkCapture
 from app.schemas.common import PaginatedResponse
 from app.schemas.network_capture import NetworkCaptureCreate, NetworkCaptureRead
@@ -18,12 +23,44 @@ async def create_capture(
     payload: NetworkCaptureCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Ingest one captured event from the coopserver capture sink."""
+    """Ingest one captured event from the capture sink (coopserver / tlsterm)."""
     row = NetworkCapture(**payload.model_dump())
     db.add(row)
     await db.commit()
     await db.refresh(row)
+    # Fan out to any live inspector clients (best-effort; DB is the record).
+    broker.publish(NetworkCaptureRead.model_validate(row).model_dump(mode="json"))
     return row
+
+
+@router.get("/stream")
+async def stream_captures(request: Request):
+    """Server-Sent-Events feed of captures as they are ingested — the live
+    'watch the game talk' wire for the inspector. Each event is one capture as
+    JSON. A periodic ``:keepalive`` comment stops idle proxies/browsers from
+    dropping the connection."""
+    queue = broker.subscribe()
+
+    async def gen():
+        try:
+            # Prime the stream so the client knows it's connected.
+            yield ": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            broker.unsubscribe(queue)
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
 
 
 @router.get("", response_model=PaginatedResponse[NetworkCaptureRead])
