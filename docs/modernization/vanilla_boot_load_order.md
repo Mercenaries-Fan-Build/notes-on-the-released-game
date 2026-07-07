@@ -77,3 +77,45 @@ this chain, and the engine must back the three bindings the chain bottoms out on
 3. Diff that order against this chain and against what our resident host actually executes (its own
    `[lua]`/println trace). The first divergence is where to wire next; the captured coords are the
    values our `Player.GetPlayerStart` must return (proving the const is dead, not guessed).
+
+## Live bisect — 3 `pmc_bb` traces (2026-07-07)
+
+Ran retail vz+`pmc_bb` on three saves. The boot chain matches the reconstruction above; the **spawn
+mechanism is now proven** — and it demolishes both our hardcodes.
+
+| Save | `SetSpawnLocations` (mrxplayer:208) | `CreatePlayerCharacter` location (mrxplayer:821) | `_TeleportHero` (mrxutil:490) |
+|---|---|---|---|
+| chris 0% (pre-takeover) | `PmcCon001_Start1` | `PmcCon001_Start1` | **none** |
+| jen early (HQ up) | `Pmc_Entry1` | `Pmc_Entry1` | → `3794.0427, 450.7505, -3911.0322` |
+| mattias endgame (HQ up) | `Pmc_Entry1` | `Pmc_Entry1` | → `3794.0427, 450.7505, -3911.0322` **then** → `2560.2646, -13.1779, -926.2511` |
+
+**Proven mechanism (two stages, both data-driven):**
+1. **Spawn at a NAMED marker.** `SetSpawnLocations(<name>)` sets the spawn; `CreatePlayerCharacter(…,
+   location=<name>)` creates the hero there. The name is **save-state/contract-driven** — the active
+   contract's start (`PmcCon001_Start1` for the opening contract) or the HQ portal entry (`Pmc_Entry1`,
+   from `mrxhq.lua:141 self.tPortal.sStart1`). The engine resolves the *name* → world coords (a named
+   marker / hardpoint in the level data). **No raw coordinates anywhere.**
+2. **Conditional `_TeleportHero`.** Only once the PMC HQ exists (jen/mattias, not chris 0%) does the
+   flow teleport the hero — via `Object.SetPosition(uHero, …)` — to the HQ interior
+   `(3794.0427, 450.7505, -3911.0322)`, and mattias then teleports back out to the exterior
+   `(2560.2646, -13.1779, -926.2511)`. The coords come from the HQ/portal config data (`mrxhq.tPortal`),
+   passed through `TeleportHeroesToLocations`.
+
+**Where we differ (the whole point):** our default boot **hardcodes a `_TeleportHero` *destination* as
+the spawn** and applies it unconditionally.
+- `PMC_INTERIOR_SPAWN = [3794.0427, 450.75, -3911.03]` is literally the **stage-2 teleport target**,
+  not a spawn — and only valid for an HQ-established save.
+- The exterior `[2560.2646, -13.1779, -926.2511]` is the **second** teleport target (leaving the HQ).
+- For a fresh game (chris 0%) there is **no teleport at all** — the hero spawns at `PmcCon001_Start1`.
+  Our const would drop a new player into the (not-yet-existing) HQ interior. Flat wrong.
+
+**The fix (kills both consts):** run the real chain in the resident host and back the two data lookups
+it bottoms out on —
+1. **Named-marker resolution.** Back `SetSpawnLocations`/`CreatePlayerCharacter(location=<name>)` and a
+   `ResolveNamedLocation(name) → [x,y,z]` over the level's named markers, so the hero spawns at the
+   contract/HQ marker the save implies (`active_contract` is already decoded in `save.rs`).
+2. **`_TeleportHero` → `Object.SetPosition`.** Already wired (`a1e5820`): once the flow runs, its
+   teleport moves `HERO_GUID`. The coords arrive from the HQ config Lua, not a const.
+
+Net: the two constants are deleted; the spawn is whatever the save-state's named marker resolves to,
+plus any teleport the HQ flow issues — exactly what vanilla does.
