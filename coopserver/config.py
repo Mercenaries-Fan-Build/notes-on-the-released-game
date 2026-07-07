@@ -33,22 +33,29 @@ class Config:
 
     bind_host: str = os.environ.get("COOP_BIND_HOST", "0.0.0.0")
 
-    # Port groups. Defaults mirror what Mercenaries 2 reaches for:
-    #   80   ad-serving HTTP (madserver.net) + generic HTTP client
-    #   443  generic HTTPS (messaging.ea.com etc.)
-    #   18300 FESL auth over TLS (typical EA FESL port; configurable in-game)
-    #   18840 Theater (matchmaking) — plaintext 4CC framing
-    tls_ports: list[int] = field(default_factory=lambda: _ports("COOP_TLS_PORTS", "443 18300"))
-    plain_ports: list[int] = field(default_factory=lambda: _ports("COOP_PLAIN_PORTS", "80 18840"))
+    # Port groups. Defaults mirror the Mercenaries 2 online stack:
+    #   80    ad-serving HTTP (madserver.net) + generic HTTP client
+    #   28710 FESL auth — PLAINTEXT, fed by tlsterm (which terminates the game's
+    #         SSLv3/RC4 or the shim's modern TLS on :18710 and forwards here)
+    #   18715 Theater (matchmaking) — plaintext 4CC framing
+    #   443   generic HTTPS (messaging.ea.com etc.) — self-signed
+    tls_ports: list[int] = field(default_factory=lambda: _ports("COOP_TLS_PORTS", "443"))
+    plain_ports: list[int] = field(default_factory=lambda: _ports("COOP_PLAIN_PORTS", "80 28710 18715"))
     udp_ports: list[int] = field(default_factory=lambda: _ports("COOP_UDP_PORTS", "1900"))
+    # GameSpy availability responder (UDP): answers the master-server reachability
+    # probe with the fixed magic. 0 disables.
+    gamespy_port: int = int(os.environ.get("COOP_GAMESPY_PORT", "27900"))
 
     cert_file: str = os.environ.get("COOP_CERT_FILE", "/app/certs/server.crt")
     key_file: str = os.environ.get("COOP_KEY_FILE", "/app/certs/server.key")
 
+    # Persistent account/profile DB (personas, known IPs, stats). Empty disables.
+    profile_db: str = os.environ.get("COOP_PROFILE_DB", "profiles.json")
+
     # Address we advertise back to the game as the theater/messaging host so it
     # keeps talking to us. Set this to the Modkit machine's reachable IP.
     advertise_host: str = os.environ.get("COOP_ADVERTISE_HOST", "127.0.0.1")
-    theater_port: int = int(os.environ.get("COOP_THEATER_PORT", "18840"))
+    theater_port: int = int(os.environ.get("COOP_THEATER_PORT", "18715"))
 
     # Catch-all DNS server: answers every A query with dns_resolve_ip. Point the
     # game machine's DNS here to force ALL the game's name lookups to Modkit.

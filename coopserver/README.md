@@ -2,7 +2,18 @@
 
 A standalone asyncio service that **emulates the EA online endpoints Mercenaries 2
 reaches for and logs every request the game makes** — like httpbin. It is the
-first step toward Modkit being a one-stop host for the game's online services.
+**single consolidated online-services surface** for the game: the full,
+stateful FESL + Theater + GameSpy + UDP-relay emulator (co-op login → lobby →
+peer-mesh relay) *and* the capture pipeline, in one process.
+
+> **Consolidation note.** This replaces the old standalone `tools/mercs2_server.py`
+> (deleted). The hardened community server logic — per-account personas, the
+> persistent JSON profile DB, race-safe lobby deletes, host-loss teardown,
+> PlayNow custom-search filters, UGAM live-settings merge, and the 65535 relay
+> buffer — was ported here as `emu_state.py` / `emu_fesl.py` / `emu_theater.py`
+> / `relay.py`, with a capture emitted for **every** message. TLS is no longer
+> terminated in-process: **`tlsterm` (dual-mode SSLv3/RC4 + modern TLS 1.2/1.3)**
+> terminates the game's handshake and forwards **plaintext FESL** to coopserver.
 
 The game's online code (both the **main menu** in `shell.wad` and **in-game** in
 `vz.wad`) tries to talk to dead EA hosts over several protocols:
@@ -11,8 +22,11 @@ The game's online code (both the **main menu** in `shell.wad` and **in-game** in
 |----------|-------|----------------|---------|
 | HTTP     | ad-serving (`madserver.net`) + generic HTTP client | 80 | `http_handler.py` |
 | HTTPS    | `messaging.ea.com` etc. | 443 | `http_handler.py` (over TLS) |
-| FESL     | `fesl.ea.com` auth (binary frames over TLS) | 18300 | `fesl_handler.py` |
-| Theater  | matchmaking 4CC frames | 18840 | `fesl_handler.py` |
+| FESL     | `fesl.ea.com` auth — **plaintext from tlsterm** | 28710 | `emu_fesl.py` |
+| Theater  | matchmaking 4CC frames | 18715 | `emu_theater.py` |
+| GameSpy  | UDP master-server availability probe | 27900 | `relay.py` |
+| UDP relay| host↔joiner peer-mesh data | 10000–10100 | `relay.py` |
+| DNS      | catch-all A → Modkit IP | 53 | `dns_handler.py` |
 | UDP/raw  | peer mesh / UPnP-SSDP | 1900, ... | `raw_handler.py` |
 
 ## What it does
@@ -22,12 +36,13 @@ The game's online code (both the **main menu** in `shell.wad` and **in-game** in
 2. Auto-detects the application protocol per connection (`protocol_detect.py`).
 3. **Captures the full request** — method/path/query/headers/body for HTTP;
    type/id/TXN/key=values + raw payload for FESL/Theater.
-4. Sends a **best-effort stub reply** so the handshake advances and the *next*
-   request appears. Stub templates live in `responders/fesl_templates.py`; any
-   transaction with no template is still captured with `notes="unhandled"`.
+4. Drives the **full stateful reply flow** so the game actually completes login,
+   hosts/joins a lobby, and gets a working peer-mesh relay — not just a stub.
+   FESL/Theater logic lives in `emu_fesl.py` / `emu_theater.py` over the shared
+   `emu_state.py` account/session/lobby state.
 5. Fans every event to a **JSONL file** (`$COOP_CAPTURE_DIR/capture-*.jsonl`,
    the source of truth) and **POSTs it to the webapp** (`/api/network-captures`)
-   so it shows up in the viewer's Network Captures page.
+   so it streams live into the **Net Inspector** (`http://<webapp>/inspector`).
 
 ## Run
 

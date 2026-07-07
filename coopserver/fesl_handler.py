@@ -1,88 +1,129 @@
-"""FESL / Theater connection handler.
+"""FESL / Theater connection handler (async I/O adapter over the emulator).
 
-Reads framed messages off the connection, captures each (type, id, TXN, full
-key=value map + raw payload hex), then sends a best-effort stub reply from
-responders.fesl_templates so the handshake advances and the next request shows
-up. Unhandled transactions are still captured (notes="unhandled").
+Reads framed messages, drives the stateful emulator (emu_fesl / emu_theater),
+writes replies (and cross-session EGRQ/EGEG routing), runs the FESL heartbeat,
+and captures every message to the inspector sink.
+
+A connection is FESL (lowercase 4CC service tags) or Theater (uppercase 4CC),
+decided by `kind` from protocol_detect. FESL owns a Session (created at login);
+Theater binds to that Session via the USER message's LKEY.
 """
 from __future__ import annotations
 
-import random
+import asyncio
 
+from emu_fesl import handle_fesl_txn
+from emu_state import STATE, Session
+from emu_theater import drop_user_from_lobby, handle_theater
 from fesl import encode_frame, read_frame
 from protocol_detect import BufferedConn
-from responders.fesl_templates import respond
 from sink import sink
 
-# FESL packet-type lives in the top byte of the 4-byte id field:
-#   0xC0xxxxxx = request (client -> server, wants a response)
-#   0x80xxxxxx = response (server -> client, reply to that request)
-# A response must reuse the request's low-24-bit id but flip the type to 0x80,
-# or the client won't match it to its pending request and drops the connection.
-FESL_RESPONSE_TYPE = 0x80000000   # server -> client reply to a client request
-FESL_REQUEST_TYPE = 0xC0000000    # request (either direction); has the 0x40 flag
-FESL_REQUEST_FLAG = 0x40000000    # set on requests, clear on responses
-FESL_ID_MASK = 0x00FFFFFF
+FESL_REQUEST_FLAG = 0x40000000   # set on client requests; clear on client responses
 
 
-def _response_id(request_id: int) -> int:
-    return (request_id & FESL_ID_MASK) | FESL_RESPONSE_TYPE
+def _peer_ip(peer: str) -> str:
+    return peer.rsplit(":", 1)[0] if ":" in peer else peer
+
+
+async def _send(writer, frame) -> int:
+    type4, msg_id, fields = frame
+    data = encode_frame(type4, msg_id, fields)
+    writer.write(data)
+    await writer.drain()
+    return len(data)
+
+
+async def _heartbeat(session: Session) -> None:
+    """Ping + MemCheck every 120s on the FESL connection (keeps it warm)."""
+    import random
+    try:
+        while True:
+            await asyncio.sleep(120)
+            w = session.fesl_writer
+            if w is None:
+                return
+            await _send(w, ("fsys", 0, {"TXN": "Ping"}))
+            await _send(w, ("fsys", 0x80000000, {"TXN": "MemCheck",
+                        "salt": random.getrandbits(32), "type": 0, "memcheck": []}))
+    except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError):
+        return
+    except Exception:  # noqa: BLE001
+        return
+
+
+async def _capture(kind, peer, port, type4, msg_id, kv, raw, note, resp):
+    await sink.emit({
+        "protocol": "theater" if kind == "theater" else "fesl",
+        "direction": "inbound", "peer_addr": peer, "server_port": port,
+        "fesl_type": type4, "fesl_txn": kv.get("TXN") or kv.get("TID"),
+        "fesl_id": msg_id, "params": kv,
+        "body_text": raw.decode("latin-1", "replace") if raw else None,
+        "body_hex": raw.hex() if raw else None, "body_len": len(raw) if raw else 0,
+        "response_summary": resp, "notes": note,
+    })
+
+
+async def _fesl_loop(conn, peer, port, writer):
+    session = Session(client_ip=_peer_ip(peer))
+    session.fesl_writer = writer
+    try:
+        while True:
+            frame = await read_frame(conn)
+            if frame is None:
+                return
+            type4, msg_id, kv, raw = frame
+            is_request = bool(msg_id & FESL_REQUEST_FLAG)
+            if not is_request:
+                await _capture("fesl", peer, port, type4, msg_id, kv, raw, "client-response", None)
+                continue
+            replies = handle_fesl_txn(session, type4, msg_id, kv)
+            nbytes = 0
+            for fr in replies:
+                nbytes += await _send(writer, fr)
+            if type4 == "fsys" and kv.get("TXN") == "Hello" and session.heartbeat_task is None:
+                session.heartbeat_task = asyncio.create_task(_heartbeat(session))
+            resp = f"{len(replies)} reply frame(s), {nbytes}B" if replies else None
+            await _capture("fesl", peer, port, type4, msg_id, kv, raw, "handled", resp)
+    finally:
+        if session.heartbeat_task:
+            session.heartbeat_task.cancel()
+
+
+async def _theater_loop(conn, peer, port, writer):
+    ctx = {"session": None, "peer_ip": _peer_ip(peer), "writer": writer}
+    try:
+        while True:
+            frame = await read_frame(conn)
+            if frame is None:
+                return
+            type4, msg_id, kv, raw = frame
+            replies, side = handle_theater(ctx, type4, kv)
+            nbytes = 0
+            for fr in replies:
+                nbytes += await _send(writer, fr)
+            routed = []
+            for other_writer, fr in side:
+                try:
+                    await _send(other_writer, fr)
+                    routed.append(fr[0])
+                except Exception:  # noqa: BLE001 — peer socket may be gone
+                    pass
+            resp = f"{len(replies)} reply(s), {nbytes}B" + (f" +routed {routed}" if routed else "")
+            await _capture("theater", peer, port, type4, msg_id, kv, raw, "handled", resp or None)
+    finally:
+        sess = ctx["session"]
+        if sess and sess.user:
+            note = drop_user_from_lobby(sess.user)
+            if note:
+                print(f"[emu] cleanup: {note}")
 
 
 async def handle_fesl(conn: BufferedConn, peer: str, port: int, kind: str = "fesl") -> None:
     writer = getattr(conn, "writer", None)
-    server_pkt_id = 0  # counter for server-initiated requests (MemCheck, ...)
-    while True:
-        frame = await read_frame(conn)
-        if frame is None:
-            return
-        type4, msg_id, kv, raw_payload = frame
-
-        # Only auto-reply to client *requests* (0xC0). A frame with the request
-        # flag clear (0x80) is the client *responding* to one of our server-
-        # initiated requests (e.g. its MemCheck result) — capture it, don't reply,
-        # or we'd ping-pong forever.
-        is_request = bool(msg_id & FESL_REQUEST_FLAG)
-        reply_fields, note = respond(type4, kv) if is_request else (None, "client-response")
-
-        resp_summary = None
-        if reply_fields is not None and writer is not None:
-            reply = encode_frame(type4, _response_id(msg_id), reply_fields)
-            writer.write(reply)
-            await writer.drain()
-            resp_summary = f"{type4}/{reply_fields.get('TXN','')} ({len(reply)}B)"
-
-            # FESL handshake: right after the Hello response the server sends an
-            # unsolicited MemCheck (anti-cheat) with flags 0x80000000, exactly as
-            # loganw234/Mercenaries2 server.py does. memcheck:[] => no regions to
-            # hash; the client acks and proceeds to acct login. Without it the
-            # client waits ~5s and Goodbyes.
-            if type4 == "fsys" and kv.get("TXN") == "Hello":
-                memcheck = encode_frame(
-                    "fsys", 0x80000000,
-                    {"TXN": "MemCheck", "salt": random.getrandbits(32),
-                     "type": 0, "memcheck": []},
-                )
-                writer.write(memcheck)
-                await writer.drain()
-                resp_summary += " + MemCheck(push)"
-
-        await sink.emit({
-            "protocol": "theater" if (kind == "theater" or type4.isupper()) else "fesl",
-            "direction": "inbound",
-            "peer_addr": peer,
-            "server_port": port,
-            "host": None,
-            "method": None,
-            "path": None,
-            "fesl_type": type4,
-            "fesl_txn": kv.get("TXN"),
-            "fesl_id": msg_id,
-            "headers": None,
-            "params": kv,
-            "body_text": raw_payload.decode("latin-1", "replace") if raw_payload else None,
-            "body_hex": raw_payload.hex() if raw_payload else None,
-            "body_len": len(raw_payload),
-            "response_summary": resp_summary,
-            "notes": note,
-        })
+    if writer is None:
+        return
+    if kind == "theater":
+        await _theater_loop(conn, peer, port, writer)
+    else:
+        await _fesl_loop(conn, peer, port, writer)
