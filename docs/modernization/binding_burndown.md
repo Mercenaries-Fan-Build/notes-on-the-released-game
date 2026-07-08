@@ -86,10 +86,14 @@ match. Test `game_lua_vo_drives_real_vo_manager`.
 Residue (unbacked): `AddSequence`/`RemoveSequence` (VO sequence playlists — needs a sequence model),
 VO completion callbacks back into Lua, and `Face.*` facial animation (needs the facial-anim channel).
 
-### 5. World / asset / install — `PgWorld` (~8: Spawn*/Region/Alarm/Install/Dump), `Pg` residue — MEDIUM
-Region creation, alarms, model-spawn-by-asset, install-manager, dev asset dumps. Needs the streaming +
-asset-DB host seam (`world_streaming_spec.md`). The `Dump*` family mirrors retail dev stubs and can
-stay no-ops (genuinely-stripped class).
+### 5. World / asset / install — `PgWorld` Spawn*/Install/Dump — PARTLY DONE
+✅ **Backed**: `Pg.CreateRegion` (trigger-region registry, name→handle reuse), `Pg.ActivateAlarm`/
+`ToggleAlarm` (alarm state); `Airstrike.*` — designator lifecycle (`Equip`/`Remove`/`Refill`/
+`FindDesignatorOwner`) + recorded ordnance/plane spawns (`SpawnOrdnance`/`Flyby`/`ConeSpawn`/… → a
+drainable airstrike-request log). Test `game_lua_pg_regions_and_airstrike`.
+Residue (unbacked): model-spawn-by-asset (`SpawnWithModel`/`SpawnHomingProjectile` — need the asset DB
++ projectile system), install-manager, `GetModelBBoxExtents`/`Search`/`Describe`; `Dump*` family mirrors
+retail dev stubs (genuinely-stripped, keep no-op).
 
 ### 6. Vehicle depth — `Vehicle` residue (seat transfer, ammo) — MOSTLY DONE
 ✅ **Backed** (`mercs2_vehicle::HijackFsm`/`TurretAim`, held per-vehicle on the host): the whole hijack
