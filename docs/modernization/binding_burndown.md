@@ -52,9 +52,13 @@ Residue: damage/state transitions, fire propagation, airstrike delivery, weapon 
 need the ECS write seam + `mercs2_combat`. The damage/explosion **solver** itself is still a
 reverse-engineering wall (see `rows-26-29` memory); `ObjectFilter` association/relation edges unbacked.
 
-### 4. VO / dialogue / faces — `Vo` (~10), `Face` (~7) — MEDIUM
-Voice-over cue playback, subtitle routing, facial animation. Needs a VO/dialogue director over
-`mercs2_audio` + the facial-anim channel. `vo_cue` host method exists; the surrounding surface no-ops.
+### 4. VO / dialogue / faces — `Face` (~7), `Vo` sequences — PARTLY DONE
+✅ **Backed** against `mercs2_audio::VoManager` (via the shared AudioEngine): `VO.Cue`/`CueWithoutSubtitles`
+(now really impl'd on the host — was a trait-default 0), `Cancel`/`CancelAll`/`Pause`/`PauseAll`/`Unpause`/
+`UnpauseAll`/`SetCinematicMode`. Cue names hash (FNV-1a) to a stable cue guid so `Cue`↔`Cancel(name)`
+match. Test `game_lua_vo_drives_real_vo_manager`.
+Residue (unbacked): `AddSequence`/`RemoveSequence` (VO sequence playlists — needs a sequence model),
+VO completion callbacks back into Lua, and `Face.*` facial animation (needs the facial-anim channel).
 
 ### 5. World / asset / install — `PgWorld` (~8: Spawn*/Region/Alarm/Install/Dump), `Pg` residue — MEDIUM
 Region creation, alarms, model-spawn-by-asset, install-manager, dev asset dumps. Needs the streaming +
