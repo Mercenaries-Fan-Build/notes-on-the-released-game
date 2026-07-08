@@ -48,10 +48,20 @@ Residue (unbacked): the **GFx rasterization** (drawing the tree — a render pas
 callback/animation-only cfuncs (widget update callbacks, interpolation, pie-slice, clock anim, text/
 sprite animation, flash VM input/callbacks, PDA blips, faction/vehicle/pickup marker CATEGORY toggles).
 
-### 2. Presentation / FX / post — `Atmosphere`, `Bloom`, `Fade`, `Graphics`, `Lti` (lighting), `CameraFx` — HIGH
-Screen fades, bloom/HDR knobs, atmosphere/sky params, dynamic lights, camera shake/effects. Needs the
-render-graph carve (see `rendering_fx_lighting_gap.md`): post pipeline, light objects, fade compositor.
-Back these as those render passes land.
+### 2. Presentation / FX / post — `Lti` (options menu), `CameraFx` — PARAMS DONE
+✅ **Backed**: `mercs2_core::RenderState` (new `render_state.rs`) holds the params the render passes read;
+wired via the `EngineHost::render_state` seam:
+- `Atmosphere.*` — the generic named-parameter store (`SetValue`×109/`GetValue`, `SetColorValue`×78/
+  `GetColorValue`, `SetIntValue`/`GetIntValue`) + `Begin`/`End` + time-of-day + the typed setters
+  (`SetLightIntensity`/`SetAmbientColor`/scatter multipliers) routing into canonical keys.
+- `Bloom.*` — all 7 HDR knobs (blur/threshold/multiplier/amount/luminance).
+- `Graphics.*` — gamma, shadow base distance, screen ratio, boundary effect (`Set*`↔`Get*`).
+- `Fade.*` — the four fade colors (ambient top/sides/terrain/camera).
+Tests: `mercs2_core::render_state` + `game_lua_render_state_roundtrip`.
+Residue (unbacked): the actual **render passes** (post pipeline / fade compositor / light objects — the
+`rendering_fx_lighting_gap.md` work) + atmosphere preset/region/interpolation engine; `Lti.*` options
+menu (resolution/gamma/refresh/input remap — needs a settings-menu backend); `CameraFx.*` cinematic
+camera controller.
 
 ### 3. Object gameplay actions — `object_state` (~8), `Object` residue, `Fire`, `Airstrike` (~11), `Weapon`, `Inventory` — HIGH
 ✅ **Backed**: `ObjectFilter.*` — the label boolean-expression query (`"Hero||(China&&Vehicle)"`,
