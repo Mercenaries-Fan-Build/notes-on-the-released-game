@@ -69,9 +69,14 @@ menu (resolution/gamma/refresh/input remap — needs a settings-menu backend).
 recursive-descent evaluator in `mercs2_core::object_filter`) + explicit include/exclude sets + a real
 per-object **label store** on the host (`Object.AddLabel`/`RemoveLabel`/`HasLabel` now actually work).
 Tests: `mercs2_core::object_filter` (parser/sets/registry) + `game_lua_object_filter_evaluates_real_predicate`.
-Residue: damage/state transitions, fire propagation, airstrike delivery, weapon fire/reload, inventory —
-need the ECS write seam + `mercs2_combat`. The damage/explosion **solver** itself is still a
-reverse-engineering wall (see `rows-26-29` memory); `ObjectFilter` association/relation edges unbacked.
+✅ Also backed: **`Inventory`** (per-character weapon loadout), **`Weapon`** (per-weapon clip/reserve
+ammo + reload + primary/designator flags), **`Fire`** (per-object burning state via `Ignite`/`Extinguish`/
+`Put`), **`ObjectState.SendDamage`** + object **health** (`GetHealth`/`SetHealth`/`GetMaxHealth`/`IsAlive`/
+`Kill`/`Revive` now read a real health map; `SendDamage` reduces it and reports the kill). The damage/
+explosion **solver is fully reversed in `mercs2_combat`** (`apply_hit`/`detonate_explosion`/`radius_falloff`)
+— the next step is running it over a shared combat ECS rather than the host-side health mirror.
+Residue: state-machine transitions (`SetState`/`SendMessage`), particle **emitters** (`StartEmitter`/
+`StopEmitter` — need the particle system), airstrike delivery, `ObjectFilter` association/relation edges.
 
 ### 4. VO / dialogue / faces — `Face` (~7), `Vo` sequences — PARTLY DONE
 ✅ **Backed** against `mercs2_audio::VoManager` (via the shared AudioEngine): `VO.Cue`/`CueWithoutSubtitles`
