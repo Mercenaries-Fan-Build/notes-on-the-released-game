@@ -4,11 +4,23 @@
 callable (`tests/binding_smoke.rs` enforces it), so the game's Lua never faults on a missing binding.
 But *callable ≠ implemented*. Each binding is one of:
 
-- **BACKED** (`b.real`) — wired to a real engine mechanism (`mercs2_ai`/`faction`/`population`/`audio`/…)
-  or reads real host state. A wrong body here is a bug. **424** as of the `Ai` vertical.
+- **BACKED** (`b.real`) — wired to a real engine mechanism (`mercs2_ai`/`faction`/`population`/`audio`/
+  `ui`/`core`/…) or reads real host state. A wrong body here is a bug. **672** (was 393 at session start).
 - **UNBACKED** (`b.stub`) — a deliberate no-op *because the engine system behind it isn't built yet*
-  (or, for a documented handful, because the retail cfunc is genuinely stripped). **662** remain.
+  (or, for a documented handful, because the retail cfunc is genuinely stripped). **414** remain.
   **`stub` is NOT "done" — it is this burn-down.**
+
+**Backed this session (17 verticals, +279):** Ai, Vehicle (hijack FSM), Sound (banks/pitch), Sys
+(settings), ObjectFilter (label-expr), Object attach + labels, Vo, **HUD widget tree + markers**,
+render-state (Atmosphere/Bloom/Graphics/Fade), CameraFx, Inventory, combat (Weapon/Fire/health/
+SendDamage), Pg regions/alarms + Airstrike, Human flag verbs, Net session mode, ObjectState/Face/Report,
+Player mode gates. Each is a real crate/host state model + behavioral test.
+
+**What the remaining ~414 need (not stub-swaps — real subsystem builds):** the render passes that
+rasterize the HUD/marker/FX *state* now modelled; a particle system for the node emitters; `mercs2_net`
+replication for `SendEvent_*`; the dynamic faction/source **music model** in `mercs2_audio`; a shared
+combat **ECS** to run the (reversed) `mercs2_combat` solver over instead of the host health mirror; the
+options-menu UI (`Lti.*`, 0 shipped calls) + PDA/satellite/boundary UI. These are queued as builds.
 
 The source of truth for exactly which names are unbacked is the `b.stub(...)` blocks in
 `crates/mercs2_script/src/bindings/*.rs` (the coverage report counts them per namespace). This doc
