@@ -58,10 +58,11 @@ wired via the `EngineHost::render_state` seam:
 - `Graphics.*` — gamma, shadow base distance, screen ratio, boundary effect (`Set*`↔`Get*`).
 - `Fade.*` — the four fade colors (ambient top/sides/terrain/camera).
 Tests: `mercs2_core::render_state` + `game_lua_render_state_roundtrip`.
+✅ **`CameraFx.*`** — the cinematic camera controller (pose yaw/pitch/fov `Set*`↔`Get*`, position/
+look-at, shake, blend/stop-blend, follow-guid, hold, named shot) → a real `CameraFxState` on the host.
 Residue (unbacked): the actual **render passes** (post pipeline / fade compositor / light objects — the
 `rendering_fx_lighting_gap.md` work) + atmosphere preset/region/interpolation engine; `Lti.*` options
-menu (resolution/gamma/refresh/input remap — needs a settings-menu backend); `CameraFx.*` cinematic
-camera controller.
+menu (resolution/gamma/refresh/input remap — needs a settings-menu backend).
 
 ### 3. Object gameplay actions — `object_state` (~8), `Object` residue, `Fire`, `Airstrike` (~11), `Weapon`, `Inventory` — HIGH
 ✅ **Backed**: `ObjectFilter.*` — the label boolean-expression query (`"Hero||(China&&Vehicle)"`,
