@@ -33,10 +33,20 @@ Backing a namespace is a vertical, not a binding-file edit:
 
 ## Unbacked surface, grouped by required engine system (priority order)
 
-### 1. HUD renderer — `Hud.*` (~91), most of `Gui.*` — HIGH (player-visible)
-On-screen widgets, markers, objectives, meters, prompts. Needs a HUD/2D-overlay system (extend
-`mercs2_ui`'s bitmap-text pass into a widget/marker layer) + a host seam feeding it live game state.
-No-op today = a running game with no HUD.
+### 1. HUD — `Hud.*` / `Gui._Marker*` — STATE MODEL DONE (rasterization pending)
+✅ **Backed**: `mercs2_ui` fleshed out with a real retained-mode **`WidgetTree`** (`widget.rs`:
+container/image/text/sprite/movie/flash/minimap nodes — location/color/visibility/anchoring/children/
+z-order + per-kind data) and a **`MarkerSet`** (`marker.rs`: world blips/tripwires/discs/3D/objective
+markers tracking a location or followed GUID). Wired through the `EngineHost::hud`/`markers` seam:
+- `Hud.*` — create/delete, all widget transform+state setters+getters (`Set*`↔`Get*` round-trip),
+  parenting + z-order, image texture/rotation/texcoords, text text/font/wrapping/justification/scale
+  (+ width/height estimate), sprite/movie/flash/minimap create+state. (real +55)
+- `Gui._Marker*` — add(5 kinds)/remove/location/color/follow/scale/pulse/blip-limit + `AddObjective`;
+  `LoadTexture`/`LoadFont` as name-handles. (real +16)
+Tests: `mercs2_ui` unit tests (tree parenting/z-order, marker config) + `game_lua_hud_drives_real_widget_tree`.
+Residue (unbacked): the **GFx rasterization** (drawing the tree — a render pass) and the render/
+callback/animation-only cfuncs (widget update callbacks, interpolation, pie-slice, clock anim, text/
+sprite animation, flash VM input/callbacks, PDA blips, faction/vehicle/pickup marker CATEGORY toggles).
 
 ### 2. Presentation / FX / post — `Atmosphere`, `Bloom`, `Fade`, `Graphics`, `Lti` (lighting), `CameraFx` — HIGH
 Screen fades, bloom/HDR knobs, atmosphere/sky params, dynamic lights, camera shake/effects. Needs the
