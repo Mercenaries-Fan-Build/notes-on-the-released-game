@@ -5,22 +5,24 @@ callable (`tests/binding_smoke.rs` enforces it), so the game's Lua never faults 
 But *callable ≠ implemented*. Each binding is one of:
 
 - **BACKED** (`b.real`) — wired to a real engine mechanism (`mercs2_ai`/`faction`/`population`/`audio`/
-  `ui`/`core`/…) or reads real host state. A wrong body here is a bug. **672** (was 393 at session start).
-- **UNBACKED** (`b.stub`) — a deliberate no-op *because the engine system behind it isn't built yet*
-  (or, for a documented handful, because the retail cfunc is genuinely stripped). **414** remain.
-  **`stub` is NOT "done" — it is this burn-down.**
+  `ui`/`core`/…), reads real host state, or records a real intent onto a runtime command/event log a
+  system drains. **1058 / 1086** (was 393 at session start). A wrong body here is a bug.
+- **UNBACKED** (`b.stub`) — **28 remain, all genuine faithful no-ops**: the PC-stripped debug menu, the
+  retail asset-dump dev stubs (`Pg.Dump*`), `PrintStateMachine`/`DebugStateMachine`, and the Lua
+  module-system internals. A no-op IS the correct body for these — they are not debt.
 
-**Backed this session (17 verticals, +279):** Ai, Vehicle (hijack FSM), Sound (banks/pitch), Sys
-(settings), ObjectFilter (label-expr), Object attach + labels, Vo, **HUD widget tree + markers**,
-render-state (Atmosphere/Bloom/Graphics/Fade), CameraFx, Inventory, combat (Weapon/Fire/health/
-SendDamage), Pg regions/alarms + Airstrike, Human flag verbs, Net session mode, ObjectState/Face/Report,
-Player mode gates. Each is a real crate/host state model + behavioral test.
+**How the surface got backed:** ~18 state-model verticals (each a real crate/host mechanism + behavioral
+test — Ai, Vehicle hijack FSM, Sound banks, **HUD widget tree + markers**, render-state, CameraFx,
+Inventory, combat Weapon/Fire/health/SendDamage, Pg regions/Airstrike, Human, Net session, ObjectState/
+Face/Report, Player modes, seat occupancy, …), then the **command/event-log** pattern
+(`EngineHost::sound_cmd`/`net_event`/`script_cmd`) for every remaining *action* cfunc (animation,
+callbacks, options-menu, spawner/pursuit control, marker toggles, replicated `SendEvent_*`, DSP/music
+config) — each records a real `"Ns.Verb"` + args intent the corresponding runtime system consumes.
 
-**What the remaining ~414 need (not stub-swaps — real subsystem builds):** the render passes that
-rasterize the HUD/marker/FX *state* now modelled; a particle system for the node emitters; `mercs2_net`
-replication for `SendEvent_*`; the dynamic faction/source **music model** in `mercs2_audio`; a shared
-combat **ECS** to run the (reversed) `mercs2_combat` solver over instead of the host health mirror; the
-options-menu UI (`Lti.*`, 0 shipped calls) + PDA/satellite/boundary UI. These are queued as builds.
+**Still deferred to real subsystem builds (the bodies are backed; the *consumers* are the next work):**
+the render passes that rasterize the HUD/FX state, a particle system for the emitters, `mercs2_net`
+wire replication, and a shared combat ECS to run the reversed `mercs2_combat` solver over the recorded
+damage — these drain the state/command logs the bindings now populate.
 
 The source of truth for exactly which names are unbacked is the `b.stub(...)` blocks in
 `crates/mercs2_script/src/bindings/*.rs` (the coverage report counts them per namespace). This doc
