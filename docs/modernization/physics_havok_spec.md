@@ -91,20 +91,32 @@ This is the single most important reimplementation fact. From `mercs2_formats/sr
 ```
 model container (a UCFX block)
 ├── HIER  : node tree (parent indices)          → world_matrices(hier) = per-node local→model transform
-├── SEGM  : {u8 node, u8 0, u8 seg, u8 type}     → the collision/segment HIER node indices
+├── SEGM  : {u16 bone (LE), u8 seg_id, u8 state_mask}  → attachment bone + LOD-TIER MASK  [★CORRECTED]
 ├── PHY2  : embedded Havok packfile              → the convex hulls (in *node-local* space)
-├── INDX  : mesh-group → HIER node index         → renders the visual mesh on the same node
+├── INDX  : sub-object → seg_id (into SEGM)      → node = SEGM[INDX[k]].bone   [★CORRECTED]
 └── SWIT  : flat list of node hashes             → the destruction switch set (intact ⇆ break_piece)
 ```
-- **Hull → node:** SEGM lists the collision nodes; sorted **descending**, `collision[i]` binds to
+- **Hull → node:** ⚠ *this hull-binding rule was derived from the old SEGM reading and has NOT been
+  re-validated against the corrected layout — treat it as unconfirmed.* SEGM lists the collision nodes; sorted **descending**, `collision[i]` binds to
   PHY2 `hull[i]`. Each hull's verts are then transformed by that node's HIER **world matrix** →
   model-space collision (CONFIRMED on the crate: SEGM names nodes `{2,4,5,6,7,8}`, 6 hulls).
 - **Everything is addressed by HIER node name-hash (Pandemic hash)** — vehicles wire blades/gear/weapons/
   hardpoints by node hash, not by geometry embedded in the spawn definition. A vehicle = model (HIER+meshes)
   + animgroup (Havok skeleton + clips) + ECS component set + a generic Lua class.
 - **Destruction is a state switch, not a fracture solve at runtime:** the model *ships* both the intact
-  mesh and its break pieces; `SWIT`/`SEGM` classify HIER nodes as **intact / break_piece / static** and the
-  engine switches which subtree is shown/collidable. The convex hulls in PHY2 are the break-piece colliders.
+  mesh and its wreck; the engine switches which subtree is shown/collidable. The convex hulls in PHY2 are
+  the break-piece colliders.
+
+  > ★**CORRECTED 2026-07-12.** The old **intact / break_piece / static** classification was a
+  > *heuristic* inferred from `SWIT` sibling structure, and it predates the recovery of the engine's
+  > actual state machine. Destruction is driven by the per-model `NODE`/`STAT`/`CHDR`/`CEXE` machine:
+  > named states (`PristineState 0xACB51200` → `DamagedState` → `StartDestroyedState` →
+  > `DestroyedState 0x7687DF41`) whose enter-scripts `SHOW`/`HIDE` **whole HIER subtrees**.
+  > `PristineState` `SHOW`s the intact body (`0x255EAB53`); `DestroyedState` `SHOW`s the wreck body
+  > (`0x75F1F74D`), which IS geometry in the container. "static" nodes are not a category — nodes the
+  > machine never names are still hidden as *children* of a governed parent.
+  > See [`vehicle_model_spec.md`](vehicle_model_spec.md) §5 and
+  > [`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md).
 
 ---
 

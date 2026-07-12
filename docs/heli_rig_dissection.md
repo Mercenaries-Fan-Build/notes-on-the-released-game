@@ -19,16 +19,27 @@ inside the spawn definition — they are wired together by hashes and handles.
   hardpoint/muzzle **node hashes**; projectiles spawn at that node's world transform.
 - **Faction** = the `FactionMarker` ECS component (0=PMC, 1=VZ, …) — *not* the model or
   class. This is the override-able lever for "make it PMC".
-- A submesh attaches to its node via **`hier_node_idx` / INDX** (mesh-group → node index).
+- A submesh attaches to its node via **`INDX`** — ★CORRECTED 2026-07-12: `INDX` is keyed by
+  **sub-object** ordinal (not mesh-group) and yields a **`seg_id` into `SEGM`**, whose `bone` field is
+  the HIER node. It is NOT a direct mesh-group→node map. See
+  [`modernization/vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §2.
 
 ## Concrete Mi-26 layout (verified)
-The model is split across blocks (the `[[override-source-must-match-aset-block]]` pattern):
+The model is split across blocks (the `[[override-source-must-match-aset-block]]` pattern).
+
+> ★**CORRECTED 2026-07-12 — this table misread the LOD-block chain.** The `_P00N_Q(3-N)` blocks are a
+> model's **LOD chain**, not "stub variants". `P000_Q3` is the **RESIDENT** block: it *is* the object
+> (HIER, SEGM, MTRL, PHY2, destruction machine) plus the coarsest meshes. `P001_Q2` and `P002_Q1` are
+> **streamed geometry refinements** carrying `GEOM` + `INDX` and nothing else — which is exactly why
+> the row below says "No HIER" and reads as a stub. Their `INDX` rows index the **resident** block's
+> `SEGM`. Calling `P000_Q3` "minimal" and treating `P001_Q2` as *the* geometry inverts the
+> relationship. See [`modernization/vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §1.
 
 | Block | Role | Contents |
 |---|---|---|
 | `05322` `vz_veh_helicopter_mi26_wheels_P001_Q2` | **geometry** | GEOM, **37 mesh groups / 71 submeshes**, 14 materials, ~25.5k tris, **INDX** (mesh-group→node). No HIER. |
 | `03310` `vehiclenameanimgroup_mi26_P000_Q3` | **rig + anims** | **43 Havok packfiles**, `hkaSkeleton`×… (**86 bones**), wavelet clips (`opendoor`, `closedoor`, `ahj_gear_*`), annotation/event tracks. The skeleton mirrors the HIER; node names live here. |
-| `03546` `..._P000_Q3` (7 KB) / `08328` `..._P002_Q1` | LOD/stub variants | minimal; the ASET-resolved orchestration stub. |
+| `03546` `..._P000_Q3` (7 KB) / `08328` `..._P002_Q1` | ★**the RESIDENT block + the finest LOD rung** (NOT stubs) | `P000_Q3` = the object: HIER / SEGM / MTRL / PHY2 / destruction machine + coarse meshes. `P002_Q1` = streamed geometry + `INDX` only. See the correction box above. |
 | `03521` `hijack_mi26` | Lua | hijack minigame script (not the vehicle). |
 
 Mesh-group shape (materials per group): `mg1`=mat2 (3.6k faces, main body LOD0); `mg2/mg3`=

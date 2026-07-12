@@ -1,5 +1,10 @@
 # Custom-Geometry Proof-of-Concept — "Cube Mod"
 
+> **Tool renamed (2026-07-08):** the `cube_mod` crate is now **`mercs2_smuggler`**
+> (binary `smuggler`) — cube-izing was only the PoC gimmick; the crate's real job is
+> injecting/overriding assets by hash. Commands below reading `cube_mod` = `smuggler`.
+> See [asset_injection_playbook.md](asset_injection_playbook.md).
+
 > First demonstration of injecting **custom mesh geometry** into the native
 > Mercenaries 2 (PC) engine via a `vz-patch.wad` overlay. Status: **WORKING
 > in-game** — the supply-drop crate spawns as a cube and the game runs clean

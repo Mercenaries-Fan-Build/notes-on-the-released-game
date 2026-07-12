@@ -42,7 +42,11 @@ is why the earlier c3 "coarse↔fine LOD swap" was a misread and was reverted.
 
 `[Render]` holds the sliders that scale detail/LOD/streaming at runtime (0–3 style levels unless
 noted):
-- `ViewDistance=100` — the draw/stream distance knob (slider units, not metres).
+- `ViewDistance=100` — **fog/atmosphere far-distance only, NOT draw or stream distance.** Unclamped
+  (`FUN_00753280` → `DAT_00dfc348`). Its one and only reader is `FUN_007140b0`, which writes the
+  atmosphere env-block's far field (`+0x44`) as `far = ViewDistance * k1 * k2 + base`, and only when
+  the active atmosphere preset leaves that field on the "auto" sentinel `DAT_00beaef8`. It is read by
+  no culling, LOD, streaming or block-residency code. See `render_distance_and_density_levers.md`.
 - `ModelDetailLevel`, `DetailLevel`, `ParticleDetailLevel`, `ShaderLevel`, `WaterDetail`, `SkyDetail`.
 - `EnableShadows`, `EnableScrub`, `EnableWaterEffects`, `MotionBlur`.
 

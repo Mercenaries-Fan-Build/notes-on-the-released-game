@@ -1,7 +1,34 @@
 # Rigid-accessory drawing-group → attachment-bone binding (B investigation)
 
-**Status: CONFIRMED (two independent methods).** Verified against
-`pmc_hum_mattias_v3` (`0xA3C1FABC`) and a destructible prop (`0xEEB8C3A8`).
+> ## ★ 2026-07-12 — INCOMPLETE. This rule is a SPECIAL CASE. Read this box first.
+>
+> The rule below — *"the i-th top-level GEOM child attaches to `SEGM` record i"* — **omits the `INDX`
+> indirection** and holds only where `INDX` is the **identity map**. It is:
+>
+> ```
+> seg_id = INDX[sub_object]        <- the missing step
+> SEGM[seg_id] = { bone, seg_id, state_mask }
+> ```
+>
+> It was verified on `pmc_hum_mattias_v3`, whose `INDX` **is** identity (`[0,1,2,3,…]`) — so
+> `SEGM[i]` and `SEGM[INDX[i]]` coincide and the shortcut looked correct. **No vehicle is identity:**
+>
+> ```
+> pmc_hum_mattias_v3   INDX = [0,1,2,3,4,…]                    identity  -> shortcut works
+> ch_veh_tank_ztz98    INDX = [0,1,2,3,4,5,6,17,20,23,73,80]   NOT       -> shortcut is WRONG
+> vz_veh_tank_amx30_elite (P002)  = [2,5,8,10,12,14,16,19,…]   NOT       -> shortcut is WRONG
+> ```
+>
+> Using the shortcut on a vehicle hands meshes **someone else's bone and someone else's LOD tier** —
+> it is what threw the `amx30_elite`'s treads into the air. Everything else in this document
+> (the GEOM-child walk, `SKIN` vs `MESH` rigidity, the world-rest placement) is **correct and still
+> load-bearing** — only the join key needs the extra hop.
+>
+> **Authoritative:** [`vehicle_model_spec.md`](vehicle_model_spec.md) §2.
+
+**Status: CONFIRMED (two independent methods) — but see the correction box above.** Verified against
+`pmc_hum_mattias_v3` (`0xA3C1FABC`) and a destructible prop (`0xEEB8C3A8`), both of which have an
+identity `INDX`, which is why the missing hop went unnoticed.
 
 **This corrects `segm_group_bone_binding.md` (the "A" investigation), whose join
 key — `PRMT[0].field0` → SEGM.seg_id — is WRONG.** `PRMT[0].field0` is the
@@ -22,6 +49,10 @@ there are `SEGM` records, and:
 
 > **The i-th top-level GEOM child (0-based, in tree order) attaches to `SEGM` record i;
 > its bone is that record's `u16@0` (a global HIER node index).**
+>
+> ★**CORRECTED:** the i-th top-level GEOM child attaches to `SEGM[INDX[i]]`, not `SEGM[i]`. The two
+> coincide only when `INDX` is the identity map (true for `pmc_hum_mattias_v3`, false for every
+> vehicle). The record's `u8@3` is additionally the **LOD-tier mask**, which this doc never noticed.
 
 No pointer, hash, or index inside the group's own chunks names the bone. The join is the
 **ordinal position** of the group among GEOM's children, matched 1:1 against the flat

@@ -178,11 +178,28 @@ Sys.AddStringDb("patch01", "dlc01")
 
 Resolves asset name `<current_language>_<prefix>` → `english_dlc01`, hashes to `pandemic_hash_m2("english_dlc01") = 0x9FE1E7D8`, loads via ASET lookup. The first argument `"patch01"` is an internal DB namespace identifier.
 
-### 4.2 INDX chunk (MESH group → HIER node mapping)
+### 4.2 INDX chunk (sub-object → **seg_id**) — ★CORRECTED 2026-07-12
 
-**Tool:** [`tools/ucfx_mesh_codec.py :: parse_indx_chunk`](../tools/ucfx_mesh_codec.py)
+> **⚠ This section previously said "MESH group → HIER node index". That is wrong on BOTH counts.**
+> `INDX` is keyed by **sub-object ordinal**, not by drawing group, and its value is a **`seg_id` — an
+> index into `SEGM`** — not a HIER node index. The node comes from `SEGM[seg_id].bone`.
+> Authoritative: [`docs/modernization/vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §2.
 
-Located inside the **GEOM** container as a direct child chunk. The INDX chunk provides an authoritative mapping from MESH group index to HIER node index, replacing the heuristic bounding-box matching that was previously used.
+```
+PRMG drawing group → its parent MESH/SKIN sub-object under GEOM  → ordinal k
+                     seg_id = INDX[k]
+                     SEGM[seg_id] = { bone: u16, seg_id: u8, state_mask: u8 }
+                                      ^ HIER node        ^ LOD tier bitmask
+```
+
+`INDX.len()` equals the **`MESH` + `SKIN` sub-object count**, never the PRMG-group count (which is
+larger — one sub-object can own several groups). Verified on every container: Mattias 24 = 7+17
+(29 PRMG); car van 65 = 65 (77 PRMG); ztz98 P002 62 = 62 (63 PRMG).
+
+**Tool:** [`tools/ucfx_mesh_codec.py :: parse_indx_chunk`](../tools/ucfx_mesh_codec.py) *(still carries
+the old interpretation — see the Rust `model_cubeize::read_model_meshes_segm` for the correct one).*
+
+Located inside the **GEOM** container as a direct child chunk.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -192,9 +209,16 @@ Located inside the **GEOM** container as a direct child chunk. The INDX chunk pr
 | `u2` (count) | u32 | Number of entries (= N = number of MESH groups in this GEOM) |
 | `u3` | u32 | Reserved (0) |
 
-**Payload:** N × u16 little-endian values. Entry `i` gives the HIER node index for MESH group `i`.
+**Payload:** N × u16 little-endian values, N = the sub-object count. Entry `i` gives the **`seg_id`**
+(SEGM row) for sub-object `i`.
 
-**Example (ZTZ-63 tank, 9 MESH groups, 115 HIER nodes):**
+**★The old example below misread seg_ids as node indices.** The values `[0,1,2,3,4,5,6,51,64]` are
+seg_ids: the low run happens to look like node numbers, and the outliers (51, 64) gave it away. The
+retail `ch_veh_tank_ztz98` reads `INDX = [0,1,2,3,4,5,6,17,20,23,73,80]` — same shape. Note also that
+each LOD rung's INDX claims a **disjoint subset** of the shared SEGM table (P000 → 0–6…, P001 → 9–16…,
+P002 → 7,8,18,21,24…), which only makes sense if these are SEGM rows, not nodes.
+
+<details><summary>Original (incorrect) example, kept for reference</summary>
 
 ```
 INDX values: [0, 1, 2, 3, 4, 5, 6, 51, 64]
@@ -208,8 +232,18 @@ INDX values: [0, 1, 2, 3, 4, 5, 6, 51, 64]
   MESH group 7 → HIER node 51  (turret base, at 0, 1.63, 0.23)
   MESH group 8 → HIER node 64  (headlight L, at -0.77, 1.51, 3.60)
 ```
+</details>
 
-When INDX is present, `decode_submesh` uses it to look up the HIER node's world transform directly instead of bbox matching. Analysis shows that **every block with a HIER chunk also has an INDX chunk** (1,147 out of 3,581 P000_Q3 blocks have both; the remaining 2,434 have neither HIER nor INDX). The bbox fallback path exists for safety but is not exercised by any known block in the archive.
+The mapping above is coincidentally *plausible* — which is what made it survive. It reads as node
+indices only because a mesh's seg_id and its bone often correlate for the first few sub-objects. Route
+through SEGM and the outliers land somewhere else entirely.
+
+When INDX is present, `decode_submesh` uses it to place the mesh (via `SEGM[INDX[k]].bone` — the Python
+path still shortcuts straight to a node and inherits the old error). Analysis shows that **every block with a HIER chunk also has an INDX chunk** (1,147 out of 3,581 P000_Q3 blocks have both; the remaining 2,434 have neither HIER nor INDX). The bbox fallback path exists for safety but is not exercised by any known block in the archive.
+
+> **Note:** a block can carry `INDX` **without** `HIER`/`SEGM` — that is exactly what a streamed LOD
+> rung (`_P001_`/`_P002_`) is. Its INDX rows index the **resident** block's SEGM table. See
+> [`vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §1.
 
 INDX + HIER are found in multi-part assets: vehicles, characters, buildings with sub-components, and complex props where multiple MESH groups must be positioned relative to a hierarchy. Single-part meshes (simple static props, vegetation, terrain tiles) have no HIER and produce one mesh group at origin.
 
