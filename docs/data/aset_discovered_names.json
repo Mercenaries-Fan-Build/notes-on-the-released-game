@@ -1,0 +1,6985 @@
+{
+  "pandemic_hash_m2": {
+    "0x0015DF12": [
+      "civ_hum_casualfemale_ub_c"
+    ],
+    "0x001F797D": [
+      "maracaibo_bridge_bracket"
+    ],
+    "0x006243A4": [
+      "global_weapon_pf97"
+    ],
+    "0x006473C6": [
+      "gr_hum_starter04_head"
+    ],
+    "0x0065B09D": [
+      "al_veh_truck_hmmwv_armored"
+    ],
+    "0x0077334E": [
+      "global_checkpointa"
+    ],
+    "0x00924685": [
+      "civ_hum_cartworker_capa"
+    ],
+    "0x0097289B": [
+      "global_weapon_gbu16"
+    ],
+    "0x00B310A5": [
+      "global_att_satellitedishc"
+    ],
+    "0x00BD2A78": [
+      "estate_bld_mansion02_01"
+    ],
+    "0x00E01065": [
+      "global_weapon_qbu88sniper"
+    ],
+    "0x01029B24": [
+      "global_propanetanklargea"
+    ],
+    "0x01102117": [
+      "merida_signb"
+    ],
+    "0x0115D44A": [
+      "vz_hum_blanco_hat"
+    ],
+    "0x01200D4C": [
+      "global_att_clothesrack"
+    ],
+    "0x0158FC82": [
+      "civ_hum_journalist_accb"
+    ],
+    "0x0189C80A": [
+      "outskirt_bld_market04"
+    ],
+    "0x019FE5AE": [
+      "maracaibo_obelisk"
+    ],
+    "0x0204B3E6": [
+      "civ_hum_beachfemale_b_head"
+    ],
+    "0x020E5BB4": [
+      "groutpost_bld_shackfuselage"
+    ],
+    "0x0233DED1": [
+      "civ_hum_protester_female_uba"
+    ],
+    "0x02573525": [
+      "gr_hum_boss_fake_ub"
+    ],
+    "0x029207ED": [
+      "pr_hum_starter05_ub"
+    ],
+    "0x02C01B6D": [
+      "ocoutpost_bld_helipad_floor"
+    ],
+    "0x02D1FC23": [
+      "pr_veh_boat_jetski"
+    ],
+    "0x02E3A9A2": [
+      "gr_hum_boss_fake_beard"
+    ],
+    "0x02F17D0C": [
+      "global_env_rocktall01"
+    ],
+    "0x02FED7B2": [
+      "city_bld_storefrontcornerb_signs"
+    ],
+    "0x0319C377": [
+      "aloutpost_bld_hanger_interior_alpha"
+    ],
+    "0x03214C2A": [
+      "commercial_bld_supermarket_01"
+    ],
+    "0x034E7E65": [
+      "industrial_bld_towerrefinery_001"
+    ],
+    "0x036E4F11": [
+      "city_bld_corner32x32b"
+    ],
+    "0x037CDC9B": [
+      "al_hum_soldier_elitea_ub"
+    ],
+    "0x03931F17": [
+      "groutpost_bld_tentsmalltarp02"
+    ],
+    "0x039D1770": [
+      "global_fueltankcarsmall"
+    ],
+    "0x03A7BB02": [
+      "cumana_bld_corner16x16b_parts"
+    ],
+    "0x03B6EFDA": [
+      "pmc_hum_jennifer_ub"
+    ],
+    "0x03CF59A0": [
+      "proutpost_docka_lights"
+    ],
+    "0x03F9F4EE": [
+      "industrial_bld_warehouselarge01_roof"
+    ],
+    "0x04159450": [
+      "estate_bld_mansion03_02_nm"
+    ],
+    "0x044EDB9C": [
+      "civ_veh_boat_dinghy"
+    ],
+    "0x04549112": [
+      "white_bld_segment16x16a"
+    ],
+    "0x0477A95A": [
+      "pmcoutpost_bld_hqinterior_floor01_livedin"
+    ],
+    "0x048175DE": [
+      "angelfalls_env_middle"
+    ],
+    "0x04817CD7": [
+      "jungle_env_treesmall01"
+    ],
+    "0x0491480A": [
+      "oc_hum_mercenaryofficer_head"
+    ],
+    "0x0499A0F1": [
+      "docks_bld_warehousesmall"
+    ],
+    "0x04AADA6A": [
+      "civ_hum_casualfemale_head_d"
+    ],
+    "0x04B2FE94": [
+      "chinaoutpost_bld_flag"
+    ],
+    "0x04CC21CD": [
+      "cumana_bld_fortress01"
+    ],
+    "0x04F31159": [
+      "city_bld_apartment06_parts"
+    ],
+    "0x051A09F9": [
+      "al_hum_starter01_lb"
+    ],
+    "0x053A1CD0": [
+      "white_bld_foundation01"
+    ],
+    "0x05403603": [
+      "gr_hum_soldier_a_beret"
+    ],
+    "0x0545C5A7": [
+      "cartel_hum_thug_a_lb"
+    ],
+    "0x05542E46": [
+      "pmcoutpost_interior_jet"
+    ],
+    "0x056B331D": [
+      "village_bld_food02"
+    ],
+    "0x056D65E8": [
+      "global_veh_hondacrx_wheel"
+    ],
+    "0x058CD8B8": [
+      "shanty_polepower"
+    ],
+    "0x05B65EF6": [
+      "shanty_bld_outhouse"
+    ],
+    "0x05CB049C": [
+      "residential_road10_cross"
+    ],
+    "0x05D426D7": [
+      "aloutpost_concretewall01"
+    ],
+    "0x05D62268": [
+      "vzoutpost_bld_barrackreinforced"
+    ],
+    "0x061E96DB": [
+      "proutpost_bld_bunkersandbag_sm"
+    ],
+    "0x067424EB": [
+      "gr_att_soldier_a_sunglassesa"
+    ],
+    "0x06A48CAF": [
+      "pr_hum_sailor_b_hair"
+    ],
+    "0x06D5DB5A": [
+      "city_bld_corner16x16a"
+    ],
+    "0x06FBC1C3": [
+      "city_bld_apartment06_roof"
+    ],
+    "0x07135D3C": [
+      "proutpost_docka"
+    ],
+    "0x071A8BF9": [
+      "groutpost_mine_road10_straight"
+    ],
+    "0x073DE05B": [
+      "city_bld_segment16x16b_walls"
+    ],
+    "0x074EC106": [
+      "proutpost_bld_barstand"
+    ],
+    "0x076BED6B": [
+      "global_weapon_rpg"
+    ],
+    "0x07A8C6AE": [
+      "global_barrelc"
+    ],
+    "0x07EB2E28": [
+      "outskirt_bld_mercbar_windowa"
+    ],
+    "0x07F4EE74": [
+      "port_containerd"
+    ],
+    "0x07F9592C": [
+      "industrial_att_pipelargecap_001"
+    ],
+    "0x07F96BA2": [
+      "port_containerb"
+    ],
+    "0x080262ED": [
+      "gr_hum_officerfemale_hair"
+    ],
+    "0x0803E41C": [
+      "gr_hum_starter1_ub"
+    ],
+    "0x080D83D1": [
+      "vz_veh_apc_m113_command"
+    ],
+    "0x08241556": [
+      "port_cranegantry_d"
+    ],
+    "0x0852CC6D": [
+      "chinaoutpost_interior_desk"
+    ],
+    "0x08558897": [
+      "civ_veh_car_phoenix_crappy_body"
+    ],
+    "0x0859EA8A": [
+      "industrial_bld_warehousesmall02"
+    ],
+    "0x086666D2": [
+      "industrial_bld_warehouse05"
+    ],
+    "0x087B088F": [
+      "caracas_rampgovernmentmid_road01"
+    ],
+    "0x08E25CDC": [
+      "oc_veh_semi_fueltrailer"
+    ],
+    "0x08E81D4C": [
+      "vz_hum_soldierelite_heada"
+    ],
+    "0x0927AEBC": [
+      "global_weapon_towtripod"
+    ],
+    "0x09521378": [
+      "aloutpostinterior_boxb"
+    ],
+    "0x095FEBF4": [
+      "cartel_hum_thug_a_hat"
+    ],
+    "0x09741190": [
+      "pr_hum_thug_a_head"
+    ],
+    "0x09858870": [
+      "pr_att_thug_b_glasses"
+    ],
+    "0x099E80E4": [
+      "global_decal_super_concrete"
+    ],
+    "0x09E169B3": [
+      "caracas_bld_historical02"
+    ],
+    "0x09F23B8B": [
+      "gr_hum_soldierfemale_d_ub"
+    ],
+    "0x0A069B4D": [
+      "global_weapon_tmp"
+    ],
+    "0x0A148A1C": [
+      "shanty_bld_housegroup01_window01"
+    ],
+    "0x0A318BDA": [
+      "shanty_bld_housegroup01_ground02"
+    ],
+    "0x0A362710": [
+      "jungle_env_plantlarge01"
+    ],
+    "0x0A4E4BCC": [
+      "civ_hum_protester_uba"
+    ],
+    "0x0A5D9EA3": [
+      "village_bld_house02"
+    ],
+    "0x0A6269EA": [
+      "caracas_bld_governmentcorner01"
+    ],
+    "0x0A72B054": [
+      "ocoutpost_bld_hq_metalfloor"
+    ],
+    "0x0A9245A7": [
+      "global_billboard2x1"
+    ],
+    "0x0AADF2FA": [
+      "pr_hum_thug_b_ub"
+    ],
+    "0x0AD49827": [
+      "vzoupost_bld_pillboxabandoned_concrete"
+    ],
+    "0x0B5F2794": [
+      "chinaoutpost_interior_controlc"
+    ],
+    "0x0B76A8FC": [
+      "oc_veh_helicopter_wz10"
+    ],
+    "0x0B9C9F47": [
+      "oc_bld_warehouse_cementfloor"
+    ],
+    "0x0BD6E44E": [
+      "pmc_hum_eva_hair_alt"
+    ],
+    "0x0C15275F": [
+      "civ_hum_journalist_lbb"
+    ],
+    "0x0C217F7C": [
+      "chinaoutpost_bld_tentgrnd"
+    ],
+    "0x0C339E74": [
+      "global_veh_phoenix_wheel"
+    ],
+    "0x0C3B85E3": [
+      "merida_universityfence"
+    ],
+    "0x0C95FF35": [
+      "global_veh_rib36"
+    ],
+    "0x0CBAD2A4": [
+      "al_hum_worker_a_ub"
+    ],
+    "0x0CE91120": [
+      "groutpost_bld_shackfuselage01_alpha"
+    ],
+    "0x0D2172B7": [
+      "outskirt_bld_house01"
+    ],
+    "0x0D3094CF": [
+      "merida_bld_universitycampus01"
+    ],
+    "0x0D42F1C2": [
+      "ocoutpost_bld_radiotower01"
+    ],
+    "0x0D4FA498": [
+      "global_weapon_c4water"
+    ],
+    "0x0D54B5BE": [
+      "al_hum_soldier_c_ub"
+    ],
+    "0x0D901E5C": [
+      "gr_hum_officerfemale_acc"
+    ],
+    "0x0DB4BBB6": [
+      "proutpost_att_satelitelarge002"
+    ],
+    "0x0DE7E622": [
+      "merida_plazastatue"
+    ],
+    "0x0DF7B8A8": [
+      "global_roof_metal01"
+    ],
+    "0x0E4535C9": [
+      "port_crane2_d"
+    ],
+    "0x0E756742": [
+      "pmc_hum_mattias_v3_hat"
+    ],
+    "0x0E844C45": [
+      "vzoutpost_bld_barrack"
+    ],
+    "0x0E8BA7CE": [
+      "vz_hum_officer_head"
+    ],
+    "0x0E9502CF": [
+      "oc_veh_truck_ext"
+    ],
+    "0x0E9716DD": [
+      "global_metal_beams"
+    ],
+    "0x0EB0853A": [
+      "white_sidewalk_straight"
+    ],
+    "0x0ECC2929": [
+      "global_weapon_xm8"
+    ],
+    "0x0EDA29D3": [
+      "merida_bld_soccerstadium02"
+    ],
+    "0x0F044C62": [
+      "gr_hum_advisor_ub"
+    ],
+    "0x0F1658DC": [
+      "police_hum_officer_b_badge"
+    ],
+    "0x0F193044": [
+      "vz_hum_soldierelite_lba"
+    ],
+    "0x0F4FCDC6": [
+      "port_dockloading"
+    ],
+    "0x0F8A0F17": [
+      "global_weapon_rpk"
+    ],
+    "0x0F8BE811": [
+      "pmcoutpost_bld_dock_wall_brick01_sm"
+    ],
+    "0x0F9B9B04": [
+      "civ_veh_car_r90_limo"
+    ],
+    "0x0FBDBB3B": [
+      "proutpost_bld_warehouse01d"
+    ],
+    "0x0FDCABCD": [
+      "oc_hum_fireman_ub"
+    ],
+    "0x0FFDE8C8": [
+      "shanty_env_bush01"
+    ],
+    "0x10170967": [
+      "global_trafficlight01"
+    ],
+    "0x101C45DB": [
+      "chinaoutpost_interior_steel"
+    ],
+    "0x105A7B75": [
+      "pmcoutpost_bld_dock_wall_brick02"
+    ],
+    "0x10A1D397": [
+      "pmc_veh_motorcycle_mattias"
+    ],
+    "0x10A3D14D": [
+      "global_radioa"
+    ],
+    "0x10A7796B": [
+      "proutpost_att_neona"
+    ],
+    "0x10CC41E0": [
+      "oc_hum_executive_female_ub"
+    ],
+    "0x1125CB99": [
+      "oc_veh_semi_austin"
+    ],
+    "0x11335853": [
+      "global_bld_potty01"
+    ],
+    "0x114BB7C9": [
+      "city_bld_corner16x16c_roof"
+    ],
+    "0x11A51FD5": [
+      "pmcoutpost_bld_hangar_wall_01"
+    ],
+    "0x11C2DEF9": [
+      "village_bld_farming04"
+    ],
+    "0x11C51234": [
+      "oc_bld_warehouse_interiora"
+    ],
+    "0x11D54DBC": [
+      "ocoutpost_bld_hq_walls"
+    ],
+    "0x11EA5D4A": [
+      "village_lampcolemana"
+    ],
+    "0x1203E036": [
+      "jungle_env_plantsmall03"
+    ],
+    "0x1216B2B4": [
+      "proutpost_helipad_details02"
+    ],
+    "0x12181179": [
+      "gr_veh_truck_m151_50cal"
+    ],
+    "0x121ADCB1": [
+      "global_att_billboardroofa_sign"
+    ],
+    "0x1225F582": [
+      "estate_bld_mansion01_02"
+    ],
+    "0x1230F107": [
+      "port_cranegantry_a"
+    ],
+    "0x12356E35": [
+      "port_cranegantry_c"
+    ],
+    "0x1241B65A": [
+      "global_veh_rotorblur"
+    ],
+    "0x1243A7AA": [
+      "civ_hum_protester_headb"
+    ],
+    "0x1248E0BE": [
+      "global_flag_smalch"
+    ],
+    "0x125512D6": [
+      "pmcoutpost_fountain"
+    ],
+    "0x12551ECE": [
+      "global_moneysuitcase"
+    ],
+    "0x12B2BD31": [
+      "oilrig_tankmeda"
+    ],
+    "0x12C2288E": [
+      "pmcoutpost_painting"
+    ],
+    "0x12C790CE": [
+      "oc_hum_mercenaryofficer_lb"
+    ],
+    "0x12DCBBC3": [
+      "caracas_bld_governmentcorner01_wall02"
+    ],
+    "0x12FA24EB": [
+      "civ_veh_car_van_commercial_damage"
+    ],
+    "0x13417609": [
+      "groutpost_bld_cranemining"
+    ],
+    "0x1350D914": [
+      "ch_hum_sailor_lba"
+    ],
+    "0x1362DD8C": [
+      "global_barbedwire"
+    ],
+    "0x138D9C98": [
+      "city_bld_segment32x32d_pavement"
+    ],
+    "0x13A86EF7": [
+      "civ_veh_boat_saltonsea"
+    ],
+    "0x13AA2EFB": [
+      "island_ruin_debris"
+    ],
+    "0x13B569E5": [
+      "maracaiboruins_bld_govtbld"
+    ],
+    "0x13BFAF0E": [
+      "vzoutpost_bld_garage"
+    ],
+    "0x13D34698": [
+      "proutpost_bld_garageboat_wall01"
+    ],
+    "0x13DE4C39": [
+      "civ_hum_mechanic_lba"
+    ],
+    "0x13E11930": [
+      "commercial_road_whiteline"
+    ],
+    "0x140400C1": [
+      "commercial_bld_segment8x8c"
+    ],
+    "0x1425D79F": [
+      "industrial_bld_smokestack_01"
+    ],
+    "0x142B3099": [
+      "gr_hum_elite_ub"
+    ],
+    "0x14400F0B": [
+      "shanty_bld_housegroupsmall03"
+    ],
+    "0x14448C39": [
+      "shanty_bld_housegroupsmall01"
+    ],
+    "0x1453A888": [
+      "city_bld_corner16x16d_roof"
+    ],
+    "0x1454AEC5": [
+      "pr_hum_thugfemale_b_head"
+    ],
+    "0x1461B75A": [
+      "industrial_catwalk"
+    ],
+    "0x14878671": [
+      "al_att_starter09_helmet"
+    ],
+    "0x14954ADD": [
+      "global_containertransplant"
+    ],
+    "0x149FC407": [
+      "maracaibo_bld_skyscraper02"
+    ],
+    "0x14B93F56": [
+      "city_bld_segment16x16b_parts"
+    ],
+    "0x14D94B9B": [
+      "maracaibo_park"
+    ],
+    "0x14E1FBDA": [
+      "maracaibo_bld_warehouse01_ruin_d"
+    ],
+    "0x155C8246": [
+      "civ_veh_semi_mark"
+    ],
+    "0x155E5F33": [
+      "industrial_bld_smokestack"
+    ],
+    "0x156157E7": [
+      "village_bld_shacksmall01"
+    ],
+    "0x156B1738": [
+      "global_env_treeplaza03"
+    ],
+    "0x15A84729": [
+      "jungle_ruinhotelpool_metal"
+    ],
+    "0x15DC5140": [
+      "civ_hum_business_a_head"
+    ],
+    "0x1607AF5E": [
+      "ocoutpostinterior_bamboo"
+    ],
+    "0x160AAD5B": [
+      "pmcoutpost_walla"
+    ],
+    "0x160E89FE": [
+      "global_sandbags2"
+    ],
+    "0x161718C7": [
+      "estate_bld_mansion02_floor_nm"
+    ],
+    "0x1623BB16": [
+      "civ_veh_truck_thunder"
+    ],
+    "0x163AA7A0": [
+      "commercial_road10_straight"
+    ],
+    "0x1649BF8F": [
+      "port_crane2_b"
+    ],
+    "0x165E65E7": [
+      "industrial_cartundercarriage"
+    ],
+    "0x1665D880": [
+      "aloutpostinterior_interiordetail"
+    ],
+    "0x166AC560": [
+      "global_debris_metalpiece"
+    ],
+    "0x168586CF": [
+      "global_drink"
+    ],
+    "0x16970F43": [
+      "oilrig_cranelargea"
+    ],
+    "0x16C0DFB9": [
+      "groutpostinterior_boxc"
+    ],
+    "0x16C1349B": [
+      "global_vendingmachine02"
+    ],
+    "0x16F30F81": [
+      "gr_hum_defector_head"
+    ],
+    "0x17128250": [
+      "merida_signa"
+    ],
+    "0x171CDF70": [
+      "industrial_bld_hangar01_brick"
+    ],
+    "0x172379F6": [
+      "ocoutpost_wall"
+    ],
+    "0x1735507E": [
+      "global_weapon_fae"
+    ],
+    "0x1738E48A": [
+      "gr_hum_boss_hair"
+    ],
+    "0x17452AB2": [
+      "global_handrails01"
+    ],
+    "0x17596D06": [
+      "airport_bld_terminal01_details"
+    ],
+    "0x1778BD07": [
+      "global_barrelmarket"
+    ],
+    "0x179A7702": [
+      "civ_veh_truck_ambulance"
+    ],
+    "0x179FB150": [
+      "docks_docksmall"
+    ],
+    "0x17C61495": [
+      "proutpost_att_satelitelarge005"
+    ],
+    "0x17D4BB0D": [
+      "oc_hum_boss_head"
+    ],
+    "0x17DF83D8": [
+      "civ_hum_beachfemale_a_ub"
+    ],
+    "0x17E58FCE": [
+      "ocoutpostinterior_fruitboxc"
+    ],
+    "0x1800A6AB": [
+      "global_veh_aircraftglass"
+    ],
+    "0x1816D822": [
+      "al_hum_soldier_elitea_glasses"
+    ],
+    "0x181A8208": [
+      "civ_hum_casualfemale_ub_a"
+    ],
+    "0x18674F1F": [
+      "civ_veh_motorcycle_scooter"
+    ],
+    "0x186E0D9B": [
+      "chinaoutpost_bld_guardtower_ladder"
+    ],
+    "0x186EE929": [
+      "global_weapon_qbzlmg"
+    ],
+    "0x187475A8": [
+      "gr_hum_boss_fake_hair"
+    ],
+    "0x18B22FF9": [
+      "ocoutpostinterior_walls"
+    ],
+    "0x18C6E389": [
+      "island_bld_fortress01_wallbroken"
+    ],
+    "0x190DE84C": [
+      "global_weapon_mk19"
+    ],
+    "0x19205095": [
+      "pmc_hum_mattias_v3_lb"
+    ],
+    "0x19288878": [
+      "civ_hum_journalist_heada"
+    ],
+    "0x19366D68": [
+      "civ_hum_poor_lbb"
+    ],
+    "0x1946F361": [
+      "commercial_bld_firestation"
+    ],
+    "0x195F080C": [
+      "airport_bld_terminal01_details02"
+    ],
+    "0x19690E70": [
+      "pmcoutpost_genericstonestatue"
+    ],
+    "0x1976B149": [
+      "cumana_bld_corner32x32b"
+    ],
+    "0x199051A8": [
+      "outpost_bld_warehouse01a"
+    ],
+    "0x199ABE01": [
+      "residential_bld_corner16x16a"
+    ],
+    "0x19ADC3A5": [
+      "proutpost_bld_garageboat_details"
+    ],
+    "0x19B03310": [
+      "oilrig_stairwelllonga"
+    ],
+    "0x19BE6A2C": [
+      "docks_dockpump01"
+    ],
+    "0x19EAE783": [
+      "caracasruins_bld_corner16x16b"
+    ],
+    "0x1A01CB9C": [
+      "commercial_bld_segment8x8b"
+    ],
+    "0x1A0B8983": [
+      "gr_att_tank_helmet_a"
+    ],
+    "0x1A0DC8E1": [
+      "global_constructionjunkpilec"
+    ],
+    "0x1A1B848F": [
+      "aloutpost_bld_prison"
+    ],
+    "0x1A22847D": [
+      "ocoutpostinterior_interiordetailb"
+    ],
+    "0x1A2F151C": [
+      "global_env_bushlarge02"
+    ],
+    "0x1A74D3EE": [
+      "shanty_bld_housegroup05"
+    ],
+    "0x1A83DE10": [
+      "jungle_env_treesmall02"
+    ],
+    "0x1B00857B": [
+      "global_propanetanklargeb"
+    ],
+    "0x1B29FBB3": [
+      "oilrig_bld_buildinga_wall_01"
+    ],
+    "0x1B3ABC4A": [
+      "global_veh_transport"
+    ],
+    "0x1B4434D5": [
+      "industrial_bld_hangar01_sm"
+    ],
+    "0x1B558460": [
+      "pr_hum_thug_a_lb"
+    ],
+    "0x1B691728": [
+      "village_bld_food03"
+    ],
+    "0x1B87B261": [
+      "outskirt_bld_market03"
+    ],
+    "0x1BAB207A": [
+      "global_electricalbox02"
+    ],
+    "0x1BAD2456": [
+      "pmc_hum_eva_necklace"
+    ],
+    "0x1BE2F795": [
+      "village_campfire"
+    ],
+    "0x1C1CB0E0": [
+      "port_gangplankb"
+    ],
+    "0x1C394F9A": [
+      "pmc_hum_mechanic_head"
+    ],
+    "0x1C793E11": [
+      "city_bld_segment16x16b"
+    ],
+    "0x1C9503F3": [
+      "merida_plazawaterfountain"
+    ],
+    "0x1CC9B977": [
+      "oc_hum_boardmember_ub"
+    ],
+    "0x1CD4C0C4": [
+      "proutpost_bld_dormitory_wall03"
+    ],
+    "0x1CE8F54F": [
+      "vz_veh_helicopter_mi35hind"
+    ],
+    "0x1D038EA8": [
+      "al_hum_starter02_head"
+    ],
+    "0x1D1F2CCD": [
+      "civ_hum_casual_b_ub"
+    ],
+    "0x1D43700A": [
+      "oilrig_bld_platform_top"
+    ],
+    "0x1DAC7011": [
+      "village_bld_housestilts05"
+    ],
+    "0x1DB09757": [
+      "jungle_env_bushsmall03"
+    ],
+    "0x1DD117BF": [
+      "proutpost_bld_garageboat_wall02"
+    ],
+    "0x1DE07812": [
+      "cartel_hum_officer_heada"
+    ],
+    "0x1E1238E5": [
+      "shanty_bld_apartment02_002"
+    ],
+    "0x1E359C2F": [
+      "caracas_bld_parquecentral03"
+    ],
+    "0x1E3F8C03": [
+      "airport_bld_rails"
+    ],
+    "0x1E588D65": [
+      "merida_bld_pmcautoshop_window"
+    ],
+    "0x1F1AC5BC": [
+      "industrial_bld_warehouse01_ruin_b"
+    ],
+    "0x1F3990E0": [
+      "global_roof_concrete01_nm"
+    ],
+    "0x1F422D4C": [
+      "estate_bld_mansion02_stair"
+    ],
+    "0x1F65E8E0": [
+      "ch_hum_elite_head"
+    ],
+    "0x1F746ABF": [
+      "ocoutpost_wallgate"
+    ],
+    "0x1F7B5BC6": [
+      "global_veh_68valiant_wheel"
+    ],
+    "0x1FB95B74": [
+      "global_tablefolding"
+    ],
+    "0x1FD97545": [
+      "gr_att_elite_camouflage"
+    ],
+    "0x1FDF880C": [
+      "groutpost_bld_bunkerbeetle"
+    ],
+    "0x200050D6": [
+      "ch_hum_pilot_lba"
+    ],
+    "0x20169CED": [
+      "industrial_att_pipelargeshort_002"
+    ],
+    "0x201F0FA4": [
+      "civ_hum_aidworkerfemale_uba"
+    ],
+    "0x20267B12": [
+      "city_bld_skyscraper02_wall"
+    ],
+    "0x20322DED": [
+      "jungle_env_vines01"
+    ],
+    "0x205CB2B7": [
+      "commercial_bld_corner8x16c_signs"
+    ],
+    "0x206D48A0": [
+      "groutpostinterior_barrela"
+    ],
+    "0x20A16344": [
+      "pr_att_thugfemale_a_acc"
+    ],
+    "0x20B1F873": [
+      "pmcoutpost_fountain01"
+    ],
+    "0x20C6A949": [
+      "vz_hum_officer_holster"
+    ],
+    "0x20DA5502": [
+      "global_env_rocksbeach02"
+    ],
+    "0x20F17DB6": [
+      "vz_hum_soldier_a_lb"
+    ],
+    "0x20FA704D": [
+      "ocoutpost_planter01_lod"
+    ],
+    "0x20FE8634": [
+      "vz_hum_solano_lb"
+    ],
+    "0x212101AE": [
+      "merida_bld_oilwellland02"
+    ],
+    "0x21484E8F": [
+      "chinaoutpost_bld_tent02"
+    ],
+    "0x21711760": [
+      "pmcoutpost_bld_hqexterior_rooftop02"
+    ],
+    "0x2171B6D7": [
+      "outpost_bld_warehouse01"
+    ],
+    "0x217AEDA9": [
+      "outpost_bld_warehouselarge01_misc"
+    ],
+    "0x219F85DF": [
+      "oc_att_mercenary_elite_goggles"
+    ],
+    "0x21A0C4D6": [
+      "al_hum_soldier_eliteb_ub"
+    ],
+    "0x21A2AFD1": [
+      "global_pallet"
+    ],
+    "0x21AF0174": [
+      "groutpost_mine_road10t"
+    ],
+    "0x21E72675": [
+      "ch_att_elite_backpack"
+    ],
+    "0x22101D86": [
+      "global_veh_civilianruin"
+    ],
+    "0x2218532F": [
+      "civ_hum_casualfemale_ub_b"
+    ],
+    "0x223593E1": [
+      "vz_veh_plane_tucano"
+    ],
+    "0x22435EEA": [
+      "vz_veh_helicopter_alouetteiii"
+    ],
+    "0x2255CE3E": [
+      "global_veh_scorpiondpv"
+    ],
+    "0x227708EC": [
+      "city_bld_segment16x16c"
+    ],
+    "0x228FE801": [
+      "al_veh_truck_mtv_semi"
+    ],
+    "0x22B4D036": [
+      "maracaibo_bridge_concrete"
+    ],
+    "0x22BA44C8": [
+      "civ_veh_plane_cessna"
+    ],
+    "0x22C8D632": [
+      "groutpost_bld_tentlargetarp03"
+    ],
+    "0x22CE9B7B": [
+      "gr_veh_towed_m101a"
+    ],
+    "0x22DD7B58": [
+      "global_veh_hondacrx_damage"
+    ],
+    "0x22E304D3": [
+      "pmcoutpost_sofa"
+    ],
+    "0x22EDD68E": [
+      "oilrig_tanktalla_01"
+    ],
+    "0x230DB00A": [
+      "merida_plazastatue_base"
+    ],
+    "0x2323D3F0": [
+      "outskirt_bld_house02"
+    ],
+    "0x2327BE5D": [
+      "city_bld_segment16x16c_wall02"
+    ],
+    "0x232B1C7C": [
+      "commercial_bld_segment8x16e"
+    ],
+    "0x232DDCC4": [
+      "pmcoutpost_column"
+    ],
+    "0x2336E0D7": [
+      "pmc_hum_jennifer_hair"
+    ],
+    "0x237E9074": [
+      "ch_att_elite_helmet"
+    ],
+    "0x238C3C27": [
+      "outskirt_bld_market05"
+    ],
+    "0x23AA3AEC": [
+      "village_bld_housestilts04"
+    ],
+    "0x23C40A73": [
+      "shanty_bld_house02_wall"
+    ],
+    "0x23CF21E1": [
+      "ch_hum_boss_ub"
+    ],
+    "0x23ED1938": [
+      "civ_hum_businessfemale_a_lb"
+    ],
+    "0x243A4E1E": [
+      "ocoutpost_fountain01c"
+    ],
+    "0x24730348": [
+      "cumana_bld_segment16x16a_01"
+    ],
+    "0x24AEA618": [
+      "merida_pmcautoshopcowhead"
+    ],
+    "0x24B67E63": [
+      "gr_veh_tank_m551_attachments"
+    ],
+    "0x24D47735": [
+      "oc_hum_pilot_helmet"
+    ],
+    "0x24E0ADAF": [
+      "caracas_bld_construction01"
+    ],
+    "0x24E160F5": [
+      "al_veh_plane_predator"
+    ],
+    "0x25169317": [
+      "oc_hum_aidworker_heada"
+    ],
+    "0x25240A31": [
+      "industrial_bld_warehouse02b"
+    ],
+    "0x25283D75": [
+      "commercial_bld_supermarket_02"
+    ],
+    "0x254B96AE": [
+      "pmcoutpost_bld_fueldepot01"
+    ],
+    "0x255A9E21": [
+      "pmc_hum_jennifer_jacket"
+    ],
+    "0x255F0762": [
+      "al_hum_starter01_ub"
+    ],
+    "0x25A178EC": [
+      "chinaoutpost_interior_stationary"
+    ],
+    "0x25BB5EA6": [
+      "city_bld_standalone05"
+    ],
+    "0x25FE00A7": [
+      "ch_veh_boat_destroyer"
+    ],
+    "0x261F45A4": [
+      "global_weapon_tankshell"
+    ],
+    "0x261F62BF": [
+      "chinaoutpost_bld_prison"
+    ],
+    "0x2633CF40": [
+      "chinaoutpost_interior_panel"
+    ],
+    "0x263B1D67": [
+      "pr_hum_sailorfemale_b_hair"
+    ],
+    "0x2653B4DD": [
+      "global_signstopa"
+    ],
+    "0x26677704": [
+      "vz_att_deathsquad_capeb"
+    ],
+    "0x26771181": [
+      "global_veh_gavin_tracks"
+    ],
+    "0x267CFB1F": [
+      "industrial_bld_hangar01_roof"
+    ],
+    "0x268FBE50": [
+      "port_signs1"
+    ],
+    "0x26A714E1": [
+      "estate_bld_mansion02_stair2_sm"
+    ],
+    "0x26AD4E87": [
+      "civ_hum_casualfemale_head_e"
+    ],
+    "0x27148AF8": [
+      "pr_att_sailor_a_ammobelt"
+    ],
+    "0x2735D9C0": [
+      "pmcoutpost_bld_hangar_concrete"
+    ],
+    "0x274DBD01": [
+      "vzoutpost_wallgate"
+    ],
+    "0x27883603": [
+      "aloutpostinterior_hanger_roof"
+    ],
+    "0x27CB42D6": [
+      "gr_faction_headb"
+    ],
+    "0x27D260A8": [
+      "cartel_hum_thug_a_ub"
+    ],
+    "0x27D4E45F": [
+      "vz_hum_deathsquad_lba"
+    ],
+    "0x27D928EF": [
+      "vzoutpost_bld_guardtower"
+    ],
+    "0x27FC7EB8": [
+      "global_veh_phoenix_racing_body"
+    ],
+    "0x28041A9D": [
+      "ch_att_heavy_backpack"
+    ],
+    "0x28245A35": [
+      "civ_veh_truck_ridgeline_damage"
+    ],
+    "0x284F9AF1": [
+      "police_hum_officer_b_lb"
+    ],
+    "0x28558AB9": [
+      "oc_hum_beachfemale_a_head"
+    ],
+    "0x286A3B62": [
+      "gr_hum_soldierfemale_c_ub"
+    ],
+    "0x2878B8A9": [
+      "pmc_hum_fiona_head"
+    ],
+    "0x28938DED": [
+      "vz_hum_blanco_lb"
+    ],
+    "0x28F287BF": [
+      "civ_veh_car_rtr_crappy_wheel"
+    ],
+    "0x28FD3F58": [
+      "global_weapon_ak103"
+    ],
+    "0x2902C890": [
+      "pmcoutpost_interior_divider"
+    ],
+    "0x2909DB6F": [
+      "aloutpostinterior_cementfloor"
+    ],
+    "0x2915F4A0": [
+      "pmc_veh_truck_esv"
+    ],
+    "0x294B9E7E": [
+      "global_fencebarbed"
+    ],
+    "0x295555E3": [
+      "chinaoutpost_interior_paperbox"
+    ],
+    "0x29685E76": [
+      "civ_hum_casual_f_head"
+    ],
+    "0x297FEF21": [
+      "pmc_hum_eva_cuffs"
+    ],
+    "0x298FC14E": [
+      "industrial_att_pipelargeshort"
+    ],
+    "0x299E2340": [
+      "gr_veh_boat_turbosquid"
+    ],
+    "0x29ED97C3": [
+      "jungle_env_treesmall01_imposter"
+    ],
+    "0x2A47D96B": [
+      "global_gunboxa"
+    ],
+    "0x2A5FF32E": [
+      "groutpost_bld_shacktall01"
+    ],
+    "0x2A68DAEF": [
+      "industrial_bld_warehouse04"
+    ],
+    "0x2A77C3E5": [
+      "city_bld_corner32x32d_parts01"
+    ],
+    "0x2A899EEB": [
+      "global_veh_sheridantread"
+    ],
+    "0x2A9EB592": [
+      "shanty_bld_housegroup01_wall07"
+    ],
+    "0x2AC29044": [
+      "cartel_hum_thug01_lb"
+    ],
+    "0x2B503BD0": [
+      "commercial_bld_supermarket"
+    ],
+    "0x2B64CF66": [
+      "groutpost_bld_shackcave03"
+    ],
+    "0x2B97DD31": [
+      "civ_veh_truck_garbage"
+    ],
+    "0x2BBE22C3": [
+      "global_advertisement01"
+    ],
+    "0x2BD9F929": [
+      "city_bld_segment16x32d"
+    ],
+    "0x2BFA1B94": [
+      "pmc_att_pilothelicopter_chains"
+    ],
+    "0x2C123DF0": [
+      "merida_bld_soccerstadium_signs02"
+    ],
+    "0x2C217F06": [
+      "vz_att_soldierelite_acca"
+    ],
+    "0x2C294CFB": [
+      "airport_bld_terminal01_walls"
+    ],
+    "0x2C31E48A": [
+      "ocoutpost_bld_hq"
+    ],
+    "0x2C324EBF": [
+      "jungle_env_plantmed01"
+    ],
+    "0x2C568134": [
+      "oc_hum_executive_lb"
+    ],
+    "0x2C695B35": [
+      "caracas_bld_governmentcorner02"
+    ],
+    "0x2C833309": [
+      "global_flag_smalpr"
+    ],
+    "0x2C845EC8": [
+      "airport_bld_hanger_wall"
+    ],
+    "0x2C98FABB": [
+      "global_americanflag"
+    ],
+    "0x2CE290F9": [
+      "pmcoutpost_bld_hqgarage"
+    ],
+    "0x2D1CC799": [
+      "oc_hum_mercenary_a_ub"
+    ],
+    "0x2D1D4D03": [
+      "pmc_veh_car_offroad_buggy"
+    ],
+    "0x2D3BCEBD": [
+      "oilrig_bld_buildinga_roof"
+    ],
+    "0x2D5C567F": [
+      "city_bld_corner16x16b_walls"
+    ],
+    "0x2D7F4289": [
+      "industrial_bld_platform_mesh"
+    ],
+    "0x2DD2E988": [
+      "civ_veh_boat_swamp_cables"
+    ],
+    "0x2DD31CFB": [
+      "gr_veh_truck_m35_aa"
+    ],
+    "0x2DE27D3B": [
+      "civ_hum_doctorfemale_uba"
+    ],
+    "0x2DF261DD": [
+      "civ_veh_semi_austin_damage"
+    ],
+    "0x2DFE5F85": [
+      "commercial_bld_segment16x16a"
+    ],
+    "0x2E3C0B49": [
+      "groutpost_bld_earthmover"
+    ],
+    "0x2E4A3730": [
+      "ch_deliverycrate"
+    ],
+    "0x2E4BA6FD": [
+      "ocoutpost_fountain01d"
+    ],
+    "0x2E70D46F": [
+      "cumana_bld_segment16x16a_02"
+    ],
+    "0x2E941159": [
+      "vz_hum_deathsquad_headc"
+    ],
+    "0x2EA81FD6": [
+      "global_bridgepedestrian_rail"
+    ],
+    "0x2EB3F3AE": [
+      "industrial_bld_gasstationpump03"
+    ],
+    "0x2ED05EAA": [
+      "civ_hum_casualfemale_lb_d"
+    ],
+    "0x2ED4385B": [
+      "civ_hum_poor_heada"
+    ],
+    "0x2EF46E54": [
+      "groutpost_bld_bunkerconcrete"
+    ],
+    "0x2EFE2E33": [
+      "global_weapon_m1014shotgun"
+    ],
+    "0x2F031F41": [
+      "port_dockend"
+    ],
+    "0x2F1F099B": [
+      "aloutpost_bld_hanger"
+    ],
+    "0x2F4F8F3E": [
+      "industrial_bld_warehouselarge02"
+    ],
+    "0x2F58903F": [
+      "ch_hum_elite_ub"
+    ],
+    "0x2F967F03": [
+      "cumana_bld_hoteltwostar01"
+    ],
+    "0x2FB6CCDD": [
+      "caracas_rampgovernmentmid"
+    ],
+    "0x300CF3B5": [
+      "ocoutpostinterior_imagemix"
+    ],
+    "0x3018AF50": [
+      "oilrig_bld_buildinga_whitepanel"
+    ],
+    "0x309C2B83": [
+      "cartel_att_briefcaselt_hat"
+    ],
+    "0x30B8A010": [
+      "global_flag_largech"
+    ],
+    "0x30BC17CD": [
+      "port_dockdry"
+    ],
+    "0x3123546D": [
+      "city_bld_skyscraper02_windows"
+    ],
+    "0x31397111": [
+      "mouth_interior_a"
+    ],
+    "0x314049E6": [
+      "global_portablelight"
+    ],
+    "0x31557BE9": [
+      "global_tableyard"
+    ],
+    "0x3179078B": [
+      "oilrig_bld_platform_top_02"
+    ],
+    "0x319D840A": [
+      "city_bld_skyscraper03"
+    ],
+    "0x31D7E576": [
+      "shanty_bld_apartment01_002"
+    ],
+    "0x31F0FE47": [
+      "pmc_veh_truck_ext"
+    ],
+    "0x32150ACF": [
+      "ch_veh_truck_sx2150_semi"
+    ],
+    "0x32A33D98": [
+      "ocoutpost_bench"
+    ],
+    "0x32D2BC16": [
+      "global_treeplanter01"
+    ],
+    "0x32FBE556": [
+      "civ_veh_plane_727jet"
+    ],
+    "0x3310FC0C": [
+      "city_bld_corner16x32d_wall"
+    ],
+    "0x3339E1E4": [
+      "civ_hum_cartworker_acca"
+    ],
+    "0x333D66A4": [
+      "civ_hum_casual_lb_b"
+    ],
+    "0x3354942D": [
+      "aloutpostinterior_boxc"
+    ],
+    "0x3382D9E0": [
+      "civ_hum_protester_female_lba"
+    ],
+    "0x3386C4AF": [
+      "civ_veh_car_rtr_crappy"
+    ],
+    "0x3387F0FD": [
+      "proutpost_docka_roof"
+    ],
+    "0x338DA2D2": [
+      "groutpost_bld_earthmover_flag"
+    ],
+    "0x33AC0183": [
+      "pmcoutpost_bld_hqgarage_livedin"
+    ],
+    "0x33C678E5": [
+      "pmc_hum_fiona_lb"
+    ],
+    "0x33C70042": [
+      "civ_hum_businessfemale_a_hair"
+    ],
+    "0x33C8B389": [
+      "pmc_veh_plane_mig27"
+    ],
+    "0x340B1CB8": [
+      "ch_veh_apc_zbd2000"
+    ],
+    "0x342EDDD4": [
+      "vz_veh_helicopter_mi35hind_solano"
+    ],
+    "0x343644C8": [
+      "industrial_bld_warehouse_roof"
+    ],
+    "0x344CC848": [
+      "city_bld_storefrontd_windows"
+    ],
+    "0x3450B9A1": [
+      "chinaoutpost_interior_control"
+    ],
+    "0x345A6700": [
+      "vz_hum_carmona_hat"
+    ],
+    "0x34702E02": [
+      "gr_hum_elite_lb"
+    ],
+    "0x347521AD": [
+      "police_hum_officer_b_head"
+    ],
+    "0x34DCA43C": [
+      "merida_bld_soccerstadium01"
+    ],
+    "0x351F91D4": [
+      "jungle_road10t"
+    ],
+    "0x35383CCD": [
+      "docks_tiredock"
+    ],
+    "0x353ACE4D": [
+      "caracas_rampgovernment01_stairs"
+    ],
+    "0x3571AB17": [
+      "groutpost_bld_shackcave06"
+    ],
+    "0x35762845": [
+      "groutpost_bld_shackcave04"
+    ],
+    "0x358DB6E6": [
+      "pr_hum_sailorfemale_b_hat"
+    ],
+    "0x358DD172": [
+      "caracas_rampgovernment01_road03"
+    ],
+    "0x35992F99": [
+      "margarita_bld_condo01"
+    ],
+    "0x35A38869": [
+      "docks_bld_booth"
+    ],
+    "0x35CDE682": [
+      "civ_hum_doctorfemale_glassesa"
+    ],
+    "0x35E1D680": [
+      "oc_att_boss_glasses"
+    ],
+    "0x35E593D6": [
+      "caracas_bld_skyscraperpristine02_windows"
+    ],
+    "0x3601FC68": [
+      "industrial_bld_refinery06"
+    ],
+    "0x361B2FFA": [
+      "estate_bld_mansion01_stair_sm"
+    ],
+    "0x362FD6F6": [
+      "airport_bld_hanger_roof"
+    ],
+    "0x3649DBF2": [
+      "pmcoutpost_bld_hangar"
+    ],
+    "0x366CEBB3": [
+      "pmcoutpost_bld_hqinterior_floor02"
+    ],
+    "0x369044AE": [
+      "pmc_hum_mattias_v2_lb"
+    ],
+    "0x3693147C": [
+      "global_weapon_suppressor"
+    ],
+    "0x36A0A401": [
+      "merida_bld_universitydorm"
+    ],
+    "0x36A9F3D4": [
+      "proutpost_att_neonb"
+    ],
+    "0x36B43DD1": [
+      "global_veh_turbosquid"
+    ],
+    "0x36D72849": [
+      "proutpost_bld_dormitory_wall02"
+    ],
+    "0x374AA73F": [
+      "global_weapon_anm14"
+    ],
+    "0x37A039BD": [
+      "civ_hum_protester_female_hairb"
+    ],
+    "0x37B0103D": [
+      "caracas_bld_theater01"
+    ],
+    "0x37C0DC34": [
+      "village_bld_farming05"
+    ],
+    "0x37C55962": [
+      "village_bld_farming03"
+    ],
+    "0x37C5FBFE": [
+      "docks_bld_docks03"
+    ],
+    "0x37DC28B2": [
+      "gr_hum_soldierfemale_b_hairb"
+    ],
+    "0x37F5339B": [
+      "industrial_bld_refinery01"
+    ],
+    "0x380CB1CE": [
+      "shanty_bld_housegroup01_roof01"
+    ],
+    "0x38274BD1": [
+      "proutpost_bld_alarmtower"
+    ],
+    "0x383D01E1": [
+      "shanty_bld_apartment01"
+    ],
+    "0x384DEECA": [
+      "aloutpost_bld_barracks01"
+    ],
+    "0x38EA04CE": [
+      "global_newspaperstand_01"
+    ],
+    "0x38F22ABE": [
+      "pr_hum_worker_lb"
+    ],
+    "0x390FDC15": [
+      "chinaoutpost_interior_tent"
+    ],
+    "0x3925E07B": [
+      "oilrig_cranesmalla"
+    ],
+    "0x397A411C": [
+      "outskirt_road20_straight"
+    ],
+    "0x397ED41F": [
+      "civ_hum_mechanic_ubb"
+    ],
+    "0x39BFB76B": [
+      "groutpost_mine_road10_straightmerge"
+    ],
+    "0x39C54DA2": [
+      "gr_att_boss_bandana"
+    ],
+    "0x39C5AA99": [
+      "groutpost_bld_cranemining_cabindetails_nm"
+    ],
+    "0x39DC69DC": [
+      "jungle_bld_ruinshotelside"
+    ],
+    "0x3A1CB5C0": [
+      "al_veh_plane_ac130_spooky"
+    ],
+    "0x3A6D0366": [
+      "ocoutpostinterior_interiorwindow"
+    ],
+    "0x3AAEB03D": [
+      "merida_bld_pmcautoshop_wallb"
+    ],
+    "0x3ABB0FBE": [
+      "cumana_bld_segment16x16a_lod"
+    ],
+    "0x3AE83C9F": [
+      "civ_hum_cartworker_lba"
+    ],
+    "0x3B031B72": [
+      "vz_hum_soldier_a_head"
+    ],
+    "0x3B2D59B4": [
+      "vzoutpost_bld_helipad"
+    ],
+    "0x3B4B5A5C": [
+      "outskirt_bld_mercbar_floora"
+    ],
+    "0x3B4F3D70": [
+      "vz_veh_towed_m101a"
+    ],
+    "0x3B690A9A": [
+      "estate_bld_mansion02_stair2"
+    ],
+    "0x3B7DD9B7": [
+      "vz_hum_soldierriot_a_ub"
+    ],
+    "0x3B867B20": [
+      "chinaoutpost_interior_floor"
+    ],
+    "0x3BCB6E8E": [
+      "pmcoutpost_bld_dock"
+    ],
+    "0x3BEC4657": [
+      "estate_bld_mansion02_floor02"
+    ],
+    "0x3BF3DA2E": [
+      "village_bld_plantation03"
+    ],
+    "0x3C05E445": [
+      "oilrig_att_anchorlinespindlea"
+    ],
+    "0x3C0C5AC9": [
+      "proutpost_helipad"
+    ],
+    "0x3C14D32E": [
+      "industrial_bld_warehouse02_ruin_a"
+    ],
+    "0x3C44C096": [
+      "island_bld_boothrental"
+    ],
+    "0x3C4F1510": [
+      "global_cartbrick"
+    ],
+    "0x3C76C1A0": [
+      "shanty_fencecorner01"
+    ],
+    "0x3C947E50": [
+      "oilrig_bld_buildinga_details_02"
+    ],
+    "0x3CACF5B2": [
+      "oc_att_mercenary_heavy_helmet"
+    ],
+    "0x3CBEDCF4": [
+      "groutpostinterior_boxb"
+    ],
+    "0x3D070CAC": [
+      "pmc_hum_jennifer_v2_head"
+    ],
+    "0x3D0F8738": [
+      "al_hum_starter02_lb"
+    ],
+    "0x3D5EC6FF": [
+      "global_boxholes"
+    ],
+    "0x3D853E99": [
+      "global_miscmetala"
+    ],
+    "0x3D8AA814": [
+      "oilrig_tanktalla"
+    ],
+    "0x3D9BF0EE": [
+      "gr_veh_motorcycle_offroad_wheel"
+    ],
+    "0x3E48E2BD": [
+      "civ_hum_casual_hat_d"
+    ],
+    "0x3E629E14": [
+      "pmcoutpost_bld_hq_livedin"
+    ],
+    "0x3E7D2911": [
+      "caracas_skytramcolumn"
+    ],
+    "0x3EA6B69F": [
+      "global_att_billboardroofa"
+    ],
+    "0x3EA76786": [
+      "pmcoutpost_bld_hqinterior_wall02_recruitmechanic"
+    ],
+    "0x3EA94386": [
+      "global_waterpuddle02"
+    ],
+    "0x3EBA9067": [
+      "caracasruins_bld_corner32x32b"
+    ],
+    "0x3ED4386D": [
+      "mountain_blastdoors_yellow"
+    ],
+    "0x3ED46D48": [
+      "maracaibo_bld_parkingstructure01"
+    ],
+    "0x3F05BD92": [
+      "oilrig_towerdrill_01"
+    ],
+    "0x3F2BD8B1": [
+      "industrial_att_pipestacked_002"
+    ],
+    "0x3F520BC5": [
+      "civ_hum_beachfemale_c_head"
+    ],
+    "0x3F6BA26B": [
+      "city_bld_segment32x32d_wall01"
+    ],
+    "0x3F6D97ED": [
+      "global_env_treeplaza02"
+    ],
+    "0x3F79F561": [
+      "village_bld_plantationsmall03"
+    ],
+    "0x3FAD978E": [
+      "ch_hum_boss_head"
+    ],
+    "0x3FB0FC30": [
+      "ch_hum_elite_lb"
+    ],
+    "0x3FF2692D": [
+      "aloutpost_bld_storage"
+    ],
+    "0x3FF77DD5": [
+      "oc_hum_mercenaryofficer_ub"
+    ],
+    "0x40113B94": [
+      "shanty_bld_housegroup01_roof03"
+    ],
+    "0x4069DE89": [
+      "vz_att_deathsquad_capec"
+    ],
+    "0x408575ED": [
+      "global_debris_concrete01"
+    ],
+    "0x40858AFC": [
+      "vz_veh_apc_m113_aa"
+    ],
+    "0x40B5E6AC": [
+      "city_bld_storefrontwalls01"
+    ],
+    "0x40D1E566": [
+      "jungle_env_treetall02"
+    ],
+    "0x410AF029": [
+      "global_barrelorange"
+    ],
+    "0x4160F9DD": [
+      "city_bld_storefrontsigns01"
+    ],
+    "0x41623F36": [
+      "pmcoutpost_bld_hqexterior_rooftop04"
+    ],
+    "0x4180E1C2": [
+      "civ_hum_journalistfemale_haira"
+    ],
+    "0x4181A5E6": [
+      "commercial_bld_corner8x16a"
+    ],
+    "0x419D6ED0": [
+      "oc_hum_pilot_lb"
+    ],
+    "0x41C8E954": [
+      "global_veh_fordf150_damage"
+    ],
+    "0x41D625C1": [
+      "merida_bld_plazachurch05"
+    ],
+    "0x41F9E9DB": [
+      "global_att_acunitroofhugea"
+    ],
+    "0x42740E1B": [
+      "global_veh_winch_magnet"
+    ],
+    "0x429EAA34": [
+      "city_bld_corner16x16a_parts01"
+    ],
+    "0x42A35888": [
+      "shanty_bld_housegroup01_wall05"
+    ],
+    "0x42C8E416": [
+      "civ_hum_richfemale_lbb"
+    ],
+    "0x43144941": [
+      "civ_hum_journalistfemale_uba"
+    ],
+    "0x43552C13": [
+      "global_golfclub"
+    ],
+    "0x435DB572": [
+      "city_bld_corner16x32d_parts"
+    ],
+    "0x436A7829": [
+      "global_junkpile04"
+    ],
+    "0x43AEEA7A": [
+      "village_bld_housestilts02"
+    ],
+    "0x43C97954": [
+      "pr_att_sailorfemale_a_acc"
+    ],
+    "0x43DCA001": [
+      "vz_deliverycrate"
+    ],
+    "0x43E676BB": [
+      "global_telephonebooth"
+    ],
+    "0x43F3DB12": [
+      "village_fruitboxstacka"
+    ],
+    "0x43FAF9A5": [
+      "pr_hum_sailor_b_head"
+    ],
+    "0x43FDFE36": [
+      "city_bld_storefrontcornera"
+    ],
+    "0x44398956": [
+      "al_hum_pilot_helmet"
+    ],
+    "0x447A0F11": [
+      "civ_hum_richfemale_heada"
+    ],
+    "0x448774F6": [
+      "white_bld_corner16x16a"
+    ],
+    "0x44B027A1": [
+      "shanty_bld_housegroup01_wall08"
+    ],
+    "0x44CB4A4F": [
+      "groutpost_bld_tentlargetarp02"
+    ],
+    "0x44DF6B8F": [
+      "caracas_bld_hospitalvargas_parts01"
+    ],
+    "0x4581F210": [
+      "gr_hum_boss_lb"
+    ],
+    "0x45C06D68": [
+      "global_veh_transport_box_damage"
+    ],
+    "0x45CA9B90": [
+      "city_bld_standalone03"
+    ],
+    "0x45D00014": [
+      "oc_att_mercenary_b_glasses"
+    ],
+    "0x45EC5734": [
+      "maracaibo_bld_corner16x32a"
+    ],
+    "0x45EC5F8C": [
+      "oc_hqbase01_tile"
+    ],
+    "0x4602AF25": [
+      "civ_hum_casual_hair_a"
+    ],
+    "0x461F1A3A": [
+      "global_veh_stingray"
+    ],
+    "0x4621901A": [
+      "angelfalls_env_top"
+    ],
+    "0x46ADBA99": [
+      "al_hum_white_heada"
+    ],
+    "0x46B472DC": [
+      "pmcoutpost_fountain02"
+    ],
+    "0x46C5012C": [
+      "civ_veh_car_w12_sprint"
+    ],
+    "0x46E9EA5A": [
+      "village_tablewooda"
+    ],
+    "0x46EADB5F": [
+      "maracaiboruins_bld_skyscraper01"
+    ],
+    "0x477EA839": [
+      "city_bld_roof01"
+    ],
+    "0x478DCF04": [
+      "global_veh_phoenix_racing_body_damage"
+    ],
+    "0x47BDD2C3": [
+      "city_bld_standalone04"
+    ],
+    "0x47BFFAE0": [
+      "pmcoutpost_interior_flower"
+    ],
+    "0x47C01300": [
+      "aloutpost_bld_hanger_roof"
+    ],
+    "0x47C472D3": [
+      "global_weightbench"
+    ],
+    "0x47D3F09C": [
+      "merida_bld_plazachurch04"
+    ],
+    "0x47D570B7": [
+      "pmc_hum_mattias_v2_chain"
+    ],
+    "0x47DAF5EE": [
+      "angelfalls_env_base"
+    ],
+    "0x47EB50C1": [
+      "civ_hum_casual_ub_d"
+    ],
+    "0x48089288": [
+      "industrial_bld_conveyortransition"
+    ],
+    "0x481F56F5": [
+      "island_bld_fortress01_wallb01"
+    ],
+    "0x483E33A5": [
+      "ch_hum_heavy_acc"
+    ],
+    "0x48612AAA": [
+      "oilrig_bld_platform_mesh"
+    ],
+    "0x48B1D27D": [
+      "chinaoutpost_interior_scroll"
+    ],
+    "0x48C0311A": [
+      "gr_hum_boss_fake_sunglasses"
+    ],
+    "0x48CDC4C1": [
+      "npc_civilian_01_mustache"
+    ],
+    "0x48F796A6": [
+      "global_woodfence01"
+    ],
+    "0x4928806B": [
+      "aloutpost_interior_steel"
+    ],
+    "0x493A8290": [
+      "chinaoutpost_interior_paneloverhead"
+    ],
+    "0x4956322E": [
+      "global_fencetarped"
+    ],
+    "0x4968D350": [
+      "white_walla"
+    ],
+    "0x496E4644": [
+      "pmc_hum_jennifer_v2_lb"
+    ],
+    "0x499042A2": [
+      "merida_signfold"
+    ],
+    "0x49A5053A": [
+      "global_veh_scorpiondpv_wheel"
+    ],
+    "0x49A7C542": [
+      "commercial_bld_corner8x16b_signs"
+    ],
+    "0x49A94DD4": [
+      "ocoutpost_bld_hq_windows"
+    ],
+    "0x49B83DDB": [
+      "civ_veh_car_van_racing_damage"
+    ],
+    "0x49D0C1EE": [
+      "jungle_env_bushlarge02"
+    ],
+    "0x49E2348F": [
+      "gr_hum_officerfemale_head"
+    ],
+    "0x4A0B28C8": [
+      "oc_hum_boardmember_head"
+    ],
+    "0x4A41B9BA": [
+      "gr_veh_motorcycle_offroad"
+    ],
+    "0x4A579010": [
+      "global_veh_phoenix"
+    ],
+    "0x4A6BC856": [
+      "civ_veh_trailer_flatbed"
+    ],
+    "0x4A95F55C": [
+      "pr_veh_helicopter_alouetteiii"
+    ],
+    "0x4A9D4A45": [
+      "aloutpost_bld_largetentcamo01"
+    ],
+    "0x4AD0FB4E": [
+      "cumana_bld_segment16x16a"
+    ],
+    "0x4AEE11CE": [
+      "civ_veh_car_van_crappy"
+    ],
+    "0x4B194399": [
+      "jungle_road5_straight"
+    ],
+    "0x4B2189E3": [
+      "shanty_bld_shack_roof"
+    ],
+    "0x4B62E907": [
+      "global_veh_weapon_2towrack"
+    ],
+    "0x4B739815": [
+      "pmcoutpost_bld_hqexterior_rooftop03"
+    ],
+    "0x4B740C50": [
+      "groutpost_bld_shackcave05"
+    ],
+    "0x4B8E37BE": [
+      "proutpost_bld_shacksmall04"
+    ],
+    "0x4BBBEB29": [
+      "global_bridgetransition"
+    ],
+    "0x4BFC0C32": [
+      "global_dumpstergrayshort"
+    ],
+    "0x4C0287FC": [
+      "city_bld_storefrontcornerc"
+    ],
+    "0x4C36FE4D": [
+      "jungle_env_plantmed03"
+    ],
+    "0x4C388367": [
+      "city_bld_storefrontcornerc_signs"
+    ],
+    "0x4C39F277": [
+      "vz_hum_captain_ub"
+    ],
+    "0x4C4101FD": [
+      "caracas_skyscraperplateau02"
+    ],
+    "0x4C463D70": [
+      "civ_hum_journalistfemale_heada"
+    ],
+    "0x4C4EDB4C": [
+      "commercial_grassymedian_straight"
+    ],
+    "0x4C721B46": [
+      "estate_walllong"
+    ],
+    "0x4C731D54": [
+      "global_weapon_agm65maverick"
+    ],
+    "0x4C8A5999": [
+      "gr_hum_heavy_a_ub"
+    ],
+    "0x4C998949": [
+      "pmc_veh_truck_cougar"
+    ],
+    "0x4CA129AF": [
+      "shanty_bld_housegroup01_wall06"
+    ],
+    "0x4D17AFBC": [
+      "pmc_hum_chris_v3_ub"
+    ],
+    "0x4D3B50FB": [
+      "civ_hum_casual_lb_a"
+    ],
+    "0x4D3FCE29": [
+      "civ_hum_casual_lb_c"
+    ],
+    "0x4D61C502": [
+      "oc_hum_mercenary_a_lb"
+    ],
+    "0x4D674383": [
+      "groutpost_bld_shackcave02"
+    ],
+    "0x4D72B2BC": [
+      "civ_veh_boat_smallfishing"
+    ],
+    "0x4D8A5EF7": [
+      "proutpost_bld_garageboat_roof"
+    ],
+    "0x4DA84CB7": [
+      "industrial_generator01"
+    ],
+    "0x4DB1F10D": [
+      "commercial_bld_segment16x16a_lod"
+    ],
+    "0x4DDF37B3": [
+      "civ_hum_taxi_hat"
+    ],
+    "0x4DE91B9C": [
+      "civ_hum_casual_ub_e"
+    ],
+    "0x4DF6EA1D": [
+      "estate_bld_mansion02_floor"
+    ],
+    "0x4E065784": [
+      "gr_att_elite_hat"
+    ],
+    "0x4E0AA4D4": [
+      "city_bld_segment32x32d_parts"
+    ],
+    "0x4E0F5715": [
+      "city_bld_storefrontcornerf"
+    ],
+    "0x4E115423": [
+      "global_flag_largeoc"
+    ],
+    "0x4E11C576": [
+      "global_bookshelflargea"
+    ],
+    "0x4E2B373E": [
+      "white_bld_corner8x16b"
+    ],
+    "0x4E2BA50D": [
+      "groutpostinterior_lampalleya"
+    ],
+    "0x4E40427D": [
+      "global_tableb"
+    ],
+    "0x4E5D7283": [
+      "gr_hum_starter04_acc"
+    ],
+    "0x4EC9BB2A": [
+      "merida_market02"
+    ],
+    "0x4ECF28FB": [
+      "oc_veh_truck_esv_hood_damage"
+    ],
+    "0x4EE35C0A": [
+      "pmcoutpost_bld_hqexterior_wall01"
+    ],
+    "0x4EF718B5": [
+      "ch_att_officer_helmet"
+    ],
+    "0x4F0F3381": [
+      "oc_veh_truck_mtv_wheel"
+    ],
+    "0x4F203D76": [
+      "global_weapon_mgl"
+    ],
+    "0x4F3C5FBE": [
+      "estate_bld_mansion02"
+    ],
+    "0x4F45682A": [
+      "oilrig_bld_buildinga_pipes"
+    ],
+    "0x4F5AAC45": [
+      "global_wallsafelarge"
+    ],
+    "0x4F6A8EF5": [
+      "civ_hum_cartworker_haira"
+    ],
+    "0x4F7656A9": [
+      "industrial_stairwelllonga"
+    ],
+    "0x4F79E5E9": [
+      "global_veh_phoenix_body_damage"
+    ],
+    "0x4FBBA0EC": [
+      "oc_veh_truck_esv_wheel"
+    ],
+    "0x4FC18E5C": [
+      "aloutpost_bld_garage01"
+    ],
+    "0x4FC2D374": [
+      "al_veh_boat_lcur"
+    ],
+    "0x4FE330C6": [
+      "oc_hum_mercenary_elite_head"
+    ],
+    "0x5040C09F": [
+      "pr_att_thug_a_glasses"
+    ],
+    "0x505572CA": [
+      "global_roof03"
+    ],
+    "0x507A547E": [
+      "industrial_bld_silosmall"
+    ],
+    "0x509509D6": [
+      "pmc_hum_eva_equip_alt"
+    ],
+    "0x50AACA22": [
+      "pmcoutpost_bld_hq"
+    ],
+    "0x50B95F9F": [
+      "civ_hum_doctorfemale_acca"
+    ],
+    "0x50C1E7A3": [
+      "gr_hum_starter1_head"
+    ],
+    "0x50D0D98C": [
+      "caracas_bld_hospitalvargas_wall"
+    ],
+    "0x50D0DC7B": [
+      "civ_hum_casual_head_a"
+    ],
+    "0x50D2D2C7": [
+      "civ_hum_casualfemale_lb_e"
+    ],
+    "0x50D559A9": [
+      "civ_hum_casual_head_c"
+    ],
+    "0x50E128A6": [
+      "proutpost_bld_hq_wall03"
+    ],
+    "0x5146925F": [
+      "groutpost_podium"
+    ],
+    "0x51500BBD": [
+      "civ_veh_car_crx_racing_damage"
+    ],
+    "0x51565106": [
+      "merida_lightstadiuma"
+    ],
+    "0x515D86E8": [
+      "commercial_bld_corner8x16b_wall"
+    ],
+    "0x516050E7": [
+      "gr_hum_soldierfemale_a_lb"
+    ],
+    "0x516E145E": [
+      "global_chairwooda"
+    ],
+    "0x5183C4FB": [
+      "global_cannister_propanea"
+    ],
+    "0x51F277BD": [
+      "global_veh_klr650"
+    ],
+    "0x51F84DC9": [
+      "civ_hum_richfemale_accb"
+    ],
+    "0x521F5FCB": [
+      "shanty_docka"
+    ],
+    "0x527C7220": [
+      "commercial_bld_policestation_02"
+    ],
+    "0x528A5A4B": [
+      "global_weapon_grapplinghook"
+    ],
+    "0x529E0C88": [
+      "global_att_piperibbeda"
+    ],
+    "0x52BFCBFD": [
+      "city_bld_segment32x32b"
+    ],
+    "0x5321E155": [
+      "player_irish_default_body"
+    ],
+    "0x535FE820": [
+      "cumana_bld_segment32x32d_pavement"
+    ],
+    "0x53980DF1": [
+      "ocoutpost_bld_alarmtower"
+    ],
+    "0x539FF827": [
+      "city_bld_skyscraper02"
+    ],
+    "0x53AD7D23": [
+      "oc_hum_beachfemale_a_hair"
+    ],
+    "0x53C9C94A": [
+      "oc_hum_journalistfemale_heada"
+    ],
+    "0x53D226FA": [
+      "global_weapon_smaw"
+    ],
+    "0x53E64929": [
+      "ocoutpost_bld_hq_interiorwindow"
+    ],
+    "0x53ECE49F": [
+      "global_billboardc"
+    ],
+    "0x53FD74F4": [
+      "pmc_hum_chickensuit_head"
+    ],
+    "0x5436A936": [
+      "jungle_bld_ruinshotelfront"
+    ],
+    "0x54557BF3": [
+      "pmcoutpost_bld_fueldepot"
+    ],
+    "0x545DE2CE": [
+      "cartel_hum_officer_lba"
+    ],
+    "0x5465793B": [
+      "police_hum_starter05_acc"
+    ],
+    "0x546BB61A": [
+      "ch_hum_boss_lb"
+    ],
+    "0x5494E8D9": [
+      "civ_hum_poorfemale_haira"
+    ],
+    "0x54A17A49": [
+      "oc_bld_warehouse01"
+    ],
+    "0x54AC7C10": [
+      "civ_hum_business_a_lb"
+    ],
+    "0x54BD3887": [
+      "al_att_tank_helmet_a"
+    ],
+    "0x54DB2EBE": [
+      "shanty_env_tree01"
+    ],
+    "0x54E9C345": [
+      "al_veh_plane_c130"
+    ],
+    "0x54F71231": [
+      "groutpost_bld_guardtowertree01"
+    ],
+    "0x55064245": [
+      "city_bld_apartment01_wall01"
+    ],
+    "0x551A0FF1": [
+      "maracaibo_bld_corner32x32b"
+    ],
+    "0x554820C8": [
+      "marsh_bridgemid"
+    ],
+    "0x555C59EB": [
+      "civ_hum_latin_headf_hair"
+    ],
+    "0x557757F9": [
+      "groutpost_bld_shackfuselage01_metal"
+    ],
+    "0x55931598": [
+      "pmcoutpost_bld_hqroof"
+    ],
+    "0x559F909D": [
+      "proutpost_bld_shacksmall03"
+    ],
+    "0x55C77A6A": [
+      "global_curb01"
+    ],
+    "0x55E78FC8": [
+      "proutpost_bld_pavillion01"
+    ],
+    "0x560001FD": [
+      "civ_att_journalistfemale_baga"
+    ],
+    "0x5601BDF1": [
+      "chinaoutpost_interior_jar"
+    ],
+    "0x5604896E": [
+      "shanty_bld_housegroup01_wall10"
+    ],
+    "0x56130E64": [
+      "global_att_wheelchair_chrome"
+    ],
+    "0x564EC48D": [
+      "pmcoutpost_bld_hangar_door"
+    ],
+    "0x5657A1C1": [
+      "aloutpost_bld_bunker"
+    ],
+    "0x565AB62F": [
+      "maracaibo_park_roadtiles"
+    ],
+    "0x56B638DF": [
+      "merida_bld_universitydorm01_sm"
+    ],
+    "0x56CAAF8B": [
+      "oilrig_bld_buildinga_details"
+    ],
+    "0x56EE6A1F": [
+      "ch_veh_tank_pgz95"
+    ],
+    "0x56F9D2A5": [
+      "civ_hum_rich_b_lb"
+    ],
+    "0x578A0D82": [
+      "global_weapon_m86pdm"
+    ],
+    "0x578E9844": [
+      "civ_hum_rich_a_lb"
+    ],
+    "0x57B0953A": [
+      "groutpost_bld_shackperm02"
+    ],
+    "0x57E44E17": [
+      "pmc_hum_proppilot_lb"
+    ],
+    "0x580CB71A": [
+      "global_trashpile01"
+    ],
+    "0x585A9008": [
+      "margarita_bld_club01"
+    ],
+    "0x5877B5F3": [
+      "maracaibo_bld_gasstation_walls02"
+    ],
+    "0x5890600C": [
+      "merida_universitylamppost"
+    ],
+    "0x58EF3286": [
+      "oc_hum_doctorfemale_haira"
+    ],
+    "0x590DC884": [
+      "global_weapon_pp2000"
+    ],
+    "0x5924E9EF": [
+      "global_tirelargea"
+    ],
+    "0x59359519": [
+      "chinaoutpost_interior_barrelc"
+    ],
+    "0x593EB95C": [
+      "vz_hum_carmona_ub"
+    ],
+    "0x594968AA": [
+      "white_bld_segment8x16b"
+    ],
+    "0x59729E24": [
+      "global_chairwoodc"
+    ],
+    "0x5980581D": [
+      "gr_att_heavy_a_rag"
+    ],
+    "0x59A14498": [
+      "docks_bld_toolshed_roof"
+    ],
+    "0x59A75C88": [
+      "global_weapon_mlrsrocket"
+    ],
+    "0x59C8701B": [
+      "docks_bld_docks02"
+    ],
+    "0x59D4D890": [
+      "global_pickup_health"
+    ],
+    "0x5A1E0DD9": [
+      "jungle_road5_cross"
+    ],
+    "0x5A304582": [
+      "oilrig_bld_pontoonbase_02"
+    ],
+    "0x5A34F604": [
+      "city_bld_storefrontwindows01"
+    ],
+    "0x5A82D7F4": [
+      "maracaibo_park_coins"
+    ],
+    "0x5AAF7AF6": [
+      "vz_att_soldierriot_a_gasmask"
+    ],
+    "0x5AB8A933": [
+      "jungle_env_treemedium03"
+    ],
+    "0x5AD1838A": [
+      "pmcoutpost_bld_hqinterior_details_02"
+    ],
+    "0x5AE677DE": [
+      "merida_bld_universitylibrary_steps"
+    ],
+    "0x5AF28185": [
+      "proutpost_bld_hq_wall04"
+    ],
+    "0x5B172306": [
+      "civ_veh_truck_impact"
+    ],
+    "0x5B30829D": [
+      "maracaibo_freewaystraight01"
+    ],
+    "0x5B3458E9": [
+      "pmc_veh_truck_monster_rtr"
+    ],
+    "0x5B3B0BF5": [
+      "global_weapon_amraam"
+    ],
+    "0x5B565B35": [
+      "proutpost_bld_shacksmall04_wall"
+    ],
+    "0x5B6B8D06": [
+      "pmcoutpost_bld_hqexterior_window01"
+    ],
+    "0x5B6F14FF": [
+      "global_weapon_minigun"
+    ],
+    "0x5B7F6D3D": [
+      "global_chairwoodf"
+    ],
+    "0x5B81D918": [
+      "global_weapon_chainfeed01"
+    ],
+    "0x5BA2CD7C": [
+      "al_hum_pilot_ub"
+    ],
+    "0x5BB1CAEC": [
+      "pmc_hum_chickensuit_lb"
+    ],
+    "0x5BCB6FFB": [
+      "pmc_hum_jennifer_v3_head"
+    ],
+    "0x5BF87E08": [
+      "village_fruitboxstackc"
+    ],
+    "0x5BFF5EE2": [
+      "global_veh_van_wheel"
+    ],
+    "0x5C412F85": [
+      "vzoutpost_bld_garagebunker"
+    ],
+    "0x5C550984": [
+      "merida_bld_universitydorm01_nm"
+    ],
+    "0x5C5FE18E": [
+      "cumana_bld_corner16x16d_wall"
+    ],
+    "0x5C6F661C": [
+      "pmcoutpost_bld_hqinterior_floor01"
+    ],
+    "0x5C7A21BF": [
+      "pr_hum_sailorfemale_a_ub"
+    ],
+    "0x5CCAF358": [
+      "oc_hum_boardmember_lb"
+    ],
+    "0x5CD136E8": [
+      "global_env_palmtree01trunk"
+    ],
+    "0x5D108EF2": [
+      "city_bld_apartment06"
+    ],
+    "0x5D146E7B": [
+      "city_bld_apartment01_parts01"
+    ],
+    "0x5D16F3CB": [
+      "pmc_hum_chris_v3_lb"
+    ],
+    "0x5D46E3F1": [
+      "oc_logo_sign"
+    ],
+    "0x5D520233": [
+      "pmc_hum_eva_ub_alt"
+    ],
+    "0x5D5A7F44": [
+      "gr_hum_officerfemale_bereta"
+    ],
+    "0x5D7360DF": [
+      "global_veh_rtr_damage"
+    ],
+    "0x5E218664": [
+      "gr_hum_elite_hair"
+    ],
+    "0x5E42B2FE": [
+      "oilrig_bld_platform"
+    ],
+    "0x5E7E2F77": [
+      "ocoutpostinterior_metal"
+    ],
+    "0x5EA12FC4": [
+      "maracaibo_bridge_base"
+    ],
+    "0x5EA88695": [
+      "global_newspaperbin02"
+    ],
+    "0x5EBEE147": [
+      "estate_bld_mansion01_stair"
+    ],
+    "0x5F2F8B4F": [
+      "global_att_pipethicka"
+    ],
+    "0x5F6F6450": [
+      "merida_bld_plazachurch"
+    ],
+    "0x5FA48A25": [
+      "cumana_bld_corner16x16d_doors"
+    ],
+    "0x5FBA3915": [
+      "global_weapon_ak47"
+    ],
+    "0x5FE560EF": [
+      "proutpost_bld_pavillion02"
+    ],
+    "0x5FF412A5": [
+      "vzoutpost_walla"
+    ],
+    "0x600429C3": [
+      "caracas_rampgovernment01_wall"
+    ],
+    "0x60200721": [
+      "al_hum_asian_head_a"
+    ],
+    "0x60266604": [
+      "gr_hum_worker_ub"
+    ],
+    "0x60388732": [
+      "al_hum_officer_a_holster"
+    ],
+    "0x604D2D83": [
+      "white_sidewalk_corner"
+    ],
+    "0x606ACAAB": [
+      "global_benchpark"
+    ],
+    "0x60773CA2": [
+      "civ_att_protester_bandanab"
+    ],
+    "0x608179B5": [
+      "estate_bld_mansion03_01_nm"
+    ],
+    "0x608E8AF7": [
+      "civ_hum_richfemale_ubb"
+    ],
+    "0x609414A7": [
+      "white_road10_straight"
+    ],
+    "0x60AEBB0E": [
+      "pmc_hum_chickensuit_feathers"
+    ],
+    "0x60BC3EF2": [
+      "global_att_loadingdocka_02"
+    ],
+    "0x60C4F0C4": [
+      "merida_bld_universitydorm01"
+    ],
+    "0x60E7FFEB": [
+      "vz_veh_boat_patrol"
+    ],
+    "0x6101E845": [
+      "ch_att_pilot_helmetb"
+    ],
+    "0x6129B5A4": [
+      "pr_att_thug_a_hat"
+    ],
+    "0x613D6CEC": [
+      "oilrig_tanksmalla"
+    ],
+    "0x614FAE88": [
+      "shanty_bld_shack02"
+    ],
+    "0x616D04E3": [
+      "vz_hum_carmona_head"
+    ],
+    "0x616F7AF4": [
+      "al_att_starter02_helmet"
+    ],
+    "0x618DF23E": [
+      "police_hum_starter05_head"
+    ],
+    "0x61D66430": [
+      "global_att_acunitroofc02"
+    ],
+    "0x61E157FA": [
+      "groutpost_bld_shackfuselage01_alpha02"
+    ],
+    "0x61EE7C3C": [
+      "civ_att_business_hat"
+    ],
+    "0x6205DB44": [
+      "civ_hum_casualfemale_hat"
+    ],
+    "0x622EB29F": [
+      "global_weapon_deserteagle"
+    ],
+    "0x624F3CEA": [
+      "proutpost_bld_hq"
+    ],
+    "0x6270A601": [
+      "village_bld_watchtower02"
+    ],
+    "0x62823F00": [
+      "pr_hum_officer_head"
+    ],
+    "0x6284C592": [
+      "oc_hum_mercenary_elite_lb"
+    ],
+    "0x62C9F0CD": [
+      "civ_hum_industrialfemale_lb_a"
+    ],
+    "0x62D45983": [
+      "jungle_env_treetall03"
+    ],
+    "0x6307D65B": [
+      "pmcoutpost_gate"
+    ],
+    "0x6309BF85": [
+      "vehicle_truck_hmmwv_softtop_al"
+    ],
+    "0x634584E9": [
+      "city_bld_standalone03_wall02"
+    ],
+    "0x6353438F": [
+      "gr_faction_haira"
+    ],
+    "0x63538936": [
+      "industrial_bld_gasstation01"
+    ],
+    "0x638F9B92": [
+      "pmcoutpost_planter02"
+    ],
+    "0x63A552E1": [
+      "village_bld_shackovergrown01"
+    ],
+    "0x63A88E79": [
+      "civ_hum_industrialfemale_head_a"
+    ],
+    "0x63A924BD": [
+      "docks_net02"
+    ],
+    "0x63B3D192": [
+      "ch_hum_officer_ub"
+    ],
+    "0x63C031B5": [
+      "pmc_hum_mattias_v2_ub"
+    ],
+    "0x63CCAB53": [
+      "oilrig_bld_signs"
+    ],
+    "0x63E4703A": [
+      "civ_veh_truck_bank"
+    ],
+    "0x6408DEF8": [
+      "industrial_bld_silowide_top"
+    ],
+    "0x64383224": [
+      "civ_veh_car_l300_normal_damage"
+    ],
+    "0x6439E3EA": [
+      "proutpost_bld_hq_brace"
+    ],
+    "0x64582C69": [
+      "global_ruindebris_wood01"
+    ],
+    "0x6463C9A0": [
+      "pmc_hum_eva_head"
+    ],
+    "0x646D71FF": [
+      "pmc_hum_eva_ub"
+    ],
+    "0x64836F61": [
+      "global_trashcan02"
+    ],
+    "0x6497F968": [
+      "global_flag_smalgr"
+    ],
+    "0x64F25712": [
+      "industrial_signgastall"
+    ],
+    "0x64FFB8A5": [
+      "global_sandbagsprdetail"
+    ],
+    "0x6500A0AE": [
+      "global_flag_largegr"
+    ],
+    "0x651A93B9": [
+      "civ_hum_richfemale_b_head"
+    ],
+    "0x651FA5B4": [
+      "civ_hum_beachfemale_b_hair"
+    ],
+    "0x6523B88D": [
+      "pmcoutpost_bld_hqinterior_livedina"
+    ],
+    "0x652F1208": [
+      "aloutpost_bld_hangersmall"
+    ],
+    "0x655CD33F": [
+      "industrial_cartlong"
+    ],
+    "0x6561F3D9": [
+      "chinaoutpost_interior_controlb"
+    ],
+    "0x656E1CD4": [
+      "city_bld_segment32x32d_wall02"
+    ],
+    "0x657FC252": [
+      "pmc_hum_chris_v4_lb"
+    ],
+    "0x65855F86": [
+      "global_corrugatedroof01"
+    ],
+    "0x65A85F92": [
+      "merida_bld_universityadmin_sign"
+    ],
+    "0x65AB942B": [
+      "cartel_hum_briefcaselt_lb"
+    ],
+    "0x65D46951": [
+      "commercial_bld_corner8x8a"
+    ],
+    "0x664CB4E6": [
+      "global_generator"
+    ],
+    "0x66667D8A": [
+      "ch_hum_medic_lba"
+    ],
+    "0x66728CB2": [
+      "pr_hum_thugfemale_a_hair"
+    ],
+    "0x667CC56A": [
+      "vz_hum_deathsquad_hairb"
+    ],
+    "0x668AD7C9": [
+      "industrial_bld_gasstationbathroom_walls02"
+    ],
+    "0x66C866DE": [
+      "civ_hum_poor_uba"
+    ],
+    "0x66F6279F": [
+      "shanty_bld_apartment04_002"
+    ],
+    "0x6720E7B3": [
+      "mar_commercial_sidewalk_corner"
+    ],
+    "0x67250E34": [
+      "pmcoutpost_bld_dock_doors"
+    ],
+    "0x67281D71": [
+      "oc_veh_truck_mtv"
+    ],
+    "0x6749B1F8": [
+      "oilrig_bld_platform_bottom"
+    ],
+    "0x674A9C75": [
+      "al_hum_starter01_head"
+    ],
+    "0x67641496": [
+      "global_weapon_beacon"
+    ],
+    "0x67742B21": [
+      "caracas_bld_governmentcorner01_parts"
+    ],
+    "0x682B0765": [
+      "global_flag_smaloc"
+    ],
+    "0x682BC167": [
+      "cartel_hum_thug_a_head"
+    ],
+    "0x6847FAFD": [
+      "city_bld_corner16x16d_doors"
+    ],
+    "0x686E70DC": [
+      "village_bld_watchtower03"
+    ],
+    "0x687CDF83": [
+      "cartel_hum_thug01_ub"
+    ],
+    "0x68A5C41B": [
+      "pmc_hum_chris_v2_ub"
+    ],
+    "0x68C7C563": [
+      "pmc_hum_jennifer_v3_lb"
+    ],
+    "0x68DD3165": [
+      "city_bld_corner16x16b"
+    ],
+    "0x68E14661": [
+      "pmcoutpost_bld_hqexterior_wall06"
+    ],
+    "0x68EB87C9": [
+      "city_bld_corner16x16c_wall02"
+    ],
+    "0x693BFE45": [
+      "merida_pmcautoshopinterior"
+    ],
+    "0x6959F389": [
+      "commercial_bld_segment16x16a_01"
+    ],
+    "0x699EB2D3": [
+      "global_whitewall01"
+    ],
+    "0x69A728A4": [
+      "docks_bld_warehouse_roof01"
+    ],
+    "0x69AB9F8B": [
+      "global_barrelb"
+    ],
+    "0x69CAC9E8": [
+      "maracaiboruins_bld_historical01"
+    ],
+    "0x69FC447F": [
+      "port_containerc"
+    ],
+    "0x6A0E8D92": [
+      "merida_busstop"
+    ],
+    "0x6A2BE04D": [
+      "ch_veh_plane_transport"
+    ],
+    "0x6A4181D0": [
+      "groutpost_bld_shackbus"
+    ],
+    "0x6A41FBB4": [
+      "aloutpost_bld_largetentextensiona"
+    ],
+    "0x6A535D21": [
+      "global_roof04"
+    ],
+    "0x6A59794B": [
+      "global_weapon_pistol"
+    ],
+    "0x6A6764F0": [
+      "maracaiboruins_bld_radiotower01"
+    ],
+    "0x6A7BADCC": [
+      "industrial_lampost01"
+    ],
+    "0x6A8DFB86": [
+      "global_veh_68valiant4door"
+    ],
+    "0x6AB0E73B": [
+      "city_bld_segment32x32d"
+    ],
+    "0x6AB6A5FA": [
+      "industrial_bld_hangar01_nm"
+    ],
+    "0x6ADAFFB9": [
+      "aloutpost_bld_hanger_nm"
+    ],
+    "0x6ADD4183": [
+      "industrial_bld_gasstation_walls02"
+    ],
+    "0x6B1DE27D": [
+      "chinaoutpost_bld_storage"
+    ],
+    "0x6B1E6C01": [
+      "cumana_bld_corner16x16c_roof"
+    ],
+    "0x6B470131": [
+      "global_weapon_ordinancecart"
+    ],
+    "0x6B4D7FAF": [
+      "shanty_bld_shack01"
+    ],
+    "0x6B5B55B7": [
+      "jungle_env_bushmedium01"
+    ],
+    "0x6B624A6D": [
+      "groutpostinterior_bulletinboardeasela"
+    ],
+    "0x6B641DE0": [
+      "village_bld_shacksmall02"
+    ],
+    "0x6B9D74A8": [
+      "proutpost_bld_shacksmall02"
+    ],
+    "0x6BA7CC2E": [
+      "proutpost_fencewood"
+    ],
+    "0x6BD49A52": [
+      "pmc_hum_chris_ub"
+    ],
+    "0x6BD6828A": [
+      "pr_hum_boss_ub"
+    ],
+    "0x6BDE4B9D": [
+      "cumana_bld_hotelfourstar01"
+    ],
+    "0x6BE9A63A": [
+      "caracas_bridgeparquecentral"
+    ],
+    "0x6BF13B0D": [
+      "global_ruindebris01"
+    ],
+    "0x6C04E2B7": [
+      "global_barrelfuel"
+    ],
+    "0x6C2FA30F": [
+      "global_boxa"
+    ],
+    "0x6C38E1E5": [
+      "shanty_bld_housegroup01_ground01"
+    ],
+    "0x6C7DD6DC": [
+      "pmcoutpost_interior_drapes"
+    ],
+    "0x6C7EE853": [
+      "white_bld_corner8x8b"
+    ],
+    "0x6CBE86D9": [
+      "aloutpost_bld_helipad"
+    ],
+    "0x6CCDFCA0": [
+      "pr_att_sailor_b_glasses"
+    ],
+    "0x6CD28DB0": [
+      "pr_hum_sailorfemale_a_lb"
+    ],
+    "0x6CDD76BD": [
+      "civ_hum_aidworker_lba"
+    ],
+    "0x6CF39C31": [
+      "port_dockdryenda"
+    ],
+    "0x6D394A7B": [
+      "ch_veh_helicopter_wz10"
+    ],
+    "0x6D74F10B": [
+      "pmc_hum_strap"
+    ],
+    "0x6DA9538F": [
+      "merida_bld_universitylibrary01"
+    ],
+    "0x6DD58170": [
+      "vz_att_tank_helmet_a"
+    ],
+    "0x6E13A822": [
+      "aloutpost_bld_helipad_flag"
+    ],
+    "0x6E1C7A8B": [
+      "al_hum_pilot_lb"
+    ],
+    "0x6E40E838": [
+      "gr_hum_soldier_a_lba"
+    ],
+    "0x6E8A4C03": [
+      "vzoutpost_bld_pillbox"
+    ],
+    "0x6EDD5C27": [
+      "civ_hum_protester_female_headb"
+    ],
+    "0x6EE59B3D": [
+      "civ_veh_car_van_racing_wheel"
+    ],
+    "0x6F1105DF": [
+      "proutpost_bld_garageboat_details02"
+    ],
+    "0x6F4707FE": [
+      "global_firehydrantyellow01"
+    ],
+    "0x6F4B9CA8": [
+      "estate_bld_mansion04"
+    ],
+    "0x6F4C806D": [
+      "caracas_bld_plazaparquecentral01"
+    ],
+    "0x6F616008": [
+      "jungle_env_rock02"
+    ],
+    "0x6F86E292": [
+      "pr_hum_thugfemale_b_ub"
+    ],
+    "0x6F98CA68": [
+      "cumana_bld_corner16x16c"
+    ],
+    "0x6FEF5F6A": [
+      "al_hum_black_head_a"
+    ],
+    "0x6FFFC2DF": [
+      "global_weapon_moab"
+    ],
+    "0x70317F41": [
+      "pmcoutpost_bld_hangar_details"
+    ],
+    "0x70531E0E": [
+      "vz_hum_deathsquad_uba"
+    ],
+    "0x7079E7A4": [
+      "estate_bld_mansion03_03_sm"
+    ],
+    "0x709D6E4F": [
+      "civ_att_aidworker_acca"
+    ],
+    "0x70B233DA": [
+      "ocoutpost_statueoil"
+    ],
+    "0x70D0AC75": [
+      "merida_market01"
+    ],
+    "0x70D2FBFA": [
+      "global_env_treetropical01"
+    ],
+    "0x70D8F9FA": [
+      "global_bridgepedestrian01"
+    ],
+    "0x70D9523C": [
+      "chinaoutpost_interior_lamp"
+    ],
+    "0x70DACFC5": [
+      "civ_veh_car_van_racing"
+    ],
+    "0x70DFAA3D": [
+      "ocoutpostinterior_chairblackleather"
+    ],
+    "0x70E270AC": [
+      "civ_veh_car_rtr_racing_wheel"
+    ],
+    "0x71145D98": [
+      "maracaibo_lampposta"
+    ],
+    "0x7120245F": [
+      "civ_att_motorhelmet_b"
+    ],
+    "0x71332164": [
+      "groutpost_bld_trailerhut02"
+    ],
+    "0x713ED3DB": [
+      "estate_bld_mansion03"
+    ],
+    "0x716D9525": [
+      "vz_hum_soldierelite_uba"
+    ],
+    "0x717EB6DA": [
+      "pmc_veh_truck_monster_ridgeline"
+    ],
+    "0x718C019B": [
+      "cumana_bld_corner16x16d"
+    ],
+    "0x71BB808C": [
+      "city_bld_corner16x16d_parts"
+    ],
+    "0x71EAD542": [
+      "global_billboardb"
+    ],
+    "0x720F3948": [
+      "global_veh_fordf150"
+    ],
+    "0x722BEA76": [
+      "al_veh_plane_a10"
+    ],
+    "0x72311A9D": [
+      "gr_att_soldier_b_maskb"
+    ],
+    "0x723CEBA7": [
+      "estate_bld_mansion03_01"
+    ],
+    "0x7242C788": [
+      "gr_hum_officer_ub"
+    ],
+    "0x7257E6E7": [
+      "global_roof02"
+    ],
+    "0x72A847A3": [
+      "cumana_bld_corner16x16c_parts"
+    ],
+    "0x72AC6E24": [
+      "vz_hum_soldier_a_beret"
+    ],
+    "0x72E39CC3": [
+      "proutpost_bld_hq_wall02"
+    ],
+    "0x72FDFD30": [
+      "groutpost_bld_guardtowertree04"
+    ],
+    "0x7301C096": [
+      "proutpost_bld_hq_roof01"
+    ],
+    "0x73070DE9": [
+      "chinaoutpost_bld_helipad"
+    ],
+    "0x735D8762": [
+      "pmc_hum_proppilot_helmet"
+    ],
+    "0x73621699": [
+      "global_playgroundride03"
+    ],
+    "0x7366155A": [
+      "pr_veh_boat_cutter"
+    ],
+    "0x737505A9": [
+      "global_chairwoodb"
+    ],
+    "0x7395AD22": [
+      "oilrig_details_01"
+    ],
+    "0x73A763DE": [
+      "groutpost_bld_bunkersandbag01"
+    ],
+    "0x73A9A6C5": [
+      "chinaoutpost_interior_tentb"
+    ],
+    "0x73BE3E20": [
+      "global_wheelbarrel"
+    ],
+    "0x73E8C0A4": [
+      "civ_veh_car_valiant_crappy"
+    ],
+    "0x73ECEBE8": [
+      "gr_hum_soldierfemale_a_ub"
+    ],
+    "0x73F02B0D": [
+      "global_att_binoculars"
+    ],
+    "0x7411ADBD": [
+      "pmc_att_mechanic_backpack"
+    ],
+    "0x74132706": [
+      "residential_bld_segment16x16d"
+    ],
+    "0x74474CB1": [
+      "airport_bld_terminal01"
+    ],
+    "0x7477B5BE": [
+      "gr_hum_boss_fake_lb"
+    ],
+    "0x747E2793": [
+      "city_bld_corner16x16a_wall02"
+    ],
+    "0x74C5DDF0": [
+      "pmc_hum_eva_lb"
+    ],
+    "0x74CF6DE1": [
+      "pmcoutpost_bld_hqinterior_details_05"
+    ],
+    "0x74D4218D": [
+      "estate_bld_mansion01_03_nm"
+    ],
+    "0x74EB59B1": [
+      "civ_veh_boat_fishing"
+    ],
+    "0x750E53C3": [
+      "civ_veh_car_r90_taxi_damage"
+    ],
+    "0x753DE3CC": [
+      "caracas_stairparquecentrallong"
+    ],
+    "0x75A20E55": [
+      "ocoutpost_interiordetail"
+    ],
+    "0x75BEFD49": [
+      "ocoutpost_tablearmwrestling"
+    ],
+    "0x75C187D7": [
+      "pmcoutpost_bld_hqdome"
+    ],
+    "0x75DB90E0": [
+      "ocoutpost_hqbase"
+    ],
+    "0x761EFF04": [
+      "ch_hum_heavy_lb"
+    ],
+    "0x7655C427": [
+      "global_weapon_xm84"
+    ],
+    "0x76768012": [
+      "caracasruins_bld_corner16x32a"
+    ],
+    "0x767A2AA2": [
+      "estate_bld_mansion01_03_sm"
+    ],
+    "0x768974EB": [
+      "outskirt_bld_mercbar_wallb"
+    ],
+    "0x7690EC30": [
+      "civ_hum_richfemale_uba"
+    ],
+    "0x76BDF95A": [
+      "global_dumpstergraylong"
+    ],
+    "0x770E7949": [
+      "city_bld_apartment01"
+    ],
+    "0x773D1F65": [
+      "oc_veh_truck_esv_hood"
+    ],
+    "0x77F115C8": [
+      "global_weapon_qjy88"
+    ],
+    "0x7821DA34": [
+      "shanty_dockb"
+    ],
+    "0x7823DBBF": [
+      "global_att_laserrangefinder"
+    ],
+    "0x784F5A0B": [
+      "port_crane1_a"
+    ],
+    "0x7853D739": [
+      "port_crane1_c"
+    ],
+    "0x7857A7D4": [
+      "vz_hum_deathsquad_ubc"
+    ],
+    "0x7870EA35": [
+      "oc_att_mercenaryofficer_speakear"
+    ],
+    "0x789A900A": [
+      "global_env_hedgeleaves"
+    ],
+    "0x78C1A4E0": [
+      "chinaoutpost_gateentrance"
+    ],
+    "0x78EC7F01": [
+      "pmcoutpost_bld_pool_01"
+    ],
+    "0x78FC4179": [
+      "chinaoutpost_bld_guardtower01"
+    ],
+    "0x791B286F": [
+      "global_bld_bunkersandbag"
+    ],
+    "0x793EA066": [
+      "pmcoutpost_bld_solanobust01"
+    ],
+    "0x795F312F": [
+      "jungle_env_rock01"
+    ],
+    "0x796CDE43": [
+      "mar_commercial_road10_cross"
+    ],
+    "0x79752F8D": [
+      "chinaoutpost_bld_guardtowertall"
+    ],
+    "0x7981330F": [
+      "pmcoutpost_bld_hqinterior_ceiling01"
+    ],
+    "0x79835204": [
+      "industrial_bld_towerrefinerytall"
+    ],
+    "0x7997F8BF": [
+      "global_metal_misc"
+    ],
+    "0x7998AB25": [
+      "gr_att_boss_rag"
+    ],
+    "0x7A06DFEA": [
+      "commercial_bld_segment8x8d"
+    ],
+    "0x7A5DCB7C": [
+      "civ_veh_towed_fuel"
+    ],
+    "0x7A821524": [
+      "chinaoutpost_bld_tent01top_ruin2"
+    ],
+    "0x7ABD58C1": [
+      "jungle_env_treemedium01"
+    ],
+    "0x7AE87D68": [
+      "global_weapon_clusterbomb"
+    ],
+    "0x7B084C90": [
+      "residential_road5_straight"
+    ],
+    "0x7B122EBF": [
+      "maracaibo_lamppostb"
+    ],
+    "0x7B1A87EA": [
+      "commercial_road10_cross"
+    ],
+    "0x7B1A9FA7": [
+      "global_weapon_kvsk"
+    ],
+    "0x7B5059F5": [
+      "white_bld_segment8x16a"
+    ],
+    "0x7B6E7C00": [
+      "oilrig_bld_buildinga_windows_01"
+    ],
+    "0x7B823953": [
+      "outskirt_bld_market01"
+    ],
+    "0x7BB37558": [
+      "merida_bld_universitylibrary_trim01"
+    ],
+    "0x7BB79E5E": [
+      "pmcoutpost_bld_hqinterior_wall03"
+    ],
+    "0x7C4E0BB8": [
+      "gr_att_starter1_sunglasses"
+    ],
+    "0x7C602D85": [
+      "civ_hum_industrial_a_head"
+    ],
+    "0x7C717277": [
+      "al_hum_soldier_b_helmet"
+    ],
+    "0x7C74F58F": [
+      "oc_hum_executive_female_head"
+    ],
+    "0x7C77ACCB": [
+      "shanty_bld_housegroup04"
+    ],
+    "0x7C7BA3D2": [
+      "city_bld_storefrontcorneresigns_01"
+    ],
+    "0x7C7EF2D5": [
+      "commercial_bld_policestation_03"
+    ],
+    "0x7C98CD8D": [
+      "ocoutpostinterior_sign"
+    ],
+    "0x7C9FF339": [
+      "pmc_hum_pilothelicopter_head"
+    ],
+    "0x7CC149A7": [
+      "gr_hum_soldierfemale_a_head"
+    ],
+    "0x7CC413C4": [
+      "global_vendingmachine01"
+    ],
+    "0x7CD49FF7": [
+      "pr_att_thug_b_hat"
+    ],
+    "0x7D0B00CB": [
+      "civ_veh_truck_impact_sut"
+    ],
+    "0x7D19BD73": [
+      "commercial_bld_supermarket_04"
+    ],
+    "0x7D575C8D": [
+      "chinaoutpost_bld_roof01"
+    ],
+    "0x7D800D2D": [
+      "commercial_bld_corner16x16a_sign"
+    ],
+    "0x7DB27685": [
+      "global_electricalbox01"
+    ],
+    "0x7DB2E527": [
+      "caracas_bld_skytrammain"
+    ],
+    "0x7DF9A5C0": [
+      "global_att_pda"
+    ],
+    "0x7E013B43": [
+      "civ_veh_trailer_box"
+    ],
+    "0x7E247FE5": [
+      "residential_bld_segment16x16c"
+    ],
+    "0x7E2CE762": [
+      "city_bld_segment16x16c_parts01"
+    ],
+    "0x7E3AB07D": [
+      "caracas_bld_parquecentral01"
+    ],
+    "0x7E6BEF2C": [
+      "village_prop_tentsmallpupa"
+    ],
+    "0x7E9A4B88": [
+      "shanty_bld_apartment04_lod"
+    ],
+    "0x7EA34BB3": [
+      "civ_hum_casualfemale_head_a"
+    ],
+    "0x7EC3FC58": [
+      "jungle_bld_ruinshotelback"
+    ],
+    "0x7EDA994E": [
+      "proutpost_att_neon"
+    ],
+    "0x7F0BA51B": [
+      "industrial_bld_warehouse01a"
+    ],
+    "0x7F1FDA0A": [
+      "industrial_bld_warehouse01_ruin_d"
+    ],
+    "0x7F287B0D": [
+      "al_hum_soldier_eliteb_lb"
+    ],
+    "0x7F747B40": [
+      "industrial_bld_gasstation_misc02"
+    ],
+    "0x7FA69925": [
+      "groutpostinterior_earthmover_flag"
+    ],
+    "0x7FC5A768": [
+      "outskirt_curb_straight"
+    ],
+    "0x7FEDC6AC": [
+      "caracasruins_bld_corner16x16a"
+    ],
+    "0x80109864": [
+      "civ_hum_casualfemale_ub_e"
+    ],
+    "0x8010D674": [
+      "civ_hum_industrialfemale_helmet"
+    ],
+    "0x802C5666": [
+      "civ_hum_protester_female_ubb"
+    ],
+    "0x805C965E": [
+      "industrial_bld_warehouse01"
+    ],
+    "0x80659E62": [
+      "global_veh_68valiant"
+    ],
+    "0x806824DB": [
+      "city_bld_corner16x16c_parts"
+    ],
+    "0x80725FF4": [
+      "global_weapon_stinger"
+    ],
+    "0x807ADD10": [
+      "pmc_hum_mattias_v4_lb"
+    ],
+    "0x807D1C3B": [
+      "pmc_veh_car_camo_veyron"
+    ],
+    "0x80835935": [
+      "mar_commercial_road_whiteline"
+    ],
+    "0x809D7FCC": [
+      "gr_att_soldier_a_acca"
+    ],
+    "0x80A53793": [
+      "vz_hum_solano_ub"
+    ],
+    "0x80C357EC": [
+      "ch_veh_tank_ztz63a"
+    ],
+    "0x80CE4CA3": [
+      "city_bld_corner16x16d"
+    ],
+    "0x80CF15A5": [
+      "al_hum_soldier_b_ub"
+    ],
+    "0x80DD5849": [
+      "caracas_bld_governmentcorner01_wall"
+    ],
+    "0x80E59E75": [
+      "groutpostinterior_tablemap"
+    ],
+    "0x80F39CED": [
+      "vz_hum_soldier_a_ub"
+    ],
+    "0x811872A8": [
+      "ocoutpostinterior_interiorfloor"
+    ],
+    "0x811F5D30": [
+      "oc_hum_starter05_hair"
+    ],
+    "0x815A9746": [
+      "chinaoutpost_interior_screen"
+    ],
+    "0x815DB6F0": [
+      "jungle_env_bushmedium02"
+    ],
+    "0x8166C6A6": [
+      "city_bld_corner32x32a"
+    ],
+    "0x81758ACC": [
+      "global_weapon_quad50"
+    ],
+    "0x818A1E06": [
+      "airport_bld_controltower"
+    ],
+    "0x818E5819": [
+      "outpost_bld_govtbld"
+    ],
+    "0x81C71C96": [
+      "up_deliverycrate"
+    ],
+    "0x81E052C7": [
+      "vzoutpost_bld_hangarbunker"
+    ],
+    "0x81EE8FC1": [
+      "gr_hum_soldier_b_ubb"
+    ],
+    "0x81F7E456": [
+      "global_intercom"
+    ],
+    "0x8200A82E": [
+      "city_bld_apartment01_roof"
+    ],
+    "0x82181FB8": [
+      "civ_hum_journalist_lba"
+    ],
+    "0x823C5319": [
+      "chinaoutpost_bld_helipad_metal"
+    ],
+    "0x825B033A": [
+      "civ_hum_poor_hairb"
+    ],
+    "0x825B3A03": [
+      "estate_bld_mansion03_02_sm"
+    ],
+    "0x825CEA72": [
+      "industrial_bld_domerefinery_railing"
+    ],
+    "0x82737485": [
+      "civ_hum_aidworkerfemale_lba"
+    ],
+    "0x827D01EE": [
+      "ch_att_sailor_helmeta"
+    ],
+    "0x828500B3": [
+      "global_roof_concrete01_sm"
+    ],
+    "0x82AD560E": [
+      "global_veh_taxi01"
+    ],
+    "0x82F3AEA2": [
+      "pmc_hum_chris_v2_glasses"
+    ],
+    "0x83111785": [
+      "global_veh_klr650_wheel"
+    ],
+    "0x831B6C22": [
+      "global_suspsensions"
+    ],
+    "0x832857B9": [
+      "merida_bld_oilwellland01"
+    ],
+    "0x833030CA": [
+      "commercial_bld_segment8x16c"
+    ],
+    "0x8337EC4C": [
+      "angelfalls_env_canyonside"
+    ],
+    "0x8346F5C5": [
+      "pmc_hum_proppilot_hair"
+    ],
+    "0x8363AAB2": [
+      "village_bld_food01"
+    ],
+    "0x83973E9C": [
+      "oc_hum_executive_head"
+    ],
+    "0x83A15CF9": [
+      "global_weapon_cruisemissile"
+    ],
+    "0x83A5B740": [
+      "gr_hum_boss_head"
+    ],
+    "0x83FEA17A": [
+      "al_hum_soldier_b_head"
+    ],
+    "0x840125BF": [
+      "chinaoutpost_bld_rail01"
+    ],
+    "0x8403E3A4": [
+      "groutpostinterior_steel"
+    ],
+    "0x841B19EA": [
+      "mar_commercial_sidewalk_straight"
+    ],
+    "0x84248CFD": [
+      "global_att_awningmetallonga"
+    ],
+    "0x84415CA7": [
+      "city_bld_storefrontcornerdsigns_01"
+    ],
+    "0x844C7CF6": [
+      "pmc_hum_mattias_v3_chain"
+    ],
+    "0x844EB63B": [
+      "estate_stairs01"
+    ],
+    "0x84570FDD": [
+      "civ_hum_protester_lba"
+    ],
+    "0x84725085": [
+      "estate_bld_mansion03_stair"
+    ],
+    "0x84799823": [
+      "industrial_lampost02"
+    ],
+    "0x847F9CA7": [
+      "chinaoutpost_concretewall01"
+    ],
+    "0x848EA568": [
+      "global_pickup_ammo"
+    ],
+    "0x84A7EA36": [
+      "al_deliverycrate"
+    ],
+    "0x84C7FFFA": [
+      "gr_hum_soldier_a_haira"
+    ],
+    "0x855325E7": [
+      "global_veh_phoenix_body"
+    ],
+    "0x85533E72": [
+      "civ_hum_casualfemale_hair01_c"
+    ],
+    "0x8566262E": [
+      "oilrig_towerblowoutdiagonal"
+    ],
+    "0x85FC5E0F": [
+      "caracas_bld_skyscraperpristine03_windows"
+    ],
+    "0x865A0E2D": [
+      "global_balconybars02"
+    ],
+    "0x86738727": [
+      "caracas_bld_skyscraperpristine03_base"
+    ],
+    "0x869533F2": [
+      "pr_hum_sailor_b_ub"
+    ],
+    "0x86A7C828": [
+      "vz_veh_towed_zu23aa"
+    ],
+    "0x86AF96CD": [
+      "global_bonfire01"
+    ],
+    "0x87289583": [
+      "pmc_hum_jennifer_v2_ub"
+    ],
+    "0x8749553F": [
+      "global_att_signs"
+    ],
+    "0x874D4EFA": [
+      "proutpost_bld_command"
+    ],
+    "0x8757B5FE": [
+      "commercial_wall"
+    ],
+    "0x87764118": [
+      "pr_hum_sailor_a_head"
+    ],
+    "0x87ED6900": [
+      "caracas_bld_historical05"
+    ],
+    "0x87F9725E": [
+      "pmc_hum_mechanic_lb"
+    ],
+    "0x88169378": [
+      "pmc_hum_eva_lb_alt"
+    ],
+    "0x88515D5E": [
+      "pmc_att_pilothelicopter_glasses"
+    ],
+    "0x885E2E35": [
+      "gr_hum_soldierfemale_a_hair"
+    ],
+    "0x88612024": [
+      "industrial_bld_warehouse03"
+    ],
+    "0x887E59E2": [
+      "oilrig_fueltanklargea_01"
+    ],
+    "0x8887BA1C": [
+      "proutpost_bld_command_wall01"
+    ],
+    "0x88C48C72": [
+      "island_bld_fortress01_walla01"
+    ],
+    "0x88CF5829": [
+      "civ_hum_poor_ubb"
+    ],
+    "0x88F5E975": [
+      "gr_hum_advisor_head"
+    ],
+    "0x8954D2BB": [
+      "merida_bld_universityadmin01"
+    ],
+    "0x8965A860": [
+      "city_bld_storefrontcornera_bottom"
+    ],
+    "0x896BC68E": [
+      "civ_hum_casualfemale_f_head"
+    ],
+    "0x897870A8": [
+      "civ_hum_businessfemale_a_head"
+    ],
+    "0x89A5F66E": [
+      "residential_road10_straight"
+    ],
+    "0x89CC9BD6": [
+      "port_dockt"
+    ],
+    "0x89CE1BB3": [
+      "gr_faction_headc"
+    ],
+    "0x89D8DE72": [
+      "global_veh_uh1huey"
+    ],
+    "0x8A00F40D": [
+      "port_containera"
+    ],
+    "0x8A28CFF8": [
+      "industrial_bld_smokestack_02"
+    ],
+    "0x8A3D75A6": [
+      "civ_veh_car_van_crappy_damage"
+    ],
+    "0x8A6DEF3D": [
+      "industrial_bld_warehouse06"
+    ],
+    "0x8A74240B": [
+      "global_containertransplantheart"
+    ],
+    "0x8A7CD8F6": [
+      "white_bld_corner8x8c"
+    ],
+    "0x8AA91FA8": [
+      "aloutpostinterior_water"
+    ],
+    "0x8ABA321F": [
+      "estate_bld_mansion02_02"
+    ],
+    "0x8ADAF8B6": [
+      "oc_hum_mercenary_a_head"
+    ],
+    "0x8AF1FD5D": [
+      "civ_hum_journalist_bagb"
+    ],
+    "0x8B19EA4C": [
+      "outskirt_bld_house06"
+    ],
+    "0x8B310BBB": [
+      "groutpost_bld_trailerhut01"
+    ],
+    "0x8B5545B6": [
+      "village_bld_shacksmall04"
+    ],
+    "0x8B5F7BD8": [
+      "commercial_bld_corner16x16a_wall_01"
+    ],
+    "0x8B6081B5": [
+      "industrial_bld_warehouselarge02_wall"
+    ],
+    "0x8B6C0872": [
+      "global_searchlighta"
+    ],
+    "0x8B73A257": [
+      "city_bld_corner32x32d"
+    ],
+    "0x8BD75909": [
+      "caracas_bld_skytramshopa"
+    ],
+    "0x8BD8A9E2": [
+      "airport_sign"
+    ],
+    "0x8BFD3293": [
+      "oc_hum_executive_ub"
+    ],
+    "0x8C0579EF": [
+      "aloutpostinterior_markerboard"
+    ],
+    "0x8C0DA2D2": [
+      "global_billboard06_wood"
+    ],
+    "0x8C3B2C58": [
+      "vz_hum_captain_lb"
+    ],
+    "0x8C4CB7E8": [
+      "port_crane2_a"
+    ],
+    "0x8C58E7EB": [
+      "pmc_veh_car_panhard"
+    ],
+    "0x8C674939": [
+      "groutpost_bld_shacktall02"
+    ],
+    "0x8C83F560": [
+      "civ_veh_car_phoenix_crappy"
+    ],
+    "0x8CA421C3": [
+      "vz_veh_tank_scorpion90"
+    ],
+    "0x8CAFF9CF": [
+      "al_veh_airstrike_f117"
+    ],
+    "0x8CCEB4D8": [
+      "white_bld_segment8x8a"
+    ],
+    "0x8CD1E32E": [
+      "industrial_machineparts02"
+    ],
+    "0x8CFD2B1F": [
+      "aloutpostinterior_woodbox"
+    ],
+    "0x8D21D116": [
+      "city_bld_apartment04_wall01"
+    ],
+    "0x8D26B965": [
+      "outskirt_bld_house03"
+    ],
+    "0x8D702E62": [
+      "city_bld_corner32x32d_wall"
+    ],
+    "0x8DBB9727": [
+      "global_flag_smalvz"
+    ],
+    "0x8DD459AA": [
+      "city_bld_standalone03_windows"
+    ],
+    "0x8DE46BB7": [
+      "civ_hum_beachfemale_a_head"
+    ],
+    "0x8DFB1843": [
+      "caracas_portplateau02"
+    ],
+    "0x8E02AA5B": [
+      "city_bld_storefrontcornerf_signs01"
+    ],
+    "0x8E139F4A": [
+      "commercial_lightclinic"
+    ],
+    "0x8E77A04D": [
+      "global_pickup_rockets"
+    ],
+    "0x8E7DFBFE": [
+      "civ_hum_mechanic_headb"
+    ],
+    "0x8E8ED4C0": [
+      "shanty_bld_house02"
+    ],
+    "0x8EA18772": [
+      "angelfalls_env_waterfallmiddle"
+    ],
+    "0x8EC34589": [
+      "docks_dockpump"
+    ],
+    "0x8EDC8642": [
+      "maracaibo_bld_warehouse01d"
+    ],
+    "0x8F1E1502": [
+      "civ_att_motorhelmet_c"
+    ],
+    "0x8F369E2D": [
+      "oc_fountentrance01"
+    ],
+    "0x8F552915": [
+      "groutpost_bld_tentlargetarp"
+    ],
+    "0x8F76896E": [
+      "port_windows"
+    ],
+    "0x8F803A20": [
+      "global_weapon_microuzi"
+    ],
+    "0x8FAD5881": [
+      "shanty_fencestraight01"
+    ],
+    "0x8FAE19F4": [
+      "global_barrela"
+    ],
+    "0x8FBC4421": [
+      "proutpost_att_satelitelarge001"
+    ],
+    "0x8FCA6118": [
+      "village_bld_farming01"
+    ],
+    "0x90133539": [
+      "oc_veh_truck_mtv_damaged"
+    ],
+    "0x905B2A87": [
+      "pmc_veh_helicopter_uh1huey"
+    ],
+    "0x90728623": [
+      "civ_hum_richfemale_b_hair"
+    ],
+    "0x9074E048": [
+      "pr_hum_thugfemale_a_lb"
+    ],
+    "0x90A7053B": [
+      "oc_att_mercenary_b_hat"
+    ],
+    "0x90ACC019": [
+      "proutpost_att_neonc"
+    ],
+    "0x90B6CC8B": [
+      "industrial_bld_gasstationpump02"
+    ],
+    "0x90C0E777": [
+      "global_blueprints"
+    ],
+    "0x9132806D": [
+      "aloutpost_bld_command"
+    ],
+    "0x91E950FD": [
+      "underwater_minea"
+    ],
+    "0x924F247B": [
+      "maracaibo_bld_stagerepublica_windows"
+    ],
+    "0x926D9ECB": [
+      "civ_veh_semi_austin"
+    ],
+    "0x928162BC": [
+      "white_bld_corner8x8a"
+    ],
+    "0x92894A5C": [
+      "docks_fishcage"
+    ],
+    "0x92BDE016": [
+      "oc_att_tank_helmet_a"
+    ],
+    "0x92C2410E": [
+      "chinaoutpost_interior_metalbox"
+    ],
+    "0x92C4347C": [
+      "police_hum_starter05_hair"
+    ],
+    "0x92CA4620": [
+      "city_bld_segment32x32d_roof"
+    ],
+    "0x9302194B": [
+      "civ_veh_car_l300_racing"
+    ],
+    "0x9337E2DF": [
+      "caracas_bld_governmentsegment"
+    ],
+    "0x934AE6B8": [
+      "village_prop_chaira"
+    ],
+    "0x93533353": [
+      "global_weapon_rpgrocket"
+    ],
+    "0x936BB7FD": [
+      "wz10_wheel"
+    ],
+    "0x9387F335": [
+      "pr_veh_boat_saltonsea"
+    ],
+    "0x93D66DE1": [
+      "city_bld_storefronte_windows"
+    ],
+    "0x93F94EEF": [
+      "city_bld_storefronta"
+    ],
+    "0x941ECAE8": [
+      "global_bld_officetrailera"
+    ],
+    "0x942D7DED": [
+      "estate_bld_mansion01_01"
+    ],
+    "0x94557171": [
+      "global_rail02"
+    ],
+    "0x9479BFC5": [
+      "npc_civilian_01_head"
+    ],
+    "0x9483F0A7": [
+      "global_brickpile01"
+    ],
+    "0x94B75193": [
+      "global_chessset"
+    ],
+    "0x94B92541": [
+      "oilrig_rails_01"
+    ],
+    "0x94BD5660": [
+      "caracasruins_bld_corner32x32a"
+    ],
+    "0x94D71784": [
+      "civ_hum_poor_headb"
+    ],
+    "0x94DCBC43": [
+      "docks_bld_bar01"
+    ],
+    "0x9510F5C7": [
+      "cumana_bld_corner16x16b_walls"
+    ],
+    "0x9548E783": [
+      "civ_hum_rich_a_ub"
+    ],
+    "0x955D4CFF": [
+      "commercial_bld_corner16x16a_wall_02"
+    ],
+    "0x95669E95": [
+      "village_bld_shacksmall03"
+    ],
+    "0x956B1EF8": [
+      "pmc_hum_proppilot_ub"
+    ],
+    "0x9595808B": [
+      "jungle_road5_straightmerge"
+    ],
+    "0x95A1756C": [
+      "ch_att_heavy_helmet"
+    ],
+    "0x95C09E8A": [
+      "global_bonfire01_2"
+    ],
+    "0x95CB0919": [
+      "global_chaircafe"
+    ],
+    "0x95DDD1AE": [
+      "pmc_hum_pilothelicopter_ub"
+    ],
+    "0x95E65E54": [
+      "groutpostinterior_sandbags"
+    ],
+    "0x95FB5377": [
+      "caracas_rampgovernment02"
+    ],
+    "0x96195816": [
+      "civ_veh_boat_barco"
+    ],
+    "0x964451A0": [
+      "shanty_bld_apartment04"
+    ],
+    "0x96AE27BA": [
+      "global_weapon_jdam"
+    ],
+    "0x96B02B30": [
+      "global_att_satellitedishb"
+    ],
+    "0x96E70416": [
+      "pmc_hum_jennifer_v2_hair"
+    ],
+    "0x96FCC26A": [
+      "civ_hum_poorfemale_uba"
+    ],
+    "0x97028D6D": [
+      "commercial_sidewalk_straight"
+    ],
+    "0x974B46E8": [
+      "chinaoutpost_bld_tent01"
+    ],
+    "0x974D0363": [
+      "underwater_algae"
+    ],
+    "0x97581091": [
+      "pr_hum_sailorfemale_b_lb"
+    ],
+    "0x976A5D44": [
+      "oc_veh_truck_esv_damage"
+    ],
+    "0x976E561B": [
+      "global_att_wheelchair"
+    ],
+    "0x97933596": [
+      "residential_bld_corner16x16b"
+    ],
+    "0x979BDBA0": [
+      "civ_hum_rich_head_a"
+    ],
+    "0x97A96272": [
+      "mountain_blastdoors"
+    ],
+    "0x97BAF5E2": [
+      "oc_hum_mercenaryofficer_mustashe"
+    ],
+    "0x97C0CDE7": [
+      "proutpost_att_satelitelarge007"
+    ],
+    "0x97C6B5B4": [
+      "global_att_antennad"
+    ],
+    "0x97CDB444": [
+      "gr_att_elite_acc"
+    ],
+    "0x97E1C632": [
+      "oc_veh_boat_oiltanker_pipes"
+    ],
+    "0x98025EAB": [
+      "gr_hum_starter1_lb"
+    ],
+    "0x98251DB7": [
+      "global_sandbagsgr"
+    ],
+    "0x983118E6": [
+      "vz_hum_deathsquad_a_head"
+    ],
+    "0x9839E26A": [
+      "jungle_bridge_woodpedestriana"
+    ],
+    "0x9840666A": [
+      "oc_att_fireman_helmet"
+    ],
+    "0x98529145": [
+      "pmc_hum_mechanic_ub"
+    ],
+    "0x98583AA5": [
+      "maracaibo_bld_gasstation_misc03"
+    ],
+    "0x98712D0C": [
+      "chinaoutpost_interior_woodbox"
+    ],
+    "0x98B149DF": [
+      "proutpost_att_neone"
+    ],
+    "0x98B8D75B": [
+      "industrial_bld_conveyorbeltangle"
+    ],
+    "0x98DA7A00": [
+      "civ_hum_protester_capb"
+    ],
+    "0x99019E37": [
+      "global_weapon_coilgun"
+    ],
+    "0x991DC461": [
+      "industrial_bld_warehouse01_ruin_c"
+    ],
+    "0x994E1953": [
+      "al_veh_helicopter_ah1z"
+    ],
+    "0x99C8323F": [
+      "village_bld_farming02"
+    ],
+    "0x9A0013C3": [
+      "global_locker"
+    ],
+    "0x9A12FFE9": [
+      "civ_hum_casualfemale_ub_d"
+    ],
+    "0x9A1407D9": [
+      "shanty_bld_housegroup01_roof02"
+    ],
+    "0x9A71B5A6": [
+      "city_bld_segment16x16a"
+    ],
+    "0x9A7642ED": [
+      "caracas_bld_hospitalvargas"
+    ],
+    "0x9A80A1FC": [
+      "city_bld_corner16x16a_wall01"
+    ],
+    "0x9AFAD2D0": [
+      "aloutpostinterior_interiorequipbox"
+    ],
+    "0x9B144351": [
+      "oc_hum_boss_lb"
+    ],
+    "0x9B1F89AC": [
+      "industrial_lampost02a"
+    ],
+    "0x9B289586": [
+      "groutpost_env_minewall"
+    ],
+    "0x9B28E532": [
+      "global_jug01"
+    ],
+    "0x9B3F956E": [
+      "civ_hum_journalist_ubb"
+    ],
+    "0x9B6E216C": [
+      "residential_bld_corner16x1604"
+    ],
+    "0x9B994D39": [
+      "global_veh_rtr"
+    ],
+    "0x9BCDCB04": [
+      "civ_veh_car_phoenix_crappy_wheel"
+    ],
+    "0x9BD70FC6": [
+      "civ_hum_doctorfemale_heada"
+    ],
+    "0x9BE980B1": [
+      "pr_hum_boss_lb"
+    ],
+    "0x9BF38B64": [
+      "oc_hum_mercenaryofficer_glasses"
+    ],
+    "0x9C318A56": [
+      "civ_veh_car_w8_normal"
+    ],
+    "0x9C65981A": [
+      "global_bld_concrete01"
+    ],
+    "0x9C8BEF54": [
+      "outskirt_bld_mercbar_walla"
+    ],
+    "0x9CB32B4E": [
+      "civ_hum_cartworker_uba"
+    ],
+    "0x9CC16BF6": [
+      "aloutpost_bld_hanger_alpha"
+    ],
+    "0x9CFC68C3": [
+      "pmcoutpost_bld_hangar_roof"
+    ],
+    "0x9D1BA658": [
+      "maracaibo_bld_historical02"
+    ],
+    "0x9D2E1B21": [
+      "commercial_bld_segment8x16d"
+    ],
+    "0x9D3FF1F1": [
+      "industrial_bld_hangar01_graffiti"
+    ],
+    "0x9D66680E": [
+      "pmcoutpost_bld_hqinterior_details03"
+    ],
+    "0x9D8BB3C8": [
+      "ch_hum_prisoner_heada"
+    ],
+    "0x9DBA127B": [
+      "pmcoutpost_bld_hqinterior_wall02"
+    ],
+    "0x9DE4FBAC": [
+      "cumana_bld_segment32x32d_parts"
+    ],
+    "0x9DF6B30B": [
+      "village_bld_plantation02"
+    ],
+    "0x9DF812C4": [
+      "industrial_bld_refinery02"
+    ],
+    "0x9DFC8FF2": [
+      "industrial_bld_refinery04"
+    ],
+    "0x9E1C2939": [
+      "industrial_bld_warehouse02_ruin_b"
+    ],
+    "0x9E3144C0": [
+      "jungle_ruinshotelarch"
+    ],
+    "0x9E362805": [
+      "global_soccerball"
+    ],
+    "0x9E51D474": [
+      "port_crane1_b"
+    ],
+    "0x9E5651A2": [
+      "port_crane1_d"
+    ],
+    "0x9E5A3B99": [
+      "shanty_bld_house01_roof01"
+    ],
+    "0x9E726255": [
+      "caracas_rampgovernment01_road"
+    ],
+    "0x9E992EB1": [
+      "global_roof_concrete04"
+    ],
+    "0x9EA7FB41": [
+      "civ_hum_casualfemale_head_c"
+    ],
+    "0x9ED289FA": [
+      "pr_hum_worker_head"
+    ],
+    "0x9F0D483A": [
+      "merida_signc"
+    ],
+    "0x9F2A82D2": [
+      "civ_hum_casual_b_head"
+    ],
+    "0x9F2BCEBE": [
+      "docks_lamppost"
+    ],
+    "0x9F2D315C": [
+      "global_veh_hondacrx"
+    ],
+    "0x9F33065C": [
+      "jungle_env_junglewall02"
+    ],
+    "0x9F42225A": [
+      "city_bld_corner16x32d_roof"
+    ],
+    "0x9F747C53": [
+      "village_bld_plantationsmall01"
+    ],
+    "0x9F92E02C": [
+      "caracas_bld_skyscraperpristine02_base"
+    ],
+    "0x9F9F004A": [
+      "chinaoutpost_interior_woodboxb"
+    ],
+    "0x9FB4CBC9": [
+      "oc_hum_mercenary_elite_ub"
+    ],
+    "0x9FB7C103": [
+      "pmc_hum_mattias_v3_hair"
+    ],
+    "0x9FCAE910": [
+      "oc_veh_helicopter_md500"
+    ],
+    "0x9FE38F26": [
+      "oc_att_mercenaryofficer_acc"
+    ],
+    "0xA0690536": [
+      "global_att_shaft_002"
+    ],
+    "0xA0738255": [
+      "aloutpost_bld_hanger_alpha_sm"
+    ],
+    "0xA073F0CE": [
+      "residential_sidewalk_corner"
+    ],
+    "0xA0741702": [
+      "chinaoutpost_bld_helipad_floor"
+    ],
+    "0xA080693A": [
+      "global_trucker_seats"
+    ],
+    "0xA0CF6EC5": [
+      "ocoutpost_planter01"
+    ],
+    "0xA0E3D7C9": [
+      "ch_hum_officer_lb"
+    ],
+    "0xA113D98D": [
+      "merida_bld_hotel"
+    ],
+    "0xA1200668": [
+      "oc_att_mercenary_elite_acc"
+    ],
+    "0xA12035F2": [
+      "city_bld_segment16x16c_wall01"
+    ],
+    "0xA147285A": [
+      "industrial_bld_towerrefinery_002"
+    ],
+    "0xA14A463B": [
+      "global_moneylargea"
+    ],
+    "0xA154B878": [
+      "city_bld_storefronte_signs"
+    ],
+    "0xA15BA731": [
+      "al_hum_soldierheavy_helmet"
+    ],
+    "0xA16BE24C": [
+      "gr_att_boss_acc"
+    ],
+    "0xA176803B": [
+      "civ_veh_boat_swamp"
+    ],
+    "0xA184B3BC": [
+      "outskirt_bld_market02"
+    ],
+    "0xA190463A": [
+      "groutpost_bld_tentsmalltarp03"
+    ],
+    "0xA1A48E75": [
+      "residential_bld_corner16x16e"
+    ],
+    "0xA1B48C34": [
+      "aloutpost_bld_guardtower"
+    ],
+    "0xA1E2EE65": [
+      "chinaoutpost_signbarrier_steel"
+    ],
+    "0xA20D5204": [
+      "civ_veh_car_rtr_racing_damage"
+    ],
+    "0xA250FA25": [
+      "global_weapon_m4"
+    ],
+    "0xA26387A9": [
+      "industrial_bld_warehouse02"
+    ],
+    "0xA274BE00": [
+      "civ_att_protester_acc1a"
+    ],
+    "0xA27A2734": [
+      "shanty_bld_housegroup07"
+    ],
+    "0xA27DDD1E": [
+      "vz_hum_blanco_chain"
+    ],
+    "0xA27EA462": [
+      "shanty_bld_housegroup01"
+    ],
+    "0xA2828658": [
+      "island_bld_fortress01_floora01"
+    ],
+    "0xA28FE8B6": [
+      "pr_hum_starter05_lb"
+    ],
+    "0xA294E51E": [
+      "shanty_bld_housegroup01_wall03"
+    ],
+    "0xA2AB2E44": [
+      "al_veh_airstrike_b2"
+    ],
+    "0xA2AF8D66": [
+      "proutpost_bld_gasstationpump02"
+    ],
+    "0xA2AFC889": [
+      "pmc_hum_chris_v4_ub"
+    ],
+    "0xA2B2FBA5": [
+      "al_veh_truck_hmmwv_armored_50cal"
+    ],
+    "0xA2E1DD6D": [
+      "global_env_rocksbeach01"
+    ],
+    "0xA31C81C6": [
+      "industrial_bld_warehouse02a"
+    ],
+    "0xA325901F": [
+      "civ_hum_journalist_headb"
+    ],
+    "0xA333750F": [
+      "civ_hum_poor_lba"
+    ],
+    "0xA33B7A3A": [
+      "global_veh_68valiant_damage"
+    ],
+    "0xA34D97B8": [
+      "civ_veh_car_rtr_racing"
+    ],
+    "0xA35416A8": [
+      "ch_veh_apc_wz551"
+    ],
+    "0xA36C907E": [
+      "pmc_hum_fiona_ub"
+    ],
+    "0xA3981809": [
+      "global_bld_tentmarket"
+    ],
+    "0xA3B1A282": [
+      "al_hum_sailor_ub"
+    ],
+    "0xA42F1CEB": [
+      "civ_hum_cartworker_heada"
+    ],
+    "0xA43FF500": [
+      "outpost_bld_warehouse01_flag"
+    ],
+    "0xA483B0A8": [
+      "global_munitions_hackedairstrike"
+    ],
+    "0xA4937D58": [
+      "civ_veh_car_l300_normal"
+    ],
+    "0xA4992048": [
+      "global_attachmentsa"
+    ],
+    "0xA4A29F09": [
+      "global_weapon_m95"
+    ],
+    "0xA4A5C61C": [
+      "civ_hum_casualfemale_head_b"
+    ],
+    "0xA517D4A3": [
+      "outskirt_bld_house05"
+    ],
+    "0xA532A4E7": [
+      "commercial_bld_segment8x16b"
+    ],
+    "0xA54BB2A4": [
+      "chinaoutpost_interior_mat"
+    ],
+    "0xA55928AE": [
+      "pmcoutpost_bld_hqinterior_floor05_livedin"
+    ],
+    "0xA5B1C357": [
+      "village_bld_housestilts03"
+    ],
+    "0xA5B64085": [
+      "village_bld_housestilts01"
+    ],
+    "0xA5CB5BB2": [
+      "civ_hum_business_lbb"
+    ],
+    "0xA5F1A8E0": [
+      "gr_hum_officerfemale_ub"
+    ],
+    "0xA5F2A080": [
+      "civ_hum_casual_ub_a"
+    ],
+    "0xA60D9145": [
+      "global_veh_phoenix_racing_wheel"
+    ],
+    "0xA6137556": [
+      "cartel_hum_thug_b_head"
+    ],
+    "0xA619C83B": [
+      "cumana_bld_corner16x16c_wall"
+    ],
+    "0xA62D68EA": [
+      "estate_bld_mansion02_floor02_sm"
+    ],
+    "0xA6440A90": [
+      "port_handrails1"
+    ],
+    "0xA6489D3A": [
+      "village_bld_windmill01"
+    ],
+    "0xA67A960D": [
+      "village_bld_farmhouse"
+    ],
+    "0xA69DB877": [
+      "global_roof_concrete02"
+    ],
+    "0xA6EE41C6": [
+      "al_veh_truck_mtv_tanker"
+    ],
+    "0xA719777F": [
+      "maracaibo_bld_historical01"
+    ],
+    "0xA73E8233": [
+      "commercial_beachwall"
+    ],
+    "0xA777C0ED": [
+      "pmcoutpost_bld_hqinterior_details04"
+    ],
+    "0xA7D904EA": [
+      "merida_bld_plazachurch02"
+    ],
+    "0xA7DE4652": [
+      "civ_hum_industrial_a_ub"
+    ],
+    "0xA7F7E5A3": [
+      "pmc_hum_pilothelicopter_hair"
+    ],
+    "0xA7FCC904": [
+      "global_att_acunitroofhugeb"
+    ],
+    "0xA8680E8A": [
+      "groutpostinterior_barrelc"
+    ],
+    "0xA8B822C2": [
+      "estate_bld_mansion02_03"
+    ],
+    "0xA8C8CFF3": [
+      "civ_hum_casualfemale_lb_a"
+    ],
+    "0xA8CD6FA7": [
+      "margarita_bld_hotelresort01"
+    ],
+    "0xA904A089": [
+      "pmc_hum_chris_lb"
+    ],
+    "0xA961140C": [
+      "caracas_bld_skyscraperbluetower01"
+    ],
+    "0xA96D5752": [
+      "global_junkpile03"
+    ],
+    "0xA9727EC7": [
+      "industrial_bld_gasstation_misc01"
+    ],
+    "0xA976FBF5": [
+      "industrial_bld_gasstation_misc03"
+    ],
+    "0xA98B2430": [
+      "ch_veh_plane_transport_wings"
+    ],
+    "0xA9A2BE20": [
+      "city_bld_skyscraper01"
+    ],
+    "0xA9D2CB41": [
+      "gr_faction_heada"
+    ],
+    "0xA9E17B48": [
+      "city_bld_segment16x32a"
+    ],
+    "0xA9E79E12": [
+      "angelfalls_env_waterfallbase"
+    ],
+    "0xAA17D9CA": [
+      "global_barbedwireb"
+    ],
+    "0xAA2F2556": [
+      "vzoutpost_bld_barracktent"
+    ],
+    "0xAA61A555": [
+      "industrial_bld_warehousesmall01"
+    ],
+    "0xAA996EE4": [
+      "shanty_bld_housegroup01_wall01"
+    ],
+    "0xAAC01E5C": [
+      "industrial_towerblowout_01"
+    ],
+    "0xAB053DC8": [
+      "proutpost_bld_bunkersandbag"
+    ],
+    "0xAB210B8C": [
+      "industrial_bld_warehouse02c"
+    ],
+    "0xAB30902C": [
+      "global_veh_transport_box"
+    ],
+    "0xAB3E9879": [
+      "global_weapon_mac11"
+    ],
+    "0xAB75668E": [
+      "civ_veh_semi_mark_damage"
+    ],
+    "0xAB8BAD43": [
+      "pmc_hum_chris_v3_head"
+    ],
+    "0xABCAD547": [
+      "aloutpostinterior_easelmap"
+    ],
+    "0xABD817F9": [
+      "jungle_env_bushlarge01"
+    ],
+    "0xABF78DCC": [
+      "oilrig_towerblowout_02"
+    ],
+    "0xABFDB4B0": [
+      "caracas_rampgovernment01"
+    ],
+    "0xAC00EC63": [
+      "civ_hum_business_ubb"
+    ],
+    "0xAC3C89C8": [
+      "vz_hum_captain_head"
+    ],
+    "0xAC3CD893": [
+      "oilrig_bld_buildingb"
+    ],
+    "0xAC6644C1": [
+      "airport_bld_hanger_extras"
+    ],
+    "0xAC92C18E": [
+      "ocoutpost_bld_helipad"
+    ],
+    "0xAC990539": [
+      "al_veh_truck_hmmwv_avenger"
+    ],
+    "0xACA63DFD": [
+      "shanty_bld_housegroup01_wall04"
+    ],
+    "0xACB6E8C9": [
+      "pr_hum_thugfemale_b_lb"
+    ],
+    "0xAD10F5B8": [
+      "global_bencha"
+    ],
+    "0xAD1F6546": [
+      "docks_bld_toolshed_wall"
+    ],
+    "0xAD3E6130": [
+      "city_bld_skyscraper02_parts"
+    ],
+    "0xAD473926": [
+      "vzoutpost_bld_barrackbunker"
+    ],
+    "0xAD6F208B": [
+      "aloutpost_bld_guardtower_ladder"
+    ],
+    "0xAD7E8063": [
+      "al_hum_medic_a_backpack"
+    ],
+    "0xAD8715A4": [
+      "pmc_hum_jennifer_v3_ub"
+    ],
+    "0xADDD5619": [
+      "civ_veh_car_phoenix_crappy_body_damage"
+    ],
+    "0xADEE2FEA": [
+      "civ_hum_casual_ub_c"
+    ],
+    "0xADFA6C15": [
+      "global_roof07_sm"
+    ],
+    "0xAE229D00": [
+      "vz_att_captain_helmet"
+    ],
+    "0xAE2D0AC0": [
+      "gr_veh_tank_m551"
+    ],
+    "0xAE48B2DD": [
+      "pmc_hum_jennifer_head"
+    ],
+    "0xAE56FDA2": [
+      "global_weapon_dumbbomb"
+    ],
+    "0xAE7FFC96": [
+      "shanty_bld_house04"
+    ],
+    "0xAE96B0D7": [
+      "oc_expandablevan_prop"
+    ],
+    "0xAEEBB65E": [
+      "commercial_bld_firestation03"
+    ],
+    "0xAF22579B": [
+      "civ_veh_car_taxi_tercel_wheel"
+    ],
+    "0xAF306425": [
+      "estate_bld_mansion03_stair2"
+    ],
+    "0xAF67A7A4": [
+      "shanty_roof_concrete01"
+    ],
+    "0xAF81CC78": [
+      "civ_hum_mechanic_uba"
+    ],
+    "0xAFEAA2A3": [
+      "merida_parkingplant"
+    ],
+    "0xAFF092FE": [
+      "civ_hum_richfemale_acca"
+    ],
+    "0xB0093711": [
+      "caracas_rampgovernment01_pavement"
+    ],
+    "0xB05328E0": [
+      "aloutpost_bld_barracks03"
+    ],
+    "0xB09DEE2A": [
+      "civ_hum_industrialfemale_ub_a"
+    ],
+    "0xB1074308": [
+      "global_baseballbat"
+    ],
+    "0xB144395F": [
+      "oc_hum_pilot_ub"
+    ],
+    "0xB16F4EC1": [
+      "oc_hum_mercenary_heavy_ub"
+    ],
+    "0xB187C134": [
+      "gr_veh_truck_m35_tanker"
+    ],
+    "0xB19CA14D": [
+      "pr_hum_sailorfemale_b_head"
+    ],
+    "0xB1D40155": [
+      "civ_hum_casual_g_head"
+    ],
+    "0xB1D6F62E": [
+      "civ_hum_mechanic_lbb"
+    ],
+    "0xB1EFE9B5": [
+      "caracas_bld_historical04"
+    ],
+    "0xB206692C": [
+      "estate_bld_poolelevated01"
+    ],
+    "0xB2189BE3": [
+      "caracas_bridgegovernment01_ground"
+    ],
+    "0xB226B27D": [
+      "commercial_bld_corner8x16a_signs"
+    ],
+    "0xB2365F38": [
+      "pmc_att_packs_a"
+    ],
+    "0xB244D044": [
+      "oc_hum_doctorfemale_heada"
+    ],
+    "0xB24B1F17": [
+      "groutpost_bld_shacksemiperm01"
+    ],
+    "0xB254F596": [
+      "oc_hum_fireman_lb"
+    ],
+    "0xB262D026": [
+      "civ_att_journalist_acca"
+    ],
+    "0xB283CEB3": [
+      "cumana_bld_segment32x32d_wall01"
+    ],
+    "0xB2AA8E03": [
+      "chinaoutpost_interior_3dmap"
+    ],
+    "0xB2B756EE": [
+      "angelfalls_env_waterfalltop"
+    ],
+    "0xB2B80766": [
+      "merida_telephonepole"
+    ],
+    "0xB2F6BEF5": [
+      "groutpost_bld_helipad"
+    ],
+    "0xB32053A7": [
+      "civ_veh_car_taxi_shuttle"
+    ],
+    "0xB342AD52": [
+      "civ_hum_casual_lb_d"
+    ],
+    "0xB358951D": [
+      "maracaibo_bld_stagerepublica"
+    ],
+    "0xB36A22AC": [
+      "groutpost_bld_shackcave01"
+    ],
+    "0xB37E0008": [
+      "pmcoutpost_bld_hqinterior_floor03_livedin"
+    ],
+    "0xB37E7DB3": [
+      "civ_veh_truck_ridgeline"
+    ],
+    "0xB387CB50": [
+      "global_filebox"
+    ],
+    "0xB3BB8B03": [
+      "docks_dockpump02"
+    ],
+    "0xB3DF6DE1": [
+      "shanty_bld_apartment01_001"
+    ],
+    "0xB40B1E54": [
+      "docks_docklarge"
+    ],
+    "0xB42B50AD": [
+      "industrial_bld_smokestack_03"
+    ],
+    "0xB42E5456": [
+      "caracas_bld_skyscraperpristine03_roof"
+    ],
+    "0xB43B9B66": [
+      "civ_hum_casual_mustache_d"
+    ],
+    "0xB470F189": [
+      "pmcoutpost_bld_hqinterior_floor02_livedin"
+    ],
+    "0xB478EB00": [
+      "pmcoutpost_bld_hqinterior_floor05"
+    ],
+    "0xB4F3D79A": [
+      "civ_att_journalistfemale_clothsa"
+    ],
+    "0xB528BC9F": [
+      "gr_hum_boss_ub"
+    ],
+    "0xB5616360": [
+      "pmc_hum_stealth"
+    ],
+    "0xB580856D": [
+      "city_bld_storefrontcornera_signs"
+    ],
+    "0xB588024D": [
+      "global_env_lawngrass"
+    ],
+    "0xB5C2D9F8": [
+      "oc_veh_truck_esv"
+    ],
+    "0xB5D9D806": [
+      "estate_wallshort"
+    ],
+    "0xB6357976": [
+      "shanty_bld_apartment02"
+    ],
+    "0xB642EDA4": [
+      "industrial_machineparts"
+    ],
+    "0xB645EE21": [
+      "al_veh_tank_m2a3"
+    ],
+    "0xB65B34BD": [
+      "chinaoutpost_signbarrier"
+    ],
+    "0xB6AF3A82": [
+      "proutpost_att_neond"
+    ],
+    "0xB6B946F4": [
+      "industrial_bld_gasstationpump01"
+    ],
+    "0xB6CC3E93": [
+      "civ_att_journalistfemale_glassesa"
+    ],
+    "0xB6CE2306": [
+      "global_weapon_bunkerbuster"
+    ],
+    "0xB6D838D2": [
+      "civ_hum_casual_head_d"
+    ],
+    "0xB6E99A56": [
+      "jungle_env_junglewall"
+    ],
+    "0xB6EDE80B": [
+      "vz_veh_tank_amx30_aa"
+    ],
+    "0xB6F04024": [
+      "commercial_bld_firestation01"
+    ],
+    "0xB6FE9827": [
+      "global_parkinglota"
+    ],
+    "0xB7163C70": [
+      "vzoutpost_bld_hangar"
+    ],
+    "0xB751DDA9": [
+      "civ_hum_casualfemale_a_hair"
+    ],
+    "0xB75E7F82": [
+      "chinaoutpost_interior_flagpole"
+    ],
+    "0xB76293B7": [
+      "village_bld_outhouse"
+    ],
+    "0xB76DF57B": [
+      "port_dockdryt"
+    ],
+    "0xB7A482CF": [
+      "pmc_veh_truck_monster_rtr_damage"
+    ],
+    "0xB7DCAD5D": [
+      "pmc_hum_mattias_v3_glasses"
+    ],
+    "0xB7FA7A49": [
+      "industrial_bld_refinery03"
+    ],
+    "0xB807624B": [
+      "shanty_bld_housegroup01_wall11"
+    ],
+    "0xB83AECED": [
+      "ocoutpostinterior_chairoffice"
+    ],
+    "0xB8555125": [
+      "civ_hum_beachfemale_a_hair"
+    ],
+    "0xB8601CE4": [
+      "vz_att_deathsquad_accb"
+    ],
+    "0xB86A929B": [
+      "pmc_hum_mattias_head"
+    ],
+    "0xB88CD847": [
+      "shanty_bld_house01"
+    ],
+    "0xB8915575": [
+      "shanty_bld_house03"
+    ],
+    "0xB8A727D2": [
+      "merida_bld_pmcautoshop_walla"
+    ],
+    "0xB8B09366": [
+      "city_bld_storefrontwalls03"
+    ],
+    "0xB8DC70F1": [
+      "proutpost_sandbags"
+    ],
+    "0xB8FD0F3D": [
+      "commercial_bld_firestation04"
+    ],
+    "0xB903B3B5": [
+      "civ_hum_poorfemale_ubb"
+    ],
+    "0xB907FECA": [
+      "police_hum_starter05_lb"
+    ],
+    "0xB94FE560": [
+      "industrial_bld_warehouselarge01_misc"
+    ],
+    "0xB9827CED": [
+      "vz_att_soldierheavy_acc"
+    ],
+    "0xB98FB059": [
+      "al_veh_tank_m2a3_m6"
+    ],
+    "0xB993D852": [
+      "al_veh_helicopter_mh53pavelow"
+    ],
+    "0xB9A7D923": [
+      "cartel_hum_briefcaselt_head"
+    ],
+    "0xB9B36E17": [
+      "groutpost_bld_shackperm03"
+    ],
+    "0xB9B7EB45": [
+      "groutpost_bld_shackperm01"
+    ],
+    "0xB9C00644": [
+      "al_hum_boss_lb"
+    ],
+    "0xB9CAAC7B": [
+      "pmc_veh_car_w12_z12_racer"
+    ],
+    "0xB9FAFE72": [
+      "pr_hum_starter05_head"
+    ],
+    "0xBA14440E": [
+      "estate_bld_mansion03_05_sm"
+    ],
+    "0xBA40157D": [
+      "commercial_bld_corner8x8b_signs"
+    ],
+    "0xBA421563": [
+      "global_weapon_m2"
+    ],
+    "0xBAA4005E": [
+      "al_hum_latino_head_a"
+    ],
+    "0xBAE263E8": [
+      "caracas_bld_hospitalvargas_parts02"
+    ],
+    "0xBAF0F4FB": [
+      "pr_hum_sailorfemale_a_ammobelt"
+    ],
+    "0xBB034506": [
+      "global_weapon_dshk"
+    ],
+    "0xBB2279E3": [
+      "al_hum_soldier_a_lb"
+    ],
+    "0xBB73FB18": [
+      "vz_att_soldierriot_a_helmet"
+    ],
+    "0xBB808201": [
+      "outskirt_bld_mercbar_roof"
+    ],
+    "0xBBA569F7": [
+      "pr_hum_thug_b_hair"
+    ],
+    "0xBBADBE7A": [
+      "jungle_env_bushsmall02"
+    ],
+    "0xBBBCCEB4": [
+      "cumana_bld_corner16x16d_parts"
+    ],
+    "0xBBD8D408": [
+      "global_fountainsmall"
+    ],
+    "0xBBDC51DD": [
+      "civ_veh_car_r90_taxi"
+    ],
+    "0xBC09ECF1": [
+      "maracaibo_bld_gasstation02"
+    ],
+    "0xBC0AE2DA": [
+      "shanty_bld_apartment02_001"
+    ],
+    "0xBC3C23AC": [
+      "estate_bld_pool_02"
+    ],
+    "0xBC580719": [
+      "civ_hum_poorfemale_b_hair"
+    ],
+    "0xBCA019B0": [
+      "global_roof_concrete01"
+    ],
+    "0xBCA0CBCA": [
+      "global_newspaperbin01"
+    ],
+    "0xBCCB104B": [
+      "mountain_blastdoors_solano"
+    ],
+    "0xBCCE4395": [
+      "global_barricadecd"
+    ],
+    "0xBCE98A49": [
+      "pmc_hum_jennifer_v2_fur"
+    ],
+    "0xBCEDD3B8": [
+      "maracaiboruins_bld_skyscraper02"
+    ],
+    "0xBD01FFDA": [
+      "caracas_bld_hospitalvargas_roof"
+    ],
+    "0xBD05D38A": [
+      "chinaoutpost_interior_ear"
+    ],
+    "0xBD0FBBD7": [
+      "pmc_hum_proppilot_head"
+    ],
+    "0xBD245046": [
+      "industrial_att_pipestacked_001"
+    ],
+    "0xBD27B2D5": [
+      "caracas_bld_governmentcorner01_rail"
+    ],
+    "0xBD387FC4": [
+      "pmc_hum_mattias_ub"
+    ],
+    "0xBD552CD3": [
+      "civ_veh_car_taxi_tercel"
+    ],
+    "0xBD8C9EAE": [
+      "global_phonea"
+    ],
+    "0xBD8F8BD3": [
+      "pr_att_sailor_b_acc"
+    ],
+    "0xBDA1507E": [
+      "gr_veh_apc_m113"
+    ],
+    "0xBDB622FF": [
+      "ch_hum_advisor_head"
+    ],
+    "0xBDD52D37": [
+      "global_tiresmalla"
+    ],
+    "0xBDDE97B5": [
+      "industrial_cartribbed"
+    ],
+    "0xBDE4B1F2": [
+      "global_veh_civilianframe01"
+    ],
+    "0xBE2C617B": [
+      "maracaibo_bld_gasstationpump02"
+    ],
+    "0xBE5CA114": [
+      "global_weapon_ied"
+    ],
+    "0xBE7B4991": [
+      "gr_hum_starter1_hair"
+    ],
+    "0xBE844F79": [
+      "aloutpostinterior_wall06"
+    ],
+    "0xBEB0DD1A": [
+      "chinaoutpost_bld_prison01"
+    ],
+    "0xBEF6A0CE": [
+      "merida_universitypicnictable"
+    ],
+    "0xBF161164": [
+      "civ_hum_poorfemale_lbb"
+    ],
+    "0xBF3F5E4D": [
+      "global_waterbumper"
+    ],
+    "0xBF597172": [
+      "city_bld_storefrontsigns02"
+    ],
+    "0xBFC09F3E": [
+      "merida_bld_universityadmin"
+    ],
+    "0xBFCB4F44": [
+      "docks_bld_docks01"
+    ],
+    "0xBFCE9D56": [
+      "merida_bld_plazachurch06"
+    ],
+    "0xBFFF040F": [
+      "industrial_bld_refinery05"
+    ],
+    "0xC06497DB": [
+      "vz_att_deathsquad_capea"
+    ],
+    "0xC087777D": [
+      "pmcoutpost_bld_pool"
+    ],
+    "0xC0B3C611": [
+      "caracas_bld_skyscraperpristine03"
+    ],
+    "0xC0EFFA5C": [
+      "ch_hum_sailor_heada"
+    ],
+    "0xC126D90B": [
+      "outskirt_bld_church"
+    ],
+    "0xC1413B1E": [
+      "shanty_bld_shack04"
+    ],
+    "0xC1527544": [
+      "proutpost_bld_surveillance"
+    ],
+    "0xC171FA48": [
+      "global_junkpile01"
+    ],
+    "0xC178BA3C": [
+      "global_att_lampposta"
+    ],
+    "0xC1E0DE18": [
+      "ch_veh_plane_q5"
+    ],
+    "0xC1EE44F1": [
+      "vz_hum_blanco_head"
+    ],
+    "0xC1EEB3B3": [
+      "pmc_veh_motorcycle_tankbike"
+    ],
+    "0xC1F1B821": [
+      "vz_att_captain_glasses"
+    ],
+    "0xC2088274": [
+      "city_bld_apartment06_walls"
+    ],
+    "0xC212B445": [
+      "proutpost_lampa"
+    ],
+    "0xC23032BC": [
+      "pmc_veh_car_rocket_buggy"
+    ],
+    "0xC2388D52": [
+      "docks_dockmini"
+    ],
+    "0xC25A28DE": [
+      "global_veh_van_damage"
+    ],
+    "0xC25E48DB": [
+      "pmc_veh_motorcycle_devastator"
+    ],
+    "0xC2759092": [
+      "gr_hum_starter04_lb"
+    ],
+    "0xC29C7DB7": [
+      "mar_commercial_road10_straight"
+    ],
+    "0xC2AD77E6": [
+      "pmcoutpost_interior_equipbox"
+    ],
+    "0xC2CECB8D": [
+      "global_metala"
+    ],
+    "0xC2D68CFA": [
+      "gr_hum_boss_fake_head"
+    ],
+    "0xC2D96DD1": [
+      "jungle_env_treetall01"
+    ],
+    "0xC30DBEB5": [
+      "pmc_hum_pilothelicopter_lb"
+    ],
+    "0xC3432DF3": [
+      "global_att_billboardroofc_sign"
+    ],
+    "0xC37BFE13": [
+      "village_fencewood01"
+    ],
+    "0xC3892E51": [
+      "commercial_bld_corner8x16b"
+    ],
+    "0xC3A8A6AC": [
+      "global_weapon_tow"
+    ],
+    "0xC3C43764": [
+      "pmc_eva_new_head"
+    ],
+    "0xC3C53A29": [
+      "pr_hum_sailor_b_lb"
+    ],
+    "0xC40BBC88": [
+      "city_bld_apartment02_wall01"
+    ],
+    "0xC40DE75F": [
+      "global_signcokea"
+    ],
+    "0xC40E916B": [
+      "global_tanktrap01"
+    ],
+    "0xC40ECCAC": [
+      "al_hum_boss_head"
+    ],
+    "0xC41A2674": [
+      "industrial_bld_warehouse02_ruin_c"
+    ],
+    "0xC451F742": [
+      "caracas_capitolstatue"
+    ],
+    "0xC453469F": [
+      "civ_hum_business_a_ub"
+    ],
+    "0xC46F94A0": [
+      "al_hum_officer_a_ub"
+    ],
+    "0xC4831CFE": [
+      "industrial_bld_gasstationbathroom_walls01"
+    ],
+    "0xC497593B": [
+      "shanty_bld_housegroup01_wall02"
+    ],
+    "0xC49BA91A": [
+      "global_roof_concrete03"
+    ],
+    "0xC4B20183": [
+      "proutpost_bld_gasstationpump03"
+    ],
+    "0xC4D06C81": [
+      "civ_hum_richfemale_lba"
+    ],
+    "0xC50EF17F": [
+      "caracas_bld_cathedralstatue"
+    ],
+    "0xC534D54E": [
+      "jungle_bld_ruinshotelcorner"
+    ],
+    "0xC53D362E": [
+      "caracas_cathedralplateau"
+    ],
+    "0xC541F6FA": [
+      "cartel_hum_thug_a_holster"
+    ],
+    "0xC56A9F63": [
+      "caracas_bld_skytramshopa_nm"
+    ],
+    "0xC576F6BC": [
+      "village_bld_plantationsmall02"
+    ],
+    "0xC58C4F27": [
+      "industrial_pipeground01"
+    ],
+    "0xC5D1A077": [
+      "pmcoutpost_fountain_railing"
+    ],
+    "0xC5E5664E": [
+      "al_hum_soldierheavy_objects"
+    ],
+    "0xC5F161FA": [
+      "global_veh_outboardmotor"
+    ],
+    "0xC5F57823": [
+      "oilrig_towerblowout_01"
+    ],
+    "0xC5F8F636": [
+      "docks_dockconcrete"
+    ],
+    "0xC5FB637D": [
+      "village_fruitboxstackb"
+    ],
+    "0xC60586A1": [
+      "city_bld_storefrontcornerb"
+    ],
+    "0xC607BF0E": [
+      "npc_civilian_01_hat"
+    ],
+    "0xC619EAE7": [
+      "port_gangplanka"
+    ],
+    "0xC648AD2E": [
+      "al_hum_medic_a_helmet"
+    ],
+    "0xC660CEF6": [
+      "global_roof_stone01"
+    ],
+    "0xC68A3A23": [
+      "global_weapon_m21at"
+    ],
+    "0xC68EFD61": [
+      "white_bld_corner16x16b"
+    ],
+    "0xC6937275": [
+      "village_cota"
+    ],
+    "0xC6B190EC": [
+      "caracas_bld_skyscraperpristine02"
+    ],
+    "0xC6D1AA25": [
+      "pr_hum_worker_ub"
+    ],
+    "0xC6E89620": [
+      "pmcoutpost_bld_hqexterior_wall03"
+    ],
+    "0xC7243030": [
+      "caracas_bld_skytramshopa_sm"
+    ],
+    "0xC733E65D": [
+      "ch_veh_boat_huangfeng"
+    ],
+    "0xC75238BE": [
+      "commercial_bld_segment16x16a_02"
+    ],
+    "0xC7609576": [
+      "global_concretebarrier01"
+    ],
+    "0xC765E205": [
+      "gr_att_advisor_acc"
+    ],
+    "0xC771DC80": [
+      "industrial_bld_refinery06_lod"
+    ],
+    "0xC7C3C08C": [
+      "pr_veh_semi_mark"
+    ],
+    "0xC808E35C": [
+      "village_bld_cattleranch"
+    ],
+    "0xC83FB1A0": [
+      "estate_bld_mansion03_02"
+    ],
+    "0xC85AACE0": [
+      "global_roof01"
+    ],
+    "0xC8706DDA": [
+      "city_bld_corner32x32d_parts02"
+    ],
+    "0xC8916EB6": [
+      "vz_hum_blanco_ub"
+    ],
+    "0xC892A846": [
+      "oc_hum_beachfemale_b_hair"
+    ],
+    "0xC8986AD1": [
+      "island_bld_boothrefreshments01"
+    ],
+    "0xC8CD7F81": [
+      "civ_hum_casualfemale_lb_c"
+    ],
+    "0xC8DA7178": [
+      "pmcoutpost_bld_dock_windows"
+    ],
+    "0xC8DBCD53": [
+      "pmcoutpost_bld_hqexterior_wall04"
+    ],
+    "0xC91A533E": [
+      "civ_hum_rich_b_ub"
+    ],
+    "0xC92093CD": [
+      "city_bld_segment16x16c_roof"
+    ],
+    "0xC939089F": [
+      "aloutpost_bld_supplydepot"
+    ],
+    "0xC945C4E4": [
+      "shanty_bld_shack06"
+    ],
+    "0xC95C04B1": [
+      "global_ramp_roadlessrider"
+    ],
+    "0xC96A7595": [
+      "ch_hum_sailor_uba"
+    ],
+    "0xC977839E": [
+      "global_firehydrantred02"
+    ],
+    "0xC97C6A11": [
+      "ocoutpostinterior_windows"
+    ],
+    "0xC986F92C": [
+      "commercial_bld_corner8x16c"
+    ],
+    "0xC9DB7907": [
+      "merida_bld_plazachurch03"
+    ],
+    "0xC9DFF635": [
+      "merida_bld_plazachurch01"
+    ],
+    "0xC9E0E2A7": [
+      "global_veh_transparent_01"
+    ],
+    "0xC9F15098": [
+      "al_hum_sailor_helmet"
+    ],
+    "0xC9F95730": [
+      "port_docklong"
+    ],
+    "0xCA107464": [
+      "chinaoutpost_bld_alarmtower"
+    ],
+    "0xCA20C1D9": [
+      "merida_bld_soccerstadium"
+    ],
+    "0xCA32E8D3": [
+      "estate_bld_mansion03_05"
+    ],
+    "0xCA3AC936": [
+      "oilrig_bld_buildingc"
+    ],
+    "0xCA53F48A": [
+      "npc_civilian_01_chest"
+    ],
+    "0xCA6A82A7": [
+      "groutpostinterior_barrelb"
+    ],
+    "0xCAAD28FC": [
+      "shanty_bld_housegroup01_wall09"
+    ],
+    "0xCAAF4D42": [
+      "civ_veh_car_r90"
+    ],
+    "0xCABA66D4": [
+      "aloutpost_bld_alarmtower"
+    ],
+    "0xCAC9D01F": [
+      "civ_veh_motorcycle_sportbike"
+    ],
+    "0xCAF3823C": [
+      "oilrig_catwalkc"
+    ],
+    "0xCAFABBD8": [
+      "gr_hum_defector_head_hair"
+    ],
+    "0xCB0117DB": [
+      "pmc_hum_chickensuit_ub"
+    ],
+    "0xCB5293FD": [
+      "shanty_bld_shack03"
+    ],
+    "0xCB6E5167": [
+      "pmcoutpost_bld_hqexterior_rooftop01"
+    ],
+    "0xCB6FCB6F": [
+      "global_junkpile02"
+    ],
+    "0xCB760D13": [
+      "docks_bld_toolshed"
+    ],
+    "0xCBA41113": [
+      "city_bld_corner32x32d_wall_roof"
+    ],
+    "0xCBABA641": [
+      "civ_veh_car_pony_normal"
+    ],
+    "0xCBCB87D2": [
+      "village_bld_outhouse01"
+    ],
+    "0xCBE4596F": [
+      "merida_bld_pmcautoshop_roof"
+    ],
+    "0xCC34B75D": [
+      "global_boxc"
+    ],
+    "0xCC36A4EB": [
+      "city_bld_corner16x32b"
+    ],
+    "0xCC38BA12": [
+      "global_tablea"
+    ],
+    "0xCC84A986": [
+      "vz_veh_tank_amx30_elite"
+    ],
+    "0xCC8CC8F1": [
+      "global_palletcement"
+    ],
+    "0xCCAC5014": [
+      "gr_hum_starter04_hair"
+    ],
+    "0xCD0494F0": [
+      "merida_bld_oilwellwater"
+    ],
+    "0xCD8C840A": [
+      "jungle_env_treesmall02_imposter"
+    ],
+    "0xCDC5617A": [
+      "city_bld_standalone01"
+    ],
+    "0xCDDC96EC": [
+      "pmc_veh_car_vanquish"
+    ],
+    "0xCE0EE56D": [
+      "chinaoutpost_bld_tent01top"
+    ],
+    "0xCE2156F6": [
+      "docks_bld_warehouse_wall01"
+    ],
+    "0xCE2AEFC3": [
+      "global_weapon_recoilessrifle"
+    ],
+    "0xCE480511": [
+      "gr_att_starter1_acc"
+    ],
+    "0xCE65B7F6": [
+      "airport_bld_refinery02"
+    ],
+    "0xCECB4A5C": [
+      "civ_hum_casualfemale_lb_b"
+    ],
+    "0xCED17D88": [
+      "pmcoutpost_pedestal"
+    ],
+    "0xCEFB0CA9": [
+      "ch_hum_prisoner_uba"
+    ],
+    "0xCF52EC9E": [
+      "jungle_env_rock04"
+    ],
+    "0xCF546850": [
+      "police_hum_officer_b_helmet"
+    ],
+    "0xCF73CAD6": [
+      "ch_att_boss_acc"
+    ],
+    "0xCF756C6D": [
+      "pr_hum_boss_head"
+    ],
+    "0xCF93B5FD": [
+      "global_freeway_wall"
+    ],
+    "0xCFC87639": [
+      "pmc_att_chris_v3_acc"
+    ],
+    "0xCFE24803": [
+      "city_bld_corner16x16c_wall"
+    ],
+    "0xD038D631": [
+      "al_veh_vtol_f35b"
+    ],
+    "0xD08BF094": [
+      "estate_wallgate01"
+    ],
+    "0xD0932675": [
+      "global_electronicboxa"
+    ],
+    "0xD09FF2A1": [
+      "pmc_hum_jennifer_lb"
+    ],
+    "0xD0ABCAC8": [
+      "merida_bld_pmcautoshop_wallc"
+    ],
+    "0xD0B84392": [
+      "city_bld_segment32x32a"
+    ],
+    "0xD0C7814B": [
+      "commercial_bld_corner16x16a"
+    ],
+    "0xD0D2F1BE": [
+      "outskirt_road10merge"
+    ],
+    "0xD0EE2A7B": [
+      "commercial_bld_firestation02"
+    ],
+    "0xD132E03B": [
+      "island_bld_hutmodern01"
+    ],
+    "0xD1574A09": [
+      "industrial_bld_warehouselarge01"
+    ],
+    "0xD1575ABB": [
+      "global_weapon_sniperdragunov"
+    ],
+    "0xD158DEF6": [
+      "city_bld_corner16x16d_wall"
+    ],
+    "0xD16AA485": [
+      "caracas_fountaingovernment"
+    ],
+    "0xD1968AF1": [
+      "civ_veh_boat_cargoship"
+    ],
+    "0xD197AC21": [
+      "merida_plazaplantbox01"
+    ],
+    "0xD1B791F9": [
+      "global_drinkingfountain"
+    ],
+    "0xD1EA8DBA": [
+      "gr_deliverycrate"
+    ],
+    "0xD22FA2BE": [
+      "city_bld_storefrontwindows03"
+    ],
+    "0xD23F52FC": [
+      "oilrig_bld_buildinga"
+    ],
+    "0xD25A7419": [
+      "vz_hum_deathsquad_ubb"
+    ],
+    "0xD25E073B": [
+      "vz_att_deathsquad_acca"
+    ],
+    "0xD2628469": [
+      "vz_att_deathsquad_accc"
+    ],
+    "0xD2B03804": [
+      "gr_att_soldierfemale_b_band"
+    ],
+    "0xD2B37879": [
+      "global_scaffold"
+    ],
+    "0xD2EF89C6": [
+      "groutpost_bld_guardtowertree02"
+    ],
+    "0xD3128786": [
+      "maracaibo_bld_corner32x32a"
+    ],
+    "0xD3584121": [
+      "al_hum_soldier_elitea_helmet"
+    ],
+    "0xD35DD971": [
+      "merida_lightstadiumb"
+    ],
+    "0xD3A4F81A": [
+      "pmcoutpost_interior_tiger"
+    ],
+    "0xD3B23E7E": [
+      "global_weapon_detonator"
+    ],
+    "0xD3C055F4": [
+      "oc_att_mercenary_heavy_acc"
+    ],
+    "0xD3FD0560": [
+      "vz_att_soldierheavy_backpack"
+    ],
+    "0xD4213AE4": [
+      "global_dumpstergreenshort"
+    ],
+    "0xD44C2215": [
+      "oilrig_bld_buildingd"
+    ],
+    "0xD46A12D6": [
+      "pmcoutpost_bld_hqinterior_floor03"
+    ],
+    "0xD4914514": [
+      "vz_hum_deathsquad_headb"
+    ],
+    "0xD4E88AFD": [
+      "al_veh_boat_markv"
+    ],
+    "0xD501EBCA": [
+      "village_bld_gasstation"
+    ],
+    "0xD504CEE0": [
+      "gr_att_soldierfemale_a_acca"
+    ],
+    "0xD5052BF0": [
+      "ocoutpostinterior_boxc"
+    ],
+    "0xD506BE7E": [
+      "city_bld_apartment02"
+    ],
+    "0xD545216F": [
+      "civ_hum_casual_lb_e"
+    ],
+    "0xD56E2BCD": [
+      "caracas_bld_skyscraperpristine02_roof"
+    ],
+    "0xD59375C1": [
+      "pmc_att_pilothelicopter_acc"
+    ],
+    "0xD5AD199C": [
+      "cartel_hum_briefcaselt_ub"
+    ],
+    "0xD5D048EE": [
+      "maracaibo_bld_gasstationbathroom_walls01"
+    ],
+    "0xD5D65249": [
+      "pmcoutpost_bld_hqsuites"
+    ],
+    "0xD64E8456": [
+      "global_veh_van"
+    ],
+    "0xD662B0D0": [
+      "global_weapon_bullpup"
+    ],
+    "0xD6DDF2C1": [
+      "global_weapon_sw500"
+    ],
+    "0xD745E58F": [
+      "gr_veh_apc_m113_aa"
+    ],
+    "0xD77E96B9": [
+      "global_weapon_sawmg"
+    ],
+    "0xD799C328": [
+      "global_weapon_flaregun"
+    ],
+    "0xD79FB991": [
+      "docks_crane"
+    ],
+    "0xD7A5B97E": [
+      "global_roof_concrete03_nm"
+    ],
+    "0xD7BB0643": [
+      "oc_veh_truck_mtv_guntruck"
+    ],
+    "0xD7DC15F2": [
+      "global_att_camera"
+    ],
+    "0xD7DE49F7": [
+      "civ_hum_beachfemale_a_lb"
+    ],
+    "0xD886491C": [
+      "cumana_bld_segment32x32d_wall02"
+    ],
+    "0xD889B9C8": [
+      "pmc_hum_mechanic_hair"
+    ],
+    "0xD8AE5D33": [
+      "shanty_bld_house02_roof02"
+    ],
+    "0xD8B84F27": [
+      "pr_hum_sailor_a_ub"
+    ],
+    "0xD8DAACEF": [
+      "civ_hum_casual_head_e"
+    ],
+    "0xD8E67BEC": [
+      "proutpost_bld_hq_wall01"
+    ],
+    "0xD8FB6264": [
+      "pmc_hum_mattias_chain"
+    ],
+    "0xD913FBBB": [
+      "civ_hum_poorfemale_lba"
+    ],
+    "0xD924FC34": [
+      "al_hum_soldier_c_helmet"
+    ],
+    "0xD928FA32": [
+      "maracaibo_freewaystraight02"
+    ],
+    "0xD9332C44": [
+      "village_bld_windmillbroken"
+    ],
+    "0xD94676CF": [
+      "airport_bld_controltower_roof"
+    ],
+    "0xD964457D": [
+      "jungle_env_rock03"
+    ],
+    "0xD977E4D2": [
+      "global_chairwoode"
+    ],
+    "0xD97BE454": [
+      "chinaoutpost_interior_flag"
+    ],
+    "0xD987FDAC": [
+      "civ_hum_aidworker_uba"
+    ],
+    "0xD9D2CC48": [
+      "global_fencechain01"
+    ],
+    "0xD9D498E4": [
+      "global_weapon_towrocket"
+    ],
+    "0xD9F2E010": [
+      "proutpost_att_neon_walls"
+    ],
+    "0xD9FDC9FE": [
+      "estate_bld_mansion02_stair2_nm"
+    ],
+    "0xDA09D5B6": [
+      "groutpost_bld_helipad_floor"
+    ],
+    "0xDA115EC1": [
+      "pr_hum_thug_b_lb"
+    ],
+    "0xDA1D87E2": [
+      "global_barrieroc"
+    ],
+    "0xDA4422A0": [
+      "city_bld_storefrontcornerdsigns_02"
+    ],
+    "0xDA4429CD": [
+      "global_weapon_m60"
+    ],
+    "0xDA50B276": [
+      "chinaoutpost_bld_guardpost01"
+    ],
+    "0xDA54E390": [
+      "police_hum_officer_b_radio"
+    ],
+    "0xDA55A995": [
+      "aloutpost_bld_barracks02"
+    ],
+    "0xDA6328D9": [
+      "global_fencewoodpanel"
+    ],
+    "0xDAABBEAC": [
+      "ch_veh_plane_transport_interior"
+    ],
+    "0xDAB30783": [
+      "city_bld_storefrontwalls02"
+    ],
+    "0xDB04EB7B": [
+      "jungle_bridge_metalvehiclea"
+    ],
+    "0xDB3879BF": [
+      "global_veh_truck_interior"
+    ],
+    "0xDB466E7F": [
+      "outskirt_bld_churchfloor"
+    ],
+    "0xDB78B25A": [
+      "shanty_bld_shack_base"
+    ],
+    "0xDB8BA341": [
+      "vz_att_soldierheavy_helmet"
+    ],
+    "0xDBA1C013": [
+      "pr_deliverycrate"
+    ],
+    "0xDBB062AD": [
+      "civ_hum_business_b_head"
+    ],
+    "0xDBBFDE65": [
+      "pmcoutpost_bld_dock_wall"
+    ],
+    "0xDC0B0D14": [
+      "commercial_sidewalk_corner"
+    ],
+    "0xDC121D9E": [
+      "outskirt_road20_cross"
+    ],
+    "0xDC37CDED": [
+      "oilrig_bld_pontoonbase_01"
+    ],
+    "0xDC3ACA9A": [
+      "civ_veh_car_r90_damage"
+    ],
+    "0xDC611BB1": [
+      "industrial_cart"
+    ],
+    "0xDC717376": [
+      "industrial_bld_hangar01"
+    ],
+    "0xDCDB4CAA": [
+      "proutpost_bld_surveillance_wall01"
+    ],
+    "0xDCE08204": [
+      "shanty_env_tree03"
+    ],
+    "0xDCF91FF8": [
+      "shanty_bld_apartment04_001"
+    ],
+    "0xDD0685A1": [
+      "civ_veh_car_rtr_crappy_damage"
+    ],
+    "0xDD4C7720": [
+      "industrial_bld_warehouselarge01_wall"
+    ],
+    "0xDD69D5BC": [
+      "groutpost_bld_bunkersemitruck"
+    ],
+    "0xDD8013E7": [
+      "civ_hum_protester_female_lbb"
+    ],
+    "0xDDBD9AC4": [
+      "residential_bld_corner16x16a01"
+    ],
+    "0xDDE0070C": [
+      "chinaoutpost_bld_commbunker01"
+    ],
+    "0xDDE8100F": [
+      "oc_hum_executive_female_lb"
+    ],
+    "0xDDEC7EBB": [
+      "village_fruitboxstackd"
+    ],
+    "0xDE09DCB4": [
+      "shanty_bld_housegroup01_wall12"
+    ],
+    "0xDE0C6762": [
+      "merida_plazalampost"
+    ],
+    "0xDE45AE42": [
+      "industrial_cartsmelting"
+    ],
+    "0xDE5C3A3E": [
+      "merida_whitewall01"
+    ],
+    "0xDE690A5C": [
+      "civ_hum_doctorfemale_haira"
+    ],
+    "0xDE7B6BB5": [
+      "pmcoutpost_bld_hqinterior_floor04"
+    ],
+    "0xDE8AC65A": [
+      "outpost_bld_warehouse01_flagpr"
+    ],
+    "0xDF16BFEB": [
+      "global_weapon_dualmount"
+    ],
+    "0xDF18175D": [
+      "city_bld_apartment05"
+    ],
+    "0xDF266ADA": [
+      "city_bld_corner16x16b_parts"
+    ],
+    "0xDF3B2FD1": [
+      "global_weapon_tripodmount"
+    ],
+    "0xDF54274E": [
+      "al_hum_soldier_a_helmet"
+    ],
+    "0xDF75362D": [
+      "chinaoutpost_interior_computer"
+    ],
+    "0xDF93DCDA": [
+      "global_flag_largeal"
+    ],
+    "0xDF9FBF3D": [
+      "global_barbequea_01"
+    ],
+    "0xDFCDA372": [
+      "pmc_att_mechanic_acc"
+    ],
+    "0xDFD0F890": [
+      "civ_hum_poorfemale_acca"
+    ],
+    "0xE01CE9F2": [
+      "maracaibo_bld_segment32x32a"
+    ],
+    "0xE03FCB10": [
+      "pr_hum_starter05_hair"
+    ],
+    "0xE05FC66E": [
+      "oilrig_att_anchorline01"
+    ],
+    "0xE0691D96": [
+      "village_bld_watchtower01"
+    ],
+    "0xE0F5B81C": [
+      "ocoutpostinterior_interiorcurtain"
+    ],
+    "0xE110E2D3": [
+      "proutpost_dockb"
+    ],
+    "0xE1230C04": [
+      "npc_civilian_01_legs"
+    ],
+    "0xE1370357": [
+      "merida_bld_pmcautoshop_autolift"
+    ],
+    "0xE13D71F4": [
+      "oc_hum_boss_hair_new"
+    ],
+    "0xE15BE58F": [
+      "city_bld_storefrontsigns03"
+    ],
+    "0xE16645CF": [
+      "wz10_missile_launcher"
+    ],
+    "0xE181CC1E": [
+      "ocoutpost_bld_hq_metal"
+    ],
+    "0xE188FB00": [
+      "cumana_bld_corner16x16d_roof"
+    ],
+    "0xE1B76011": [
+      "estate_bld_mansion03_05_nm"
+    ],
+    "0xE1C60AE2": [
+      "gr_hum_soldierfemale_b_lb"
+    ],
+    "0xE1EB7ABF": [
+      "merida_plateau01"
+    ],
+    "0xE1FEBBB5": [
+      "global_weapon_smg"
+    ],
+    "0xE2068412": [
+      "chinaoutpost_bld_hangar01"
+    ],
+    "0xE20BE2FA": [
+      "oc_hum_mercenary_heavy_lb"
+    ],
+    "0xE2329B68": [
+      "global_boxb"
+    ],
+    "0xE2598A5D": [
+      "groutpostinterior_chairwoodb"
+    ],
+    "0xE27C6F51": [
+      "teeth"
+    ],
+    "0xE2829CDA": [
+      "maracaibo_bld_stagerepublica_details"
+    ],
+    "0xE2C3C75D": [
+      "global_att_loadingdocka_01"
+    ],
+    "0xE2F1E090": [
+      "ch_att_boss_helmet"
+    ],
+    "0xE300517F": [
+      "civ_hum_richfemale_haira"
+    ],
+    "0xE31521AD": [
+      "civ_veh_bus_escort"
+    ],
+    "0xE3192CD6": [
+      "ch_att_soldier_helmeta"
+    ],
+    "0xE3298A69": [
+      "civ_hum_rich_b_head"
+    ],
+    "0xE343AF3B": [
+      "shanty_bld_shack05"
+    ],
+    "0xE343DCDD": [
+      "ocoutpostinterior_interiordetail"
+    ],
+    "0xE35824F8": [
+      "merida_bld_lockerroom"
+    ],
+    "0xE371584C": [
+      "city_bld_standalone01_walls"
+    ],
+    "0xE3806FAC": [
+      "civ_hum_casualfemale_f_hair"
+    ],
+    "0xE38FD6AF": [
+      "airport_bld_terminal01_windows"
+    ],
+    "0xE3B78B31": [
+      "industrial_bld_buildinga_pipes"
+    ],
+    "0xE3CCE0E6": [
+      "commercial_bld_corner8x8b"
+    ],
+    "0xE3D09D6F": [
+      "global_fencechain02"
+    ],
+    "0xE3EBDF57": [
+      "civ_hum_businessfemale_a_ub"
+    ],
+    "0xE413DA85": [
+      "merida_bld_mediabooth"
+    ],
+    "0xE43A561C": [
+      "global_env_bush01"
+    ],
+    "0xE4B6A290": [
+      "caracas_rampgovernment01_ceiling"
+    ],
+    "0xE4B79CB6": [
+      "docks_bld_warehouse_misc01"
+    ],
+    "0xE4BDDC28": [
+      "rocket_launcher"
+    ],
+    "0xE4BFF8CB": [
+      "jungle_road10_straightmerge"
+    ],
+    "0xE4F5B754": [
+      "pr_att_sailor_a_hat"
+    ],
+    "0xE50E4C89": [
+      "civ_hum_industrial_a_lb"
+    ],
+    "0xE50E8444": [
+      "industrial_bld_warehouse01b"
+    ],
+    "0xE5130172": [
+      "industrial_bld_warehouse01d"
+    ],
+    "0xE523825A": [
+      "civ_hum_richfemale_bagb"
+    ],
+    "0xE524F263": [
+      "shanty_wallstraight02"
+    ],
+    "0xE54047D5": [
+      "al_veh_boat_destroyer"
+    ],
+    "0xE55B11A1": [
+      "industrial_bld_gasstation02"
+    ],
+    "0xE5995EE8": [
+      "ocoutpostinterior_trashcanb"
+    ],
+    "0xE5AC5064": [
+      "industrial_track"
+    ],
+    "0xE5DA9757": [
+      "residential_sidewalk_straight"
+    ],
+    "0xE5F34EC3": [
+      "ocoutpostinterior_desklobby"
+    ],
+    "0xE5FADACE": [
+      "caracas_skytramplateau01"
+    ],
+    "0xE6027C27": [
+      "outpost_bld_vzwarehouselarge"
+    ],
+    "0xE6624139": [
+      "industrial_bld_hangar01_misc"
+    ],
+    "0xE677C9A3": [
+      "global_weapon_mp5sd"
+    ],
+    "0xE6A22510": [
+      "global_deliverycrate"
+    ],
+    "0xE6A8BED5": [
+      "estate_bld_mansion01_stair_nm"
+    ],
+    "0xE6D2387C": [
+      "oc_hum_beachfemale_b_head"
+    ],
+    "0xE6D9BDF6": [
+      "pmcoutpost_bld_hqexterior_wall05"
+    ],
+    "0xE6DA3EEB": [
+      "pmcoutpost_planters"
+    ],
+    "0xE700B8EE": [
+      "global_flag_smallal"
+    ],
+    "0xE7202486": [
+      "pmc_hum_chris_v4_head"
+    ],
+    "0xE7231CB8": [
+      "civ_att_motorhelmet_a"
+    ],
+    "0xE745DBEA": [
+      "pr_hum_sailorfemale_b_ub"
+    ],
+    "0xE76612BE": [
+      "global_veh_transport_wheel"
+    ],
+    "0xE7D3FD64": [
+      "civ_hum_latin_headf"
+    ],
+    "0xE7E8CC0E": [
+      "pmcoutpost_bld_dock_wall_brick01_nm"
+    ],
+    "0xE832ED80": [
+      "port_cranegantry_b"
+    ],
+    "0xE83CF2B8": [
+      "pr_hum_thugfemale_a_head"
+    ],
+    "0xE84BD4B6": [
+      "global_roof07"
+    ],
+    "0xE85D181F": [
+      "gr_att_soldierfemale_a_acc"
+    ],
+    "0xE86073E9": [
+      "gr_hum_heavy_a_ammobelt"
+    ],
+    "0xE86593FA": [
+      "global_trashbag01"
+    ],
+    "0xE870A185": [
+      "pmc_hum_chris_head"
+    ],
+    "0xE871528F": [
+      "pr_hum_thug_a_ub"
+    ],
+    "0xE887A5AA": [
+      "oc_hum_boss_ub"
+    ],
+    "0xE8B8F4B3": [
+      "industrial_bld_domerefinery"
+    ],
+    "0xE8C6DC01": [
+      "merida_market05"
+    ],
+    "0xE8D2B208": [
+      "global_env_hedgeshort"
+    ],
+    "0xE8E3BF4D": [
+      "gr_att_hum_boss_fake_bandana"
+    ],
+    "0xE8E446BD": [
+      "oc_hum_aidworkerfemale_haira"
+    ],
+    "0xE8E58109": [
+      "ch_veh_tank_pgz95_command"
+    ],
+    "0xE90623BF": [
+      "oc_veh_semi_austin_damage"
+    ],
+    "0xE92464DD": [
+      "groutpost_bld_tentsmalltarp"
+    ],
+    "0xE93BA432": [
+      "aloutpostinterior_hanger"
+    ],
+    "0xE93F602D": [
+      "ch_veh_plane_transport_hull"
+    ],
+    "0xE96FB3F9": [
+      "gr_hum_soldier_a_uba"
+    ],
+    "0xE97E787C": [
+      "village_fencewood02"
+    ],
+    "0xE98187FC": [
+      "estate_bld_mansion02_floor_sm"
+    ],
+    "0xE9CF9E3E": [
+      "caracas_bld_skytramshopb"
+    ],
+    "0xE9D79B53": [
+      "vzoutpost_bld_alarmtower"
+    ],
+    "0xE9D93BD5": [
+      "civ_hum_aidworker_heada"
+    ],
+    "0xE9E253D5": [
+      "civ_veh_car_van_commercial"
+    ],
+    "0xE9E4AC90": [
+      "groutpost_bld_cranemining_alpha_nm"
+    ],
+    "0xE9E9B2A2": [
+      "global_ruindebris02"
+    ],
+    "0xE9ED0A5E": [
+      "city_bld_storefrontd"
+    ],
+    "0xEA4A33E0": [
+      "ocoutpost_planter"
+    ],
+    "0xEA5253E7": [
+      "caracas_fountainparquecentral"
+    ],
+    "0xEA5D6325": [
+      "marsh_bridgeend"
+    ],
+    "0xEAA1C080": [
+      "maracaibo_bld_skyscraper01"
+    ],
+    "0xEAB4AA7C": [
+      "global_veh_fordf150_wheel"
+    ],
+    "0xEACE4E81": [
+      "cumana_bld_corner16x16c_wall02"
+    ],
+    "0xEADBE07F": [
+      "estate_bld_mansion03_03_nm"
+    ],
+    "0xEB20325A": [
+      "pmc_veh_car_vanquish_racer"
+    ],
+    "0xEB3ED263": [
+      "aloutpost_bld_hanger_roof_sm"
+    ],
+    "0xEB609C65": [
+      "jungle_env_bushmedium03"
+    ],
+    "0xEB7E74E9": [
+      "global_firehydrantred01"
+    ],
+    "0xEB9565F1": [
+      "police_hum_starter05_ub"
+    ],
+    "0xEBB79CEB": [
+      "vz_hum_carmona_lb"
+    ],
+    "0xEBC1E1BD": [
+      "shanty_bld_shack_siding"
+    ],
+    "0xEBC297CB": [
+      "oc_bld_warehouse_interiorb"
+    ],
+    "0xEBCB43EA": [
+      "civ_hum_doctorfemale_lba"
+    ],
+    "0xEC14384B": [
+      "proutpost_helipad_details01"
+    ],
+    "0xEC339B37": [
+      "shanty_bld_housegroup01_ground03"
+    ],
+    "0xEC6C211D": [
+      "oc_veh_boat_turbosquid"
+    ],
+    "0xECED04B2": [
+      "global_veh_transport_damage"
+    ],
+    "0xECEFD1CD": [
+      "civ_veh_boat_jetski"
+    ],
+    "0xECF86330": [
+      "aloutpost_bld_hanger_roof_nm"
+    ],
+    "0xED28F202": [
+      "ocoutpostinterior_statueoil"
+    ],
+    "0xED2B33F5": [
+      "proutpost_bld_bunker01"
+    ],
+    "0xED3E43B5": [
+      "oilrig_att_pipes"
+    ],
+    "0xED44F802": [
+      "caracas_bld_plazaparquecentral02"
+    ],
+    "0xED65AB4F": [
+      "global_chairyarda"
+    ],
+    "0xED963F1D": [
+      "global_fencemetal02"
+    ],
+    "0xED9E8799": [
+      "estate_bld_tower01"
+    ],
+    "0xEDA0A997": [
+      "ch_hum_pilot_uba"
+    ],
+    "0xEDC393E0": [
+      "proutpost_att_satelitelarge004"
+    ],
+    "0xEDE90EC7": [
+      "pr_hum_thugfemale_a_ub"
+    ],
+    "0xEDF20B2C": [
+      "industrial_trackstop"
+    ],
+    "0xEE385D45": [
+      "global_flag_largevz"
+    ],
+    "0xEE3EAC02": [
+      "gr_att_heavy_a_helmet"
+    ],
+    "0xEE538A2A": [
+      "pmcoutpost_bld_dock_wall_brick01"
+    ],
+    "0xEE6ACC8E": [
+      "pmc_hum_mattias_v3_ub"
+    ],
+    "0xEE8B91DA": [
+      "industrial_bld_platform_interior"
+    ],
+    "0xEEBF4EF9": [
+      "gr_hum_advisor_lb"
+    ],
+    "0xEEC143F4": [
+      "ch_veh_truck_sx2150_tanker"
+    ],
+    "0xEED4BC0B": [
+      "industrial_machineparts03"
+    ],
+    "0xEF32C872": [
+      "city_bld_corner16x16b_roof"
+    ],
+    "0xEF4468C7": [
+      "gr_hum_officer_head"
+    ],
+    "0xEF842B68": [
+      "pmcoutpost_bld_hqinterior_ceiling02"
+    ],
+    "0xEF8CF621": [
+      "vz_hum_officer_ub"
+    ],
+    "0xEF9850CF": [
+      "ocoutpost_bld_hq_windows_sm"
+    ],
+    "0xEFB6CB13": [
+      "proutpost_att_satelitelarge003"
+    ],
+    "0xEFE5F37A": [
+      "aloutpost_bld_hanger_alpha_nm"
+    ],
+    "0xF0053B2E": [
+      "police_hum_officer_b_gasmask"
+    ],
+    "0xF00E9F68": [
+      "merida_plazabench"
+    ],
+    "0xF01E652C": [
+      "oc_att_fireman_acc"
+    ],
+    "0xF021A79F": [
+      "pmc_hum_mattias_v4_ub"
+    ],
+    "0xF0232AF8": [
+      "jungle_fountainruinshotel"
+    ],
+    "0xF032F209": [
+      "white_bld_corner8x16a"
+    ],
+    "0xF04ADDBE": [
+      "pmcoutpost_pool_ground"
+    ],
+    "0xF04B0DF5": [
+      "shanty_fencewood"
+    ],
+    "0xF0505E7C": [
+      "global_roof05"
+    ],
+    "0xF05FB44C": [
+      "village_bld_house01"
+    ],
+    "0xF08ADAD9": [
+      "jungle_road10_straight"
+    ],
+    "0xF09DB0A1": [
+      "gr_hum_soldierfemale_b_ubb"
+    ],
+    "0xF0B53106": [
+      "aloutpost_bld_hanger_sm"
+    ],
+    "0xF0EB16D5": [
+      "pmcoutpost_bld_hqexterior_wall02"
+    ],
+    "0xF1056CD3": [
+      "global_weapon_archer"
+    ],
+    "0xF12616DD": [
+      "global_ruinconcretea"
+    ],
+    "0xF1441A89": [
+      "estate_bld_mansion01"
+    ],
+    "0xF15560BB": [
+      "jungle_env_rock05"
+    ],
+    "0xF1868A8A": [
+      "civ_hum_protester_female_accb"
+    ],
+    "0xF1BC37E3": [
+      "global_pickup_grenades"
+    ],
+    "0xF1E8B11C": [
+      "industrial_bld_warehouse03_lod"
+    ],
+    "0xF2008BD0": [
+      "global_weapon_aarocket"
+    ],
+    "0xF206C5BF": [
+      "pmcoutpost_bld_hqinterior_floor04_livedin"
+    ],
+    "0xF20CB9E0": [
+      "merida_bld_tickets"
+    ],
+    "0xF2391F54": [
+      "city_bld_corner16x32a"
+    ],
+    "0xF23A160B": [
+      "city_bld_corner16x16a_roof"
+    ],
+    "0xF2423255": [
+      "estate_bld_mansion03_03"
+    ],
+    "0xF292F41F": [
+      "cartel_hum_officer_uba"
+    ],
+    "0xF2BEF3FF": [
+      "civ_veh_car_w12_z12"
+    ],
+    "0xF2C7D0DD": [
+      "civ_att_aidworker_helmeta"
+    ],
+    "0xF2D6BDEB": [
+      "al_hum_soldierheavy_ub"
+    ],
+    "0xF2EF963E": [
+      "al_hum_soldier_b_lb"
+    ],
+    "0xF2FEEC3A": [
+      "city_bld_apartment01_wall02"
+    ],
+    "0xF30E57D4": [
+      "industrial_rails_01"
+    ],
+    "0xF32A4CF5": [
+      "pmc_att_mechanic_glasses"
+    ],
+    "0xF33C89E1": [
+      "gr_att_soldierfemale_a_band"
+    ],
+    "0xF33E348B": [
+      "gr_hum_officer_sunglasses"
+    ],
+    "0xF35CCFEB": [
+      "global_playgroundride01"
+    ],
+    "0xF3809C05": [
+      "civ_veh_car_w12_normal"
+    ],
+    "0xF3C7D18F": [
+      "maracaiboruins_bld_historical02"
+    ],
+    "0xF3CC0565": [
+      "global_fruitboxc"
+    ],
+    "0xF3DD9D32": [
+      "merida_bld_universitycampus"
+    ],
+    "0xF3F25DAD": [
+      "global_billboarda"
+    ],
+    "0xF3FDF76C": [
+      "caracas_portplateau01"
+    ],
+    "0xF3FF5133": [
+      "commercial_bld_segment8x8a"
+    ],
+    "0xF405EF93": [
+      "jungle_env_plantsmall02"
+    ],
+    "0xF4063DE9": [
+      "village_bld_docks"
+    ],
+    "0xF42804DF": [
+      "estate_bld_mansion01_03"
+    ],
+    "0xF4280F12": [
+      "oc_hum_starter05_head"
+    ],
+    "0xF43216DB": [
+      "city_bld_storefrontwindows02"
+    ],
+    "0xF433C5D7": [
+      "jungle_env_plantlarge02"
+    ],
+    "0xF43939C5": [
+      "global_signoneway"
+    ],
+    "0xF445EE6D": [
+      "city_bld_corner16x32d"
+    ],
+    "0xF4474B72": [
+      "port_crane2_c"
+    ],
+    "0xF44B684F": [
+      "aloutpostinterior_steelbox"
+    ],
+    "0xF47072A8": [
+      "pr_hum_worker_hair"
+    ],
+    "0xF49FB9C8": [
+      "civ_att_protester_accb"
+    ],
+    "0xF4A846E1": [
+      "global_barricadea"
+    ],
+    "0xF4A94C58": [
+      "civ_hum_poorfemale_headb"
+    ],
+    "0xF4AECC79": [
+      "gr_att_advisor_helmet"
+    ],
+    "0xF4D4C8F0": [
+      "civ_hum_journalistfemale_lba"
+    ],
+    "0xF4F1FDE3": [
+      "groutpost_bld_guardtowertree03"
+    ],
+    "0xF515FB68": [
+      "city_bld_apartment04"
+    ],
+    "0xF51C01DD": [
+      "caracas_bld_capitol"
+    ],
+    "0xF59A7C4F": [
+      "proutpost_bld_shacksmall01"
+    ],
+    "0xF5C233CA": [
+      "police_hum_officer_b_ub"
+    ],
+    "0xF6205ECE": [
+      "global_veh_68valiant4door_damage"
+    ],
+    "0xF62118B4": [
+      "al_hum_soldier_elitea_head"
+    ],
+    "0xF62FFF7B": [
+      "shanty_bld_housegroupsmall03_lod"
+    ],
+    "0xF66B8F19": [
+      "pmc_hum_mattias_hair"
+    ],
+    "0xF66FC4F8": [
+      "gr_hum_soldier_a_heada"
+    ],
+    "0xF67B3FD5": [
+      "global_weapon_daisycutter"
+    ],
+    "0xF691CA59": [
+      "ocoutpostinterior_interiorequipbox"
+    ],
+    "0xF6A707C1": [
+      "global_weapon_gm94"
+    ],
+    "0xF6ADF438": [
+      "aloutpostinterior_steel"
+    ],
+    "0xF6DEC8EA": [
+      "ch_veh_helicopter_ka29b"
+    ],
+    "0xF6E2E989": [
+      "shanty_env_tree02"
+    ],
+    "0xF6E4F696": [
+      "pmcoutpost_bld_pool_02"
+    ],
+    "0xF700316E": [
+      "oc_hum_mercenary_heavy_head"
+    ],
+    "0xF71FAC22": [
+      "caracasruins_bld_corner16x16a_parts01"
+    ],
+    "0xF7293CCC": [
+      "merida_universitystatue"
+    ],
+    "0xF73AA4F8": [
+      "global_env_tree01_imposter"
+    ],
+    "0xF747670D": [
+      "global_prop_spotlight"
+    ],
+    "0xF747913D": [
+      "gr_hum_starter04_bandana"
+    ],
+    "0xF75502DB": [
+      "caracas_shoppingcenterplateau"
+    ],
+    "0xF762CFC3": [
+      "civ_veh_motorcycle_chopper"
+    ],
+    "0xF77A5583": [
+      "al_hum_boss_ub"
+    ],
+    "0xF799E10F": [
+      "global_weapon_hellfire"
+    ],
+    "0xF7F6F6EA": [
+      "pmc_hum_eva_hair"
+    ],
+    "0xF7F79D28": [
+      "vz_hum_soldierheavy_ub"
+    ],
+    "0xF7F945D2": [
+      "shanty_env_bush03"
+    ],
+    "0xF855B1BB": [
+      "civ_hum_baseballcap"
+    ],
+    "0xF863325B": [
+      "global_flag_largepr"
+    ],
+    "0xF87E087D": [
+      "caracasruins_bld_corner16x32b"
+    ],
+    "0xF88147A1": [
+      "ch_veh_tank_ztz98"
+    ],
+    "0xF88503ED": [
+      "shanty_concreteleft"
+    ],
+    "0xF8936247": [
+      "port_wheels_a"
+    ],
+    "0xF8E34B9C": [
+      "vz_hum_solano_head"
+    ],
+    "0xF9184B53": [
+      "industrial_bld_warehouse01_ruin_a"
+    ],
+    "0xF91FF8B6": [
+      "oc_hum_journalist_heada"
+    ],
+    "0xF926E4BD": [
+      "groutpost_podium_wood"
+    ],
+    "0xF96BC9FE": [
+      "groutpost_bld_shackfuselage01_parts"
+    ],
+    "0xF9960E73": [
+      "residential_bld_corner16x16c"
+    ],
+    "0xFA394A93": [
+      "global_weapon_m34wp"
+    ],
+    "0xFA83AC18": [
+      "shanty_bld_housegroup03"
+    ],
+    "0xFAD34333": [
+      "pmc_hum_fiona_hair"
+    ],
+    "0xFAF2CF03": [
+      "pmc_hum_mattias_lb"
+    ],
+    "0xFB25BCC0": [
+      "commercial_bld_supermarket_03"
+    ],
+    "0xFB2A4AA2": [
+      "pr_hum_starter05_sunglasses"
+    ],
+    "0xFB356AE0": [
+      "commercial_bld_segment8x16a"
+    ],
+    "0xFB3EA8A1": [
+      "global_sandbagsch"
+    ],
+    "0xFB3F09AE": [
+      "proutpost_bld_garageboat"
+    ],
+    "0xFB7A58EF": [
+      "global_chairwoodd"
+    ],
+    "0xFB84E548": [
+      "docks_bld_warehouse"
+    ],
+    "0xFBADCB43": [
+      "cumana_bld_segment32x32d"
+    ],
+    "0xFBAF28EF": [
+      "gr_veh_truck_m151_damage"
+    ],
+    "0xFBB942FC": [
+      "proutpost_docka_columns"
+    ],
+    "0xFBD0E02C": [
+      "pmc_hum_chris_v2_lb"
+    ],
+    "0xFBF8A299": [
+      "civ_veh_boat_swamp_wire"
+    ],
+    "0xFC1431D5": [
+      "pmc_att_mechanic_cloth"
+    ],
+    "0xFC332812": [
+      "caracas_bld_parquecentral02"
+    ],
+    "0xFC3D2AA8": [
+      "global_sandbags"
+    ],
+    "0xFC79AC27": [
+      "commercial_bld_policestation_01"
+    ],
+    "0xFC8A5AE6": [
+      "commercial_bld_corner16x16a_window"
+    ],
+    "0xFC950DF2": [
+      "merida_bld_universitylibrary"
+    ],
+    "0xFC9B506F": [
+      "gr_att_heavy_a_backpack"
+    ],
+    "0xFCA2E3A2": [
+      "city_bld_corner32x32d_tile"
+    ],
+    "0xFCAE37AB": [
+      "civ_veh_car_crx_racing"
+    ],
+    "0xFCC5F93A": [
+      "city_busstop01"
+    ],
+    "0xFCD93E55": [
+      "pmcoutpost_bld_hqinterior_details_01"
+    ],
+    "0xFCE2379F": [
+      "caracas_bld_cathedral"
+    ],
+    "0xFCE608C9": [
+      "al_hum_soldier_eliteb_objects"
+    ],
+    "0xFD0E4D57": [
+      "al_hum_starter02_ub"
+    ],
+    "0xFD46EB79": [
+      "civ_hum_journalist_uba"
+    ],
+    "0xFD5D010D": [
+      "oilrig_att_dockingrampb"
+    ],
+    "0xFDA4EB28": [
+      "cumana_bld_segment32x32d_roof"
+    ],
+    "0xFE1F3937": [
+      "residential_bld_segment16x16a"
+    ],
+    "0xFE54DCB6": [
+      "pmcoutpost_gate_alpha"
+    ],
+    "0xFE6CEE25": [
+      "global_bld_concrete02"
+    ],
+    "0xFE832C3D": [
+      "city_bld_storefrontcorneresigns_02"
+    ],
+    "0xFE9D8AEF": [
+      "civ_att_protester_acca"
+    ],
+    "0xFEA71D7F": [
+      "civ_hum_poorfemale_heada"
+    ],
+    "0xFEB0D79C": [
+      "shanty_bld_house02_roof01"
+    ],
+    "0xFEDA4BF0": [
+      "city_bld_corner16x16c"
+    ],
+    "0xFEE23DF5": [
+      "proutpost_bld_surveillance_wall02"
+    ],
+    "0xFEEFD84B": [
+      "pmcoutpost_bld_pool_stone"
+    ],
+    "0xFEFA923A": [
+      "ch_att_pilot_helmeta"
+    ],
+    "0xFEFEC9DF": [
+      "pmcoutpost_bld_hqinterior_details_01_livedin"
+    ],
+    "0xFF10EBC9": [
+      "industrial_bld_warehouse01c"
+    ],
+    "0xFF32C8D4": [
+      "chinaoutpost_interior_barrelb"
+    ],
+    "0xFF4691E7": [
+      "vz_hum_soldierheavy_head"
+    ],
+    "0xFF6A0A9A": [
+      "pr_att_thugfemale_a_bandana"
+    ],
+    "0xFFA596C9": [
+      "gr_hum_starter04_ub"
+    ],
+    "0xFFCE09B6": [
+      "gr_hum_elite_head"
+    ],
+    "0xFFE1CA24": [
+      "al_hum_soldier_a_ub"
+    ],
+    "0xFFE7463A": [
+      "global_roof07_nm"
+    ]
+  }
+}
