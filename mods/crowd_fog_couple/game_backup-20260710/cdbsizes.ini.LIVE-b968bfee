@@ -1,0 +1,338 @@
+[presize]
+_BoatPhysics 160 32
+_BuildingPhysics 2048
+_CarPhysicsV2 1536
+_CarWheel 4608
+_CollapsePhysics 8 8
+_DebrisPhysics	256
+_HelicopterPhysics 160 32
+_HelicopterPhysicsAi 160 32
+_HumanPhysics 768 256
+_JetPhysics 8 8
+_PropPhysics 768
+_TankPhysics 128 64
+Ai 2048
+AiBehavior 1024
+AiDriving 512
+AiHelicopter 256 128
+AiHintNode 128 64
+AiPatrol 1536
+AiSkill	256 128
+AiUnUsable 8 8
+AiWaterZone	16 16
+Alarm 32 32
+Anchor 1152 128
+AnimationController 16 16
+AnimationResponse 64 64
+Association 1024
+AtmosphereBase 160 32 
+BlobShadow 1280
+BoneControllerRuntime 512
+BoneCtrlFakeWheel 1280
+BoneCtrlJostle 8 8
+BoneCtrlLocalRotation 192 64
+BoneCtrlLocalTranslation 16 16
+BoneCtrlLookAt 512
+BoneCtrlPhysicsActor 1024
+BoneCtrlRotationCopy 64 64
+BoneCtrlStrapOn 768
+BoneCtrlTentacle 64 64
+BoneCtrlWind 96 32
+BuildingCollapseAnim 1024
+BuildingDestruction 32 32
+Buoyancy 256
+CameraCarPreset 128 32
+CameraCarPresetLink 2048
+CameraHelicopter 160 32
+CameraShake 384 128
+CameraTank 192 32
+CameraTurret 768
+Carryable 8 8
+CashValue 1024
+CenterOfMassInWorld 8 8
+ChatterSet 1280
+CheatInfiniteAmmo 256 128
+CheatInvincible 96 32
+CheatUnkillable 8 8
+CircleRegion 8 8
+ColorAnimation 8 8
+ConnectPoint 256
+ConstraintLink 32 32
+ContextAction 16 16
+ControlBinding 48 16
+ControllerBoat 64 64
+ControllerCar 128 128
+ControllerHelicopter 64 64
+ControllerLadder 32 32
+ControllerLW 16 16
+ControllerPlayer 96 32
+ControllerTank 32 32
+ControllerTurret 256
+ControllerVehicle 16 16
+ControllerVelocity 192 64
+ControllerWeapon 256
+CoverHint 2048
+CoverHintOffset 1536 256
+Crusher 32 32
+DamageChunks 32 32
+DamageKey 1280
+DangerousBuilding 768
+DebrisEffect 4608
+DestructionLink 1024
+Disable3DDecals 1536
+DisableDamageEffect 768
+DisableDecals 512
+DisableMaterialEffect 8 8
+Door 2304
+DoorCoupling 256
+DrivingKey 8 8
+EffectAiOccluder 64 64
+EffectModel 64 64
+EffectTemplate 768
+EffectVelocityControl 2560
+EntranceLink 13312
+EntranceParameters 192 64
+EntranceToSeat 512
+Equipment 96 32
+EquipmentDock 256
+EquipmentLink 768
+ExplosionFudge 256 64
+Explosive 96 32
+FactionMarker 1280
+FactionValue 64 64
+FactionZone 16 16
+Flags 14848
+Flammable 256
+FlareObject 16 16
+FlightNoise 64 32
+GenericLOD 128 64
+GrappleParameters 64 64
+Health 6656
+HibernationControl 14080
+HomingProjectile 64 64
+HomingTarget 1024
+HomingWeapon 128 64
+HumanAnimationControllerNEW 128 64
+HumanAnimationSet 768 256
+HumanAnimationSystem 768 256
+HumanCameraModifier 64 64
+HumanInventory 8 8
+HumanStateMachine 256 256
+Ignitor 96 32
+InitialAngularVelocity 32 32
+InitialAngularVelocityLocalSpace 8 8
+InitialLinearVelocity 16 16
+InitialLinearVelocityLocalSpace 8 8
+IntersectionToIntersection 256
+Label 6400
+LandingZone 96 32
+LaneData 512 128
+LaneZeroDirection 256
+LightAnimation 64 64
+LightObject 2048
+LineRegion 512 128
+LocalizedName 4352
+LowResTerrainObject 512
+MassiveComponent 32 32
+MaterialControllerRuntime 512
+MaterialCtrlTankTread 192 64
+MaterialEmitter 1024
+MaterialMapping 256 256
+MeleeCombatant 768 256
+Model 8 8
+ModelMixeProfile 512 128
+ModelName 4608
+ModifierKey 6656
+MusicRegion 64 64
+MusicSource 64 32
+Name 6912
+NetCategoryInfo 3328
+NodeHealth 11264
+ObjectHint 1280
+ObjectMaterial 32 32
+ObjectScript 2048
+OSMParameter 1280
+OSMStateParameter 768
+ParticleEmitter 8 8
+ParticleKey 6144
+Path 512
+PathData 8 8
+PendingSceneObject 4096
+Perception 2560
+PhysicalLink 2816
+PhysicsActor 2304
+PhysicsActorRagdoll 128 64
+PhysicsActorWinch 16 16
+PhysicsDefaultActivator 128 64
+PhysicsPropertyCrashable 512
+PhysicsPropertyFakeContinuous 32 32
+PhysicsPropertyGravityScaler 160 32
+PhysicsPropertyUncrushable 16 16
+Pickup 256
+Players 8 8
+PointLocation 64 64
+PopulationDensity 256 128
+PopulationDynamicRoad 64 64
+PopulationFlow 384 128
+PopulationList 2048
+PopulationSimpleSpawner 1536
+PoweredGate 32 32
+ProjectilePhysics 128 128
+RagdollController 128 64
+RedEffectComponent 768
+RedEffectTweak 96 32
+Relationship 96 32
+Ribbon 32 32
+Rider 2048
+RiderLink 1024
+Road 4608
+RoadIntersection 2304
+RoadIntersectionHint 32 32
+Rope 8 8
+Rotor 384 128
+RtAlarm 32 32
+RtAlphaAnimation 8 8
+RtAttachedFlowControl 768
+RtColorAnimation 8 8
+RtCoverHint 768 256
+RtDebris 64 64
+RtDriverData 64 64
+RtEffectVelocityControl 256
+RtExhaustionCounter 8 8
+RtFactionZone 16 16
+RtFlowControl 192 64
+RtFlowCycleTimer 32 32
+RtGenericLOD 32 32
+RtGenericLODProxy 32 32
+RTHuman 256 128
+RtJunction 8 8
+RtLightAnimation 32 32
+RtLivingWorld 16 16
+RtPathMember 32 32
+RtPopHint 256 128
+RtPopMembership 32 32
+RtPoweredGate 96 32
+RtRedEffect 8 8
+RtRibbon 16 16
+RtRisingRuinPhysicsAnimation 8 8
+RtRoadIntersection 320 64
+RtScaleAnimation 8 8
+RtSpeedLimit 8 8
+RtTerrainChildren 32 32
+RtTickDamage 16 16
+RtVFX 768 256
+RuntimeAirstrikeAirplane 4 4
+RuntimeAirstrikeProjectile 8 8
+RuntimeAlternatingFire 8 8
+RuntimeAnimationParams 8 8
+RuntimeAssetRef 2560
+RuntimeClaim 16 16
+RuntimeClaimCover 16 16
+RuntimeConstraintLink 32 32
+RuntimeDebrisEffect 8 8
+RuntimeEntrance 256 128
+RuntimeEntranceUsable 512 256
+RuntimeEquipmentLink 5120
+RuntimeExplosion 8 8
+RuntimeFacialExpression 96 32
+RuntimeFakeProjectile 8 8
+RuntimeFakeWheel 8 8
+RuntimeFlightNoise 8 8
+RuntimeFoliageModel 8 8
+RuntimeHeadLookAt 128 64
+RuntimeHealth 2560
+RuntimeHIjackState 8 8
+RuntimeHomingProjectile 8 8
+RuntimeHomingTarget 64 64
+RuntimeHomingWeapon 8 8
+RuntimeIgnitor 8 8
+RuntimeInventory 320 64
+RuntimeLaserDesignator 4 4
+RuntimeLastDamageApplied 32 32
+RuntimeLayerId 20224
+RuntimeModelState 2048
+RuntimeMusicRegion 64 64
+RuntimeNodeHealth 1280
+RuntimeObjectiveMarker 32 32
+RuntimeOwnerGuid 96 32
+RuntimePhysicalLink 22784
+RuntimePickup 192 64
+RuntimeProjectile 512 128
+RuntimeProjectileThrown 16 16
+RuntimeRiderCrawlExit 8 8
+untimeRiderDiveEnter 8 8
+RuntimeRope 8 8
+RuntimeSceneObject 5632
+RuntimeScriptCallback 8 8
+RuntimeScrub 2816
+RuntimeSoundAmbience 128 64
+RuntimeSoundEffect 1024
+RuntimeSoundRuinKey 16 16
+RuntimeTerrainBound 32 32
+RuntimeTimer 16 16
+RuntimeTravelGroup 8 8
+RuntimeTriggerable 8 8
+RuntimeTurret 128 64
+RuntimeVehicleCrawlExits 8 8
+RuntimeVehicleInventory 64 32
+RuntimeVehiclePart 640 128
+RuntimeVelocity 16 16
+RuntimeWeapon 192 64
+RuntimeWeaponProjectile 160 32
+ScaleAnimation 16 16
+SceneObject 172032
+ScrubObject 1280
+SeatLink 13312
+SeatParameters 512
+SeatToSeat 512
+SkirmishSpawnList 16 16
+SkirmishZone 16 16
+SocialUse 96 32
+SoundAmbience 96 32
+SoundEffect 3584
+SoundInterior 8 8
+SoundKey 5632
+SoundRuinKey 8 8
+SpawnerAdjust 16 16
+SpawnOnDeath 768 256
+SpeedLimit 16 16
+SphereRegion 32 32
+Squad 16 16
+SquadSource 16 16
+SquadUnitLink 16 16
+StateMachine 1536
+Sticky 16 16
+Stimulus 3584
+StimulusModifier 512
+Suspect 64 32
+SysPathIntersectionIndex 1536
+SysPathRoadIndex 1792
+Target 64 64
+TerrainFade 32 32
+TerrainGuidMappingHighResToLowRes 512
+TerrainKey 512
+TerrainObject 1024
+TickDamage 1024
+TimerResponse 96 32
+TinyGeometryObject 32 32
+TreeFoliage 32 32
+TreeParam 16 16
+TriggerOnTimer 64 64
+Turret 1024
+TurretCoupling 256
+Usable 512 128
+VehicleAnimationSet 1024
+VehicleDisguiseScale 1280
+VehiclePart 8192
+WeaponBarrel 512
+WeaponCoupling 512
+WeaponEffects 384 128
+WeaponHint 384 128
+WeaponProjectileBase 384 128
+WeaponRecoilVehicle 64 64
+WeaponScatter 256
+WeaponScope 16 16
+WeaponThrown 16 16
+WeaponTrigger 16 16
+WeaponUI 384 128
+Winch 160 32
