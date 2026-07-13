@@ -1,0 +1,10 @@
+{
+  "name": "browser-screenshot",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Headless-Chromium screenshots of local pages (three.js WebGL viewer) for visual inspection.",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
