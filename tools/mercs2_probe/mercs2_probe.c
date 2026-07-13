@@ -249,6 +249,179 @@ static BOOL PtrReadable(const void* p, SIZE_T n) {
     return (addr + n <= end);
 }
 
+/* --- StreamWatch: find the terrain-collision readiness signal ----------------
+ *
+ * The PMC->exterior teleport (MrxUtil._TeleportHero) does
+ *   DisablePhysics -> SetPosition(Pmc_B1 = 2560.26, -13.1779, -926.25)
+ *   -> wait STATE_WAITFORSTREAMING -> EnablePhysics.
+ * On a fast CPU the hero is released before the exterior terrain COLLISION is
+ * resident, so he falls through and the terrain streams in above him. Adding
+ * load latency (the Lua log hook) or lifting the anchor +20m both mask it,
+ * proving it is a race and not a bad coordinate -- the anchor XZ sits inside
+ * the building footprint (ground -13.18, roof ~+6.8), so a lift is wrong.
+ *
+ * STATE_WAITFORSTREAMING clearly is NOT the right gate (it releases too early).
+ * So: sample the hero pose and the streaming manager's counters together at
+ * ~120Hz across the transition. The frame the hero's Y STOPS falling is the
+ * frame ground became solid; whichever field transitions at that same instant
+ * is the readiness signal we should gate EnablePhysics on. Measured, not
+ * guessed. Read-only: every deref is PtrReadable-gated, nothing is patched.
+ *
+ * Address provenance (project memory / prior live captures):
+ *   hero  : *(0x011761B0) -> owner_base; *(owner_base+0x200) -> record;
+ *           record+0x44 = float x,y,z  (pose)
+ *   stream: *(0x01176630) -> manager; busy flag +0x4C35C (== IsLoadingOrStreaming,
+ *           what WAITFORSTREAMING waits on); node-list counters +0x814/+0x824/
+ *           +0x834; resident +0x844.
+ * Offsets we are less sure of are dumped as a window so the log can settle it. */
+#define HERO_OWNER_BASE_PTR  0x011761B0
+#define HERO_RECORD_OFF      0x200
+#define HERO_POSE_OFF        0x44
+
+#define STREAM_MGR_PTR       0x01176630
+#define SW_BUSY_OFF          0x4C35C
+#define SW_PENDING_OFF       0x814
+#define SW_INFLIGHT_OFF      0x824
+#define SW_NODES3_OFF        0x834
+#define SW_RESIDENT_OFF      0x844
+
+#define SW_POLL_MS           8
+#define SW_Y_EPSILON         0.004f
+
+/* OBSERVER EFFECT: v1 of this sampler called Log() (an unbuffered WriteFile) on
+ * every changed sample -- ~125 disk writes/sec during the fall. That latency
+ * MASKED the very race we are measuring; the bug stopped reproducing the moment
+ * the probe was installed (same accidental fix as the Lua log hook and the +20m
+ * lift). So: zero syscalls in the hot path. Samples go into a fixed in-memory
+ * ring; nothing touches disk until well AFTER the transition has completed. */
+#define SW_RING_N            65536          /* ~8.7 min @ 8ms */
+#define SW_DUMP_DELAY_MS     2500           /* flush this long after FALL STOP */
+
+typedef struct {
+    DWORD t;
+    float x, y, z;
+    DWORD busy, pend, infl, n3, res;
+} SwSample;
+
+static SwSample g_swRing[SW_RING_N];
+static volatile LONG g_swCount   = 0;       /* samples written (may exceed ring) */
+static LONG          g_swFallStart = -1;    /* ring indices of the transitions */
+static LONG          g_swFallStop  = -1;
+static volatile LONG g_swDumped  = 0;
+
+static DWORD SwRd32(DWORD va) {
+    return PtrReadable((const void*)va, 4) ? *(const DWORD*)va : 0xFFFFFFFFu;
+}
+
+/* Flush the ring. Called only AFTER the fall has resolved (or at detach), so its
+ * I/O cannot perturb the measurement. */
+static void SwDump(const char* why) {
+    LONG total, first, i;
+    if (InterlockedExchange(&g_swDumped, 1)) return;
+    total = g_swCount;
+    first = (total > SW_RING_N) ? (total - SW_RING_N) : 0;
+    Log("[swatch] ==== DUMP (%s): %ld samples, fallStart=%ld fallStop=%ld ====",
+        why, total, g_swFallStart, g_swFallStop);
+    Log("[swatch] t_ms,x,y,z,busy,pend,infl,n3,res,mark");
+    for (i = first; i < total; i++) {
+        const SwSample* s = &g_swRing[i % SW_RING_N];
+        const char* mark = (i == g_swFallStart) ? "  <<< FALL START (physics released)"
+                         : (i == g_swFallStop)  ? "  <<< FALL STOP (ground solid) -- readiness signal here"
+                         : "";
+        Log("[swatch] %lu,%.3f,%.4f,%.3f,%lu,%lu,%lu,%lu,%lu%s",
+            s->t, s->x, s->y, s->z, s->busy, s->pend, s->infl, s->n3, s->res, mark);
+    }
+    Log("[swatch] ==== END DUMP ====");
+}
+
+/* Resolve the hero pose. Returns TRUE if the pointer chain is READABLE (even if
+ * the values are zero -- the slot is ZEROED at rest, so we must NOT reject that;
+ * v1 did, which is why nothing recorded). *live is set only when the pose looks
+ * like a real position (non-zero), used purely for fall detection. */
+static BOOL SwHeroPose(float* x, float* y, float* z, BOOL* live) {
+    DWORD base, rec;
+    const float* p;
+    *x = *y = *z = 0.0f;
+    *live = FALSE;
+    if (!PtrReadable((const void*)HERO_OWNER_BASE_PTR, 4)) return FALSE;
+    base = *(const DWORD*)HERO_OWNER_BASE_PTR;
+    if (!base || !PtrReadable((const void*)(base + HERO_RECORD_OFF), 4)) return FALSE;
+    rec = *(const DWORD*)(base + HERO_RECORD_OFF);
+    if (!rec || !PtrReadable((const void*)(rec + HERO_POSE_OFF), 12)) return FALSE;
+    p = (const float*)(rec + HERO_POSE_OFF);
+    *x = p[0]; *y = p[1]; *z = p[2];
+    *live = (p[0] != 0.0f || p[1] != 0.0f || p[2] != 0.0f);
+    return TRUE;
+}
+
+/* Sample hero pose + manager counters into the ring. NOTHING is logged here --
+ * see the OBSERVER EFFECT note above. The fall transitions are detected inline
+ * and recorded as ring indices; the flush happens SW_DUMP_DELAY_MS after the
+ * hero settles, i.e. long after the race has been won or lost. */
+static DWORD WINAPI StreamWatchThread(LPVOID param) {
+    float x = 0, y = 0, z = 0, py = 0;
+    DWORD mgr;
+    BOOL had = FALSE, falling = FALSE;
+    DWORD t0 = GetTickCount();
+    DWORD stopTick = 0;
+    (void)param;
+
+    Log("[swatch] armed (zero-I/O ring, %d samples @%dms): hero=*(%08X)+%X+%X  "
+        "mgr=*(%08X) busy+%X pend+%X infl+%X n3+%X res+%X",
+        SW_RING_N, SW_POLL_MS, HERO_OWNER_BASE_PTR, HERO_RECORD_OFF, HERO_POSE_OFF,
+        STREAM_MGR_PTR, SW_BUSY_OFF, SW_PENDING_OFF, SW_INFLIGHT_OFF,
+        SW_NODES3_OFF, SW_RESIDENT_OFF);
+    Log("[swatch] records EVERY tick once the stream mgr is live; pose best-effort. "
+        "Dump: 2.5s after a fall settles, OR on quit. Ring holds ~8.7 min.");
+
+    for (;;) {
+        BOOL live = FALSE;
+        BOOL poseOk = SwHeroPose(&x, &y, &z, &live);
+        mgr = SwRd32(STREAM_MGR_PTR);
+        /* Record whenever the streaming manager resolves -- do NOT gate on pose. */
+        if (mgr == 0xFFFFFFFFu || mgr == 0) { Sleep(SW_POLL_MS); continue; }
+        (void)poseOk;
+
+        {
+            LONG idx = g_swCount;
+            SwSample* s = &g_swRing[idx % SW_RING_N];
+            s->t    = GetTickCount() - t0;
+            s->x    = x; s->y = y; s->z = z;
+            s->busy = SwRd32(mgr + SW_BUSY_OFF);
+            s->pend = SwRd32(mgr + SW_PENDING_OFF);
+            s->infl = SwRd32(mgr + SW_INFLIGHT_OFF);
+            s->n3   = SwRd32(mgr + SW_NODES3_OFF);
+            s->res  = SwRd32(mgr + SW_RESIDENT_OFF);
+            g_swCount = idx + 1;
+
+            /* Fall detection only when the pose is a real (non-zero) position. */
+            if (live && had) {
+                float dy = y - py;
+                if (!falling && dy < -SW_Y_EPSILON) {
+                    falling = TRUE;
+                    if (g_swFallStart < 0) { g_swFallStart = idx; stopTick = GetTickCount(); }
+                } else if (falling && dy > -SW_Y_EPSILON) {
+                    falling = FALSE;
+                    if (g_swFallStop < 0) { g_swFallStop = idx; stopTick = GetTickCount(); }
+                }
+            }
+            if (live) { py = y; had = TRUE; }
+        }
+
+        /* Flush once: 2.5s after a fall SETTLES (landed under-ground on lower
+         * terrain), OR 6s into a fall that never stops (fell into the void). If
+         * the pose pointer never resolves at all, the on-quit SwDump() still
+         * captures the ring. */
+        if (!g_swDumped && stopTick) {
+            if (g_swFallStop >= 0 && (GetTickCount() - stopTick) > SW_DUMP_DELAY_MS)
+                SwDump("fall settled");
+            else if (falling && (GetTickCount() - stopTick) > 6000)
+                SwDump("still falling (void)");
+        }
+        Sleep(SW_POLL_MS);
+    }
+}
+
 static BOOL IsVaInRdata(DWORD va) {
     return va >= RDATA_START_VA && va < RDATA_START_VA + RDATA_SIZE;
 }
@@ -1539,8 +1712,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
                     "Mercs2 Probe", MB_OK | MB_ICONINFORMATION);
 #endif
         CreateThread(NULL, 0, ProbeThread, NULL, 0, NULL);
+        /* Correlate hero fall vs streaming-manager readiness (read-only sampler). */
+        CreateThread(NULL, 0, StreamWatchThread, NULL, 0, NULL);
     } else if (fdwReason == DLL_PROCESS_DETACH) {
         RestoreAllRegPatches();
+        /* Fallback: if the hero never landed (fell into the void), the timed
+         * flush never fired -- dump whatever the ring holds on the way out. */
+        SwDump("process detach");
     }
     return TRUE;
 }
