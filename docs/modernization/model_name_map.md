@@ -193,10 +193,73 @@ change and is recommended first.
 
 ## Improving coverage
 
-The 783 unresolved-to-real-name hashes have entries in the table only as block
-paths / synthetic strings. To crack more real names, extend
-`tools/build_rainbow_table.py` candidate generation with vocab in the observed
-naming scheme (all resolved names follow `{faction/zone}_{category}_{name}[_vN]`,
-e.g. `global_weapon_*`, `global_env_*`, `merida_*`, `shanty_*`, `commercial_*`,
-`docks_*`, `industrial_*`, `jungle_env_*`, `village_*`, `caracas_*`, `mountain_*`,
-`ocoutpost_*`, `pmcoutpost_*`), then re-run the builder and re-run this resolver.
+### The console WADs are the name oracle — the PC bake strips names
+
+The retail PC `vz.wad` does not spell out the names of build-GENERATED assets. Grep it
+for `tinygeometry` (the per-region LOD imposters) and you get **zero** hits; grep the PS3
+WAD and you get 1,548. The console builds ship an *uncompressed block-path table*, and a
+block path spells its asset's name:
+
+```
+blocks\vz\vz_state_alljob005_01_destroyed_tinygeometry_tgr12_tgc06_0x001439f9_P000_Q3.block
+          `------------------------------ the model's name ---------------------------'
+```
+
+Strip the `_P%03d_Q%d` LOD-rung suffix and `.block`, hash the stem, and it lands on the PC
+model hash — same assets, same hashes, only the console still names them. Verified: the PC
+WAD keeps the *layer's* path (`vz_state_alljob005_01_destroyed_P000_Q3.block`) but drops
+the tiny-geometry *model's* path, keeping only its hash.
+
+`aset_external_mine` does this over any binary (console WADs, the Jul-2008 prototype ISO,
+wordlists) and emits only verified preimages:
+
+```
+cargo run --release -p wad_simulator --bin aset_external_mine -- \
+    --names docs/data/aset_names.csv \
+    --source game-files/ps3-VZ.WAD --merge docs/data/aset_model_names.json \
+    --emit docs/data/aset_external_names.json
+```
+
+This took model naming from **1,901/2,964 (64%)** to **2,442/3,007 (81%)**.
+
+### Do NOT brute-force the grammar — the hash is only 32 bits
+
+The advice this section used to give — extend `build_rainbow_table.py`'s candidate
+generation with more vocabulary and re-run — is **actively harmful**, and the corpus
+carries the scars.
+
+A candidate set of size `S` tested against `T` targets produces `S*T/2^32` preimages
+*by chance*. With `T ≈ 13,000` unresolved hashes, anything past `S ≈ 6.7M` candidates is
+expected to mint at least one false name that "verifies" perfectly — `pandemic_hash_m2(name)
+== hash` is then true of a name the game never used. `aset_expanded_names.json` contained
+three such fabrications, caught only because they are *structurally* impossible:
+
+```
+vz_state_oiljob007_e_pristine_tinygeometry_6x00022cdb   <- format string emits _0x%08x, not 6x
+vz_state_chicon18_pristine_tinygeometry_18x14acc
+vz_pmc_tiny_tinygeometry_6x00018e04
+```
+
+They have been removed. The ones that happen to *look* plausible are undetectable, so the
+rule is: **a hash match alone is not evidence.** Every emitted name needs a second,
+independent witness. `aset_external_mine` tracks that as *provenance* and reports a
+per-source error bar (`S*T/2^32` for the tokens that source actually contributed):
+
+| channel | witness | expected noise |
+|---------|---------|----------------|
+| `block-stem` | the token *was* the asset's block path — structure + hash agree | 0.02 over 428 names |
+| `tex-stem` | token was `<name>_dm/_nm/_sm`, the texture convention | ~0 |
+| `bare` | a raw token in a multi-GB image — **hash is the only witness** | 13.3 over 6 names → junk |
+
+The bare channel over a 6 GB disc image is precisely where the collisions appeared, and
+they were all short underscore-less gibberish (`cbjoxg`, `kdwjc`, `qxcvzq`, `rfwuf`) — so
+bare tokens are additionally required to contain `_` and be ≥8 chars. Read the `noise`
+column as "how many of this row's names are fiction".
+
+### The 565 that remain are not recoverable from anything we hold
+
+They live *inside* shared blocks — `c3xxxx` region model libraries, `resident2`, `effects`
+— rather than owning a block of their own, so no block path spells them, and they appear
+as a bare string in no artifact we have (PC WAD, PS3 WAD, Xbox WAD, Jul-2008 prototype ISO,
+`console-vz-wads.zip` — all mined, all exhausted). Naming them needs a *new source* (a dev
+or debug build), not a cleverer search of the old ones.
