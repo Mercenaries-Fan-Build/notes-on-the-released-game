@@ -1,0 +1,5919 @@
+{
+ "provenance": {
+  "source_exe": "mercs2_unpacked.exe",
+  "note": "RVAs are from the unpacked dump; the ASI scans .rdata at runtime and does NOT rely on these. Use for host-side reference only.",
+  "image_base": 4194304
+ },
+ "table_count": 60,
+ "entry_count": 1357,
+ "tables": [
+  {
+   "table_va": 12133288,
+   "table_rva": 7938984,
+   "count": 15,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "byte",
+     "cfunc_rva": 4601504
+    },
+    {
+     "name": "char",
+     "cfunc_rva": 4601952
+    },
+    {
+     "name": "dump",
+     "cfunc_rva": 4602176
+    },
+    {
+     "name": "find",
+     "cfunc_rva": 4605680
+    },
+    {
+     "name": "format",
+     "cfunc_rva": 4608336
+    },
+    {
+     "name": "gfind",
+     "cfunc_rva": 4606432
+    },
+    {
+     "name": "gmatch",
+     "cfunc_rva": 4606128
+    },
+    {
+     "name": "gsub",
+     "cfunc_rva": 4607072
+    },
+    {
+     "name": "len",
+     "cfunc_rva": 4600352
+    },
+    {
+     "name": "lower",
+     "cfunc_rva": 4600912
+    },
+    {
+     "name": "match",
+     "cfunc_rva": 4605712
+    },
+    {
+     "name": "rep",
+     "cfunc_rva": 4601328
+    },
+    {
+     "name": "reverse",
+     "cfunc_rva": 4600720
+    },
+    {
+     "name": "sub",
+     "cfunc_rva": 4600432
+    },
+    {
+     "name": "upper",
+     "cfunc_rva": 4601120
+    }
+   ]
+  },
+  {
+   "table_va": 12133416,
+   "table_rva": 7939112,
+   "count": 9,
+   "group": "game",
+   "entries": [
+    {
+     "name": "concat",
+     "cfunc_rva": 4597648
+    },
+    {
+     "name": "foreach",
+     "cfunc_rva": 4596320
+    },
+    {
+     "name": "foreachi",
+     "cfunc_rva": 4596016
+    },
+    {
+     "name": "getn",
+     "cfunc_rva": 4596864
+    },
+    {
+     "name": "maxn",
+     "cfunc_rva": 4596608
+    },
+    {
+     "name": "insert",
+     "cfunc_rva": 4597072
+    },
+    {
+     "name": "remove",
+     "cfunc_rva": 4597344
+    },
+    {
+     "name": "setn",
+     "cfunc_rva": 4596960
+    },
+    {
+     "name": "sort",
+     "cfunc_rva": 4600080
+    }
+   ]
+  },
+  {
+   "table_va": 12133560,
+   "table_rva": 7939256,
+   "count": 24,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "assert",
+     "cfunc_rva": 4592464
+    },
+    {
+     "name": "collectgarbage",
+     "cfunc_rva": 4590464
+    },
+    {
+     "name": "dofile",
+     "cfunc_rva": 4592304
+    },
+    {
+     "name": "error",
+     "cfunc_rva": 4588672
+    },
+    {
+     "name": "gcinfo",
+     "cfunc_rva": 4590400
+    },
+    {
+     "name": "getfenv",
+     "cfunc_rva": 4589456
+    },
+    {
+     "name": "getmetatable",
+     "cfunc_rva": 4588912
+    },
+    {
+     "name": "loadfile",
+     "cfunc_rva": 4591728
+    },
+    {
+     "name": "load",
+     "cfunc_rva": 4592048
+    },
+    {
+     "name": "loadstring",
+     "cfunc_rva": 4591552
+    },
+    {
+     "name": "next",
+     "cfunc_rva": 4590816
+    },
+    {
+     "name": "pcall",
+     "cfunc_rva": 4593136
+    },
+    {
+     "name": "print",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "rawequal",
+     "cfunc_rva": 4589824
+    },
+    {
+     "name": "rawget",
+     "cfunc_rva": 4590000
+    },
+    {
+     "name": "rawset",
+     "cfunc_rva": 4590192
+    },
+    {
+     "name": "select",
+     "cfunc_rva": 4592928
+    },
+    {
+     "name": "setfenv",
+     "cfunc_rva": 4589536
+    },
+    {
+     "name": "setmetatable",
+     "cfunc_rva": 4589024
+    },
+    {
+     "name": "tonumber",
+     "cfunc_rva": 4588192
+    },
+    {
+     "name": "tostring",
+     "cfunc_rva": 4593648
+    },
+    {
+     "name": "type",
+     "cfunc_rva": 4590704
+    },
+    {
+     "name": "unpack",
+     "cfunc_rva": 4592656
+    },
+    {
+     "name": "xpcall",
+     "cfunc_rva": 4593344
+    }
+   ]
+  },
+  {
+   "table_va": 12133760,
+   "table_rva": 7939456,
+   "count": 6,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "create",
+     "cfunc_rva": 4594944
+    },
+    {
+     "name": "resume",
+     "cfunc_rva": 4594592
+    },
+    {
+     "name": "running",
+     "cfunc_rva": 4595504
+    },
+    {
+     "name": "status",
+     "cfunc_rva": 4595248
+    },
+    {
+     "name": "wrap",
+     "cfunc_rva": 4595136
+    },
+    {
+     "name": "yield",
+     "cfunc_rva": 4595184
+    }
+   ]
+  },
+  {
+   "table_va": 12137160,
+   "table_rva": 7942856,
+   "count": 7,
+   "group": "game",
+   "entries": [
+    {
+     "name": "add",
+     "cfunc_rva": 4009360
+    },
+    {
+     "name": "clone",
+     "cfunc_rva": 4009632
+    },
+    {
+     "name": "equals",
+     "cfunc_rva": 4009856
+    },
+    {
+     "name": "normalize",
+     "cfunc_rva": 4010064
+    },
+    {
+     "name": "offset",
+     "cfunc_rva": 4010272
+    },
+    {
+     "name": "subtract",
+     "cfunc_rva": 4010480
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 4010768
+    }
+   ]
+  },
+  {
+   "table_va": 12137224,
+   "table_rva": 7942920,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "interpolate",
+     "cfunc_rva": 4012064
+    },
+    {
+     "name": "distance",
+     "cfunc_rva": 4011520
+    },
+    {
+     "name": "polar",
+     "cfunc_rva": 4012464
+    }
+   ]
+  },
+  {
+   "table_va": 12137256,
+   "table_rva": 7942952,
+   "count": 8,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addRequestHeader",
+     "cfunc_rva": 4003344
+    },
+    {
+     "name": "decode",
+     "cfunc_rva": 4003392
+    },
+    {
+     "name": "getBytesLoaded",
+     "cfunc_rva": 4003680
+    },
+    {
+     "name": "getBytesTotal",
+     "cfunc_rva": 4003776
+    },
+    {
+     "name": "load",
+     "cfunc_rva": 4003872
+    },
+    {
+     "name": "send",
+     "cfunc_rva": 4004064
+    },
+    {
+     "name": "sendAndLoad",
+     "cfunc_rva": 4004112
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 4004160
+    }
+   ]
+  },
+  {
+   "table_va": 12137472,
+   "table_rva": 7943168,
+   "count": 39,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "getDate",
+     "cfunc_rva": 3902720
+    },
+    {
+     "name": "getDay",
+     "cfunc_rva": 3903024
+    },
+    {
+     "name": "getFullYear",
+     "cfunc_rva": 3903712
+    },
+    {
+     "name": "getHours",
+     "cfunc_rva": 3903216
+    },
+    {
+     "name": "getMilliseconds",
+     "cfunc_rva": 3903536
+    },
+    {
+     "name": "getMinutes",
+     "cfunc_rva": 3903312
+    },
+    {
+     "name": "getMonth",
+     "cfunc_rva": 3902496
+    },
+    {
+     "name": "getSeconds",
+     "cfunc_rva": 3903424
+    },
+    {
+     "name": "getTime",
+     "cfunc_rva": 3903136
+    },
+    {
+     "name": "getTimezoneOffset",
+     "cfunc_rva": 3902400
+    },
+    {
+     "name": "getYear",
+     "cfunc_rva": 3903632
+    },
+    {
+     "name": "getUTCDate",
+     "cfunc_rva": 3905376
+    },
+    {
+     "name": "getUTCDay",
+     "cfunc_rva": 3905680
+    },
+    {
+     "name": "getUTCFullYear",
+     "cfunc_rva": 3906288
+    },
+    {
+     "name": "getUTCHours",
+     "cfunc_rva": 3905792
+    },
+    {
+     "name": "getUTCMilliseconds",
+     "cfunc_rva": 3906112
+    },
+    {
+     "name": "getUTCMinutes",
+     "cfunc_rva": 3905888
+    },
+    {
+     "name": "getUTCMonth",
+     "cfunc_rva": 3905152
+    },
+    {
+     "name": "getUTCSeconds",
+     "cfunc_rva": 3906000
+    },
+    {
+     "name": "getUTCYear",
+     "cfunc_rva": 3906208
+    },
+    {
+     "name": "setDate",
+     "cfunc_rva": 3904352
+    },
+    {
+     "name": "setFullYear",
+     "cfunc_rva": 3903952
+    },
+    {
+     "name": "setHours",
+     "cfunc_rva": 3904688
+    },
+    {
+     "name": "setMilliseconds",
+     "cfunc_rva": 3905056
+    },
+    {
+     "name": "setMinutes",
+     "cfunc_rva": 3904800
+    },
+    {
+     "name": "setMonth",
+     "cfunc_rva": 3904096
+    },
+    {
+     "name": "setSeconds",
+     "cfunc_rva": 3904928
+    },
+    {
+     "name": "setTime",
+     "cfunc_rva": 3904608
+    },
+    {
+     "name": "setYear",
+     "cfunc_rva": 3903792
+    },
+    {
+     "name": "setUTCDate",
+     "cfunc_rva": 3906928
+    },
+    {
+     "name": "setUTCFullYear",
+     "cfunc_rva": 3906528
+    },
+    {
+     "name": "setUTCHours",
+     "cfunc_rva": 3907184
+    },
+    {
+     "name": "setUTCMilliseconds",
+     "cfunc_rva": 3907552
+    },
+    {
+     "name": "setUTCMinutes",
+     "cfunc_rva": 3907296
+    },
+    {
+     "name": "setUTCSeconds",
+     "cfunc_rva": 3907424
+    },
+    {
+     "name": "setUTCMonth",
+     "cfunc_rva": 3906672
+    },
+    {
+     "name": "setUTCYear",
+     "cfunc_rva": 3906368
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 3907648
+    },
+    {
+     "name": "valueOf",
+     "cfunc_rva": 3903136
+    }
+   ]
+  },
+  {
+   "table_va": 12137872,
+   "table_rva": 7943568,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "getProgress",
+     "cfunc_rva": 3876400
+    },
+    {
+     "name": "loadClip",
+     "cfunc_rva": 3876800
+    },
+    {
+     "name": "unloadClip",
+     "cfunc_rva": 3877120
+    }
+   ]
+  },
+  {
+   "table_va": 12137904,
+   "table_rva": 7943600,
+   "count": 9,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addListener",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "broadcastMessage",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "getBeginIndex",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "getCaretIndex",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "getEndIndex",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "getFocus",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "setFocus",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "setSelection",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "removeListener",
+     "cfunc_rva": 3890128
+    }
+   ]
+  },
+  {
+   "table_va": 12137984,
+   "table_rva": 7943680,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "getCaretIndex",
+     "cfunc_rva": 3871984
+    },
+    {
+     "name": "getFocus",
+     "cfunc_rva": 3871472
+    },
+    {
+     "name": "setFocus",
+     "cfunc_rva": 3871600
+    },
+    {
+     "name": "setSelection",
+     "cfunc_rva": 3872160
+    }
+   ]
+  },
+  {
+   "table_va": 12138040,
+   "table_rva": 7943736,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addListener",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "removeListener",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "show",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "hide",
+     "cfunc_rva": 3890128
+    }
+   ]
+  },
+  {
+   "table_va": 12138080,
+   "table_rva": 7943776,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addListener",
+     "cfunc_rva": 3859376
+    },
+    {
+     "name": "removeListener",
+     "cfunc_rva": 3859824
+    },
+    {
+     "name": "show",
+     "cfunc_rva": 3860096
+    },
+    {
+     "name": "hide",
+     "cfunc_rva": 3860192
+    }
+   ]
+  },
+  {
+   "table_va": 12138120,
+   "table_rva": 7943816,
+   "count": 15,
+   "group": "game",
+   "entries": [
+    {
+     "name": "clone",
+     "cfunc_rva": 3850512
+    },
+    {
+     "name": "contains",
+     "cfunc_rva": 3850704
+    },
+    {
+     "name": "containsPoint",
+     "cfunc_rva": 3851008
+    },
+    {
+     "name": "containsRectangle",
+     "cfunc_rva": 3851344
+    },
+    {
+     "name": "equals",
+     "cfunc_rva": 3851760
+    },
+    {
+     "name": "inflate",
+     "cfunc_rva": 3852032
+    },
+    {
+     "name": "inflatePoint",
+     "cfunc_rva": 3852256
+    },
+    {
+     "name": "intersection",
+     "cfunc_rva": 3852496
+    },
+    {
+     "name": "intersects",
+     "cfunc_rva": 3853136
+    },
+    {
+     "name": "isEmpty",
+     "cfunc_rva": 3853648
+    },
+    {
+     "name": "offset",
+     "cfunc_rva": 3853968
+    },
+    {
+     "name": "offsetPoint",
+     "cfunc_rva": 3854288
+    },
+    {
+     "name": "setEmpty",
+     "cfunc_rva": 3854944
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 3855024
+    },
+    {
+     "name": "union",
+     "cfunc_rva": 3855552
+    }
+   ]
+  },
+  {
+   "table_va": 12138248,
+   "table_rva": 7943944,
+   "count": 12,
+   "group": "game",
+   "entries": [
+    {
+     "name": "attachSound",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "getBytesLoaded",
+     "cfunc_rva": 3843728
+    },
+    {
+     "name": "getBytesTotal",
+     "cfunc_rva": 3843728
+    },
+    {
+     "name": "getPan",
+     "cfunc_rva": 3843728
+    },
+    {
+     "name": "getTransform",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "getVolume",
+     "cfunc_rva": 3843728
+    },
+    {
+     "name": "loadSound",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "setPan",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "setTransform",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "setVolume",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "start",
+     "cfunc_rva": 2916880
+    },
+    {
+     "name": "stop",
+     "cfunc_rva": 2916880
+    }
+   ]
+  },
+  {
+   "table_va": 12138352,
+   "table_rva": 7944048,
+   "count": 7,
+   "group": "game",
+   "entries": [
+    {
+     "name": "getDepth",
+     "cfunc_rva": 3660672
+    },
+    {
+     "name": "getTextFormat",
+     "cfunc_rva": 3829760
+    },
+    {
+     "name": "getNewTextFormat",
+     "cfunc_rva": 3830192
+    },
+    {
+     "name": "setTextFormat",
+     "cfunc_rva": 3829024
+    },
+    {
+     "name": "setNewTextFormat",
+     "cfunc_rva": 3830416
+    },
+    {
+     "name": "replaceText",
+     "cfunc_rva": 3830656
+    },
+    {
+     "name": "removeTextField",
+     "cfunc_rva": 3831440
+    }
+   ]
+  },
+  {
+   "table_va": 12138416,
+   "table_rva": 7944112,
+   "count": 14,
+   "group": "game",
+   "entries": [
+    {
+     "name": "appendText",
+     "cfunc_rva": 3831184
+    },
+    {
+     "name": "appendHtml",
+     "cfunc_rva": 3831312
+    },
+    {
+     "name": "getCharBoundaries",
+     "cfunc_rva": 3831536
+    },
+    {
+     "name": "getCharIndexAtPoint",
+     "cfunc_rva": 3832240
+    },
+    {
+     "name": "getExactCharBoundaries",
+     "cfunc_rva": 3831888
+    },
+    {
+     "name": "getFirstCharInParagraph",
+     "cfunc_rva": 3833952
+    },
+    {
+     "name": "getLineIndexAtPoint",
+     "cfunc_rva": 3832480
+    },
+    {
+     "name": "getLineIndexOfChar",
+     "cfunc_rva": 3834144
+    },
+    {
+     "name": "getLineOffset",
+     "cfunc_rva": 3832704
+    },
+    {
+     "name": "getLineMetrics",
+     "cfunc_rva": 3833088
+    },
+    {
+     "name": "getLineText",
+     "cfunc_rva": 3833680
+    },
+    {
+     "name": "getLineLength",
+     "cfunc_rva": 3832896
+    },
+    {
+     "name": "setImageSubstitutions",
+     "cfunc_rva": 3835888
+    },
+    {
+     "name": "updateImageSubstitution",
+     "cfunc_rva": 3836192
+    }
+   ]
+  },
+  {
+   "table_va": 12138544,
+   "table_rva": 7944240,
+   "count": 13,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "toString",
+     "cfunc_rva": 3798800
+    },
+    {
+     "name": "valueOf",
+     "cfunc_rva": 3798800
+    },
+    {
+     "name": "clone",
+     "cfunc_rva": 3799648
+    },
+    {
+     "name": "concat",
+     "cfunc_rva": 3799808
+    },
+    {
+     "name": "createBox",
+     "cfunc_rva": 3800192
+    },
+    {
+     "name": "createGradientBox",
+     "cfunc_rva": 3800640
+    },
+    {
+     "name": "deltaTransformPoint",
+     "cfunc_rva": 3803024
+    },
+    {
+     "name": "identity",
+     "cfunc_rva": 3801152
+    },
+    {
+     "name": "invert",
+     "cfunc_rva": 3801248
+    },
+    {
+     "name": "rotate",
+     "cfunc_rva": 3801584
+    },
+    {
+     "name": "scale",
+     "cfunc_rva": 3801952
+    },
+    {
+     "name": "transformPoint",
+     "cfunc_rva": 3802304
+    },
+    {
+     "name": "translate",
+     "cfunc_rva": 3802160
+    }
+   ]
+  },
+  {
+   "table_va": 12138656,
+   "table_rva": 7944352,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "setTransform",
+     "cfunc_rva": 3793424
+    },
+    {
+     "name": "getTransform",
+     "cfunc_rva": 3794048
+    },
+    {
+     "name": "setRGB",
+     "cfunc_rva": 3794816
+    },
+    {
+     "name": "getRGB",
+     "cfunc_rva": 3795184
+    }
+   ]
+  },
+  {
+   "table_va": 12138712,
+   "table_rva": 7944408,
+   "count": 39,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "play",
+     "cfunc_rva": 3753872
+    },
+    {
+     "name": "stop",
+     "cfunc_rva": 3753936
+    },
+    {
+     "name": "gotoAndStop",
+     "cfunc_rva": 3754288
+    },
+    {
+     "name": "gotoAndPlay",
+     "cfunc_rva": 3754000
+    },
+    {
+     "name": "nextFrame",
+     "cfunc_rva": 3754576
+    },
+    {
+     "name": "prevFrame",
+     "cfunc_rva": 3754720
+    },
+    {
+     "name": "getBytesLoaded",
+     "cfunc_rva": 3754816
+    },
+    {
+     "name": "getBytesTotal",
+     "cfunc_rva": 3754912
+    },
+    {
+     "name": "getBounds",
+     "cfunc_rva": 3758032
+    },
+    {
+     "name": "localToGlobal",
+     "cfunc_rva": 3759152
+    },
+    {
+     "name": "globalToLocal",
+     "cfunc_rva": 3759712
+    },
+    {
+     "name": "hitTest",
+     "cfunc_rva": 3760224
+    },
+    {
+     "name": "attachBitmap",
+     "cfunc_rva": 3755904
+    },
+    {
+     "name": "attachMovie",
+     "cfunc_rva": 3755296
+    },
+    {
+     "name": "duplicateMovieClip",
+     "cfunc_rva": 3755024
+    },
+    {
+     "name": "removeMovieClip",
+     "cfunc_rva": 3757696
+    },
+    {
+     "name": "createEmptyMovieClip",
+     "cfunc_rva": 3756752
+    },
+    {
+     "name": "createTextField",
+     "cfunc_rva": 3757168
+    },
+    {
+     "name": "getDepth",
+     "cfunc_rva": 3660672
+    },
+    {
+     "name": "swapDepths",
+     "cfunc_rva": 3761152
+    },
+    {
+     "name": "getNextHighestDepth",
+     "cfunc_rva": 3761472
+    },
+    {
+     "name": "getInstanceAtDepth",
+     "cfunc_rva": 3761616
+    },
+    {
+     "name": "getSWFVersion",
+     "cfunc_rva": 3761824
+    },
+    {
+     "name": "startDrag",
+     "cfunc_rva": 3761936
+    },
+    {
+     "name": "stopDrag",
+     "cfunc_rva": 3762368
+    },
+    {
+     "name": "setMask",
+     "cfunc_rva": 3757792
+    },
+    {
+     "name": "loadMovie",
+     "cfunc_rva": 3762448
+    },
+    {
+     "name": "unloadMovie",
+     "cfunc_rva": 3762768
+    },
+    {
+     "name": "loadVariables",
+     "cfunc_rva": 3762848
+    },
+    {
+     "name": "clear",
+     "cfunc_rva": 3763680
+    },
+    {
+     "name": "beginFill",
+     "cfunc_rva": 3763760
+    },
+    {
+     "name": "beginGradientFill",
+     "cfunc_rva": 3766192
+    },
+    {
+     "name": "beginBitmapFill",
+     "cfunc_rva": 3766384
+    },
+    {
+     "name": "lineGradientStyle",
+     "cfunc_rva": 3766288
+    },
+    {
+     "name": "endFill",
+     "cfunc_rva": 3766912
+    },
+    {
+     "name": "lineStyle",
+     "cfunc_rva": 3766992
+    },
+    {
+     "name": "moveTo",
+     "cfunc_rva": 3767920
+    },
+    {
+     "name": "lineTo",
+     "cfunc_rva": 3768096
+    },
+    {
+     "name": "curveTo",
+     "cfunc_rva": 3768240
+    }
+   ]
+  },
+  {
+   "table_va": 12139080,
+   "table_rva": 7944776,
+   "count": 13,
+   "group": "game",
+   "entries": [
+    {
+     "name": "concat",
+     "cfunc_rva": 3720384
+    },
+    {
+     "name": "join",
+     "cfunc_rva": 3720656
+    },
+    {
+     "name": "pop",
+     "cfunc_rva": 3720944
+    },
+    {
+     "name": "push",
+     "cfunc_rva": 3721040
+    },
+    {
+     "name": "reverse",
+     "cfunc_rva": 3721296
+    },
+    {
+     "name": "shift",
+     "cfunc_rva": 3721376
+    },
+    {
+     "name": "slice",
+     "cfunc_rva": 3721472
+    },
+    {
+     "name": "sort",
+     "cfunc_rva": 3721888
+    },
+    {
+     "name": "sortOn",
+     "cfunc_rva": 3722720
+    },
+    {
+     "name": "splice",
+     "cfunc_rva": 3724624
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 3725360
+    },
+    {
+     "name": "unshift",
+     "cfunc_rva": 3725616
+    },
+    {
+     "name": "valueOf",
+     "cfunc_rva": 3725872
+    }
+   ]
+  },
+  {
+   "table_va": 12139216,
+   "table_rva": 7944912,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addListener",
+     "cfunc_rva": 3709984
+    },
+    {
+     "name": "broadcastMessage",
+     "cfunc_rva": 3710048
+    },
+    {
+     "name": "removeListener",
+     "cfunc_rva": 3710240
+    }
+   ]
+  },
+  {
+   "table_va": 12139264,
+   "table_rva": 7944960,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addListener",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "removeListener",
+     "cfunc_rva": 3890128
+    },
+    {
+     "name": "broadcastMessage",
+     "cfunc_rva": 3890128
+    }
+   ]
+  },
+  {
+   "table_va": 12139296,
+   "table_rva": 7944992,
+   "count": 8,
+   "group": "game",
+   "entries": [
+    {
+     "name": "addProperty",
+     "cfunc_rva": 3697472
+    },
+    {
+     "name": "hasOwnProperty",
+     "cfunc_rva": 3697904
+    },
+    {
+     "name": "watch",
+     "cfunc_rva": 3698096
+    },
+    {
+     "name": "unwatch",
+     "cfunc_rva": 3698432
+    },
+    {
+     "name": "isPropertyEnumerable",
+     "cfunc_rva": 3698624
+    },
+    {
+     "name": "isPrototypeOf",
+     "cfunc_rva": 3698880
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 3699008
+    },
+    {
+     "name": "valueOf",
+     "cfunc_rva": 3699184
+    }
+   ]
+  },
+  {
+   "table_va": 12139464,
+   "table_rva": 7945160,
+   "count": 5,
+   "group": "stdlib_or_scaleform",
+   "entries": [
+    {
+     "name": "MAX_VALUE",
+     "cfunc_rva": 3688944
+    },
+    {
+     "name": "MIN_VALUE",
+     "cfunc_rva": 3688928
+    },
+    {
+     "name": "NaN",
+     "cfunc_rva": 3688880
+    },
+    {
+     "name": "NEGATIVE_INFINITY",
+     "cfunc_rva": 3688912
+    },
+    {
+     "name": "POSITIVE_INFINITY",
+     "cfunc_rva": 3688896
+    }
+   ]
+  },
+  {
+   "table_va": 12158832,
+   "table_rva": 7964528,
+   "count": 16,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Create",
+     "cfunc_rva": 2059504
+    },
+    {
+     "name": "Copy",
+     "cfunc_rva": 2059536
+    },
+    {
+     "name": "SetFilter",
+     "cfunc_rva": 2059632
+    },
+    {
+     "name": "ClearFilter",
+     "cfunc_rva": 2059824
+    },
+    {
+     "name": "AddObject",
+     "cfunc_rva": 2060016
+    },
+    {
+     "name": "RemoveObject",
+     "cfunc_rva": 2060320
+    },
+    {
+     "name": "GetObjects",
+     "cfunc_rva": 2060592
+    },
+    {
+     "name": "ClearObjects",
+     "cfunc_rva": 2060880
+    },
+    {
+     "name": "UsePlayers",
+     "cfunc_rva": 2061024
+    },
+    {
+     "name": "SetAssociation",
+     "cfunc_rva": 2061200
+    },
+    {
+     "name": "ClearAssociation",
+     "cfunc_rva": 2061408
+    },
+    {
+     "name": "SetRelation",
+     "cfunc_rva": 2061536
+    },
+    {
+     "name": "ClearRelation",
+     "cfunc_rva": 2061904
+    },
+    {
+     "name": "Eval",
+     "cfunc_rva": 2062048
+    },
+    {
+     "name": "GetCoopPlayerGuid",
+     "cfunc_rva": 2062288
+    },
+    {
+     "name": "_GC",
+     "cfunc_rva": 2059408
+    }
+   ]
+  },
+  {
+   "table_va": 12158968,
+   "table_rva": 7964664,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Create",
+     "cfunc_rva": 2058736
+    },
+    {
+     "name": "CreatePersistent",
+     "cfunc_rva": 2058752
+    },
+    {
+     "name": "Delete",
+     "cfunc_rva": 2058768
+    },
+    {
+     "name": "Post",
+     "cfunc_rva": 2058896
+    }
+   ]
+  },
+  {
+   "table_va": 12159016,
+   "table_rva": 7964712,
+   "count": 6,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Printf",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LogError",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LogWarning",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LogInfo",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Assert",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "GetCallstack",
+     "cfunc_rva": 2971200
+    }
+   ]
+  },
+  {
+   "table_va": 12159072,
+   "table_rva": 7964768,
+   "count": 9,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SetClipAmmo",
+     "cfunc_rva": 2008352
+    },
+    {
+     "name": "GetClipAmmo",
+     "cfunc_rva": 2008560
+    },
+    {
+     "name": "GetMaxClipAmmo",
+     "cfunc_rva": 2008752
+    },
+    {
+     "name": "SetReserveAmmo",
+     "cfunc_rva": 2008976
+    },
+    {
+     "name": "GetReserveAmmo",
+     "cfunc_rva": 2009184
+    },
+    {
+     "name": "GetMaxReserveAmmo",
+     "cfunc_rva": 2009392
+    },
+    {
+     "name": "Reload",
+     "cfunc_rva": 2009728
+    },
+    {
+     "name": "IsDesignator",
+     "cfunc_rva": 2009968
+    },
+    {
+     "name": "IsPrimary",
+     "cfunc_rva": 2010208
+    }
+   ]
+  },
+  {
+   "table_va": 12159152,
+   "table_rva": 7964848,
+   "count": 11,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Cue",
+     "cfunc_rva": 2006496
+    },
+    {
+     "name": "CueWithoutSubtitles",
+     "cfunc_rva": 2006848
+    },
+    {
+     "name": "Cancel",
+     "cfunc_rva": 2007200
+    },
+    {
+     "name": "CancelAll",
+     "cfunc_rva": 2007488
+    },
+    {
+     "name": "Pause",
+     "cfunc_rva": 2007568
+    },
+    {
+     "name": "PauseAll",
+     "cfunc_rva": 2007744
+    },
+    {
+     "name": "Unpause",
+     "cfunc_rva": 2007568
+    },
+    {
+     "name": "UnpauseAll",
+     "cfunc_rva": 2007744
+    },
+    {
+     "name": "SetCinematicMode",
+     "cfunc_rva": 2007824
+    },
+    {
+     "name": "AddSequence",
+     "cfunc_rva": 2008000
+    },
+    {
+     "name": "RemoveSequence",
+     "cfunc_rva": 2008176
+    }
+   ]
+  },
+  {
+   "table_va": 12159256,
+   "table_rva": 7964952,
+   "count": 40,
+   "group": "game",
+   "entries": [
+    {
+     "name": "GetRiders",
+     "cfunc_rva": 1993856
+    },
+    {
+     "name": "GetDriver",
+     "cfunc_rva": 1994800
+    },
+    {
+     "name": "GetFromSeat",
+     "cfunc_rva": 1994992
+    },
+    {
+     "name": "GetFromRider",
+     "cfunc_rva": 1994992
+    },
+    {
+     "name": "GetSeatFromRider",
+     "cfunc_rva": 1890800
+    },
+    {
+     "name": "GetRiderFromSeat",
+     "cfunc_rva": 1995248
+    },
+    {
+     "name": "GetSeatByType",
+     "cfunc_rva": 1995472
+    },
+    {
+     "name": "GetSeatParams",
+     "cfunc_rva": 1995888
+    },
+    {
+     "name": "SetCanPlayerUse",
+     "cfunc_rva": 1996368
+    },
+    {
+     "name": "GetSeatToSeat",
+     "cfunc_rva": 1996864
+    },
+    {
+     "name": "IsSeatBlocked",
+     "cfunc_rva": 1997728
+    },
+    {
+     "name": "IsSeatALadder",
+     "cfunc_rva": 1998544
+    },
+    {
+     "name": "TransferToSeat",
+     "cfunc_rva": 1998704
+    },
+    {
+     "name": "Enter",
+     "cfunc_rva": 1998944
+    },
+    {
+     "name": "EnterBySeatGuid",
+     "cfunc_rva": 1999440
+    },
+    {
+     "name": "Exit",
+     "cfunc_rva": 1999952
+    },
+    {
+     "name": "HijackComplete",
+     "cfunc_rva": 2000592
+    },
+    {
+     "name": "HijackAbort",
+     "cfunc_rva": 2000240
+    },
+    {
+     "name": "HijackAbortDone",
+     "cfunc_rva": 2000384
+    },
+    {
+     "name": "EnableTurret",
+     "cfunc_rva": 2000800
+    },
+    {
+     "name": "SetTurretPitch",
+     "cfunc_rva": 2001264
+    },
+    {
+     "name": "SetTurretYaw",
+     "cfunc_rva": 2001600
+    },
+    {
+     "name": "OpenDoor",
+     "cfunc_rva": 2001936
+    },
+    {
+     "name": "CloseDoor",
+     "cfunc_rva": 2002160
+    },
+    {
+     "name": "IsFlying",
+     "cfunc_rva": 2003088
+    },
+    {
+     "name": "IsFlipped",
+     "cfunc_rva": 2003344
+    },
+    {
+     "name": "SpinHeli",
+     "cfunc_rva": 2002800
+    },
+    {
+     "name": "StartTankHijackMotion",
+     "cfunc_rva": 2002384
+    },
+    {
+     "name": "StopTankHijackMotion",
+     "cfunc_rva": 2002592
+    },
+    {
+     "name": "IsHijackRemote",
+     "cfunc_rva": 2003536
+    },
+    {
+     "name": "HijackStart",
+     "cfunc_rva": 2003792
+    },
+    {
+     "name": "SetHijackState",
+     "cfunc_rva": 2004064
+    },
+    {
+     "name": "SetHijackSuccess",
+     "cfunc_rva": 2004224
+    },
+    {
+     "name": "CancelHijack",
+     "cfunc_rva": 2004432
+    },
+    {
+     "name": "Usable",
+     "cfunc_rva": 2004672
+    },
+    {
+     "name": "IsHijackBad",
+     "cfunc_rva": 2004960
+    },
+    {
+     "name": "RestoreHealth",
+     "cfunc_rva": 2005408
+    },
+    {
+     "name": "RestoreAmmo",
+     "cfunc_rva": 2005536
+    },
+    {
+     "name": "SetParts",
+     "cfunc_rva": 2005664
+    },
+    {
+     "name": "ClearControls",
+     "cfunc_rva": 2006080
+    }
+   ]
+  },
+  {
+   "table_va": 12159608,
+   "table_rva": 7965304,
+   "count": 64,
+   "group": "game",
+   "entries": [
+    {
+     "name": "WriteToConsole",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "ToStringL",
+     "cfunc_rva": 1983584
+    },
+    {
+     "name": "MemUsage",
+     "cfunc_rva": 1984560
+    },
+    {
+     "name": "StringToGuid",
+     "cfunc_rva": 1984784
+    },
+    {
+     "name": "GuidToString",
+     "cfunc_rva": 1985088
+    },
+    {
+     "name": "RequestGameState",
+     "cfunc_rva": 1985264
+    },
+    {
+     "name": "IsLoadingOrStreaming",
+     "cfunc_rva": 1985856
+    },
+    {
+     "name": "SetNumberOfViewports",
+     "cfunc_rva": 1985952
+    },
+    {
+     "name": "SetTimeScale",
+     "cfunc_rva": 1986160
+    },
+    {
+     "name": "LTIGetPrecacheBypass",
+     "cfunc_rva": 1986416
+    },
+    {
+     "name": "GetLevelName",
+     "cfunc_rva": 1986544
+    },
+    {
+     "name": "SetLevelName",
+     "cfunc_rva": 1986736
+    },
+    {
+     "name": "GetMasterScriptName",
+     "cfunc_rva": 1986640
+    },
+    {
+     "name": "SetMasterScriptName",
+     "cfunc_rva": 1986848
+    },
+    {
+     "name": "GetCharacterTemplate",
+     "cfunc_rva": 1986960
+    },
+    {
+     "name": "RequiredAsset",
+     "cfunc_rva": 1987056
+    },
+    {
+     "name": "SetAssetRequestMax",
+     "cfunc_rva": 1987344
+    },
+    {
+     "name": "GetAssetRequestMax",
+     "cfunc_rva": 1987504
+    },
+    {
+     "name": "Callback",
+     "cfunc_rva": 1987584
+    },
+    {
+     "name": "FinishedShell",
+     "cfunc_rva": 1987776
+    },
+    {
+     "name": "AutoLoad",
+     "cfunc_rva": 1987728
+    },
+    {
+     "name": "GetSkipMission",
+     "cfunc_rva": 1987824
+    },
+    {
+     "name": "GetINIBriefing",
+     "cfunc_rva": 1988000
+    },
+    {
+     "name": "SetSkipMission",
+     "cfunc_rva": 1987856
+    },
+    {
+     "name": "SetINIBriefing",
+     "cfunc_rva": 1988048
+    },
+    {
+     "name": "GetINILoadLastSave",
+     "cfunc_rva": 1988160
+    },
+    {
+     "name": "NoHud",
+     "cfunc_rva": 1835840
+    },
+    {
+     "name": "IsDemoMode",
+     "cfunc_rva": 1988208
+    },
+    {
+     "name": "DisableAssetPreload",
+     "cfunc_rva": 1988256
+    },
+    {
+     "name": "FlushAssets",
+     "cfunc_rva": 1988304
+    },
+    {
+     "name": "Clock",
+     "cfunc_rva": 1988784
+    },
+    {
+     "name": "Date",
+     "cfunc_rva": 1989056
+    },
+    {
+     "name": "Time",
+     "cfunc_rva": 1989840
+    },
+    {
+     "name": "DiffTime",
+     "cfunc_rva": 1990384
+    },
+    {
+     "name": "MainTime",
+     "cfunc_rva": 1988352
+    },
+    {
+     "name": "RealTime",
+     "cfunc_rva": 1988416
+    },
+    {
+     "name": "MainTimeStamp",
+     "cfunc_rva": 1988480
+    },
+    {
+     "name": "RealTimeStamp",
+     "cfunc_rva": 1988528
+    },
+    {
+     "name": "TimeStampMark",
+     "cfunc_rva": 1988576
+    },
+    {
+     "name": "TimeStampGetElapsed",
+     "cfunc_rva": 1988656
+    },
+    {
+     "name": "PlayIntroMovies",
+     "cfunc_rva": 1990528
+    },
+    {
+     "name": "StartWithResources",
+     "cfunc_rva": 1990576
+    },
+    {
+     "name": "SubtitlesEnabled",
+     "cfunc_rva": 1990624
+    },
+    {
+     "name": "RumbleEnabled",
+     "cfunc_rva": 1990672
+    },
+    {
+     "name": "TutorialsEnabled",
+     "cfunc_rva": 1990720
+    },
+    {
+     "name": "SetTutorialsEnabled",
+     "cfunc_rva": 1990768
+    },
+    {
+     "name": "YAxisInverted",
+     "cfunc_rva": 1990896
+    },
+    {
+     "name": "SetLuaSaveVersion",
+     "cfunc_rva": 1990944
+    },
+    {
+     "name": "AddStringDb",
+     "cfunc_rva": 1991040
+    },
+    {
+     "name": "ClearStringDb",
+     "cfunc_rva": 1991136
+    },
+    {
+     "name": "StartSingleplayer",
+     "cfunc_rva": 1985616
+    },
+    {
+     "name": "RequestAutosave",
+     "cfunc_rva": 1991152
+    },
+    {
+     "name": "IsFinalConfig",
+     "cfunc_rva": 1992128
+    },
+    {
+     "name": "IsConfirmOnCircle",
+     "cfunc_rva": 1991504
+    },
+    {
+     "name": "GetPlatform",
+     "cfunc_rva": 1991568
+    },
+    {
+     "name": "GetLanguage",
+     "cfunc_rva": 1991712
+    },
+    {
+     "name": "IsGermanSKU",
+     "cfunc_rva": 1991632
+    },
+    {
+     "name": "HaveActiveProfile",
+     "cfunc_rva": 1992080
+    },
+    {
+     "name": "IsAutosaveEnabled",
+     "cfunc_rva": 1992160
+    },
+    {
+     "name": "SetAutosaveEnabled",
+     "cfunc_rva": 1992208
+    },
+    {
+     "name": "ForceNextAutosave",
+     "cfunc_rva": 1992304
+    },
+    {
+     "name": "GetVersion",
+     "cfunc_rva": 1992320
+    },
+    {
+     "name": "GetShellCode",
+     "cfunc_rva": 1992480
+    },
+    {
+     "name": "GetForceNewGame",
+     "cfunc_rva": 1992672
+    }
+   ]
+  },
+  {
+   "table_va": 12160152,
+   "table_rva": 7965848,
+   "count": 88,
+   "group": "game",
+   "entries": [
+    {
+     "name": "TestCueSound",
+     "cfunc_rva": 1969584
+    },
+    {
+     "name": "TestStopSound",
+     "cfunc_rva": 1969776
+    },
+    {
+     "name": "TestPauseSound",
+     "cfunc_rva": 1969968
+    },
+    {
+     "name": "CueSound",
+     "cfunc_rva": 1970160
+    },
+    {
+     "name": "StopSound",
+     "cfunc_rva": 1970416
+    },
+    {
+     "name": "PauseSound",
+     "cfunc_rva": 1970672
+    },
+    {
+     "name": "SetCategoryVolume",
+     "cfunc_rva": 1970928
+    },
+    {
+     "name": "SetCategoryPitch",
+     "cfunc_rva": 1971088
+    },
+    {
+     "name": "LockListenerPosition",
+     "cfunc_rva": 1971248
+    },
+    {
+     "name": "BindMusicCue",
+     "cfunc_rva": 1971360
+    },
+    {
+     "name": "ClearMusicCues",
+     "cfunc_rva": 1971584
+    },
+    {
+     "name": "TransitionMusic",
+     "cfunc_rva": 1971712
+    },
+    {
+     "name": "SetDynamicMusic",
+     "cfunc_rva": 1971936
+    },
+    {
+     "name": "IsDynamicMusic",
+     "cfunc_rva": 1972032
+    },
+    {
+     "name": "SetTimerUpdateMusic",
+     "cfunc_rva": 1972128
+    },
+    {
+     "name": "AddFactionMusic",
+     "cfunc_rva": 1972224
+    },
+    {
+     "name": "SetFactionMusic",
+     "cfunc_rva": 1972352
+    },
+    {
+     "name": "LockFactionMusic",
+     "cfunc_rva": 1972464
+    },
+    {
+     "name": "IsFactionLockedMusic",
+     "cfunc_rva": 1972576
+    },
+    {
+     "name": "SetActionLevelsMusic",
+     "cfunc_rva": 1972672
+    },
+    {
+     "name": "LockActionLevelMusic",
+     "cfunc_rva": 1972992
+    },
+    {
+     "name": "IsActionLevelLockedMusic",
+     "cfunc_rva": 1973104
+    },
+    {
+     "name": "SetHostilityDecayRateMusic",
+     "cfunc_rva": 1973200
+    },
+    {
+     "name": "SetSourceMusic",
+     "cfunc_rva": 1973488
+    },
+    {
+     "name": "SetSourceEnterMusic",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetSourceExitMusic",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetSourceMusicTransition",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "ClearSourceMusicTransitions",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "AddSourceMusicEntryState",
+     "cfunc_rva": 1973600
+    },
+    {
+     "name": "ClearSourceMusicEntryStates",
+     "cfunc_rva": 1973744
+    },
+    {
+     "name": "SetActionThresholdsMusic",
+     "cfunc_rva": 1973776
+    },
+    {
+     "name": "SetRootFactionRegionMusic",
+     "cfunc_rva": 1973312
+    },
+    {
+     "name": "SetHijackMusic",
+     "cfunc_rva": 1973968
+    },
+    {
+     "name": "ActivateFactionRegionMusic",
+     "cfunc_rva": 1973440
+    },
+    {
+     "name": "AddMusicState",
+     "cfunc_rva": 1974176
+    },
+    {
+     "name": "AddMusicTransition",
+     "cfunc_rva": 1974544
+    },
+    {
+     "name": "AddMusicSourcePlaylist",
+     "cfunc_rva": 1974832
+    },
+    {
+     "name": "ClearMusicSourcePlaylist",
+     "cfunc_rva": 1974992
+    },
+    {
+     "name": "RemoveMusicSourcePlaylist",
+     "cfunc_rva": 1975104
+    },
+    {
+     "name": "AddCueToMusicSourcePlaylist",
+     "cfunc_rva": 1975232
+    },
+    {
+     "name": "LoadBank",
+     "cfunc_rva": 1975424
+    },
+    {
+     "name": "UnloadBank",
+     "cfunc_rva": 1975664
+    },
+    {
+     "name": "LoadSoundBank",
+     "cfunc_rva": 1975856
+    },
+    {
+     "name": "LoadWaveBank",
+     "cfunc_rva": 1975984
+    },
+    {
+     "name": "UnloadSoundBank",
+     "cfunc_rva": 1976112
+    },
+    {
+     "name": "UnloadWaveBank",
+     "cfunc_rva": 1976240
+    },
+    {
+     "name": "LoadTempBank",
+     "cfunc_rva": 1976368
+    },
+    {
+     "name": "UnloadTempBank",
+     "cfunc_rva": 1976848
+    },
+    {
+     "name": "LoadBankWithCallback",
+     "cfunc_rva": 1977328
+    },
+    {
+     "name": "UnloadBankWithCallback",
+     "cfunc_rva": 1977808
+    },
+    {
+     "name": "RequestAmbienceBank",
+     "cfunc_rva": 1978288
+    },
+    {
+     "name": "SetStreamBlockDumping",
+     "cfunc_rva": 1978384
+    },
+    {
+     "name": "SilenceAmbience",
+     "cfunc_rva": 1978496
+    },
+    {
+     "name": "CueAmbience",
+     "cfunc_rva": 1978608
+    },
+    {
+     "name": "StopAmbience",
+     "cfunc_rva": 1978736
+    },
+    {
+     "name": "SetMessageFiltering",
+     "cfunc_rva": 1978848
+    },
+    {
+     "name": "DefineReverbPreset",
+     "cfunc_rva": 1979024
+    },
+    {
+     "name": "SetReverbPreset",
+     "cfunc_rva": 1979584
+    },
+    {
+     "name": "SetReverb",
+     "cfunc_rva": 1979712
+    },
+    {
+     "name": "SetLowPassFilterSettings",
+     "cfunc_rva": 1979824
+    },
+    {
+     "name": "SetLowPassFilter",
+     "cfunc_rva": 1980016
+    },
+    {
+     "name": "SetSurvivalMode",
+     "cfunc_rva": 1980128
+    },
+    {
+     "name": "SetVehicleEngineBoost",
+     "cfunc_rva": 1980272
+    },
+    {
+     "name": "SetCinematicMode",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "ForceActionTransition",
+     "cfunc_rva": 1980464
+    },
+    {
+     "name": "GetMaxDuration",
+     "cfunc_rva": 1980512
+    },
+    {
+     "name": "ClearFadeCategories",
+     "cfunc_rva": 1980672
+    },
+    {
+     "name": "AddFadeCategory",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "FadeCategoryDown",
+     "cfunc_rva": 1980688
+    },
+    {
+     "name": "FadeCategoryUp",
+     "cfunc_rva": 1980960
+    },
+    {
+     "name": "GetCategoryVolume",
+     "cfunc_rva": 1981136
+    },
+    {
+     "name": "ClearPitchCategories",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "AddPitchCategory",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "PitchCategoryActivate",
+     "cfunc_rva": 1981312
+    },
+    {
+     "name": "PitchCategoryDeactivate",
+     "cfunc_rva": 1981584
+    },
+    {
+     "name": "GetCategoryPitch",
+     "cfunc_rva": 1981760
+    },
+    {
+     "name": "SetSystemPause",
+     "cfunc_rva": 1981936
+    },
+    {
+     "name": "SetPauseFilter",
+     "cfunc_rva": 1982064
+    },
+    {
+     "name": "RegisterReadyCallback",
+     "cfunc_rva": 1982176
+    },
+    {
+     "name": "OpenStreamFile",
+     "cfunc_rva": 1982496
+    },
+    {
+     "name": "CloseStreamFile",
+     "cfunc_rva": 1982672
+    },
+    {
+     "name": "GetAudioDir",
+     "cfunc_rva": 1982784
+    },
+    {
+     "name": "OverrideUserMusic",
+     "cfunc_rva": 1982848
+    },
+    {
+     "name": "RestoreUserMusic",
+     "cfunc_rva": 1982912
+    },
+    {
+     "name": "StopAndFlushAllSounds",
+     "cfunc_rva": 1982976
+    },
+    {
+     "name": "SetMasterVolume",
+     "cfunc_rva": 1983040
+    },
+    {
+     "name": "_SummonEd",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "_GetLibVersion",
+     "cfunc_rva": 1983232
+    }
+   ]
+  },
+  {
+   "table_va": 12160868,
+   "table_rva": 7966564,
+   "count": 5,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Init",
+     "cfunc_rva": 1967568
+    },
+    {
+     "name": "GetInfractions",
+     "cfunc_rva": 1967904
+    },
+    {
+     "name": "Completed",
+     "cfunc_rva": 1968656
+    },
+    {
+     "name": "Failed",
+     "cfunc_rva": 1968816
+    },
+    {
+     "name": "SetDelay",
+     "cfunc_rva": 1968416
+    }
+   ]
+  },
+  {
+   "table_va": 12160960,
+   "table_rva": 7966656,
+   "count": 107,
+   "group": "game",
+   "entries": [
+    {
+     "name": "GetCharacter",
+     "cfunc_rva": 1943664
+    },
+    {
+     "name": "GetControlledObject",
+     "cfunc_rva": 1944096
+    },
+    {
+     "name": "GetSeat",
+     "cfunc_rva": 1943872
+    },
+    {
+     "name": "GetName",
+     "cfunc_rva": 1943456
+    },
+    {
+     "name": "GetCameraXZHeading",
+     "cfunc_rva": 1944400
+    },
+    {
+     "name": "GetViewport",
+     "cfunc_rva": 1944768
+    },
+    {
+     "name": "GetViewportId",
+     "cfunc_rva": 1945360
+    },
+    {
+     "name": "GetCamera",
+     "cfunc_rva": 1945584
+    },
+    {
+     "name": "TeleportCamera",
+     "cfunc_rva": 1945808
+    },
+    {
+     "name": "CheckSpawnPos",
+     "cfunc_rva": 1947296
+    },
+    {
+     "name": "SetPDAMapMode",
+     "cfunc_rva": 1947520
+    },
+    {
+     "name": "SetPDAMapModeCallback",
+     "cfunc_rva": 1946080
+    },
+    {
+     "name": "SetPDAMapModeCancelCallback",
+     "cfunc_rva": 1946432
+    },
+    {
+     "name": "RequestPDAMapModeExit",
+     "cfunc_rva": 1946736
+    },
+    {
+     "name": "RequestPDAMapModeCancel",
+     "cfunc_rva": 1947040
+    },
+    {
+     "name": "GetTargetUnderReticle",
+     "cfunc_rva": 1955504
+    },
+    {
+     "name": "SetSatelliteScanMode",
+     "cfunc_rva": 1948032
+    },
+    {
+     "name": "SetupSatelliteScan",
+     "cfunc_rva": 1948288
+    },
+    {
+     "name": "SetSatelliteScanCallbacks",
+     "cfunc_rva": 1948640
+    },
+    {
+     "name": "AddSatelliteScanTarget",
+     "cfunc_rva": 1948912
+    },
+    {
+     "name": "SetSatelliteScanPaused",
+     "cfunc_rva": 1949152
+    },
+    {
+     "name": "SetCinematicMode",
+     "cfunc_rva": 1949408
+    },
+    {
+     "name": "InCinematicMode",
+     "cfunc_rva": 1949840
+    },
+    {
+     "name": "SetOutBoundary",
+     "cfunc_rva": 1950048
+    },
+    {
+     "name": "GetOutBoundary",
+     "cfunc_rva": 1951520
+    },
+    {
+     "name": "IsInWarningZone",
+     "cfunc_rva": 1951760
+    },
+    {
+     "name": "AddBoundary",
+     "cfunc_rva": 1952000
+    },
+    {
+     "name": "RemoveBoundary",
+     "cfunc_rva": 1952304
+    },
+    {
+     "name": "RemoveAllBoundary",
+     "cfunc_rva": 1952560
+    },
+    {
+     "name": "GetAllBoundaryGuid",
+     "cfunc_rva": 1952800
+    },
+    {
+     "name": "SetBoundaryCallback",
+     "cfunc_rva": 1953120
+    },
+    {
+     "name": "IsPositionOutBoundary",
+     "cfunc_rva": 1953424
+    },
+    {
+     "name": "IsBoundaryDeath",
+     "cfunc_rva": 1953856
+    },
+    {
+     "name": "SetInputEnabled",
+     "cfunc_rva": 1950320
+    },
+    {
+     "name": "SetSurvivalMode",
+     "cfunc_rva": 1950640
+    },
+    {
+     "name": "SetHealthClamp",
+     "cfunc_rva": 1950960
+    },
+    {
+     "name": "SetSurvivalModeCallback",
+     "cfunc_rva": 1951232
+    },
+    {
+     "name": "IsCoopMultiplayer",
+     "cfunc_rva": 1955888
+    },
+    {
+     "name": "GetPrimaryPlayer",
+     "cfunc_rva": 1956000
+    },
+    {
+     "name": "GetSecondaryPlayer",
+     "cfunc_rva": 1956096
+    },
+    {
+     "name": "GetPrimaryCharacter",
+     "cfunc_rva": 1956192
+    },
+    {
+     "name": "GetSecondaryCharacter",
+     "cfunc_rva": 1956320
+    },
+    {
+     "name": "GetMaximumPlayers",
+     "cfunc_rva": 1956448
+    },
+    {
+     "name": "GetCurrentPlayers",
+     "cfunc_rva": 1956512
+    },
+    {
+     "name": "GetPlayer",
+     "cfunc_rva": 1956576
+    },
+    {
+     "name": "GetAllPlayers",
+     "cfunc_rva": 1956752
+    },
+    {
+     "name": "GetPlayerId",
+     "cfunc_rva": 1956912
+    },
+    {
+     "name": "IsJoined",
+     "cfunc_rva": 1957184
+    },
+    {
+     "name": "IsLocal",
+     "cfunc_rva": 1957344
+    },
+    {
+     "name": "IsRemote",
+     "cfunc_rva": 1957600
+    },
+    {
+     "name": "GetLocalId",
+     "cfunc_rva": 1957904
+    },
+    {
+     "name": "GetMaximumLocalPlayers",
+     "cfunc_rva": 1957776
+    },
+    {
+     "name": "GetCurrentLocalPlayers",
+     "cfunc_rva": 1957840
+    },
+    {
+     "name": "GetLocalPlayer",
+     "cfunc_rva": 1958064
+    },
+    {
+     "name": "GetLocalPlayerId",
+     "cfunc_rva": 1958224
+    },
+    {
+     "name": "GetLocalCharacter",
+     "cfunc_rva": 1958352
+    },
+    {
+     "name": "GetAnyCharacter",
+     "cfunc_rva": 1958496
+    },
+    {
+     "name": "GetAllCharacters",
+     "cfunc_rva": 1958560
+    },
+    {
+     "name": "CreatePlayer",
+     "cfunc_rva": 1958624
+    },
+    {
+     "name": "DestroyPlayer",
+     "cfunc_rva": 1958976
+    },
+    {
+     "name": "ClearPlayerDB",
+     "cfunc_rva": 1958848
+    },
+    {
+     "name": "AttachToCharacter",
+     "cfunc_rva": 1959136
+    },
+    {
+     "name": "DetachFromCharacter",
+     "cfunc_rva": 1959376
+    },
+    {
+     "name": "BindToLocal",
+     "cfunc_rva": 1959568
+    },
+    {
+     "name": "BindToRemote",
+     "cfunc_rva": 1959744
+    },
+    {
+     "name": "Unbind",
+     "cfunc_rva": 1959888
+    },
+    {
+     "name": "SetPlayerJoinedCallback",
+     "cfunc_rva": 1960032
+    },
+    {
+     "name": "SetPlayerLeftCallback",
+     "cfunc_rva": 1960464
+    },
+    {
+     "name": "RemovePlayerJoinedCallback",
+     "cfunc_rva": 1960896
+    },
+    {
+     "name": "RemovePlayerLeftCallback",
+     "cfunc_rva": 1960976
+    },
+    {
+     "name": "GetPlayerStart",
+     "cfunc_rva": 1961056
+    },
+    {
+     "name": "SetPlayerStart",
+     "cfunc_rva": 1961104
+    },
+    {
+     "name": "ClaimSeat",
+     "cfunc_rva": 1961248
+    },
+    {
+     "name": "UnClaimSeat",
+     "cfunc_rva": 1961856
+    },
+    {
+     "name": "GetRetryPosition",
+     "cfunc_rva": 1962496
+    },
+    {
+     "name": "SetWaitForInGame",
+     "cfunc_rva": 1962320
+    },
+    {
+     "name": "GetAllTargetMarkerPos",
+     "cfunc_rva": 1962704
+    },
+    {
+     "name": "SetSeatMovementLocks",
+     "cfunc_rva": 1954112
+    },
+    {
+     "name": "SetVehicleControlsLock",
+     "cfunc_rva": 1954528
+    },
+    {
+     "name": "GetControlBindingType",
+     "cfunc_rva": 1954864
+    },
+    {
+     "name": "ClearGPS",
+     "cfunc_rva": 1965792
+    },
+    {
+     "name": "SetScopeEnabled",
+     "cfunc_rva": 1965984
+    },
+    {
+     "name": "GetCash",
+     "cfunc_rva": 1963072
+    },
+    {
+     "name": "SetCash",
+     "cfunc_rva": 1963136
+    },
+    {
+     "name": "AddCash",
+     "cfunc_rva": 1963280
+    },
+    {
+     "name": "GetFuel",
+     "cfunc_rva": 1963408
+    },
+    {
+     "name": "SetFuel",
+     "cfunc_rva": 1963472
+    },
+    {
+     "name": "AddFuel",
+     "cfunc_rva": 1963632
+    },
+    {
+     "name": "GetFuelCapacity",
+     "cfunc_rva": 1963744
+    },
+    {
+     "name": "SetFuelCapacity",
+     "cfunc_rva": 1963808
+    },
+    {
+     "name": "GetProfileCharacter",
+     "cfunc_rva": 1963920
+    },
+    {
+     "name": "SetProfileCharacter",
+     "cfunc_rva": 1963984
+    },
+    {
+     "name": "GetProfileUpgrade",
+     "cfunc_rva": 1964080
+    },
+    {
+     "name": "SetProfileUpgrade",
+     "cfunc_rva": 1964144
+    },
+    {
+     "name": "GetProfileCostume",
+     "cfunc_rva": 1964256
+    },
+    {
+     "name": "SetProfileCostume",
+     "cfunc_rva": 1964320
+    },
+    {
+     "name": "GetAvailableCostumes",
+     "cfunc_rva": 1964800
+    },
+    {
+     "name": "SetAvailableCostumes",
+     "cfunc_rva": 1964864
+    },
+    {
+     "name": "SetOutfit",
+     "cfunc_rva": 1964416
+    },
+    {
+     "name": "SetGrappleEnabled",
+     "cfunc_rva": 1964976
+    },
+    {
+     "name": "SetInPmc",
+     "cfunc_rva": 1965248
+    },
+    {
+     "name": "SetAimMode",
+     "cfunc_rva": 1965520
+    },
+    {
+     "name": "SetVehicleDisguise",
+     "cfunc_rva": 1966256
+    },
+    {
+     "name": "GetVehicleDisguise",
+     "cfunc_rva": 1966384
+    },
+    {
+     "name": "VehicleDisguise",
+     "cfunc_rva": 1966752
+    },
+    {
+     "name": "GetVehicleDisguiseState",
+     "cfunc_rva": 1967216
+    },
+    {
+     "name": "SetSwimmingSearchRadius",
+     "cfunc_rva": 1966448
+    }
+   ]
+  },
+  {
+   "table_va": 12161832,
+   "table_rva": 7967528,
+   "count": 80,
+   "group": "game",
+   "entries": [
+    {
+     "name": "LoadingStaticLayers",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "GetLoadingStaticLayers",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "IsStaticLayer",
+     "cfunc_rva": 1919984
+    },
+    {
+     "name": "UnloadingStaticLayers",
+     "cfunc_rva": 1919824
+    },
+    {
+     "name": "GetUnloadingStaticLayers",
+     "cfunc_rva": 1919904
+    },
+    {
+     "name": "ResetSingletonDone",
+     "cfunc_rva": 1919968
+    },
+    {
+     "name": "LoadLayer",
+     "cfunc_rva": 1920128
+    },
+    {
+     "name": "UnloadLayer",
+     "cfunc_rva": 1920576
+    },
+    {
+     "name": "ReloadLayer",
+     "cfunc_rva": 1920912
+    },
+    {
+     "name": "AssetExists",
+     "cfunc_rva": 1922016
+    },
+    {
+     "name": "LoadAsset",
+     "cfunc_rva": 1922240
+    },
+    {
+     "name": "UnloadAsset",
+     "cfunc_rva": 1922304
+    },
+    {
+     "name": "ReloadAsset",
+     "cfunc_rva": 1922368
+    },
+    {
+     "name": "Spawn",
+     "cfunc_rva": 1924384
+    },
+    {
+     "name": "SpawnRelative",
+     "cfunc_rva": 1923280
+    },
+    {
+     "name": "SpawnFromCamera",
+     "cfunc_rva": 1925136
+    },
+    {
+     "name": "GetGuidByName",
+     "cfunc_rva": 1913376
+    },
+    {
+     "name": "GetAllGuidsByName",
+     "cfunc_rva": 1913680
+    },
+    {
+     "name": "GetObjectsInArea",
+     "cfunc_rva": 1919248
+    },
+    {
+     "name": "GetAwakeObjects",
+     "cfunc_rva": 1918656
+    },
+    {
+     "name": "GetAllLandingZones",
+     "cfunc_rva": 1914048
+    },
+    {
+     "name": "FastCollectHelicopters",
+     "cfunc_rva": 1915488
+    },
+    {
+     "name": "FastCollectJets",
+     "cfunc_rva": 1915776
+    },
+    {
+     "name": "FastCollectFlying",
+     "cfunc_rva": 1916064
+    },
+    {
+     "name": "FastCollectTanks",
+     "cfunc_rva": 1916400
+    },
+    {
+     "name": "FastCollectCars",
+     "cfunc_rva": 1916688
+    },
+    {
+     "name": "FastCollectGroundVehicles",
+     "cfunc_rva": 1916976
+    },
+    {
+     "name": "FastCollectGroundVehiclesExceptTanks",
+     "cfunc_rva": 1916688
+    },
+    {
+     "name": "FastCollectHumans",
+     "cfunc_rva": 1917312
+    },
+    {
+     "name": "FastCollectBoats",
+     "cfunc_rva": 1917600
+    },
+    {
+     "name": "FastCollectUsables",
+     "cfunc_rva": 1918176
+    },
+    {
+     "name": "FastCollectProps",
+     "cfunc_rva": 1917888
+    },
+    {
+     "name": "FastCollectBuildings",
+     "cfunc_rva": 1918368
+    },
+    {
+     "name": "SpawnPlayer",
+     "cfunc_rva": 1926976
+    },
+    {
+     "name": "SpawnPlayerAdvanced",
+     "cfunc_rva": 1927168
+    },
+    {
+     "name": "AddContextAction",
+     "cfunc_rva": 1930800
+    },
+    {
+     "name": "RemoveContextAction",
+     "cfunc_rva": 1931296
+    },
+    {
+     "name": "FindPointFromCamera",
+     "cfunc_rva": 1927392
+    },
+    {
+     "name": "IsPointInBoundary",
+     "cfunc_rva": 1928544
+    },
+    {
+     "name": "GetLineRegionPoints",
+     "cfunc_rva": 1929568
+    },
+    {
+     "name": "SetBoundaryRadius",
+     "cfunc_rva": 1931440
+    },
+    {
+     "name": "GetBoundaryRadius",
+     "cfunc_rva": 1931552
+    },
+    {
+     "name": "SetWarningRadius",
+     "cfunc_rva": 1931632
+    },
+    {
+     "name": "GetWarningRadius",
+     "cfunc_rva": 1931744
+    },
+    {
+     "name": "GetTetherDiameterStart",
+     "cfunc_rva": 1931824
+    },
+    {
+     "name": "GetTetherDiameterEnd",
+     "cfunc_rva": 1931904
+    },
+    {
+     "name": "Rumble",
+     "cfunc_rva": 1933888
+    },
+    {
+     "name": "EnableRoad",
+     "cfunc_rva": 1931984
+    },
+    {
+     "name": "EnableIntersection",
+     "cfunc_rva": 1932240
+    },
+    {
+     "name": "SaveGame",
+     "cfunc_rva": 1932464
+    },
+    {
+     "name": "LoadGame",
+     "cfunc_rva": 1932592
+    },
+    {
+     "name": "ContractActivated",
+     "cfunc_rva": 1932720
+    },
+    {
+     "name": "ContractCancelled",
+     "cfunc_rva": 1932864
+    },
+    {
+     "name": "ContractCompleted",
+     "cfunc_rva": 1932864
+    },
+    {
+     "name": "LoadIsRetry",
+     "cfunc_rva": 1932912
+    },
+    {
+     "name": "GetDistantSpawnPointOnPath",
+     "cfunc_rva": 1932960
+    },
+    {
+     "name": "AchievementIsGranted",
+     "cfunc_rva": 1934128
+    },
+    {
+     "name": "AchievementAddCount",
+     "cfunc_rva": 1934352
+    },
+    {
+     "name": "LockPursuit",
+     "cfunc_rva": 1934576
+    },
+    {
+     "name": "ClearPursuitLock",
+     "cfunc_rva": 1934880
+    },
+    {
+     "name": "SetPursuit",
+     "cfunc_rva": 1934992
+    },
+    {
+     "name": "SetPursuitSeconds",
+     "cfunc_rva": 1935312
+    },
+    {
+     "name": "AdjustPursuitLevel",
+     "cfunc_rva": 1935632
+    },
+    {
+     "name": "AdjustPursuitTimer",
+     "cfunc_rva": 1936208
+    },
+    {
+     "name": "GetPursuitState",
+     "cfunc_rva": 1936704
+    },
+    {
+     "name": "RestrictAllPursuit",
+     "cfunc_rva": 1937648
+    },
+    {
+     "name": "RestrictPursuitFaction",
+     "cfunc_rva": 1937744
+    },
+    {
+     "name": "RestrictPursuitType",
+     "cfunc_rva": 1938000
+    },
+    {
+     "name": "SetMaxPursuitLevel",
+     "cfunc_rva": 1938368
+    },
+    {
+     "name": "SetMaxPursuitTime",
+     "cfunc_rva": 1938464
+    },
+    {
+     "name": "SetPursuitLevelTimes",
+     "cfunc_rva": 1938592
+    },
+    {
+     "name": "ClearPursuitRestrictions",
+     "cfunc_rva": 1937440
+    },
+    {
+     "name": "TweakPursuitParam",
+     "cfunc_rva": 1938144
+    },
+    {
+     "name": "SetCustomPursuit",
+     "cfunc_rva": 1940016
+    },
+    {
+     "name": "ClearCustomPursuit",
+     "cfunc_rva": 1940496
+    },
+    {
+     "name": "StartHeliWaveSpawner",
+     "cfunc_rva": 1942736
+    },
+    {
+     "name": "StopHeliWaveSpawner",
+     "cfunc_rva": 1943440
+    },
+    {
+     "name": "SetSkirmishTable",
+     "cfunc_rva": 1940672
+    },
+    {
+     "name": "AddSkirmishTemplate",
+     "cfunc_rva": 1941520
+    },
+    {
+     "name": "SetGlobalSkirmishState",
+     "cfunc_rva": 1941808
+    }
+   ]
+  },
+  {
+   "table_va": 12162480,
+   "table_rva": 7968176,
+   "count": 9,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SendMessage",
+     "cfunc_rva": 1911520
+    },
+    {
+     "name": "SendDamage",
+     "cfunc_rva": 1911776
+    },
+    {
+     "name": "SetState",
+     "cfunc_rva": 1912032
+    },
+    {
+     "name": "GetLinkGuid",
+     "cfunc_rva": 1912288
+    },
+    {
+     "name": "StartEmitter",
+     "cfunc_rva": 1912736
+    },
+    {
+     "name": "StopEmitter",
+     "cfunc_rva": 1912976
+    },
+    {
+     "name": "GetStringHash",
+     "cfunc_rva": 1913216
+    },
+    {
+     "name": "PrintStateMachine",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DebugStateMachine",
+     "cfunc_rva": 2971200
+    }
+   ]
+  },
+  {
+   "table_va": 12162568,
+   "table_rva": 7968264,
+   "count": 87,
+   "group": "game",
+   "entries": [
+    {
+     "name": "GetParent",
+     "cfunc_rva": 1883216
+    },
+    {
+     "name": "IsTemplate",
+     "cfunc_rva": 1883424
+    },
+    {
+     "name": "GetPosition",
+     "cfunc_rva": 1885200
+    },
+    {
+     "name": "SetPosition",
+     "cfunc_rva": 1888016
+    },
+    {
+     "name": "SetPositionToObject",
+     "cfunc_rva": 1888240
+    },
+    {
+     "name": "SetTransformToObject",
+     "cfunc_rva": 1888752
+    },
+    {
+     "name": "GetDistanceFrom",
+     "cfunc_rva": 1889264
+    },
+    {
+     "name": "GetYaw",
+     "cfunc_rva": 1885408
+    },
+    {
+     "name": "SetYaw",
+     "cfunc_rva": 1889952
+    },
+    {
+     "name": "GetName",
+     "cfunc_rva": 1886720
+    },
+    {
+     "name": "SetName",
+     "cfunc_rva": 1886960
+    },
+    {
+     "name": "GetModelName",
+     "cfunc_rva": 1887264
+    },
+    {
+     "name": "SetModelName",
+     "cfunc_rva": 1887488
+    },
+    {
+     "name": "GetVelocity",
+     "cfunc_rva": 1885952
+    },
+    {
+     "name": "GetVelocitySquared",
+     "cfunc_rva": 1885664
+    },
+    {
+     "name": "GetVelocityVector",
+     "cfunc_rva": 1886256
+    },
+    {
+     "name": "GetHealth",
+     "cfunc_rva": 1883568
+    },
+    {
+     "name": "SetHealth",
+     "cfunc_rva": 1883872
+    },
+    {
+     "name": "GetMaxHealth",
+     "cfunc_rva": 1884208
+    },
+    {
+     "name": "GetNodeHealth",
+     "cfunc_rva": 1884448
+    },
+    {
+     "name": "GetLocalizedName",
+     "cfunc_rva": 1884752
+    },
+    {
+     "name": "GetCashValue",
+     "cfunc_rva": 1885024
+    },
+    {
+     "name": "IsAlive",
+     "cfunc_rva": 1890496
+    },
+    {
+     "name": "IsPlayerControlled",
+     "cfunc_rva": 1892336
+    },
+    {
+     "name": "InSeat",
+     "cfunc_rva": 1890800
+    },
+    {
+     "name": "InVehicle",
+     "cfunc_rva": 1891024
+    },
+    {
+     "name": "InsideBoundary",
+     "cfunc_rva": 1898384
+    },
+    {
+     "name": "OutsideBoundary",
+     "cfunc_rva": 1898624
+    },
+    {
+     "name": "Remove",
+     "cfunc_rva": 1891328
+    },
+    {
+     "name": "FadeOut",
+     "cfunc_rva": 1891648
+    },
+    {
+     "name": "Kill",
+     "cfunc_rva": 1892032
+    },
+    {
+     "name": "IsValid",
+     "cfunc_rva": 1892192
+    },
+    {
+     "name": "Revive",
+     "cfunc_rva": 1892720
+    },
+    {
+     "name": "AreEqual",
+     "cfunc_rva": 1893152
+    },
+    {
+     "name": "GetInvincible",
+     "cfunc_rva": 1893584
+    },
+    {
+     "name": "SetInvincible",
+     "cfunc_rva": 1893856
+    },
+    {
+     "name": "SetUnkillable",
+     "cfunc_rva": 1894112
+    },
+    {
+     "name": "SetInfiniteAmmo",
+     "cfunc_rva": 1894368
+    },
+    {
+     "name": "AddLabel",
+     "cfunc_rva": 1894656
+    },
+    {
+     "name": "RemoveLabel",
+     "cfunc_rva": 1895328
+    },
+    {
+     "name": "HasLabel",
+     "cfunc_rva": 1896000
+    },
+    {
+     "name": "IsDisguised",
+     "cfunc_rva": 1896224
+    },
+    {
+     "name": "GetMass",
+     "cfunc_rva": 1896496
+    },
+    {
+     "name": "SetMass",
+     "cfunc_rva": 1896720
+    },
+    {
+     "name": "IsAwake",
+     "cfunc_rva": 1897216
+    },
+    {
+     "name": "IsHibernated",
+     "cfunc_rva": 1897024
+    },
+    {
+     "name": "GetHibernationDistance",
+     "cfunc_rva": 1897504
+    },
+    {
+     "name": "SetHibernationDistance",
+     "cfunc_rva": 1897712
+    },
+    {
+     "name": "RevertHibernationDistance",
+     "cfunc_rva": 1897984
+    },
+    {
+     "name": "TransformLocalToWorld",
+     "cfunc_rva": 1898880
+    },
+    {
+     "name": "GetHardpointPosition",
+     "cfunc_rva": 1899136
+    },
+    {
+     "name": "GetHardpointYaw",
+     "cfunc_rva": 1899376
+    },
+    {
+     "name": "GetHardpointPitch",
+     "cfunc_rva": 1899696
+    },
+    {
+     "name": "ApplyImpulse",
+     "cfunc_rva": 1900256
+    },
+    {
+     "name": "ApplyPointImpulse",
+     "cfunc_rva": 1900640
+    },
+    {
+     "name": "ApplyAngularImpulse",
+     "cfunc_rva": 1901104
+    },
+    {
+     "name": "SetVisible",
+     "cfunc_rva": 1901488
+    },
+    {
+     "name": "IsVisible",
+     "cfunc_rva": 1901760
+    },
+    {
+     "name": "EnablePhysics",
+     "cfunc_rva": 1902400
+    },
+    {
+     "name": "DisablePhysics",
+     "cfunc_rva": 1902416
+    },
+    {
+     "name": "GetPhysicsType",
+     "cfunc_rva": 1902432
+    },
+    {
+     "name": "PlayAnimation",
+     "cfunc_rva": 1903568
+    },
+    {
+     "name": "StopAnimation",
+     "cfunc_rva": 1904112
+    },
+    {
+     "name": "StopAnimationChannel",
+     "cfunc_rva": 1904352
+    },
+    {
+     "name": "StopAllAnimation",
+     "cfunc_rva": 1904592
+    },
+    {
+     "name": "Attach",
+     "cfunc_rva": 1904736
+    },
+    {
+     "name": "Detach",
+     "cfunc_rva": 1905280
+    },
+    {
+     "name": "IsAttached",
+     "cfunc_rva": 1905600
+    },
+    {
+     "name": "GetAttachedObjects",
+     "cfunc_rva": 1905952
+    },
+    {
+     "name": "PlayMaterialAnimation",
+     "cfunc_rva": 1906272
+    },
+    {
+     "name": "StopMaterialAnimation",
+     "cfunc_rva": 1906672
+    },
+    {
+     "name": "OpenGate",
+     "cfunc_rva": 1906912
+    },
+    {
+     "name": "CloseGate",
+     "cfunc_rva": 1907168
+    },
+    {
+     "name": "GetWinchState",
+     "cfunc_rva": 1909328
+    },
+    {
+     "name": "SetWinchState",
+     "cfunc_rva": 1909584
+    },
+    {
+     "name": "HasWinch",
+     "cfunc_rva": 1908016
+    },
+    {
+     "name": "IsWinching",
+     "cfunc_rva": 1908192
+    },
+    {
+     "name": "IsWinched",
+     "cfunc_rva": 1908384
+    },
+    {
+     "name": "AttachCargoToWinch",
+     "cfunc_rva": 1908704
+    },
+    {
+     "name": "DetachCargoFromWinch",
+     "cfunc_rva": 1909184
+    },
+    {
+     "name": "AddQualityRef",
+     "cfunc_rva": 1907456
+    },
+    {
+     "name": "RemoveQualityRef",
+     "cfunc_rva": 1907824
+    },
+    {
+     "name": "QueueAcceleration",
+     "cfunc_rva": 1909888
+    },
+    {
+     "name": "BeginQueuedAcceleration",
+     "cfunc_rva": 1910528
+    },
+    {
+     "name": "GetHeightAboveTerrain",
+     "cfunc_rva": 1910752
+    },
+    {
+     "name": "AddToDisposer",
+     "cfunc_rva": 1911040
+    },
+    {
+     "name": "RemoveFromDisposer",
+     "cfunc_rva": 1911280
+    }
+   ]
+  },
+  {
+   "table_va": 12163280,
+   "table_rva": 7968976,
+   "count": 92,
+   "group": "game",
+   "entries": [
+    {
+     "name": "IsPlatformConnected",
+     "cfunc_rva": 1879312
+    },
+    {
+     "name": "IsMultiplayer",
+     "cfunc_rva": 1861312
+    },
+    {
+     "name": "IsConnectedToInternet",
+     "cfunc_rva": 1879312
+    },
+    {
+     "name": "IsEnabled",
+     "cfunc_rva": 1861392
+    },
+    {
+     "name": "IsActive",
+     "cfunc_rva": 1861456
+    },
+    {
+     "name": "IsLobby",
+     "cfunc_rva": 1861520
+    },
+    {
+     "name": "IsClient",
+     "cfunc_rva": 1861584
+    },
+    {
+     "name": "IsServer",
+     "cfunc_rva": 1861648
+    },
+    {
+     "name": "IsDedicated",
+     "cfunc_rva": 1861712
+    },
+    {
+     "name": "AutoLobby",
+     "cfunc_rva": 1861712
+    },
+    {
+     "name": "AutoClient",
+     "cfunc_rva": 1861712
+    },
+    {
+     "name": "AutoServer",
+     "cfunc_rva": 1861776
+    },
+    {
+     "name": "GetHostName",
+     "cfunc_rva": 1861856
+    },
+    {
+     "name": "IsMatchmakingInternet",
+     "cfunc_rva": 1879232
+    },
+    {
+     "name": "IsOnlineConnected",
+     "cfunc_rva": 1879312
+    },
+    {
+     "name": "ShouldPlayOnline",
+     "cfunc_rva": 1879376
+    },
+    {
+     "name": "DialogBoxPlayOffline",
+     "cfunc_rva": 1879440
+    },
+    {
+     "name": "DialogBoxMustBeSignInToLive",
+     "cfunc_rva": 1879616
+    },
+    {
+     "name": "IsOnlineEnabled",
+     "cfunc_rva": 1879232
+    },
+    {
+     "name": "DialogBoxPlayLocal",
+     "cfunc_rva": 1879440
+    },
+    {
+     "name": "EnterLobby",
+     "cfunc_rva": 1862112
+    },
+    {
+     "name": "ResetServerList",
+     "cfunc_rva": 1862208
+    },
+    {
+     "name": "ConnectToServer",
+     "cfunc_rva": 1862304
+    },
+    {
+     "name": "StartServer",
+     "cfunc_rva": 1862720
+    },
+    {
+     "name": "Stop",
+     "cfunc_rva": 1862960
+    },
+    {
+     "name": "QuitGame",
+     "cfunc_rva": 1863056
+    },
+    {
+     "name": "EnterFriendsLobby",
+     "cfunc_rva": 1861904
+    },
+    {
+     "name": "ExitFriendsLobby",
+     "cfunc_rva": 1862016
+    },
+    {
+     "name": "SendEvent_ShowMessage",
+     "cfunc_rva": 1863152
+    },
+    {
+     "name": "SendEvent_AddObjective",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SendEvent_RemoveObjective",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SendEvent_AddRadarObjective",
+     "cfunc_rva": 1864016
+    },
+    {
+     "name": "SendEvent_RemoveRadarObjective",
+     "cfunc_rva": 1866224
+    },
+    {
+     "name": "SendEvent_AddMarkerObjective",
+     "cfunc_rva": 1864880
+    },
+    {
+     "name": "SendEvent_RemoveMarkerObjective",
+     "cfunc_rva": 1866656
+    },
+    {
+     "name": "SendEvent_AddPdaObjective",
+     "cfunc_rva": 1865696
+    },
+    {
+     "name": "SendEvent_RemovePdaObjective",
+     "cfunc_rva": 1866432
+    },
+    {
+     "name": "SetLastHeroTeleportLocation",
+     "cfunc_rva": 1867840
+    },
+    {
+     "name": "SendEvent_TeleportPlayer",
+     "cfunc_rva": 1866864
+    },
+    {
+     "name": "SendEvent_TeleportPlayerToHardPoint",
+     "cfunc_rva": 1867264
+    },
+    {
+     "name": "SendEvent_Fanfare",
+     "cfunc_rva": 1868160
+    },
+    {
+     "name": "SendEvent_CloseFanfare",
+     "cfunc_rva": 1868992
+    },
+    {
+     "name": "SendEvent_ObjectiveMessage",
+     "cfunc_rva": 1869104
+    },
+    {
+     "name": "SendEvent_Support",
+     "cfunc_rva": 1869440
+    },
+    {
+     "name": "SendEvent_AddSupportItem",
+     "cfunc_rva": 1872464
+    },
+    {
+     "name": "SendEvent_RemoveSupportItem",
+     "cfunc_rva": 1872464
+    },
+    {
+     "name": "SendEvent_RecruitsUnlocked",
+     "cfunc_rva": 1881440
+    },
+    {
+     "name": "SendEvent_RevivePlayer",
+     "cfunc_rva": 1870080
+    },
+    {
+     "name": "SendEvent_RequestPosition",
+     "cfunc_rva": 1870416
+    },
+    {
+     "name": "SendEvent_SetObjectiveTraySlotText",
+     "cfunc_rva": 1870480
+    },
+    {
+     "name": "SendEvent_SetObjectiveTraySlotImage",
+     "cfunc_rva": 1870880
+    },
+    {
+     "name": "SendEvent_ClearObjectiveTraySlot",
+     "cfunc_rva": 1871344
+    },
+    {
+     "name": "SendEvent_ShowMovie",
+     "cfunc_rva": 1871696
+    },
+    {
+     "name": "SendEvent_HideMovie",
+     "cfunc_rva": 1872000
+    },
+    {
+     "name": "BeginLayerEventGroup",
+     "cfunc_rva": 1872112
+    },
+    {
+     "name": "EndLayerEventGroup",
+     "cfunc_rva": 1872176
+    },
+    {
+     "name": "GrantAchievement",
+     "cfunc_rva": 1872240
+    },
+    {
+     "name": "KickPlayer",
+     "cfunc_rva": 1872352
+    },
+    {
+     "name": "ApplyCachedFactionRelations",
+     "cfunc_rva": 1872400
+    },
+    {
+     "name": "SendEvent_EnableHeroWeapons",
+     "cfunc_rva": 1872464
+    },
+    {
+     "name": "SendEvent_AddDangerousBuilding",
+     "cfunc_rva": 1872528
+    },
+    {
+     "name": "SendEvent_RemoveDangerousBuilding",
+     "cfunc_rva": 1872816
+    },
+    {
+     "name": "SendEvent_SetOccupiedDangerousBuilding",
+     "cfunc_rva": 1873088
+    },
+    {
+     "name": "SendEvent_AddRandomDangerousBuilding",
+     "cfunc_rva": 1873248
+    },
+    {
+     "name": "SendEvent_TextFanfare",
+     "cfunc_rva": 1873408
+    },
+    {
+     "name": "SendEvent_CardFanfare",
+     "cfunc_rva": 1873872
+    },
+    {
+     "name": "SendEvent_HVTFanfare",
+     "cfunc_rva": 1874320
+    },
+    {
+     "name": "SendEvent_UnlockFanfare",
+     "cfunc_rva": 1874720
+    },
+    {
+     "name": "SendEvent_BatchUnlockFanfare",
+     "cfunc_rva": 1875152
+    },
+    {
+     "name": "SendEvent_ForceClientTether",
+     "cfunc_rva": 1875584
+    },
+    {
+     "name": "SendEvent_PursuitMessage",
+     "cfunc_rva": 1875696
+    },
+    {
+     "name": "SetPursuitReportingState",
+     "cfunc_rva": 1876000
+    },
+    {
+     "name": "SendEvent_AddHqPdaBlip",
+     "cfunc_rva": 1877136
+    },
+    {
+     "name": "SendEvent_RemoveHqPdaBlip",
+     "cfunc_rva": 1877680
+    },
+    {
+     "name": "SendEvent_AddPmcPdaBlip",
+     "cfunc_rva": 1877856
+    },
+    {
+     "name": "SendEvent_RemovePmcPdaBlip",
+     "cfunc_rva": 1878272
+    },
+    {
+     "name": "SendEvent_AddPDAMission",
+     "cfunc_rva": 1876272
+    },
+    {
+     "name": "SendEvent_RemovePDAMission",
+     "cfunc_rva": 1876976
+    },
+    {
+     "name": "LoadMissionSpiel",
+     "cfunc_rva": 1879680
+    },
+    {
+     "name": "UnloadMissionSpiel",
+     "cfunc_rva": 1880048
+    },
+    {
+     "name": "SetBriefingInterior",
+     "cfunc_rva": 1880192
+    },
+    {
+     "name": "SetBriefingStarters",
+     "cfunc_rva": 1880320
+    },
+    {
+     "name": "SetBriefingCheapCinematic",
+     "cfunc_rva": 1880944
+    },
+    {
+     "name": "SetLoadingScreen",
+     "cfunc_rva": 1881168
+    },
+    {
+     "name": "SetShootingGalleryBorder",
+     "cfunc_rva": 1881296
+    },
+    {
+     "name": "SetTutorialMessage",
+     "cfunc_rva": 1882240
+    },
+    {
+     "name": "SendEvent_JoinPOForceRequest",
+     "cfunc_rva": 1882112
+    },
+    {
+     "name": "SendCustomEvent",
+     "cfunc_rva": 1878416
+    },
+    {
+     "name": "DoneReloadingLayers",
+     "cfunc_rva": 1882368
+    },
+    {
+     "name": "IsReadyToTether",
+     "cfunc_rva": 1882448
+    },
+    {
+     "name": "HasPlayerUnlockedCode",
+     "cfunc_rva": 1881776
+    },
+    {
+     "name": "UpdatePresence",
+     "cfunc_rva": 1881872
+    }
+   ]
+  },
+  {
+   "table_va": 12164028,
+   "table_rva": 7969724,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Start",
+     "cfunc_rva": 1860880
+    },
+    {
+     "name": "Stop",
+     "cfunc_rva": 1860736
+    },
+    {
+     "name": "Pause",
+     "cfunc_rva": 1860784
+    },
+    {
+     "name": "Resume",
+     "cfunc_rva": 1860832
+    }
+   ]
+  },
+  {
+   "table_va": 12164072,
+   "table_rva": 7969768,
+   "count": 17,
+   "group": "game",
+   "entries": [
+    {
+     "name": "abs",
+     "cfunc_rva": 1857904
+    },
+    {
+     "name": "floor",
+     "cfunc_rva": 1857968
+    },
+    {
+     "name": "ceil",
+     "cfunc_rva": 1858032
+    },
+    {
+     "name": "round",
+     "cfunc_rva": 1858112
+    },
+    {
+     "name": "max",
+     "cfunc_rva": 1858192
+    },
+    {
+     "name": "min",
+     "cfunc_rva": 1858272
+    },
+    {
+     "name": "exp",
+     "cfunc_rva": 1858480
+    },
+    {
+     "name": "pow",
+     "cfunc_rva": 1858544
+    },
+    {
+     "name": "deg",
+     "cfunc_rva": 1858416
+    },
+    {
+     "name": "rad",
+     "cfunc_rva": 1858352
+    },
+    {
+     "name": "randi",
+     "cfunc_rva": 1858624
+    },
+    {
+     "name": "randf",
+     "cfunc_rva": 1858832
+    },
+    {
+     "name": "GetXZHeading",
+     "cfunc_rva": 1859088
+    },
+    {
+     "name": "Normalize",
+     "cfunc_rva": 1859472
+    },
+    {
+     "name": "CrossProduct",
+     "cfunc_rva": 1859680
+    },
+    {
+     "name": "Length",
+     "cfunc_rva": 1859936
+    },
+    {
+     "name": "PolarToRect",
+     "cfunc_rva": 1860192
+    }
+   ]
+  },
+  {
+   "table_va": 12164216,
+   "table_rva": 7969912,
+   "count": 52,
+   "group": "game",
+   "entries": [
+    {
+     "name": "LTIMovieStart",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LTIMovieStop",
+     "cfunc_rva": 1836448
+    },
+    {
+     "name": "LTIMoviePause",
+     "cfunc_rva": 1836544
+    },
+    {
+     "name": "LTIMovieResume",
+     "cfunc_rva": 1836640
+    },
+    {
+     "name": "LTIVideoEnter",
+     "cfunc_rva": 1837600
+    },
+    {
+     "name": "LTIVideoSwitchMode",
+     "cfunc_rva": 1837808
+    },
+    {
+     "name": "LTIVideoNextRes",
+     "cfunc_rva": 1838304
+    },
+    {
+     "name": "LTIVideoPrevRes",
+     "cfunc_rva": 1838608
+    },
+    {
+     "name": "LTIVideoNextRefresh",
+     "cfunc_rva": 1838912
+    },
+    {
+     "name": "LTIVideoPrevRefresh",
+     "cfunc_rva": 1839104
+    },
+    {
+     "name": "LTIVideoSetGamma",
+     "cfunc_rva": 1839296
+    },
+    {
+     "name": "LTIVideoGetViewDistance",
+     "cfunc_rva": 2354976
+    },
+    {
+     "name": "LTIVideoApplyChanges",
+     "cfunc_rva": 1839424
+    },
+    {
+     "name": "LTIVideoDefault",
+     "cfunc_rva": 1839456
+    },
+    {
+     "name": "LTIVideoCancel",
+     "cfunc_rva": 1839568
+    },
+    {
+     "name": "LTIVideoAdvanceEnter",
+     "cfunc_rva": 1839632
+    },
+    {
+     "name": "LTIVideoSwitchOpt1",
+     "cfunc_rva": 1839680
+    },
+    {
+     "name": "LTIVideoAdvanceDefault",
+     "cfunc_rva": 1840032
+    },
+    {
+     "name": "LTIInputGeneralEnter",
+     "cfunc_rva": 1840240
+    },
+    {
+     "name": "LTIInputGeneralOptions",
+     "cfunc_rva": 1840640
+    },
+    {
+     "name": "LTIInputGeneralInvertMouse",
+     "cfunc_rva": 1841072
+    },
+    {
+     "name": "LTIInputGeneralMouseSense",
+     "cfunc_rva": 1841136
+    },
+    {
+     "name": "LTIInputGeneralJoySense",
+     "cfunc_rva": 1841248
+    },
+    {
+     "name": "LTIInputGeneralRumble",
+     "cfunc_rva": 1841328
+    },
+    {
+     "name": "LTIInputKMEnter",
+     "cfunc_rva": 1841408
+    },
+    {
+     "name": "LTIInputKMChangeInput",
+     "cfunc_rva": 1842368
+    },
+    {
+     "name": "LTIInputKMApplyChanges",
+     "cfunc_rva": 1842432
+    },
+    {
+     "name": "LTIInputKMDefault",
+     "cfunc_rva": 1842896
+    },
+    {
+     "name": "LTIOverBoundResponse",
+     "cfunc_rva": 1845040
+    },
+    {
+     "name": "LTIInputKMCancelInput",
+     "cfunc_rva": 1845024
+    },
+    {
+     "name": "LTIInputKMExit",
+     "cfunc_rva": 1845584
+    },
+    {
+     "name": "LTIInputJoystickEnter",
+     "cfunc_rva": 1845616
+    },
+    {
+     "name": "LTIInputJoystickChangePrimary",
+     "cfunc_rva": 1846448
+    },
+    {
+     "name": "LTIInputJoystickChangeInput",
+     "cfunc_rva": 1846864
+    },
+    {
+     "name": "LTIInputJoystickCancel",
+     "cfunc_rva": 1845024
+    },
+    {
+     "name": "LTIInputJoystickApplyChanges",
+     "cfunc_rva": 1848304
+    },
+    {
+     "name": "LTIInputJoystickDefault",
+     "cfunc_rva": 1848576
+    },
+    {
+     "name": "LTIInputJoystickExit",
+     "cfunc_rva": 1848976
+    },
+    {
+     "name": "LTIInputJoystickReEnter",
+     "cfunc_rva": 1849008
+    },
+    {
+     "name": "LTIJoystickOverBoundResponse",
+     "cfunc_rva": 1847808
+    },
+    {
+     "name": "LTIGetStartButton",
+     "cfunc_rva": 1849040
+    },
+    {
+     "name": "ChangeShellState",
+     "cfunc_rva": 1849152
+    },
+    {
+     "name": "LTIProfileEnter",
+     "cfunc_rva": 1849216
+    },
+    {
+     "name": "LTIProfileExit",
+     "cfunc_rva": 1849248
+    },
+    {
+     "name": "LTIPauseItemChanged",
+     "cfunc_rva": 1849312
+    },
+    {
+     "name": "LTIPrecacheDone",
+     "cfunc_rva": 1849280
+    },
+    {
+     "name": "LTIPrecacheSmokeDone",
+     "cfunc_rva": 1849296
+    },
+    {
+     "name": "LTIChoseOnline",
+     "cfunc_rva": 1857536
+    },
+    {
+     "name": "LTIGetDateFormat",
+     "cfunc_rva": 1857600
+    },
+    {
+     "name": "LTICamera",
+     "cfunc_rva": 1857712
+    },
+    {
+     "name": "LTIupdateSupportQuickSlot",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "FirstRun",
+     "cfunc_rva": 1857792
+    }
+   ]
+  },
+  {
+   "table_va": 12164648,
+   "table_rva": 7970344,
+   "count": 24,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SpawnHomingProjectile",
+     "cfunc_rva": 1833056
+    },
+    {
+     "name": "CreateRegion",
+     "cfunc_rva": 1833728
+    },
+    {
+     "name": "Subdue",
+     "cfunc_rva": 1834176
+    },
+    {
+     "name": "GetModelBBoxExtents",
+     "cfunc_rva": 1834896
+    },
+    {
+     "name": "SpawnWithModel",
+     "cfunc_rva": 1834480
+    },
+    {
+     "name": "FormatTime",
+     "cfunc_rva": 1835296
+    },
+    {
+     "name": "DrawPath",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "IsInstallable",
+     "cfunc_rva": 1835840
+    },
+    {
+     "name": "InstallToHDD",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "UseExistingInstall",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Search",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DumpAssets",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DumpAssetsDiff",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DumpTextures",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DumpAssetMemory",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DumpMemory",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LoadScript",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LoadFunctions",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LoadData",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "DescribeGuid",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetQGrey",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "ActivateAlarm",
+     "cfunc_rva": 1835872
+    },
+    {
+     "name": "ToggleAlarm",
+     "cfunc_rva": 1836080
+    },
+    {
+     "name": "DumpStats",
+     "cfunc_rva": 2971200
+    }
+   ]
+  },
+  {
+   "table_va": 12164848,
+   "table_rva": 7970544,
+   "count": 21,
+   "group": "game",
+   "entries": [
+    {
+     "name": "DoAction",
+     "cfunc_rva": 1823328
+    },
+    {
+     "name": "SetState",
+     "cfunc_rva": 1824608
+    },
+    {
+     "name": "Knockdown",
+     "cfunc_rva": 1824864
+    },
+    {
+     "name": "SetPreemptiveRagdoll",
+     "cfunc_rva": 1825200
+    },
+    {
+     "name": "ForceExitSeatNoSnap",
+     "cfunc_rva": 1823200
+    },
+    {
+     "name": "Emote",
+     "cfunc_rva": 1824576
+    },
+    {
+     "name": "PlayRawAnimation",
+     "cfunc_rva": 1824592
+    },
+    {
+     "name": "PersistTransform",
+     "cfunc_rva": 1825392
+    },
+    {
+     "name": "IsSwimming",
+     "cfunc_rva": 1825792
+    },
+    {
+     "name": "IsCarrying",
+     "cfunc_rva": 1826064
+    },
+    {
+     "name": "Drop",
+     "cfunc_rva": 1826256
+    },
+    {
+     "name": "IsGrappling",
+     "cfunc_rva": 1826560
+    },
+    {
+     "name": "StopGrappling",
+     "cfunc_rva": 1826752
+    },
+    {
+     "name": "EnableWeapons",
+     "cfunc_rva": 1827360
+    },
+    {
+     "name": "DisableWeapons",
+     "cfunc_rva": 1827376
+    },
+    {
+     "name": "SetFireLock",
+     "cfunc_rva": 1827392
+    },
+    {
+     "name": "EquipWeapon",
+     "cfunc_rva": 1827648
+    },
+    {
+     "name": "StowWeapon",
+     "cfunc_rva": 1828032
+    },
+    {
+     "name": "SetAllowCorpseCleanup",
+     "cfunc_rva": 1828336
+    },
+    {
+     "name": "Scrub",
+     "cfunc_rva": 1828656
+    },
+    {
+     "name": "SetJostleEnabled",
+     "cfunc_rva": 1829008
+    }
+   ]
+  },
+  {
+   "table_va": 12165024,
+   "table_rva": 7970720,
+   "count": 9,
+   "group": "game",
+   "entries": [
+    {
+     "name": "GetPrimaryWeapon",
+     "cfunc_rva": 1829296
+    },
+    {
+     "name": "GetSecondaryWeapon",
+     "cfunc_rva": 1829680
+    },
+    {
+     "name": "GetVehicleWeapon",
+     "cfunc_rva": 1830064
+    },
+    {
+     "name": "GetAllWeapons",
+     "cfunc_rva": 1830240
+    },
+    {
+     "name": "SetAllWeapons",
+     "cfunc_rva": 1831264
+    },
+    {
+     "name": "DropWeapon",
+     "cfunc_rva": 1831968
+    },
+    {
+     "name": "EquipWeapon",
+     "cfunc_rva": 1832160
+    },
+    {
+     "name": "ReloadAll",
+     "cfunc_rva": 1832624
+    },
+    {
+     "name": "DestroyAllWeapons",
+     "cfunc_rva": 1832496
+    }
+   ]
+  },
+  {
+   "table_va": 12165112,
+   "table_rva": 7970808,
+   "count": 114,
+   "group": "game",
+   "entries": [
+    {
+     "name": "CreateWidget",
+     "cfunc_rva": 1789568
+    },
+    {
+     "name": "DeleteWidget",
+     "cfunc_rva": 1789728
+    },
+    {
+     "name": "SetWidgetLocation",
+     "cfunc_rva": 1789856
+    },
+    {
+     "name": "GetWidgetLocation",
+     "cfunc_rva": 1790368
+    },
+    {
+     "name": "GetWidgetHighlightable",
+     "cfunc_rva": 1790736
+    },
+    {
+     "name": "SetWidgetHighlightable",
+     "cfunc_rva": 1790544
+    },
+    {
+     "name": "SetWidgetCorrectedLocation",
+     "cfunc_rva": 1790912
+    },
+    {
+     "name": "GetWidgetCorrectedLocation",
+     "cfunc_rva": 1791152
+    },
+    {
+     "name": "SetWidgetColor",
+     "cfunc_rva": 1791328
+    },
+    {
+     "name": "GetWidgetColor",
+     "cfunc_rva": 1791824
+    },
+    {
+     "name": "SetWidgetVisible",
+     "cfunc_rva": 1792080
+    },
+    {
+     "name": "GetWidgetVisible",
+     "cfunc_rva": 1792288
+    },
+    {
+     "name": "SetWidgetIgnoresPause",
+     "cfunc_rva": 1792464
+    },
+    {
+     "name": "GetWidgetIgnoresPause",
+     "cfunc_rva": 1792672
+    },
+    {
+     "name": "ActivateWidget",
+     "cfunc_rva": 1792848
+    },
+    {
+     "name": "SetWidgetSleep",
+     "cfunc_rva": 1793040
+    },
+    {
+     "name": "GetWidgetSleep",
+     "cfunc_rva": 1793248
+    },
+    {
+     "name": "PushWidgetToFront",
+     "cfunc_rva": 1793424
+    },
+    {
+     "name": "PushWidgetToBack",
+     "cfunc_rva": 1793536
+    },
+    {
+     "name": "SetWidgetAnchoring",
+     "cfunc_rva": 1793648
+    },
+    {
+     "name": "GetWidgetAnchoring",
+     "cfunc_rva": 1794016
+    },
+    {
+     "name": "InterpolateWidget",
+     "cfunc_rva": 1794288
+    },
+    {
+     "name": "SetWidgetUpdateCallback",
+     "cfunc_rva": 1795168
+    },
+    {
+     "name": "SetWidgetViewport",
+     "cfunc_rva": 1795408
+    },
+    {
+     "name": "GetWidgetViewport",
+     "cfunc_rva": 1795600
+    },
+    {
+     "name": "AddWidgetChild",
+     "cfunc_rva": 1795808
+    },
+    {
+     "name": "SetWidgetChild",
+     "cfunc_rva": 1796080
+    },
+    {
+     "name": "RemoveWidgetChild",
+     "cfunc_rva": 1796368
+    },
+    {
+     "name": "RemoveAllWidgetChildren",
+     "cfunc_rva": 1796624
+    },
+    {
+     "name": "GetWidgetChildren",
+     "cfunc_rva": 1796784
+    },
+    {
+     "name": "SetWidgetFullscreen",
+     "cfunc_rva": 1797056
+    },
+    {
+     "name": "CorrectWidgetForResolution",
+     "cfunc_rva": 1797488
+    },
+    {
+     "name": "SetWidgetUseResolutionCorrection",
+     "cfunc_rva": 1797648
+    },
+    {
+     "name": "SetWidgetUseNewRescale",
+     "cfunc_rva": 1797856
+    },
+    {
+     "name": "GetWidgetHighlightId",
+     "cfunc_rva": 1798064
+    },
+    {
+     "name": "GetWidgetDownId",
+     "cfunc_rva": 1798160
+    },
+    {
+     "name": "CreateImageWidget",
+     "cfunc_rva": 1798256
+    },
+    {
+     "name": "SetImageTexture",
+     "cfunc_rva": 1798416
+    },
+    {
+     "name": "SetImageRotation",
+     "cfunc_rva": 1798672
+    },
+    {
+     "name": "GetImageRotation",
+     "cfunc_rva": 1798912
+    },
+    {
+     "name": "SetImageTextureCoordinates",
+     "cfunc_rva": 1799200
+    },
+    {
+     "name": "GetImageTextureCoordinates",
+     "cfunc_rva": 1799616
+    },
+    {
+     "name": "SetImageTiling",
+     "cfunc_rva": 1799808
+    },
+    {
+     "name": "SetImageTextureTransience",
+     "cfunc_rva": 1800048
+    },
+    {
+     "name": "SetImageClockAnimation",
+     "cfunc_rva": 1800256
+    },
+    {
+     "name": "SetImageClockCallback",
+     "cfunc_rva": 1800592
+    },
+    {
+     "name": "GetImageClockElapsed",
+     "cfunc_rva": 1800864
+    },
+    {
+     "name": "SetImagePieSliceRender",
+     "cfunc_rva": 1801056
+    },
+    {
+     "name": "DisableImagePieSliceRender",
+     "cfunc_rva": 1801360
+    },
+    {
+     "name": "CreateTextWidget",
+     "cfunc_rva": 1801536
+    },
+    {
+     "name": "SetTextText",
+     "cfunc_rva": 1801696
+    },
+    {
+     "name": "GetTextText",
+     "cfunc_rva": 1801920
+    },
+    {
+     "name": "SetTextFont",
+     "cfunc_rva": 1802176
+    },
+    {
+     "name": "SetTextWrapping",
+     "cfunc_rva": 1802400
+    },
+    {
+     "name": "GetTextWrapping",
+     "cfunc_rva": 1802608
+    },
+    {
+     "name": "GetTextWidth",
+     "cfunc_rva": 1802816
+    },
+    {
+     "name": "GetTextHeight",
+     "cfunc_rva": 1803024
+    },
+    {
+     "name": "SetTextJustification",
+     "cfunc_rva": 1803232
+    },
+    {
+     "name": "GetTextJustification",
+     "cfunc_rva": 1803504
+    },
+    {
+     "name": "SetTextScale",
+     "cfunc_rva": 1803760
+    },
+    {
+     "name": "GetTextScale",
+     "cfunc_rva": 1803984
+    },
+    {
+     "name": "SplitText",
+     "cfunc_rva": 1804176
+    },
+    {
+     "name": "AnimateText",
+     "cfunc_rva": 1804992
+    },
+    {
+     "name": "HaltTextAnimation",
+     "cfunc_rva": 1805280
+    },
+    {
+     "name": "MinimapCreate",
+     "cfunc_rva": 1805488
+    },
+    {
+     "name": "MinimapUpdate",
+     "cfunc_rva": 1806048
+    },
+    {
+     "name": "MinimapSetPlayerLocation",
+     "cfunc_rva": 1806544
+    },
+    {
+     "name": "MinimapSetFocusLocation",
+     "cfunc_rva": 1806560
+    },
+    {
+     "name": "MinimapSetRotation",
+     "cfunc_rva": 1806816
+    },
+    {
+     "name": "MinimapSetRange",
+     "cfunc_rva": 1807040
+    },
+    {
+     "name": "SetMinimapOwner",
+     "cfunc_rva": 1807296
+    },
+    {
+     "name": "SetMinimapBorder",
+     "cfunc_rva": 1807552
+    },
+    {
+     "name": "SetMinimapRadius",
+     "cfunc_rva": 1807872
+    },
+    {
+     "name": "MinimapAddObjective",
+     "cfunc_rva": 1808096
+    },
+    {
+     "name": "MinimapAnimateObjectiveSize",
+     "cfunc_rva": 1808912
+    },
+    {
+     "name": "MinimapAnimateObjectiveAlpha",
+     "cfunc_rva": 1809536
+    },
+    {
+     "name": "MinimapAnimateObjectiveSonar",
+     "cfunc_rva": 1810064
+    },
+    {
+     "name": "MinimapUnanimateObjective",
+     "cfunc_rva": 1810912
+    },
+    {
+     "name": "MinimapRemoveObjective",
+     "cfunc_rva": 1811296
+    },
+    {
+     "name": "MinimapDelete",
+     "cfunc_rva": 1811504
+    },
+    {
+     "name": "SetPlayerPDAWidget",
+     "cfunc_rva": 1811712
+    },
+    {
+     "name": "CreateFlashWidget",
+     "cfunc_rva": 1812096
+    },
+    {
+     "name": "SetFlashSwfFile",
+     "cfunc_rva": 1812256
+    },
+    {
+     "name": "SetFlashPlaySpeed",
+     "cfunc_rva": 1812560
+    },
+    {
+     "name": "GetFlashPlaySpeed",
+     "cfunc_rva": 1812784
+    },
+    {
+     "name": "PauseFlash",
+     "cfunc_rva": 1812976
+    },
+    {
+     "name": "PlayFlash",
+     "cfunc_rva": 1813168
+    },
+    {
+     "name": "RestartFlash",
+     "cfunc_rva": 1813360
+    },
+    {
+     "name": "SendFlashInput",
+     "cfunc_rva": 1813536
+    },
+    {
+     "name": "SendFlashLeftAnalogInput",
+     "cfunc_rva": 1813840
+    },
+    {
+     "name": "SendFlashRightAnalogInput",
+     "cfunc_rva": 1814128
+    },
+    {
+     "name": "SetFlashCallback",
+     "cfunc_rva": 1814416
+    },
+    {
+     "name": "CallFlashScriptFunction",
+     "cfunc_rva": 1814896
+    },
+    {
+     "name": "SetFlashPauseMenu",
+     "cfunc_rva": 1815776
+    },
+    {
+     "name": "SetFlashTesselationAllowed",
+     "cfunc_rva": 1814688
+    },
+    {
+     "name": "RemoveFlashPauseMenu",
+     "cfunc_rva": 1816304
+    },
+    {
+     "name": "CreateSpriteWidget",
+     "cfunc_rva": 1816496
+    },
+    {
+     "name": "SetSpriteTexture",
+     "cfunc_rva": 1816656
+    },
+    {
+     "name": "SetSpriteTextureSize",
+     "cfunc_rva": 1817328
+    },
+    {
+     "name": "SetSpriteFrameSize",
+     "cfunc_rva": 1817696
+    },
+    {
+     "name": "AnimateSprite",
+     "cfunc_rva": 1818304
+    },
+    {
+     "name": "HaltSpriteAnimation",
+     "cfunc_rva": 1818624
+    },
+    {
+     "name": "SetSpriteFrame",
+     "cfunc_rva": 1818816
+    },
+    {
+     "name": "CreateMovieWidget",
+     "cfunc_rva": 1819040
+    },
+    {
+     "name": "SetMovieFile",
+     "cfunc_rva": 1819200
+    },
+    {
+     "name": "PlayMovie",
+     "cfunc_rva": 1819440
+    },
+    {
+     "name": "PauseMovie",
+     "cfunc_rva": 1819664
+    },
+    {
+     "name": "StopMovie",
+     "cfunc_rva": 1819840
+    },
+    {
+     "name": "GetMovieCurrentFrameNumber",
+     "cfunc_rva": 1820016
+    },
+    {
+     "name": "SetMovieEndCallback",
+     "cfunc_rva": 1820224
+    },
+    {
+     "name": "RegisterForPdaUpdate",
+     "cfunc_rva": 1820464
+    },
+    {
+     "name": "RemovePdaBlip",
+     "cfunc_rva": 1822912
+    },
+    {
+     "name": "UpdatePdaBlip",
+     "cfunc_rva": 1822608
+    },
+    {
+     "name": "AddPdaMapBlips",
+     "cfunc_rva": 1822320
+    }
+   ]
+  },
+  {
+   "table_va": 12166040,
+   "table_rva": 7971736,
+   "count": 38,
+   "group": "game",
+   "entries": [
+    {
+     "name": "AddObjective",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "LoadTexture",
+     "cfunc_rva": 1781072
+    },
+    {
+     "name": "GetReticlePosition",
+     "cfunc_rva": 1781360
+    },
+    {
+     "name": "LoadFont",
+     "cfunc_rva": 1781216
+    },
+    {
+     "name": "IsPdaOnSelect",
+     "cfunc_rva": 1781520
+    },
+    {
+     "name": "IsXboxController",
+     "cfunc_rva": 1781584
+    },
+    {
+     "name": "ControllerInUse",
+     "cfunc_rva": 1781664
+    },
+    {
+     "name": "FindGuiLocation",
+     "cfunc_rva": 1781776
+    },
+    {
+     "name": "_MarkerAdd",
+     "cfunc_rva": 1782528
+    },
+    {
+     "name": "_MarkerAddTripwire",
+     "cfunc_rva": 1783488
+    },
+    {
+     "name": "_MarkerAddDisc",
+     "cfunc_rva": 1784016
+    },
+    {
+     "name": "_MarkerAdd3D",
+     "cfunc_rva": 1784544
+    },
+    {
+     "name": "_MarkerSetBlipLimit",
+     "cfunc_rva": 1785136
+    },
+    {
+     "name": "_MarkerAddOld",
+     "cfunc_rva": 1785248
+    },
+    {
+     "name": "_MarkerRemove",
+     "cfunc_rva": 1786128
+    },
+    {
+     "name": "_MarkerSetLocation",
+     "cfunc_rva": 1786672
+    },
+    {
+     "name": "_MarkerSetColor",
+     "cfunc_rva": 1786880
+    },
+    {
+     "name": "_MarkerSetFollowGuid",
+     "cfunc_rva": 1787216
+    },
+    {
+     "name": "_MarkerSetScale",
+     "cfunc_rva": 1787408
+    },
+    {
+     "name": "_MarkerPulse",
+     "cfunc_rva": 1786256
+    },
+    {
+     "name": "_MarkerHaltPulse",
+     "cfunc_rva": 1786544
+    },
+    {
+     "name": "SetFactionMarkerVisibleDistance",
+     "cfunc_rva": 1787600
+    },
+    {
+     "name": "EnableFactionMarkers",
+     "cfunc_rva": 1787744
+    },
+    {
+     "name": "SetFactionMarkerSize",
+     "cfunc_rva": 1788144
+    },
+    {
+     "name": "SetVehicleEntranceMarkerVisibleDistance",
+     "cfunc_rva": 1787872
+    },
+    {
+     "name": "EnableVehicleEntranceMarkers",
+     "cfunc_rva": 1788016
+    },
+    {
+     "name": "SetVehicleEntranceMarkerSize",
+     "cfunc_rva": 1788240
+    },
+    {
+     "name": "EnablePickupMarkers",
+     "cfunc_rva": 1788336
+    },
+    {
+     "name": "SetPickupMarkerSize",
+     "cfunc_rva": 1788464
+    },
+    {
+     "name": "SetPickupMarkerVisibleDistance",
+     "cfunc_rva": 1788560
+    },
+    {
+     "name": "EnablePlayerMarkers",
+     "cfunc_rva": 1788704
+    },
+    {
+     "name": "GetLanguageNum",
+     "cfunc_rva": 1788800
+    },
+    {
+     "name": "GetLanguageName",
+     "cfunc_rva": 1788864
+    },
+    {
+     "name": "DoSigninCheck",
+     "cfunc_rva": 1788928
+    },
+    {
+     "name": "OnShellLoaded",
+     "cfunc_rva": 1788944
+    },
+    {
+     "name": "OnGlobalExit",
+     "cfunc_rva": 1788960
+    },
+    {
+     "name": "ShowLoadingHints",
+     "cfunc_rva": 1788976
+    },
+    {
+     "name": "OutputToPIX",
+     "cfunc_rva": 1789072
+    }
+   ]
+  },
+  {
+   "table_va": 12166352,
+   "table_rva": 7972048,
+   "count": 11,
+   "group": "game",
+   "entries": [
+    {
+     "name": "ScreenShot",
+     "cfunc_rva": 1769568
+    },
+    {
+     "name": "SetNumFrameSync",
+     "cfunc_rva": 1769648
+    },
+    {
+     "name": "SetScreenRatio",
+     "cfunc_rva": 1769744
+    },
+    {
+     "name": "GetScreenRatio",
+     "cfunc_rva": 1770192
+    },
+    {
+     "name": "ReloadShaders",
+     "cfunc_rva": 1770400
+    },
+    {
+     "name": "SetGamma",
+     "cfunc_rva": 1770416
+    },
+    {
+     "name": "SetShadowBaseDistance",
+     "cfunc_rva": 1770608
+    },
+    {
+     "name": "GetShadowBaseDistance",
+     "cfunc_rva": 1770704
+    },
+    {
+     "name": "InitTinyGeometry",
+     "cfunc_rva": 1770784
+    },
+    {
+     "name": "ShowTinyGeometryObject",
+     "cfunc_rva": 1770800
+    },
+    {
+     "name": "SetBoundaryEffect",
+     "cfunc_rva": 1780512
+    }
+   ]
+  },
+  {
+   "table_va": 12166448,
+   "table_rva": 7972144,
+   "count": 7,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SetNearFar",
+     "cfunc_rva": 1771008
+    },
+    {
+     "name": "RestoreNearFar",
+     "cfunc_rva": 1771248
+    },
+    {
+     "name": "SetFovParams",
+     "cfunc_rva": 1771424
+    },
+    {
+     "name": "RestoreFovParams",
+     "cfunc_rva": 1771680
+    },
+    {
+     "name": "SetFocusParams",
+     "cfunc_rva": 1771856
+    },
+    {
+     "name": "RestoreFocusParams",
+     "cfunc_rva": 1772192
+    },
+    {
+     "name": "SetLodParams",
+     "cfunc_rva": 1772368
+    }
+   ]
+  },
+  {
+   "table_va": 12166520,
+   "table_rva": 7972216,
+   "count": 37,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Begin",
+     "cfunc_rva": 1775312
+    },
+    {
+     "name": "End",
+     "cfunc_rva": 1775344
+    },
+    {
+     "name": "SetTime",
+     "cfunc_rva": 1775440
+    },
+    {
+     "name": "SetTimeSpeed",
+     "cfunc_rva": 1775552
+    },
+    {
+     "name": "SetLightIntensity",
+     "cfunc_rva": 1775664
+    },
+    {
+     "name": "SetLightModifier",
+     "cfunc_rva": 1775776
+    },
+    {
+     "name": "SetLightAngle",
+     "cfunc_rva": 1775984
+    },
+    {
+     "name": "SetAmbientColor",
+     "cfunc_rva": 1776096
+    },
+    {
+     "name": "SetAmbientCube",
+     "cfunc_rva": 1776256
+    },
+    {
+     "name": "SetRimColor",
+     "cfunc_rva": 1776416
+    },
+    {
+     "name": "SetTurbinity",
+     "cfunc_rva": 1776496
+    },
+    {
+     "name": "SetInscatteringMultiplier",
+     "cfunc_rva": 1776608
+    },
+    {
+     "name": "SetExtinctionMultiplier",
+     "cfunc_rva": 1776720
+    },
+    {
+     "name": "SetBetaRayMultiplier",
+     "cfunc_rva": 1776832
+    },
+    {
+     "name": "SetBetaMieMultiplier",
+     "cfunc_rva": 1776944
+    },
+    {
+     "name": "SetHenyeyGreensteinConst",
+     "cfunc_rva": 1777056
+    },
+    {
+     "name": "SetAtmosphere",
+     "cfunc_rva": 1777168
+    },
+    {
+     "name": "SetHaze",
+     "cfunc_rva": 1777360
+    },
+    {
+     "name": "SetWindDirection",
+     "cfunc_rva": 1777552
+    },
+    {
+     "name": "SetParticlesPerSecond",
+     "cfunc_rva": 1779136
+    },
+    {
+     "name": "Change",
+     "cfunc_rva": 1772624
+    },
+    {
+     "name": "ChangeLineRegionSetting",
+     "cfunc_rva": 1772832
+    },
+    {
+     "name": "GetLineRegionSetting",
+     "cfunc_rva": 1773072
+    },
+    {
+     "name": "GetLineRegion",
+     "cfunc_rva": 1773248
+    },
+    {
+     "name": "Restore",
+     "cfunc_rva": 1773600
+    },
+    {
+     "name": "GetCurrentSetting",
+     "cfunc_rva": 1773712
+    },
+    {
+     "name": "EnableImmediatelyChangeMode",
+     "cfunc_rva": 1773824
+    },
+    {
+     "name": "SetRainSpeed",
+     "cfunc_rva": 1779216
+    },
+    {
+     "name": "SetRainDensity",
+     "cfunc_rva": 1779296
+    },
+    {
+     "name": "GetValue",
+     "cfunc_rva": 1773904
+    },
+    {
+     "name": "SetValue",
+     "cfunc_rva": 1774080
+    },
+    {
+     "name": "GetColorValue",
+     "cfunc_rva": 1774240
+    },
+    {
+     "name": "SetColorValue",
+     "cfunc_rva": 1774640
+    },
+    {
+     "name": "GetIntValue",
+     "cfunc_rva": 1774912
+    },
+    {
+     "name": "SetIntValue",
+     "cfunc_rva": 1775088
+    },
+    {
+     "name": "IsInterpolating",
+     "cfunc_rva": 1775248
+    },
+    {
+     "name": "SetSky",
+     "cfunc_rva": 2971200
+    }
+   ]
+  },
+  {
+   "table_va": 12166832,
+   "table_rva": 7972528,
+   "count": 7,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SetBlurRadius",
+     "cfunc_rva": 1777808
+    },
+    {
+     "name": "SetThreshold",
+     "cfunc_rva": 1777888
+    },
+    {
+     "name": "SetMultiplier",
+     "cfunc_rva": 1777968
+    },
+    {
+     "name": "SetAmount",
+     "cfunc_rva": 1778048
+    },
+    {
+     "name": "SetTargetLuminance",
+     "cfunc_rva": 1778160
+    },
+    {
+     "name": "SetAdaptiveLuminancePercent",
+     "cfunc_rva": 1778272
+    },
+    {
+     "name": "SetAdaptiveLuminanceScale",
+     "cfunc_rva": 1778384
+    }
+   ]
+  },
+  {
+   "table_va": 12167032,
+   "table_rva": 7972728,
+   "count": 4,
+   "group": "game",
+   "entries": [
+    {
+     "name": "AmbientTop",
+     "cfunc_rva": 1779552
+    },
+    {
+     "name": "AmbientSides",
+     "cfunc_rva": 1780064
+    },
+    {
+     "name": "Terrain",
+     "cfunc_rva": 1779792
+    },
+    {
+     "name": "CameraFade",
+     "cfunc_rva": 1779376
+    }
+   ]
+  },
+  {
+   "table_va": 12167080,
+   "table_rva": 7972776,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Ignite",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Extinguish",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Put",
+     "cfunc_rva": 1780304
+    }
+   ]
+  },
+  {
+   "table_va": 12167128,
+   "table_rva": 7972824,
+   "count": 14,
+   "group": "game",
+   "entries": [
+    {
+     "name": "GetYaw",
+     "cfunc_rva": 1764720
+    },
+    {
+     "name": "SetYaw",
+     "cfunc_rva": 1765136
+    },
+    {
+     "name": "GetPitch",
+     "cfunc_rva": 1765296
+    },
+    {
+     "name": "SetPitch",
+     "cfunc_rva": 1765776
+    },
+    {
+     "name": "StopBlending",
+     "cfunc_rva": 1765936
+    },
+    {
+     "name": "Shake",
+     "cfunc_rva": 1766096
+    },
+    {
+     "name": "SetFOV",
+     "cfunc_rva": 1766512
+    },
+    {
+     "name": "GetFOV",
+     "cfunc_rva": 1766672
+    },
+    {
+     "name": "SetPosition",
+     "cfunc_rva": 1766880
+    },
+    {
+     "name": "SetLookAt",
+     "cfunc_rva": 1767376
+    },
+    {
+     "name": "Hold",
+     "cfunc_rva": 1767936
+    },
+    {
+     "name": "Follow",
+     "cfunc_rva": 1768336
+    },
+    {
+     "name": "Blend",
+     "cfunc_rva": 1768800
+    },
+    {
+     "name": "SetShot",
+     "cfunc_rva": 1769184
+    }
+   ]
+  },
+  {
+   "table_va": 12167252,
+   "table_rva": 7972948,
+   "count": 6,
+   "group": "game",
+   "entries": [
+    {
+     "name": "_IMPORT",
+     "cfunc_rva": 1762000
+    },
+    {
+     "name": "_INHERIT",
+     "cfunc_rva": 1762224
+    },
+    {
+     "name": "_DYNAMIC_IMPORT",
+     "cfunc_rva": 1762688
+    },
+    {
+     "name": "_DYNAMIC_REMOVE",
+     "cfunc_rva": 1763920
+    },
+    {
+     "name": "_MODULEINDEX",
+     "cfunc_rva": 1764240
+    },
+    {
+     "name": "_GETFENV",
+     "cfunc_rva": 1761632
+    }
+   ]
+  },
+  {
+   "table_va": 12167308,
+   "table_rva": 7973004,
+   "count": 6,
+   "group": "game",
+   "entries": [
+    {
+     "name": "BindFaceAnimSet",
+     "cfunc_rva": 1759888
+    },
+    {
+     "name": "UnbindFaceAnimSet",
+     "cfunc_rva": 1760272
+    },
+    {
+     "name": "PlayFaceAnim",
+     "cfunc_rva": 1760688
+    },
+    {
+     "name": "PlayFacialExpression",
+     "cfunc_rva": 1760896
+    },
+    {
+     "name": "GetTranslationForStanceAndAction",
+     "cfunc_rva": 1761232
+    },
+    {
+     "name": "SetUseBriefingLOD",
+     "cfunc_rva": 1761488
+    }
+   ]
+  },
+  {
+   "table_va": 12167368,
+   "table_rva": 7973064,
+   "count": 12,
+   "group": "game",
+   "entries": [
+    {
+     "name": "SpawnCarpetBombLine",
+     "cfunc_rva": 1756016
+    },
+    {
+     "name": "SpawnPlaneNew",
+     "cfunc_rva": 1757760
+    },
+    {
+     "name": "SpawnOrdnance",
+     "cfunc_rva": 1754448
+    },
+    {
+     "name": "SpawnTargettedOrdnance",
+     "cfunc_rva": 1755040
+    },
+    {
+     "name": "ConeSpawn",
+     "cfunc_rva": 1755728
+    },
+    {
+     "name": "FindExitPoint",
+     "cfunc_rva": 1757456
+    },
+    {
+     "name": "EquipDesignator",
+     "cfunc_rva": 1758160
+    },
+    {
+     "name": "RemoveDesignator",
+     "cfunc_rva": 1758560
+    },
+    {
+     "name": "RefillDesignator",
+     "cfunc_rva": 2005536
+    },
+    {
+     "name": "Flyby",
+     "cfunc_rva": 1758800
+    },
+    {
+     "name": "SpawnDirectedObject",
+     "cfunc_rva": 1759328
+    },
+    {
+     "name": "FindDesignatorOwner",
+     "cfunc_rva": 1759712
+    }
+   ]
+  },
+  {
+   "table_va": 12167480,
+   "table_rva": 7973176,
+   "count": 66,
+   "group": "game",
+   "entries": [
+    {
+     "name": "Temp",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Goal",
+     "cfunc_rva": 1732784
+    },
+    {
+     "name": "DefaultGoal",
+     "cfunc_rva": 1733280
+    },
+    {
+     "name": "RemoveGoal",
+     "cfunc_rva": 1733664
+    },
+    {
+     "name": "Squad",
+     "cfunc_rva": 1734016
+    },
+    {
+     "name": "Role",
+     "cfunc_rva": 1736224
+    },
+    {
+     "name": "Anchor",
+     "cfunc_rva": 1736624
+    },
+    {
+     "name": "SetFacing",
+     "cfunc_rva": 1737152
+    },
+    {
+     "name": "LivingWorld",
+     "cfunc_rva": 1737600
+    },
+    {
+     "name": "Water",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Feed",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Rest",
+     "cfunc_rva": 1747520
+    },
+    {
+     "name": "Talk",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Admire",
+     "cfunc_rva": 1747520
+    },
+    {
+     "name": "Enable",
+     "cfunc_rva": 1739488
+    },
+    {
+     "name": "Deliver",
+     "cfunc_rva": 1740784
+    },
+    {
+     "name": "HeliLand",
+     "cfunc_rva": 1741392
+    },
+    {
+     "name": "HeliTakeoff",
+     "cfunc_rva": 1743424
+    },
+    {
+     "name": "HeliDropZoneInfo",
+     "cfunc_rva": 1744384
+    },
+    {
+     "name": "GoIn",
+     "cfunc_rva": 1745472
+    },
+    {
+     "name": "EveryoneOut",
+     "cfunc_rva": 1742896
+    },
+    {
+     "name": "Deploy",
+     "cfunc_rva": 1741808
+    },
+    {
+     "name": "TestDropZone",
+     "cfunc_rva": 1743760
+    },
+    {
+     "name": "SetHaste",
+     "cfunc_rva": 1739792
+    },
+    {
+     "name": "GetPerceivability",
+     "cfunc_rva": 1746416
+    },
+    {
+     "name": "SetPerceivability",
+     "cfunc_rva": 1745920
+    },
+    {
+     "name": "PlanSetConditions",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "PlanSetGoal",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "Plan",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "PlanIterate",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "PlanClear",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetTrafficSpawning",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetSidewalkSpawning",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetRoadSpawning",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "SetLaneActive",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "TweakAttachedSpawners",
+     "cfunc_rva": 1723456
+    },
+    {
+     "name": "TweakAttachedSpawnersInGroup",
+     "cfunc_rva": 1723664
+    },
+    {
+     "name": "ShowObjectSpawners",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "GetSpawnList",
+     "cfunc_rva": 1724064
+    },
+    {
+     "name": "GetSpawnListChangeInfo",
+     "cfunc_rva": 1724432
+    },
+    {
+     "name": "SetSpawnList",
+     "cfunc_rva": 1724800
+    },
+    {
+     "name": "ClearSpawnListChanges",
+     "cfunc_rva": 1726192
+    },
+    {
+     "name": "ResetAllSpawnLists",
+     "cfunc_rva": 1726560
+    },
+    {
+     "name": "SetExclusionZone",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "AddRoadException",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "RemoveRoadException",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "RemoveExclusionZone",
+     "cfunc_rva": 2971200
+    },
+    {
+     "name": "AddSubject",
+     "cfunc_rva": 1746768
+    },
+    {
+     "name": "RemoveSubject",
+     "cfunc_rva": 1746960
+    },
+    {
+     "name": "RemoveAllSubjects",
+     "cfunc_rva": 1747152
+    },
+    {
+     "name": "GetSubjectData",
+     "cfunc_rva": 1747184
+    },
+    {
+     "name": "ThreatPerception",
+     "cfunc_rva": 1739056
+    },
+    {
+     "name": "GetAttrib",
+     "cfunc_rva": 1737936
+    },
+    {
+     "name": "GetState",
+     "cfunc_rva": 1738688
+    },
+    {
+     "name": "SetState",
+     "cfunc_rva": 1738288
+    },
+    {
+     "name": "GetFeeling",
+     "cfunc_rva": 1747696
+    },
+    {
+     "name": "SetFeeling",
+     "cfunc_rva": 1747936
+    },
+    {
+     "name": "GetRelation",
+     "cfunc_rva": 1748192
+    },
+    {
+     "name": "SetRelation",
+     "cfunc_rva": 1748432
+    },
+    {
+     "name": "ChangeRelation",
+     "cfunc_rva": 1748720
+    },
+    {
+     "name": "GetFactionGuid",
+     "cfunc_rva": 1749008
+    },
+    {
+     "name": "AddInfraction",
+     "cfunc_rva": 1749232
+    },
+    {
+     "name": "SetInfractionMultiplier",
+     "cfunc_rva": 1749504
+    },
+    {
+     "name": "SetAttitude",
+     "cfunc_rva": 1749696
+    },
+    {
+     "name": "SetDriveThroughMassRatio",
+     "cfunc_rva": 1740096
+    },
+    {
+     "name": "SetPriorityTarget",
+     "cfunc_rva": 1740544
+    }
+   ]
+  },
+  {
+   "table_va": 13496472,
+   "table_rva": 9302168,
+   "count": 3,
+   "group": "game",
+   "entries": [
+    {
+     "name": "getaddrinfo",
+     "cfunc_rva": 6170956
+    },
+    {
+     "name": "getnameinfo",
+     "cfunc_rva": 6171590
+    },
+    {
+     "name": "freeaddrinfo",
+     "cfunc_rva": 6170899
+    }
+   ]
+  },
+  {
+   "table_va": 14670448,
+   "table_rva": 10476144,
+   "count": 13,
+   "group": "game",
+   "entries": [
+    {
+     "name": "charAt",
+     "cfunc_rva": 3863392
+    },
+    {
+     "name": "charCodeAt",
+     "cfunc_rva": 3863696
+    },
+    {
+     "name": "concat",
+     "cfunc_rva": 3863952
+    },
+    {
+     "name": "indexOf",
+     "cfunc_rva": 3864432
+    },
+    {
+     "name": "lastIndexOf",
+     "cfunc_rva": 3865024
+    },
+    {
+     "name": "slice",
+     "cfunc_rva": 3865648
+    },
+    {
+     "name": "split",
+     "cfunc_rva": 3865920
+    },
+    {
+     "name": "substr",
+     "cfunc_rva": 3867408
+    },
+    {
+     "name": "substring",
+     "cfunc_rva": 3867712
+    },
+    {
+     "name": "toLowerCase",
+     "cfunc_rva": 3868064
+    },
+    {
+     "name": "toString",
+     "cfunc_rva": 3868208
+    },
+    {
+     "name": "toUpperCase",
+     "cfunc_rva": 3868272
+    },
+    {
+     "name": "valueOf",
+     "cfunc_rva": 3868208
+    }
+   ]
+  }
+ ]
+}
