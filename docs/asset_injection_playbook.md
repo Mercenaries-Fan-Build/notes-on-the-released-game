@@ -294,6 +294,33 @@ sha256sum output/data/vz-patch.wad                                              
 # FINAL (only when all 5 in): cp output/data/vz-patch.wad "<game>/data/vz-patch.wad"  → single in-game test + loadprobe
 ```
 
+### 5.1 A patch WAD's BLOCK SET is the contract — not its block count
+
+A vehicle swap is **never** just the model. The custom tank at Fiona's spawn is **8 blocks**:
+
+| block | what it does |
+|---|---|
+| `ch_veh_tank_ztz98_P000_Q3` | the conformed model container (`inject_parts` output) |
+| `inject_<hash>` × 6 | the six skins (both road-wheel groups share material 7 → one texture) |
+| `scripts_vz_P000_Q3` | **the `wifpmcgarage` bytecode redirect** — makes the garage spawn `ZTZ98` instead of `_ksFionaCar = "Phoenix (Racing)"` |
+
+Drop `scripts_vz` and the model is still in the WAD, still correct, still validates — and the game
+simply hands you **Fiona's stock car**, because nothing ever asks for the tank. The spawn redirect and
+the model are two independent halves of one feature.
+
+```bash
+smuggler --source-wad vz.wad --exact-block --block-index 3565 \
+  --inject-container ct.ucfx --inject-block "scripts_vz:scripts_vz_ztz.bin" \
+  --inject-extra "0x<tex>:27:<tex>.bin" ...   # one per skin
+```
+
+**Always diff the block PATHS after a rebuild, never just the count** — a dropped script block and an
+added texture both land on "8 blocks", and `wad-list` (models only) shows the model intact either way:
+
+```bash
+wad_builder list-blocks --patch-wad <new>.wad | grep '^  blocks'   # compare against the last good WAD
+```
+
 **Current combined WAD** (`output/data/vz-patch.wad`): gas station only —
 1 block (`0xd5d65249` override), ASET 1/1 verified, 0 position violations, 29940 assets consumed,
 VERDICT clean. sha256 `9127d617c73aa2bfbe9ef2b816be371a7db54520fb6b241c98936d024d345e33`.
