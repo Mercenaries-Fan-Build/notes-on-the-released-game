@@ -1111,7 +1111,7 @@ validate-probe-results:
 # `make pmc-blackbox-nopatch` builds a control DLL with the patches compiled out
 # (-DPMC_NO_RUNTIME_PATCH) to A/B whether a runtime patch is responsible.
 pmc-blackbox:
-	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
+	"$(MAKE)" -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw
 	@mkdir -p "$(OUTPUT)/dlls"
 	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
 	@echo ""
@@ -1120,7 +1120,7 @@ pmc-blackbox:
 	@echo "         (game import table must reference pmc_bb.dll)"
 
 pmc-blackbox-nopatch:
-	$(MAKE) -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw EXTRA_CFLAGS=-DPMC_NO_RUNTIME_PATCH
+	"$(MAKE)" -C "$(REPO_ROOT)/tools/pmc_blackbox" mingw EXTRA_CFLAGS=-DPMC_NO_RUNTIME_PATCH
 	@mkdir -p "$(OUTPUT)/dlls"
 	@cp "$(REPO_ROOT)/tools/pmc_blackbox/pmc_bb.dll" "$(OUTPUT)/dlls/pmc_bb.dll"
 	@echo ""
