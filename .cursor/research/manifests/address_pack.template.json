@@ -1,0 +1,81 @@
+{
+  "address_pack_version": 1,
+  "pack_id": "mercs2_audio_callchain_v1_template",
+  "description": "Template for resolving x32dbg probes for mixer call-chain capture up to MixSources.",
+  "notes": [
+    "Fill executable fingerprint fields before first live run.",
+    "Use RVA as canonical. VA is optional reference metadata."
+  ],
+  "exe": {
+    "module_name": "Mercenaries2.exe",
+    "path": "C:/path/to/Mercenaries2.exe",
+    "size_bytes": 0,
+    "sha256": "replace_with_real_sha256"
+  },
+  "resolution_policy": {
+    "canonical_address_kind": "rva",
+    "allow_va_fallback": true,
+    "require_required_probes_resolved": true
+  },
+  "probes": [
+    {
+      "probe_id": "audio.mixer_thread.loop",
+      "required": true,
+      "module": "Mercenaries2.exe",
+      "address": {
+        "rva": "0x00431EE0",
+        "va": "0x00831EE0"
+      },
+      "event_expectation": {
+        "entry": "audio.mixer_thread.loop.entry",
+        "exit": "audio.mixer_thread.loop.exit"
+      },
+      "stage": "mixer_thread_wait_loop"
+    },
+    {
+      "probe_id": "audio.palsoundengine.mixsources.entry",
+      "required": true,
+      "module": "Mercenaries2.exe",
+      "address": {
+        "rva": "0x00436610",
+        "va": "0x00836610"
+      },
+      "event_expectation": {
+        "entry": "audio.palsoundengine.mixsources.entry.entry",
+        "exit": "audio.palsoundengine.mixsources.entry.exit"
+      },
+      "stage": "enter_mixsources"
+    },
+    {
+      "probe_id": "audio.palsoundengine.mixsources.callsite",
+      "required": true,
+      "module": "Mercenaries2.exe",
+      "address": {
+        "rva": "0x0043664C",
+        "va": "0x0083664C"
+      },
+      "event_expectation": {
+        "entry": "audio.palsoundengine.mixsources.callsite.entry",
+        "exit": "audio.palsoundengine.mixsources.callsite.exit"
+      },
+      "stage": "callsite_window"
+    },
+    {
+      "probe_id": "audio.palsoundengine.mixsources.crash_ip",
+      "required": false,
+      "module": "Mercenaries2.exe",
+      "address": {
+        "rva": "0x0043664E",
+        "va": "0x0083664E"
+      },
+      "event_expectation": {
+        "entry": "audio.palsoundengine.mixsources.crash_ip.entry"
+      },
+      "stage": "dispatch_or_fault_boundary"
+    }
+  ],
+  "unknowns": [
+    "Address stability across all retail/cracked variants is not yet confirmed.",
+    "Symbol availability for this module is build-dependent and may be absent."
+  ]
+}
