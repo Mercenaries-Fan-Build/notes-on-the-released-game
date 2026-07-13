@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notes-on-the-released-game.local/schemas/migration_manifest.schema.json",
+  "title": "RuntimeTraceMigrationManifest",
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "migrations"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "migrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "from_version",
+          "to_version",
+          "kind",
+          "file",
+          "idempotent"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]{3}_[a-z0-9_]+$"
+          },
+          "from_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "noop",
+              "python_transform"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "idempotent": {
+            "type": "boolean",
+            "const": true
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
