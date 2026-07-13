@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "migrations": [
+    {
+      "id": "000_v0_to_v1_noop",
+      "from_version": 0,
+      "to_version": 1,
+      "kind": "noop",
+      "file": "000_v0_to_v1_noop.json",
+      "idempotent": true,
+      "description": "Bootstrap schema version 1 without mutating records."
+    }
+  ]
+}
