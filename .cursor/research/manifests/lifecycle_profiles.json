@@ -1,0 +1,41 @@
+{
+  "profiles_version": 1,
+  "profiles": {
+    "expected_base_full_lifecycle_v1": {
+      "description": "Retail/base full gameplay lifecycle for trace capture.",
+      "required_phases": [
+        "boot",
+        "main_menu",
+        "save_load",
+        "world_stream_start",
+        "mission_active",
+        "audio_stream_runtime",
+        "mission_teardown",
+        "shutdown"
+      ],
+      "required_probes": [
+        "audio.mixer_thread.loop",
+        "audio.palsoundengine.mixsources.entry",
+        "audio.palsoundengine.mixsources.callsite"
+      ]
+    },
+    "expected_patch_full_lifecycle_v1": {
+      "description": "Patched lifecycle with same minimum phase and probe coverage.",
+      "required_phases": [
+        "boot",
+        "main_menu",
+        "save_load",
+        "world_stream_start",
+        "mission_active",
+        "audio_stream_runtime",
+        "mission_teardown",
+        "shutdown"
+      ],
+      "required_probes": [
+        "audio.mixer_thread.loop",
+        "audio.palsoundengine.mixsources.entry",
+        "audio.palsoundengine.mixsources.callsite"
+      ]
+    }
+  }
+}
