@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notes-on-the-released-game.local/schemas/runtime_trace_record.schema.json",
+  "title": "RuntimeTraceRecord",
+  "description": "Schema for normalized Mercenaries 2 runtime trace records.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "run_id",
+    "timestamp_us",
+    "lifecycle_phase",
+    "probe_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "record_type": {
+      "type": "string",
+      "enum": [
+        "event",
+        "snapshot"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_us": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lifecycle_phase": {
+      "type": "string",
+      "enum": [
+        "boot",
+        "main_menu",
+        "save_load",
+        "world_stream_start",
+        "mission_active",
+        "audio_stream_runtime",
+        "mission_teardown",
+        "shutdown"
+      ]
+    },
+    "probe_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "thread_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "instruction_ptr": {
+      "type": "string",
+      "pattern": "^0x[0-9A-Fa-f]+$"
+    },
+    "module": {
+      "type": "string"
+    },
+    "event_name": {
+      "type": "string"
+    },
+    "registers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "pointers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "address"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9A-Fa-f]+$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "memory_windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "address",
+          "size",
+          "chunk_refs"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9A-Fa-f]+$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "chunk_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "hash",
+                "size",
+                "compression"
+              ],
+              "properties": {
+                "hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "compression": {
+                  "type": "string",
+                  "enum": [
+                    "zlib"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "event"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "event_name"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "snapshot"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "memory_windows"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
