@@ -1,0 +1,12 @@
+{
+  "id": "000_v0_to_v1_noop",
+  "from_version": 0,
+  "to_version": 1,
+  "kind": "noop",
+  "idempotent": true,
+  "record_transform": "none",
+  "meta_update": {
+    "set_schema_version": 1
+  },
+  "notes": "No-op migration used to establish deterministic migration history."
+}
