@@ -1,3 +1,9 @@
 [submodule "submodules/minhook"]
 	path = submodules/minhook
 	url = https://github.com/Mercenaries-Fan-Build/minhook.git
+[submodule "tools/mercs2-tools-gfxforge"]
+	path = tools/mercs2-tools-gfxforge
+	url = https://github.com/loganw234/mercs2-tools-gfxforge
+[submodule "tools/mercs2-tools-gfxtool"]
+	path = tools/mercs2-tools-gfxtool
+	url = https://github.com/loganw234/mercs2-tools-gfxtool
