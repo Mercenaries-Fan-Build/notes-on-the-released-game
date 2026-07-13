@@ -1,0 +1,97 @@
+{
+  "config_version": 1,
+  "profile_name": "expected_base_full_lifecycle_v1",
+  "output": {
+    "raw_trace_file": "trace_raw.ndjson",
+    "flush_every_records": 32
+  },
+  "capture_limits": {
+    "max_memory_windows_per_record": 8,
+    "max_bytes_per_window": 4096,
+    "emit_pointer_only_when_window_unavailable": true
+  },
+  "phase_markers": [
+    "boot",
+    "main_menu",
+    "save_load",
+    "world_stream_start",
+    "mission_active",
+    "audio_stream_runtime",
+    "mission_teardown",
+    "shutdown"
+  ],
+  "probes": [
+    {
+      "probe_id": "audio.mixer_thread.loop",
+      "module": "Mercenaries2.exe",
+      "address": "0x00831EE0",
+      "hook_kind": "function_entry_exit",
+      "record_type": "event",
+      "event_name_entry": "mixer_thread_loop_entry",
+      "event_name_exit": "mixer_thread_loop_exit",
+      "capture_registers": [
+        "eax",
+        "ecx",
+        "edx",
+        "esi",
+        "edi",
+        "ebp",
+        "esp"
+      ],
+      "memory_windows": []
+    },
+    {
+      "probe_id": "audio.palsoundengine.mixsources.entry",
+      "module": "Mercenaries2.exe",
+      "address": "0x00836610",
+      "hook_kind": "function_entry_exit",
+      "record_type": "snapshot",
+      "event_name_entry": "mixsources_entry",
+      "event_name_exit": "mixsources_exit",
+      "capture_registers": [
+        "eax",
+        "ecx",
+        "edx",
+        "esi",
+        "edi",
+        "ebp",
+        "esp"
+      ],
+      "memory_windows": [
+        {
+          "label": "g_pPalSoundEngine_slot",
+          "address": "0x01176404",
+          "size": 64
+        },
+        {
+          "label": "mixer_flags",
+          "address": "0x019C6690",
+          "size": 16
+        }
+      ]
+    },
+    {
+      "probe_id": "audio.palsoundengine.mixsources.callsite",
+      "module": "Mercenaries2.exe",
+      "address": "0x0083664C",
+      "hook_kind": "instruction_window",
+      "record_type": "snapshot",
+      "event_name_entry": "mixsources_callsite_window",
+      "capture_registers": [
+        "eax",
+        "ecx",
+        "edx",
+        "ebp",
+        "esp"
+      ],
+      "memory_windows": [
+        {
+          "label": "pal_sound_engine_object",
+          "address_from_register": "ecx",
+          "size": 256,
+          "capture_if_non_null": true
+        }
+      ]
+    }
+  ]
+}
