@@ -99,3 +99,8 @@ storage/corpus_lancedb/
 !.mcp.json
 !tools/corpus_mcp/package.json
 !tools/corpus_mcp/package-lock.json
+# Large binaries / regenerable artifacts — keep them out of history
+untitled.blend
+custom-tank.glb
+tools/rainbow_table.json
+tools/saboteur_audio/target/
