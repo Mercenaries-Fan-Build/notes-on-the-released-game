@@ -207,12 +207,21 @@ def main():
         struct.pack_into("<10f", body, 20, cx, cy, cz, r,
                          bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2])
         new_bodies[mh["prmg_info"]] = bytes(body)
-        # PRMT: single draw record covering the whole strip, material from rec0
+        # PRMT: PRESERVE the donor's record COUNT (destructible/LOD models carry
+        # twin/multi sub-records per group; the destruction state machine iterates
+        # them, so dropping to one makes it read off the end into CSUM — the
+        # 0x00478E43 crash). Rewrite each sub-record to draw our whole strip,
+        # keeping that record's own material. Faithful for identical-twin donors;
+        # for genuinely-partitioned pieces both states then show the full mesh
+        # (no break animation) but load cleanly.
         pr = rows[mh["prmt"]]
-        rec0 = leaf_body(cont, data_off, pr[1], pr[2])
-        mat = struct.unpack_from("<I", rec0, 0)[0]
-        new_bodies[mh["prmt"]] = struct.pack("<IIHHHH", mat, 0, strip_len, 0,
-                                             vcount - 1, vcount)
+        rec_bytes = leaf_body(cont, data_off, pr[1], pr[2])
+        n_prmt = max(1, len(rec_bytes) // 16)
+        buf = bytearray()
+        for k in range(n_prmt):
+            mat_k = struct.unpack_from("<I", rec_bytes, k * 16)[0]
+            buf += struct.pack("<IIHHHH", mat_k, 0, strip_len, 0, vcount - 1, vcount)
+        new_bodies[mh["prmt"]] = bytes(buf)
 
     # Re-emit the data area: walk rows in order, place each leaf body (new or
     # original) 16-byte aligned, recompute u0; keep container-marker rows.
