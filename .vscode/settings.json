@@ -1,0 +1,12 @@
+{
+    "makefile.makePath": "\"C:\\Program Files (x86)\\GnuWin32\\bin\\make.exe\"",
+    "cmake.sourceDirectory": "C:/Users/Shadow/Desktop/notes-on-the-released-game/submodules/minhook",
+    "claudeCode.environmentVariables": [],
+    "python-envs.pythonProjects": [
+        {
+            "path": "submodules",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ]
+}
