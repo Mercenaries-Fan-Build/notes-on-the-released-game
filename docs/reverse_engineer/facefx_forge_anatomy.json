@@ -1,0 +1,24 @@
+{
+  "_comment": "Block A - Mercs2 facial anatomy dialect (bone_<feature>[_<position>]_<side>, trailing full-word side). Regenerates all 20 confirmed facial bones at expected-false 0.000 (positive control). See naming_dialect_facefx.md.",
+  "arrays": {
+    "prefix": ["bone"],
+    "feature": [
+      "mouth", "jaw", "lip", "lips", "chin", "tongue", "teeth", "tooth", "gum", "gums",
+      "cheek", "face", "head", "mask", "nose", "nostril", "sneer", "jowl", "dimple",
+      "philtrum", "brow", "eyebrow", "eyelid", "lid", "socket", "eye", "eyeball",
+      "temple", "forehead", "muzzle", "throat"
+    ],
+    "mod": [
+      "", "base", "top", "bottom", "upper", "lower", "inner", "outer", "mid", "middle",
+      "back", "front", "corner", "center", "tip", "root", "blink", "puff", "under", "over"
+    ],
+    "side": ["", "left", "right", "center", "c"]
+  },
+  "slot_orders": [
+    ["prefix", "feature", "mod", "side"],
+    ["prefix", "feature", "side", "mod"],
+    ["prefix", "mod", "feature", "side"],
+    ["prefix", "feature", "mod"],
+    ["prefix", "feature"]
+  ]
+}

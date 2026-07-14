@@ -1,0 +1,1598 @@
+{
+ "0x0054620A": [
+  "d1_bamboo_j2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x01284A9D": [
+  "path_sy_003",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x012DCD49": [
+  "civ_veh_boat_oiltanker_orientation_s0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x03765872": [
+  "hp_fx_flame_a",
+  "off-vocabulary token: flame"
+ ],
+ "0x0395E7AC": [
+  "path_officerfemale_k3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x04742A8A": [
+  "bone_attach_piston_d",
+  "off-vocabulary token: piston"
+ ],
+ "0x054A8B80": [
+  "global_att_shaft_disallowed_road01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x0630F3F8": [
+  "hk_update_junglewall_roof9",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x06357126": [
+  "hk_update_junglewall_roof7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x08E4910D": [
+  "icon_hijack_joystick_sofa_k3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x08F5CDE5": [
+  "floor01.piece2a_propattach11_ruin",
+  "off-vocabulary token: floor01.piece2a"
+ ],
+ "0x0A65DF0B": [
+  "outpost_flags4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x0A6A5C39": [
+  "outpost_flags6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x0B22C998": [
+  "bullbar_horn_cage_l_ruin",
+  "off-vocabulary token: bullbar,horn,cage"
+ ],
+ "0x0B5337C9": [
+  "mattias_peter01_only_p3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x0B944E3B": [
+  "white_q_xh_mr",
+  "off-vocabulary token: xh"
+ ],
+ "0x0D461AEA": [
+  "global_att_shaft_disallowed_road03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x0D9EBAE5": [
+  "bone_strut_rl",
+  "off-vocabulary token: strut"
+ ],
+ "0x0E721DE9": [
+  "floor02.piece1a_propattach00_ruin",
+  "off-vocabulary token: floor02.piece1a"
+ ],
+ "0x0FA95FB7": [
+  "bone_strut_fr",
+  "off-vocabulary token: strut"
+ ],
+ "0x0FC83C0E": [
+  "global_satellite_fail02_road02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x10090795": [
+  "pmcoutpost_column_noreflection",
+  "off-vocabulary token: noreflection"
+ ],
+ "0x10424CD7": [
+  "hk_update_junglewall_roof2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1046CA05": [
+  "hk_update_junglewall_roof0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x107F0E47": [
+  "material_merc_33",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x10838B75": [
+  "material_merc_31",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1181220C": [
+  "hp_fx_explosionb",
+  "off-vocabulary token: explosionb"
+ ],
+ "0x118413D9": [
+  "bone_mouth_grenade_i9",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x11C1CA54": [
+  "hp_playerb_enter",
+  "off-vocabulary token: playerb"
+ ],
+ "0x11F4BDBE": [
+  "oilrig_details_01_ia_552",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1247DD93": [
+  "bone_stabiliser_r",
+  "off-vocabulary token: stabiliser"
+ ],
+ "0x1357C18F": [
+  "mattias_peter01_only_p5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x13E74771": [
+  "spiel_job_cashdown_b4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x15468E96": [
+  "rr_stairs01_start0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x15DC2CC5": [
+  "bone_frontwheel_l",
+  "off-vocabulary token: frontwheel"
+ ],
+ "0x17262EA8": [
+  "path_sy_002",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x17CA9A9B": [
+  "bone_bomb_l",
+  "off-vocabulary token: bomb"
+ ],
+ "0x17CCC5D4": [
+  "global_satellite_fail02_road00",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x17E74C76": [
+  "bone_yaw_mast_r",
+  "off-vocabulary token: mast"
+ ],
+ "0x187F601E": [
+  "bone_steering_fr",
+  "off-vocabulary token: steering"
+ ],
+ "0x191965DB": [
+  "path_sy_005",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x192AB0B2": [
+  "d_jh_unlockable_f6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x19425381": [
+  "pmc011_solid_k2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x19889D9F": [
+  "hijack_eyelash_g0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x19D994ED": [
+  "global_satellite_fail02_road05",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1A524C61": [
+  "d1_bamboo_j5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1BAC7DCA": [
+  "object_fishing_31",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1BEBD137": [
+  "spiel_job_cashdown_b2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1C06169D": [
+  "oilrig_details_01_ia_555",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1C35433F": [
+  "hp_davit_wqg7hh",
+  "off-vocabulary token: davit,wqg7hh"
+ ],
+ "0x1C9C678E": [
+  "hp_spawn_f",
+  "off-vocabulary token: spawn"
+ ],
+ "0x1E7214E1": [
+  "bone_attach_piston_c",
+  "off-vocabulary token: piston"
+ ],
+ "0x1F401E5C": [
+  "pmc011_solid_k3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1FA51D49": [
+  "gr_att_starter1_role_road02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x1FB50320": [
+  "dv_details_5556",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x201ED1FD": [
+  "variable_chopper_c06",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2196A6CB": [
+  "global_particle_fire_jetengine_wornk_15",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x219B23F9": [
+  "global_particle_fire_jetengine_wornk_17",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2226A731": [
+  "bone_axle_fl",
+  "off-vocabulary token: axle"
+ ],
+ "0x22614B62": [
+  "bone_stern_4iq5nl",
+  "off-vocabulary token: stern,4iq5nl"
+ ],
+ "0x239A973A": [
+  "path_officerfemale_k5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x23F7AA66": [
+  "ss_ragdoll_556",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2463B612": [
+  "track_strap_7775",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x24A0F154": [
+  "hp_spawn_d",
+  "off-vocabulary token: spawn"
+ ],
+ "0x250DBE9E": [
+  "global_att_shaft_oilwellwater_64",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x259A9688": [
+  "error_cluster_fishcage_wall02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x26ADC06D": [
+  "hp_spawn_a",
+  "off-vocabulary token: spawn"
+ ],
+ "0x2768DE29": [
+  "bone_strut_fl",
+  "off-vocabulary token: strut"
+ ],
+ "0x27C46DD1": [
+  "pmcoutpost_column_noreflection_large",
+  "off-vocabulary token: noreflection,large"
+ ],
+ "0x2837E543": [
+  "hk_update_junglewall_roof6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2C77D270": [
+  "all01_contract_briefing_no_job_24",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2D124864": [
+  "global_att_shaft_oilwellwater_66",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2D9CEEF8": [
+  "hp_bomb_wqg7hm",
+  "off-vocabulary token: bomb,wqg7hm"
+ ],
+ "0x2E048617": [
+  "ss_ragdoll_553",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2E090345": [
+  "ss_ragdoll_551",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2F1F177D": [
+  "global_att_shaft_oilwellwater_63",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2F488F07": [
+  "global_att_shaft_disallowed_road02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2F4D0C35": [
+  "global_att_shaft_disallowed_road00",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x2F90262B": [
+  "hp_bomb_wqg7hj",
+  "off-vocabulary token: bomb,wqg7hj"
+ ],
+ "0x303374AD": [
+  "hk_update_junglewall_roof8",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x30685974": [
+  "outpost_flags7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x31D61713": [
+  "pmcoutpost_fountain1",
+  "off-vocabulary token: fountain"
+ ],
+ "0x31EE3270": [
+  "spiel_job_cashdown_b1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3203FAA8": [
+  "oilrig_details_01_ia_554",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x322899EE": [
+  "hp_davit_wqg7hm",
+  "off-vocabulary token: davit,wqg7hm"
+ ],
+ "0x33289B09": [
+  "d_jh_unlockable_f1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x33CFD1A4": [
+  "bone_piston_d",
+  "off-vocabulary token: piston"
+ ],
+ "0x33F731DB": [
+  "oilrig_details_01_ia_553",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x347361DA": [
+  "all01_contract_briefing_no_job_26",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3514EA7A": [
+  "error_is_lights_01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3586F7FB": [
+  "floor01.piece1c_propattach12_ruin",
+  "off-vocabulary token: floor01.piece1c"
+ ],
+ "0x35DCA0BD": [
+  "bone_piston_a",
+  "off-vocabulary token: piston"
+ ],
+ "0x36550AFF": [
+  "bone_fin_9ju7ee",
+  "off-vocabulary token: fin,9ju7ee"
+ ],
+ "0x37868E42": [
+  "hijack_eyelash_g1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x379A15FA": [
+  "bone_mouth_grenade_i6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x382CF313": [
+  "ss_ragdoll_562",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x38C93430": [
+  "bone_steering_fl",
+  "off-vocabulary token: steering"
+ ],
+ "0x39B5EF06": [
+  "bone_brake_l",
+  "off-vocabulary token: brake"
+ ],
+ "0x39E9C1DA": [
+  "spiel_job_cashdown_b3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3A403D66": [
+  "global_prop_exist_34",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3A6AAECD": [
+  "bone_stabiliser_l",
+  "off-vocabulary token: stabiliser"
+ ],
+ "0x3B728564": [
+  "error_ds_exists_in_plastic_13",
+  "off-vocabulary token: error,ds,exists"
+ ],
+ "0x3C39F2CD": [
+  "hp_davit_wqg7hj",
+  "off-vocabulary token: davit,wqg7hj"
+ ],
+ "0x3C685908": [
+  "track_strap_7777",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3D5F0473": [
+  "bone_axle_rr",
+  "off-vocabulary token: axle"
+ ],
+ "0x3E725951": [
+  "k_misc01_40",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x3F4FA6DF": [
+  "maracaibo_bridge_segmenta",
+  "off-vocabulary token: segmenta"
+ ],
+ "0x402D31AD": [
+  "bone_fan",
+  "off-vocabulary token: fan"
+ ],
+ "0x4105E2BE": [
+  "oilrig_details_01_bridgeend_x6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x41228F9E": [
+  "certsrv_e_subject_sz_a9",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x414521E0": [
+  "certsrv_e_subject_sz_a7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x423F6CF1": [
+  "vz_state_oc_trigger_c02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x43385913": [
+  "certsrv_e_subject_sz_a0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x43CAD4E1": [
+  "hijack_eyelash_f9",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4406E750": [
+  "ss_ragdoll_550",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x44519645": [
+  "global_prop_exist_33",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4470242C": [
+  "k_misc01_41",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x44877F6E": [
+  "error_ds_exists_in_misc01_61",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x44D09430": [
+  "crypt_e_assault_42",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x45FA1E83": [
+  "ss_ragdoll_557",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x471032BB": [
+  "global_att_shaft_oilwellwater_65",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4714AFE9": [
+  "global_att_shaft_oilwellwater_67",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x47992134": [
+  "global_particle_fire_jetengine_wornk_16",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4869630E": [
+  "bone_dish_a",
+  "off-vocabulary token: dish"
+ ],
+ "0x48D07148": [
+  "oilrig_bld_platform_destroyer_wall03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x496FBE86": [
+  "floor03.piece1b_propattach10_ruin",
+  "off-vocabulary token: floor03.piece1b"
+ ],
+ "0x49B845C5": [
+  "hp_backpack_roof02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4AD228D1": [
+  "hijack_eyelash_d7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4AD99080": [
+  "bone_radarb",
+  "off-vocabulary token: radarb"
+ ],
+ "0x4CE6A01E": [
+  "floor01.piece1c_propattach11_ruin",
+  "off-vocabulary token: floor01.piece1c"
+ ],
+ "0x4D556612": [
+  "subtitles_13_hidden_c2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4D5C5AB1": [
+  "lrterrain_r05_falling_37",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x4EF4D4BC": [
+  "bone_piston_bottom_l",
+  "off-vocabulary token: piston"
+ ],
+ "0x4F98004C": [
+  "bone_wind",
+  "off-vocabulary token: wind"
+ ],
+ "0x50CFF3AC": [
+  "hijack_eyelash_d6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x52AF96A0": [
+  "global_barricaded",
+  "off-vocabulary token: barricaded"
+ ],
+ "0x52C32ADF": [
+  "hijack_eyelash_d9",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x5574ECE9": [
+  "error_ds_exists_in_plastic_12",
+  "off-vocabulary token: error,ds,exists"
+ ],
+ "0x55A2E731": [
+  "icon_hijack_joystick_rb_agent4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x562AE3B6": [
+  "ss_ragdoll_563",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x56FF6E56": [
+  "hp_fx_flame",
+  "off-vocabulary token: flame"
+ ],
+ "0x579F6FAD": [
+  "hp_bomb_wqg7hl",
+  "off-vocabulary token: bomb,wqg7hl"
+ ],
+ "0x580D3A4D": [
+  "bone_pitch_sensor",
+  "off-vocabulary token: sensor"
+ ],
+ "0x598901C8": [
+  "bone_brake_r",
+  "off-vocabulary token: brake"
+ ],
+ "0x5A72B321": [
+  "oleobj_s_recovery_02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x5C42B183": [
+  "global_prop_exist_35",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x5D27E761": [
+  "hp_pmc_4iq5no",
+  "off-vocabulary token: 4iq5no"
+ ],
+ "0x5DA770F7": [
+  "icon_hijack_joystick_rb_agent2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x5E2F6D7C": [
+  "ss_ragdoll_561",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x5E92A40B": [
+  "bone_yaw_sidegun",
+  "off-vocabulary token: sidegun"
+ ],
+ "0x5F1DB2A5": [
+  "bone_pitch_mast_l",
+  "off-vocabulary token: mast"
+ ],
+ "0x5FB629D0": [
+  "hp_backpack_roof03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x613649B6": [
+  "certsrv_e_subject_sz_a1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x61A96103": [
+  "hp_backpack_roof04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x62F0AA46": [
+  "bone_piston_top_r",
+  "off-vocabulary token: piston"
+ ],
+ "0x630856DB": [
+  "oilrig_details_01_bridgeend_x7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x632503BB": [
+  "certsrv_e_subject_sz_a8",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x6413BFB3": [
+  "bone_elevator_r_roll",
+  "off-vocabulary token: elevator"
+ ],
+ "0x6442569D": [
+  "bone_engine_l_roll",
+  "off-vocabulary token: engine"
+ ],
+ "0x64462DDD": [
+  "bone_elevator_l_roll",
+  "off-vocabulary token: elevator"
+ ],
+ "0x6474D3BA": [
+  "k_misc01_47",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x655A0908": [
+  "subtitles_13_hidden_c0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x6581D5AD": [
+  "bone_axle_rl",
+  "off-vocabulary token: axle"
+ ],
+ "0x661F1DF1": [
+  "hp_trailerhitch",
+  "off-vocabulary token: trailerhitch"
+ ],
+ "0x6637A3A0": [
+  "co_e_init_suppressor_5555",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x67EBD596": [
+  "bone_steer_r",
+  "off-vocabulary token: steer"
+ ],
+ "0x682ADAD3": [
+  "co_e_init_suppressor_5552",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x693AD37C": [
+  "certsrv_e_subject_sz_a3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x694B7CFE": [
+  "mattias_peter01_only_p0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x69534A55": [
+  "bone_mainrotor_9ju7ee",
+  "off-vocabulary token: mainrotor,9ju7ee"
+ ],
+ "0x6A099AA1": [
+  "hp_fx_flame3",
+  "off-vocabulary token: flame"
+ ],
+ "0x6B47A295": [
+  "certsrv_e_subject_sz_a6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x6D598373": [
+  "bone_engine_r_roll",
+  "off-vocabulary token: engine"
+ ],
+ "0x6F57DA2F": [
+  "subtitles_13_hidden_c3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x6F83F280": [
+  "trust_e_leaf_61",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x707F409E": [
+  "bone_wing_l",
+  "off-vocabulary token: wing"
+ ],
+ "0x70C11B82": [
+  "hijack_eyelash_d8",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x71CF9219": [
+  "global_satellite_fail02_road01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x735CD5DD": [
+  "mattias_peter01_only_p7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x73DE93A5": [
+  "white_q_xh_ml",
+  "off-vocabulary token: xh"
+ ],
+ "0x74D79407": [
+  "bone_radara",
+  "off-vocabulary token: radara"
+ ],
+ "0x76D3C601": [
+  "bone_engine_l",
+  "off-vocabulary token: engine"
+ ],
+ "0x76FB73F3": [
+  "vz_maracaibo_trailer_i6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x77496773": [
+  "rr_stairs01_start1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x777F81EA": [
+  "trust_e_leaf_63",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x77990049": [
+  "hp_spawn_roof05_b1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7806F1A5": [
+  "bone_glass_f",
+  "off-vocabulary token: glass"
+ ],
+ "0x78599C20": [
+  "d1_bamboo_j0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x79D098CC": [
+  "global_att_shaft_oilwellwater_22",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x79D41BDF": [
+  "global_satellite_fail02_road07",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7A10A764": [
+  "bone_recoil",
+  "off-vocabulary token: recoil"
+ ],
+ "0x7A4CD353": [
+  "d1_bamboo_j7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7ACB426D": [
+  "outskirt_chickenfencelong",
+  "off-vocabulary token: chickenfencelong"
+ ],
+ "0x7B909466": [
+  "path_officerfemale_k1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7BA5619A": [
+  "icon_hijack_joystick_rb_agent3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7D9D627E": [
+  "gr_att_starter1_role_road01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7E6C9BD3": [
+  "bone_attach_piston_a",
+  "off-vocabulary token: piston"
+ ],
+ "0x7EA3BD99": [
+  "hp_spawn_e",
+  "off-vocabulary token: spawn"
+ ],
+ "0x7EA91FDD": [
+  "hp_barreltip_maingun",
+  "off-vocabulary token: maingun"
+ ],
+ "0x7F1C4504": [
+  "path_sy_006",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7F20C232": [
+  "path_sy_000",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x7F4532AA": [
+  "pmc011_solid_k5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8014E005": [
+  "bone_bomb_r",
+  "off-vocabulary token: bomb"
+ ],
+ "0x8128869B": [
+  "civ_veh_boat_oiltanker_orientation_s2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x82C3BD08": [
+  "bone_piston_top_l",
+  "off-vocabulary token: piston"
+ ],
+ "0x857DE0DD": [
+  "hp_fx_flame_b",
+  "off-vocabulary token: flame"
+ ],
+ "0x858C231E": [
+  "error_cluster_fishcage_wall04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x859D7017": [
+  "path_officerfemale_k4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x85A1ED45": [
+  "path_officerfemale_k6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8628CB76": [
+  "co_e_init_suppressor_5553",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x86A8475F": [
+  "hp_spawn_c",
+  "off-vocabulary token: spawn"
+ ],
+ "0x86B3D504": [
+  "bone_trunk",
+  "off-vocabulary token: trunk"
+ ],
+ "0x870FA8E7": [
+  "bone_front_hook",
+  "off-vocabulary token: hook"
+ ],
+ "0x874AEE1B": [
+  "bone_rigid",
+  "off-vocabulary token: rigid"
+ ],
+ "0x883CF991": [
+  "hk_update_junglewall_roof4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8871DE58": [
+  "outpost_flags3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8879BB01": [
+  "material_merc_35",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x895AB9E8": [
+  "mattias_peter01_only_p6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8A1CC9D5": [
+  "bone_panel_ruin",
+  "off-vocabulary token: panel"
+ ],
+ "0x8B4DF11B": [
+  "mattias_peter01_only_p1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8B8420B1": [
+  "hp_fx_explosionc",
+  "off-vocabulary token: explosionc"
+ ],
+ "0x8BEE5546": [
+  "floor02.piece2a_propattach02_ruin",
+  "off-vocabulary token: floor02.piece2a"
+ ],
+ "0x8E3AC46C": [
+  "hk_update_junglewall_roof5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8E7785DC": [
+  "material_merc_34",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8E8F94EB": [
+  "bone_cargo_hcm82l",
+  "off-vocabulary token: hcm82l"
+ ],
+ "0x8F724568": [
+  "bone_yaw_sensor",
+  "off-vocabulary token: sensor"
+ ],
+ "0x8F8B95F8": [
+  "hijack_eyelash_g3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x8F9D7BFD": [
+  "error_cluster_fishcage_wall03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x903A2455": [
+  "co_e_init_suppressor_5554",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x90C914B0": [
+  "bone_wing_r",
+  "off-vocabulary token: wing"
+ ],
+ "0x9120E03E": [
+  "d_jh_unlockable_f2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x917ECD2B": [
+  "hijack_eyelash_g4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x93B1B7E0": [
+  "object_fishing_33",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x93CE8323": [
+  "global_att_shaft_oilwellwater_21",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x942B72CB": [
+  "hp_davit_wqg7hl",
+  "off-vocabulary token: davit,wqg7hl"
+ ],
+ "0x942FEFF9": [
+  "hp_davit_wqg7hn",
+  "off-vocabulary token: davit,wqg7hn"
+ ],
+ "0x967AB7E5": [
+  "all01_contract_briefing_no_job_25",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x97002381": [
+  "vz_maracaibo_trailer_i4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9717C357": [
+  "error_is_lights_00",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x971C4085": [
+  "error_is_lights_02",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x973ACB16": [
+  "pmc011_solid_k1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x974E1701": [
+  "rr_stairs01_start3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x97D20C82": [
+  "global_satellite_fail02_road06",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x984AC3F6": [
+  "d1_bamboo_j6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x991EAC89": [
+  "path_sy_007",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9981F607": [
+  "trust_e_leaf_62",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x99867335": [
+  "trust_e_leaf_60",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x999CEED7": [
+  "bone_mouth_grenade_i7",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x99E448CC": [
+  "spiel_job_cashdown_b5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9A9DE3A5": [
+  "bone_stabilizer",
+  "off-vocabulary token: stabilizer"
+ ],
+ "0x9B32391D": [
+  "d_jh_unlockable_f5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9BF117E5": [
+  "spiel_job_cashdown_b0",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9C59E59E": [
+  "k2_dedicated_63",
+  "off-vocabulary token: k,dedicated"
+ ],
+ "0x9CB580DE": [
+  "bone_ramp_riff13",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9CFDEE5C": [
+  "vz_maracaibo_trailer_i5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9D4BE1DC": [
+  "rr_stairs01_start2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9E174992": [
+  "variable_chopper_c05",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9EC479C6": [
+  "bone_door_cr",
+  "off-vocabulary token: cr"
+ ],
+ "0x9F2CF401": [
+  "hp_fx_fire",
+  "off-vocabulary token: fire"
+ ],
+ "0x9F9FD69B": [
+  "gr_att_starter1_role_road00",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0x9FA2A618": [
+  "global_particle_fire_jetengine_wornk_12",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA04F4DBC": [
+  "d1_bamboo_j4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA0732FFE": [
+  "hp_dock_recruitheli",
+  "off-vocabulary token: recruitheli"
+ ],
+ "0xA123364F": [
+  "path_sy_001",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA1349E30": [
+  "bone_pitch_sidegun",
+  "off-vocabulary token: sidegun"
+ ],
+ "0xA147A6C7": [
+  "pmc011_solid_k4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA25C1CD5": [
+  "d1_bamboo_j1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA3C6543A": [
+  "bone_dish",
+  "off-vocabulary token: dish"
+ ],
+ "0xA468D3CD": [
+  "bone_stern_4iq5no",
+  "off-vocabulary token: stern,4iq5no"
+ ],
+ "0xA46F163C": [
+  "bone_attach_piston_b",
+  "off-vocabulary token: piston"
+ ],
+ "0xA4A63802": [
+  "hp_spawn_b",
+  "off-vocabulary token: spawn"
+ ],
+ "0xA4BA0AA4": [
+  "bone_ramp_riff11",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA4C220C6": [
+  "crypt_e_assault_44",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA554757B": [
+  "bone_strut_rr",
+  "off-vocabulary token: strut"
+ ],
+ "0xA5FF32D1": [
+  "ss_ragdoll_555",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA66B3E7D": [
+  "track_strap_7776",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA68A584B": [
+  "error_ds_exists_in_misc01_60",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA68ED579": [
+  "error_ds_exists_in_misc01_62",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA7433BC1": [
+  "global_att_shaft_disallowed_road04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA74FDEF0": [
+  "floor03.piece1a_propattach00_ruin",
+  "off-vocabulary token: floor03.piece1a"
+ ],
+ "0xA78E973B": [
+  "error_cluster_fishcage_wall05",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA7AFC90A": [
+  "dv_details_5554",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA7F66FBC": [
+  "bone_mouth_hcm82l",
+  "off-vocabulary token: hcm82l"
+ ],
+ "0xA863062E": [
+  "outpost_flags5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA8C1FDDE": [
+  "oilrig_bld_platform_destroyer_wall05",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xA9B3FEF7": [
+  "global_particle_fire_jetengine_wornk_19",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAA70B919": [
+  "bone_dish_b",
+  "off-vocabulary token: dish"
+ ],
+ "0xABA13ED1": [
+  "bone_pitch_bowgun",
+  "off-vocabulary token: bowgun"
+ ],
+ "0xABFCFDAC": [
+  "ss_ragdoll_554",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAC77A82B": [
+  "crypt_e_elitea_22",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAD178F12": [
+  "global_att_shaft_oilwellwater_60",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAD91E75B": [
+  "bone_frontwheel_r",
+  "off-vocabulary token: frontwheel"
+ ],
+ "0xAE3F73FA": [
+  "hk_update_junglewall_roof3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAE8F67DF": [
+  "hp_rockets",
+  "off-vocabulary token: rockets"
+ ],
+ "0xAED379A5": [
+  "crypt_e_assault_43",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAF7CBDCE": [
+  "hijack_eyelash_g5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xAF88ED71": [
+  "bone_anchor",
+  "off-vocabulary token: anchor"
+ ],
+ "0xAF956CD9": [
+  "hp_bomb_wqg7hh",
+  "off-vocabulary token: bomb,wqg7hh"
+ ],
+ "0xB0C687A4": [
+  "oilrig_bld_platform_destroyer_wall07",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB1301D28": [
+  "d_jh_unlockable_f4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB2745F0D": [
+  "outpost_flags2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB2FE994A": [
+  "bone_steering_l",
+  "off-vocabulary token: steering"
+ ],
+ "0xB323545B": [
+  "d_jh_unlockable_f3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB3D51852": [
+  "bone_piston_b",
+  "off-vocabulary token: piston"
+ ],
+ "0xB3E23323": [
+  "spiel_job_cashdown_b6",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB3FC7889": [
+  "oilrig_details_01_ia_551",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB5529F38": [
+  "maracaibo_bridge_segmentb",
+  "off-vocabulary token: segmentb"
+ ],
+ "0xB61BEC88": [
+  "variable_chopper_c07",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB6924EC6": [
+  "vzoutpost_bld_garage_door_generator_p0",
+  "off-vocabulary token: p"
+ ],
+ "0xB7814794": [
+  "bone_mouth_grenade_i8",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xB799F69F": [
+  "hp_bomb_wqg7hn",
+  "off-vocabulary token: bomb,wqg7hn"
+ ],
+ "0xB86F5F47": [
+  "hp_dock_recruitjet",
+  "off-vocabulary token: recruitjet"
+ ],
+ "0xB98E16AD": [
+  "hijack_eyelash_g2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBA358160": [
+  "bone_wheel_cover_r",
+  "off-vocabulary token: cover"
+ ],
+ "0xBA6D3A13": [
+  "oleobj_s_recovery_00",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBC6AD0E6": [
+  "k_misc01_43",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBDB43895": [
+  "object_fishing_32",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBEB7F4FB": [
+  "bone_ramp_riff12",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBEC05BF8": [
+  "ocoutpost_exterior_job",
+  "off-vocabulary token: exterior"
+ ],
+ "0xBF30BE39": [
+  "floor01.piece1b_propattach00_ruin",
+  "off-vocabulary token: floor01.piece1b"
+ ],
+ "0xBF93CDEE": [
+  "global_particle_fire_jetengine_wornk_14",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xBF9DC917": [
+  "bullbar_horn_cage_l",
+  "off-vocabulary token: bullbar,horn,cage"
+ ],
+ "0xC019BDAF": [
+  "variable_chopper_c04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC037E486": [
+  "vz_state_oc_trigger_c01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC0B48944": [
+  "bone_stabiliser",
+  "off-vocabulary token: stabiliser"
+ ],
+ "0xC166A4C3": [
+  "floor02.piece2a_propattach01_ruin",
+  "off-vocabulary token: floor02.piece2a"
+ ],
+ "0xC1B32D24": [
+  "qw_nomission_fr",
+  "off-vocabulary token: qw,nomission"
+ ],
+ "0xC24590AC": [
+  "global_prop_exist_36",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC4C68DC9": [
+  "bone_yaw_maingun",
+  "off-vocabulary token: maingun"
+ ],
+ "0xC51C3208": [
+  "global_att_shaft_oilwellwater_62",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC677AC97": [
+  "k_misc01_46",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC67C29C5": [
+  "k_misc01_44",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC6C494E3": [
+  "crypt_e_assault_45",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC6C5E924": [
+  "floor01.piece1a_propattach11_ruin",
+  "off-vocabulary token: floor01.piece1a"
+ ],
+ "0xC7B1EF9A": [
+  "global_particle_fire_jetengine_wornk_18",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC80EFEF8": [
+  "bone_steer_l",
+  "off-vocabulary token: steer"
+ ],
+ "0xC83C6E4C": [
+  "vz_state_oc_trigger_c03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC90B3604": [
+  "oilrig_details_01_bridgeend_x4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC93D8C99": [
+  "floor02.piece2a_propattach03_ruin",
+  "off-vocabulary token: floor02.piece2a"
+ ],
+ "0xC9A526CD": [
+  "global_particle_fire_jetengine_wornk_13",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC9B23D27": [
+  "dv_details_5555",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC9C7D63C": [
+  "hijack_eyelash_f8",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xC9F002AF": [
+  "bone_axle_fr",
+  "off-vocabulary token: axle"
+ ],
+ "0xCA7598CE": [
+  "crypt_e_elitea_23",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCAC471FB": [
+  "oilrig_bld_platform_destroyer_wall04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCAC8EF29": [
+  "oilrig_bld_platform_destroyer_wall06",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCB54D246": [
+  "lrterrain_r05_falling_34",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCB7C6AF3": [
+  "hp_dock_ai_rl",
+  "off-vocabulary token: ai"
+ ],
+ "0xCC01AD3A": [
+  "ss_ragdoll_552",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCC8CD2B4": [
+  "error_ds_exists_in_misc01_63",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCF0DA322": [
+  "bone_piston_bottom_r",
+  "off-vocabulary token: piston"
+ ],
+ "0xCF1A032F": [
+  "global_att_shaft_oilwellwater_61",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xCF5CEE7D": [
+  "subtitles_13_hidden_c1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD27A2294": [
+  "crypt_e_elitea_21",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD30DD634": [
+  "bone_steering_r",
+  "off-vocabulary token: steering"
+ ],
+ "0xD3595C0C": [
+  "lrterrain_r05_falling_36",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD486F1AD": [
+  "crypt_e_elitea_24",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD5662B25": [
+  "lrterrain_r05_falling_33",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD591457E": [
+  "hp_spawn_roof05_b2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD5D78C6F": [
+  "bone_piston_c",
+  "off-vocabulary token: piston"
+ ],
+ "0xD75D4789": [
+  "bullbar_horn_cage_r",
+  "off-vocabulary token: bullbar,horn,cage"
+ ],
+ "0xD8326C21": [
+  "ss_ragdoll_560",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD86B2AB6": [
+  "oleobj_s_recovery_01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xD973B75D": [
+  "bone_attach_steering",
+  "off-vocabulary token: steering"
+ ],
+ "0xDA3A30EE": [
+  "bone_wheel_cover_l",
+  "off-vocabulary token: cover"
+ ],
+ "0xDB205EF6": [
+  "hp_pmc_4iq5nl",
+  "off-vocabulary token: 4iq5nl"
+ ],
+ "0xDB9FE88C": [
+  "icon_hijack_joystick_rb_agent5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xDC7A0DD0": [
+  "k_misc01_45",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xDE03AD2F": [
+  "bone_steering",
+  "off-vocabulary token: steering"
+ ],
+ "0xDE6D4503": [
+  "k_misc01_42",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xDEE21058": [
+  "icon_hijack_joystick_sofa_k2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xDEEC6E9F": [
+  "bone_engine_r",
+  "off-vocabulary token: engine"
+ ],
+ "0xE1F406DA": [
+  "qw_nomission_fl",
+  "off-vocabulary token: qw,nomission"
+ ],
+ "0xE30D9D89": [
+  "oilrig_details_01_bridgeend_x5",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE332E3BA": [
+  "bullbar_horn_cage_r_ruin",
+  "off-vocabulary token: bullbar,horn,cage"
+ ],
+ "0xE33DD221": [
+  "certsrv_e_subject_sz_a2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE55C541A": [
+  "global_stain08",
+  "off-vocabulary token: stain"
+ ],
+ "0xE6810AC0": [
+  "material_merc_30",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE72B65C4": [
+  "civ_veh_boat_oiltanker_orientation_s1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE7B0EFBA": [
+  "hp_backpack_roof01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE8DFE17F": [
+  "icon_hijack_joystick_sofa_k1",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xE97A0046": [
+  "bone_pitch_maingun",
+  "off-vocabulary token: maingun"
+ ],
+ "0xECA4529A": [
+  "hk_update_junglewall_roof01",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xED574663": [
+  "lrterrain_r05_falling_35",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xEE7C9A2A": [
+  "material_merc_32",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xEFD71438": [
+  "global_satellite_fail02_road04",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF150D044": [
+  "mattias_peter01_only_p2",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF1554D72": [
+  "mattias_peter01_only_p4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF1CA4B6B": [
+  "global_satellite_fail02_road03",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF39F3C2D": [
+  "hp_dock_ai_rr",
+  "off-vocabulary token: ai"
+ ],
+ "0xF3D39771": [
+  "global_att_shaft_oilwellwater_23",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF6D36D3B": [
+  "bone_pitch_mast_r",
+  "off-vocabulary token: mast"
+ ],
+ "0xF793B99B": [
+  "hp_spawn_roof05_b3",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xF809AC58": [
+  "bone_yaw_mast_l",
+  "off-vocabulary token: mast"
+ ],
+ "0xF8DBADB5": [
+  "model5",
+  "off-vocabulary token: model"
+ ],
+ "0xFBADA738": [
+  "bone_yaw_bowgun",
+  "off-vocabulary token: bowgun"
+ ],
+ "0xFD26139F": [
+  "hp_barreltip_sidegun",
+  "off-vocabulary token: sidegun"
+ ],
+ "0xFD50F62A": [
+  "rr_stairs01_start4",
+  "counter-sweep + off-vocab (generator signature)"
+ ],
+ "0xFD981CD1": [
+  "path_officerfemale_k2",
+  "counter-sweep + off-vocab (generator signature)"
+ ]
+}

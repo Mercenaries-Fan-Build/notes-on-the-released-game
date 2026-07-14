@@ -1,0 +1,2518 @@
+{
+ "pandemic_hash_m2": {
+  "0x0054620A": [
+   "d1_bamboo_j2"
+  ],
+  "0x01284A9D": [
+   "path_sy_003"
+  ],
+  "0x012DCD49": [
+   "civ_veh_boat_oiltanker_orientation_s0"
+  ],
+  "0x0395E7AC": [
+   "path_officerfemale_k3"
+  ],
+  "0x0630F3F8": [
+   "hk_update_junglewall_roof9"
+  ],
+  "0x06357126": [
+   "hk_update_junglewall_roof7"
+  ],
+  "0x0B22C998": [
+   "bullbar_horn_cage_l_ruin"
+  ],
+  "0x0B4C79B4": [
+   "aloutpost_bld_alarmtower_pristine_lod_propattach6"
+  ],
+  "0x0B5337C9": [
+   "mattias_peter01_only_p3"
+  ],
+  "0x10090795": [
+   "pmcoutpost_column_noreflection"
+  ],
+  "0x10424CD7": [
+   "hk_update_junglewall_roof2"
+  ],
+  "0x1046CA05": [
+   "hk_update_junglewall_roof0"
+  ],
+  "0x11F4BDBE": [
+   "oilrig_details_01_ia_552"
+  ],
+  "0x1357C18F": [
+   "mattias_peter01_only_p5"
+  ],
+  "0x13E74771": [
+   "spiel_job_cashdown_b4"
+  ],
+  "0x15468E96": [
+   "rr_stairs01_start0"
+  ],
+  "0x17262EA8": [
+   "path_sy_002"
+  ],
+  "0x19119247": [
+   "floor00.piece1p_propattach38_ruin_lod0"
+  ],
+  "0x191965DB": [
+   "path_sy_005"
+  ],
+  "0x1A524C61": [
+   "d1_bamboo_j5"
+  ],
+  "0x1BAC7DCA": [
+   "object_fishing_31"
+  ],
+  "0x1BEBD137": [
+   "spiel_job_cashdown_b2"
+  ],
+  "0x1C06169D": [
+   "oilrig_details_01_ia_555"
+  ],
+  "0x1FA51D49": [
+   "gr_att_starter1_role_road02"
+  ],
+  "0x1FB50320": [
+   "dv_details_5556"
+  ],
+  "0x201ED1FD": [
+   "variable_chopper_c06"
+  ],
+  "0x22614B62": [
+   "bone_stern_4iq5nl"
+  ],
+  "0x239A973A": [
+   "path_officerfemale_k5"
+  ],
+  "0x27C46DD1": [
+   "pmcoutpost_column_noreflection_large"
+  ],
+  "0x2837E543": [
+   "hk_update_junglewall_roof6"
+  ],
+  "0x2B89DD6A": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod0"
+  ],
+  "0x303374AD": [
+   "hk_update_junglewall_roof8"
+  ],
+  "0x318CEC77": [
+   "bone_waterplane"
+  ],
+  "0x31EE3270": [
+   "spiel_job_cashdown_b1"
+  ],
+  "0x3203FAA8": [
+   "oilrig_details_01_ia_554"
+  ],
+  "0x33F731DB": [
+   "oilrig_details_01_ia_553"
+  ],
+  "0x39620ADC": [
+   "floor09.piece0v_propattach35_pristine"
+  ],
+  "0x39E9C1DA": [
+   "spiel_job_cashdown_b3"
+  ],
+  "0x3A403D66": [
+   "global_prop_exist_34"
+  ],
+  "0x3F4FA6DF": [
+   "maracaibo_bridge_segmenta"
+  ],
+  "0x44519645": [
+   "global_prop_exist_33"
+  ],
+  "0x44D09430": [
+   "crypt_e_assault_42"
+  ],
+  "0x4A355711": [
+   "groutpost_bld_shackcave02_wood_ruin_dm_attach14_lod0"
+  ],
+  "0x4D556612": [
+   "subtitles_13_hidden_c2"
+  ],
+  "0x4D8C5187": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod1"
+  ],
+  "0x5A72B321": [
+   "oleobj_s_recovery_02"
+  ],
+  "0x5C2DCDAC": [
+   "bullbar_horn_cage_r_pristine"
+  ],
+  "0x5C42B183": [
+   "global_prop_exist_35"
+  ],
+  "0x5E2BF886": [
+   "aloutpost_bld_bunker_wall_w12_17"
+  ],
+  "0x655A0908": [
+   "subtitles_13_hidden_c0"
+  ],
+  "0x6630824C": [
+   "aloutpost_bld_bunker_wall_w12_15"
+  ],
+  "0x694B7CFE": [
+   "mattias_peter01_only_p0"
+  ],
+  "0x6F57DA2F": [
+   "subtitles_13_hidden_c3"
+  ],
+  "0x6F83F280": [
+   "trust_e_leaf_61"
+  ],
+  "0x735CD5DD": [
+   "mattias_peter01_only_p7"
+  ],
+  "0x76FB73F3": [
+   "vz_maracaibo_trailer_i6"
+  ],
+  "0x77496773": [
+   "rr_stairs01_start1"
+  ],
+  "0x777F81EA": [
+   "trust_e_leaf_63"
+  ],
+  "0x77990049": [
+   "hp_spawn_roof05_b1"
+  ],
+  "0x78599C20": [
+   "d1_bamboo_j0"
+  ],
+  "0x7A4CD353": [
+   "d1_bamboo_j7"
+  ],
+  "0x7B909466": [
+   "path_officerfemale_k1"
+  ],
+  "0x7D4E7B6B": [
+   "oilrig_bld_buildinga_details_02_propattach50_pristine"
+  ],
+  "0x7D9D627E": [
+   "gr_att_starter1_role_road01"
+  ],
+  "0x7F1C4504": [
+   "path_sy_006"
+  ],
+  "0x7F20C232": [
+   "path_sy_000"
+  ],
+  "0x802E6CA3": [
+   "aloutpost_bld_bunker_wall_w12_16"
+  ],
+  "0x8128869B": [
+   "civ_veh_boat_oiltanker_orientation_s2"
+  ],
+  "0x859D7017": [
+   "path_officerfemale_k4"
+  ],
+  "0x85A1ED45": [
+   "path_officerfemale_k6"
+  ],
+  "0x883CF991": [
+   "hk_update_junglewall_roof4"
+  ],
+  "0x895AB9E8": [
+   "mattias_peter01_only_p6"
+  ],
+  "0x8B4DF11B": [
+   "mattias_peter01_only_p1"
+  ],
+  "0x8E3AC46C": [
+   "hk_update_junglewall_roof5"
+  ],
+  "0x8FEC98D4": [
+   "village_bld_plantation03_windows_ruin_dm_propattach87_ruin_lod"
+  ],
+  "0x901A0A9C": [
+   "bone_yaw_doorgun"
+  ],
+  "0x93B1B7E0": [
+   "object_fishing_33"
+  ],
+  "0x97002381": [
+   "vz_maracaibo_trailer_i4"
+  ],
+  "0x974E1701": [
+   "rr_stairs01_start3"
+  ],
+  "0x984AC3F6": [
+   "d1_bamboo_j6"
+  ],
+  "0x991EAC89": [
+   "path_sy_007"
+  ],
+  "0x9981F607": [
+   "trust_e_leaf_62"
+  ],
+  "0x99867335": [
+   "trust_e_leaf_60"
+  ],
+  "0x99E448CC": [
+   "spiel_job_cashdown_b5"
+  ],
+  "0x9BF117E5": [
+   "spiel_job_cashdown_b0"
+  ],
+  "0x9CB580DE": [
+   "bone_ramp_riff13"
+  ],
+  "0x9CFDEE5C": [
+   "vz_maracaibo_trailer_i5"
+  ],
+  "0x9D4BE1DC": [
+   "rr_stairs01_start2"
+  ],
+  "0x9E174992": [
+   "variable_chopper_c05"
+  ],
+  "0x9F9FD69B": [
+   "gr_att_starter1_role_road00"
+  ],
+  "0xA04F4DBC": [
+   "d1_bamboo_j4"
+  ],
+  "0xA123364F": [
+   "path_sy_001"
+  ],
+  "0xA25C1CD5": [
+   "d1_bamboo_j1"
+  ],
+  "0xA468D3CD": [
+   "bone_stern_4iq5no"
+  ],
+  "0xA4BA0AA4": [
+   "bone_ramp_riff11"
+  ],
+  "0xA4C220C6": [
+   "crypt_e_assault_44"
+  ],
+  "0xA7AFC90A": [
+   "dv_details_5554"
+  ],
+  "0xAC77A82B": [
+   "crypt_e_elitea_22"
+  ],
+  "0xAE3F73FA": [
+   "hk_update_junglewall_roof3"
+  ],
+  "0xAED379A5": [
+   "crypt_e_assault_43"
+  ],
+  "0xB3E23323": [
+   "spiel_job_cashdown_b6"
+  ],
+  "0xB3FC7889": [
+   "oilrig_details_01_ia_551"
+  ],
+  "0xB5529F38": [
+   "maracaibo_bridge_segmentb"
+  ],
+  "0xB61BEC88": [
+   "variable_chopper_c07"
+  ],
+  "0xB769E30C": [
+   "bone_front_lookat"
+  ],
+  "0xBA6D3A13": [
+   "oleobj_s_recovery_00"
+  ],
+  "0xBB8FC4E4": [
+   "floor00.slice6q_propattach28_ruin_lod0"
+  ],
+  "0xBDB43895": [
+   "object_fishing_32"
+  ],
+  "0xBEB7F4FB": [
+   "bone_ramp_riff12"
+  ],
+  "0xBEC05BF8": [
+   "ocoutpost_exterior_job"
+  ],
+  "0xBF9DC917": [
+   "bullbar_horn_cage_l"
+  ],
+  "0xC019BDAF": [
+   "variable_chopper_c04"
+  ],
+  "0xC1B32D24": [
+   "qw_nomission_fr"
+  ],
+  "0xC24590AC": [
+   "global_prop_exist_36"
+  ],
+  "0xC6C494E3": [
+   "crypt_e_assault_45"
+  ],
+  "0xC9B23D27": [
+   "dv_details_5555"
+  ],
+  "0xCA7598CE": [
+   "crypt_e_elitea_23"
+  ],
+  "0xCF5CEE7D": [
+   "subtitles_13_hidden_c1"
+  ],
+  "0xD0B0CDDE": [
+   "aloutpost_bld_garage01_door_boothrental_a2"
+  ],
+  "0xD250A36D": [
+   "bone_rear_lookat"
+  ],
+  "0xD27A2294": [
+   "crypt_e_elitea_21"
+  ],
+  "0xD486F1AD": [
+   "crypt_e_elitea_24"
+  ],
+  "0xD591457E": [
+   "hp_spawn_roof05_b2"
+  ],
+  "0xD5922C69": [
+   "floor00.slice6q_propattach28_ruin_lod1"
+  ],
+  "0xD70A23D7": [
+   "bone_pitch_doorgun"
+  ],
+  "0xD75D4789": [
+   "bullbar_horn_cage_r"
+  ],
+  "0xD86B2AB6": [
+   "oleobj_s_recovery_01"
+  ],
+  "0xD8B557A4": [
+   "aloutpost_bld_garage01_door_boothrental_a0"
+  ],
+  "0xE1F406DA": [
+   "qw_nomission_fl"
+  ],
+  "0xE332E3BA": [
+   "bullbar_horn_cage_r_ruin"
+  ],
+  "0xE72B65C4": [
+   "civ_veh_boat_oiltanker_orientation_s1"
+  ],
+  "0xECA4529A": [
+   "hk_update_junglewall_roof01"
+  ],
+  "0xF150D044": [
+   "mattias_peter01_only_p2"
+  ],
+  "0xF1554D72": [
+   "mattias_peter01_only_p4"
+  ],
+  "0xF2B7BF29": [
+   "aloutpost_bld_garage01_door_boothrental_a1"
+  ],
+  "0xF70F1E2A": [
+   "floor00.piece1p_propattach38_ruin_lod1"
+  ],
+  "0xF793B99B": [
+   "hp_spawn_roof05_b3"
+  ],
+  "0xFD50F62A": [
+   "rr_stairs01_start4"
+  ],
+  "0xFD981CD1": [
+   "path_officerfemale_k2"
+  ],
+  "0x00018D6C": [
+   "floor01.slice2c_j0smy9"
+  ],
+  "0x00ABB064": [
+   "floor01.slice1d_k9mau3"
+  ],
+  "0x010F3D82": [
+   "piece1e_uf656"
+  ],
+  "0x01293618": [
+   "slice1a_1toic8"
+  ],
+  "0x0196E3B3": [
+   "global_billboard_useb1"
+  ],
+  "0x01DBF046": [
+   "village_bld_house02_roof01_69jd5"
+  ],
+  "0x02B87F7D": [
+   "floor01.slice1d_k9mau6"
+  ],
+  "0x02ED8861": [
+   "slice1a_propattach00_zldob3"
+  ],
+  "0x0301FD38": [
+   "piece1b_efbu05"
+  ],
+  "0x033583F4": [
+   "variable_q0epm6_pristine"
+  ],
+  "0x0346A9CB": [
+   "global_env_rockjungle04"
+  ],
+  "0x0349F1B6": [
+   "floor01.slice1d_m1dp11"
+  ],
+  "0x034B26F9": [
+   "global_env_rockjungle06"
+  ],
+  "0x04EFC7DE": [
+   "floor00.piece1p_propattach38_4bz2u0"
+  ],
+  "0x05499780": [
+   "hp_ladder_bottom_wzij25"
+  ],
+  "0x054FAE82": [
+   "bone_hub_u0p5t2"
+  ],
+  "0x06480D17": [
+   "bone_hatch_mnae10"
+  ],
+  "0x064C8A45": [
+   "bone_hatch_mnae12"
+  ],
+  "0x06B863E8": [
+   "slice1a_propattach00_96f3m6"
+  ],
+  "0x07E3634D": [
+   "bone_attach_rod_3w1f22"
+  ],
+  "0x08AA9588": [
+   "variable_q0epm0_ruin"
+  ],
+  "0x08E875C2": [
+   "floor01.slice1d_fup0e0"
+  ],
+  "0x091545FD": [
+   "bone_hatch_a6ozk5"
+  ],
+  "0x09E07A0C": [
+   "village_bld_house02_roof01_69jd7"
+  ],
+  "0x09E77E5B": [
+   "slice1d_o6mhj0"
+  ],
+  "0x0A84728E": [
+   "bone_hub_legl"
+  ],
+  "0x0A8AF517": [
+   "piece1a_iaham9"
+  ],
+  "0x0B294CBA": [
+   "piece1b_9evyz2"
+  ],
+  "0x0B4E7B7C": [
+   "floor01.slice1d_m1dp13"
+  ],
+  "0x0BAE5F49": [
+   "floor01.slice1d_gamz4"
+  ],
+  "0x0C3DA7BE": [
+   "jungle_env_7ofbj7"
+  ],
+  "0x0C4DB73B": [
+   "hp_ny0vn5_ruin"
+  ],
+  "0x0C603A00": [
+   "jungle_env_7ofbj9"
+  ],
+  "0x0CC2DBDC": [
+   "piece1a_t1uv2"
+  ],
+  "0x0D099328": [
+   "piece1a_iahal1"
+  ],
+  "0x0D3CFED9": [
+   "piece2a_7ozyr3"
+  ],
+  "0x0D4526EA": [
+   "hp_ladder_bottom_wzij27"
+  ],
+  "0x0D488E81": [
+   "slice1d_ucvdh6"
+  ],
+  "0x0D8D57DA": [
+   "civ_veh_boat_saltonsea_y7pq01"
+  ],
+  "0x0D95F392": [
+   "error_cluster_fishcage_wall00"
+  ],
+  "0x0E0362D2": [
+   "groutpost_mine_road10_0wj40"
+  ],
+  "0x0E5E6282": [
+   "bone_hub_97orl4_ruin"
+  ],
+  "0x0EED0B90": [
+   "al_veh_plane_a10_atgm_768q90"
+  ],
+  "0x0F1B0EF0": [
+   "aloutpost_bld_garage01_door_boothrental_cr4c87"
+  ],
+  "0x0FB0533B": [
+   "slice1a_propattach05_akdk46"
+  ],
+  "0x0FB4D069": [
+   "slice1a_propattach05_akdk44"
+  ],
+  "0x104449E1": [
+   "hp_ladder_bottom_6ate86"
+  ],
+  "0x1093D9A1": [
+   "slice1d_kagl89"
+  ],
+  "0x11E79281": [
+   "slice1a_propattach00_2wvn96"
+  ],
+  "0x12895C41": [
+   "caracas_bld_theater01_pile_xx0"
+  ],
+  "0x129D989E": [
+   "piece1a_iahaj1"
+  ],
+  "0x12DA2133": [
+   "bone_hatch_c8wd66"
+  ],
+  "0x12FFA6A7": [
+   "civ_veh_hw2208"
+  ],
+  "0x1346595C": [
+   "slice1d_ucvdh7"
+  ],
+  "0x13C4AD80": [
+   "bone_pitch_turret_vgfef0"
+  ],
+  "0x1469E07C": [
+   "pmc_veh_car_hj876"
+  ],
+  "0x14886128": [
+   "village_bld_farming03_gyxbb5"
+  ],
+  "0x149E11B8": [
+   "piece3e_gae366"
+  ],
+  "0x14B36213": [
+   "piece1a_iahaj8"
+  ],
+  "0x15080D4E": [
+   "bone_rearwing_uxy4l6"
+  ],
+  "0x15103AEC": [
+   "error_is_lights_07"
+  ],
+  "0x1545CE0A": [
+   "margarita_bld_club01_ht2i86"
+  ],
+  "0x156FF09E": [
+   "bone_wheel_l_n8tix0"
+  ],
+  "0x159282E0": [
+   "bone_wheel_l_y2f3t1"
+  ],
+  "0x15938B0B": [
+   "hp_snap_f08nh4"
+  ],
+  "0x15FCE8BC": [
+   "global_billboard_buy6c0"
+  ],
+  "0x16192E71": [
+   "civ_veh_boat_oopqe8"
+  ],
+  "0x1627E091": [
+   "bone_amcrr49_right"
+  ],
+  "0x164F009D": [
+   "jungle_env_7ofbj0"
+  ],
+  "0x1676AF95": [
+   "pmc_veh_car_hj873"
+  ],
+  "0x167B985B": [
+   "village_bld_farming03_gyxbb2"
+  ],
+  "0x169148EB": [
+   "piece3e_gae361"
+  ],
+  "0x16ED1CF4": [
+   "jungle_env_tdz9i5"
+  ],
+  "0x16F19A22": [
+   "jungle_env_tdz9i3"
+  ],
+  "0x17169E5A": [
+   "aloutpost_bld_garage01_door_boothrental_cr4c85"
+  ],
+  "0x171F6935": [
+   "piece1a_iahal8"
+  ],
+  "0x1761C4E0": [
+   "piece1e_cu8oo8"
+  ],
+  "0x1785BA13": [
+   "bone_wheel_l_n8tix9"
+  ],
+  "0x17AA5B86": [
+   "hp_winch_197674"
+  ],
+  "0x1848D3A7": [
+   "hp_fx_u0cag8"
+  ],
+  "0x1869A7E0": [
+   "industrial_bld_0pf8o5"
+  ],
+  "0x1887271C": [
+   "caracas_bld_theater01_pile_xx1"
+  ],
+  "0x18C1A80E": [
+   "oilrig_att_pipes_flatbed_a4"
+  ],
+  "0x1954FC13": [
+   "aloutpost_bld_garage01_door_boothrental_f94vl5"
+  ],
+  "0x197478F7": [
+   "bone_hatch_gpboq7"
+  ],
+  "0x1AAE17E9": [
+   "floor01.slice1d_k9mau2"
+  ],
+  "0x1AEBC287": [
+   "slice2n_ierl3"
+  ],
+  "0x1AF03FB5": [
+   "slice2n_ierl1"
+  ],
+  "0x1B65C120": [
+   "ocoutpost_bld_ve56p5"
+  ],
+  "0x1BC03CEA": [
+   "bone_pitch_turret_vgfef2"
+  ],
+  "0x1D0C9714": [
+   "bone_rearwing_uxy4l4"
+  ],
+  "0x1D58F853": [
+   "ocoutpost_bld_ve56p2"
+  ],
+  "0x1D8D6091": [
+   "hp_dock_ij4y41"
+  ],
+  "0x1D9747F7": [
+   "bone_hub_4uxh71"
+  ],
+  "0x1DEC281E": [
+   "hp_ny0vn4_pristine"
+  ],
+  "0x1F19662D": [
+   "hp_barreltip_h1np08"
+  ],
+  "0x1F68C346": [
+   "al_veh_plane_a10_oilcon_u5"
+  ],
+  "0x1FAEE54C": [
+   "hp_seat_44o829"
+  ],
+  "0x2017523E": [
+   "vzoutpost_fueltanks_nu61"
+  ],
+  "0x20CF1344": [
+   "hp_dock_6j5kc1"
+  ],
+  "0x211A5DEE": [
+   "floor01.slice2c_h6wyi3"
+  ],
+  "0x2171DABE": [
+   "vzoutpost_bld_helipad_drhy06"
+  ],
+  "0x219B9341": [
+   "global_billboard_useb3"
+  ],
+  "0x21B024EB": [
+   "jungle_env_7ofbk5"
+  ],
+  "0x21CEE28F": [
+   "bone_hub_yz65j9"
+  ],
+  "0x22D300ED": [
+   "oilrig_att_pipes_flatbed_a3"
+  ],
+  "0x233D4E7D": [
+   "bone_hub_qiy6c9"
+  ],
+  "0x2347B8A4": [
+   "ocoutpost_bld_ve56p9"
+  ],
+  "0x238B2B6C": [
+   "hp_dock_ij4y40"
+  ],
+  "0x238E4E00": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod2"
+  ],
+  "0x23DE6463": [
+   "village_bld_house02_roof01_69jd4"
+  ],
+  "0x24064EEA": [
+   "slice1a_k7sd58"
+  ],
+  "0x24A75CA4": [
+   "bone_5i6ay8"
+  ],
+  "0x25587832": [
+   "variable_q0epm6_ruin"
+  ],
+  "0x263922BE": [
+   "civ_veh_car_ag9a67"
+  ],
+  "0x26A0B7E6": [
+   "bone_door_e8mjn3"
+  ],
+  "0x26B86A81": [
+   "island_bld_p8t809"
+  ],
+  "0x26F23BFB": [
+   "floor00.piece1p_propattach38_4bz2u1"
+  ],
+  "0x27995E1C": [
+   "global_billboard_useb2"
+  ],
+  "0x281949AA": [
+   "hp_ladder_f2igq6"
+  ],
+  "0x286CE2F3": [
+   "caracas_bld_theater01_pile_fis5h7"
+  ],
+  "0x28922B4E": [
+   "white_o24625_ruin"
+  ],
+  "0x28BC5B0B": [
+   "oilrig_details_01_ia_6w85j3"
+  ],
+  "0x28C0D839": [
+   "oilrig_details_01_ia_6w85j1"
+  ],
+  "0x294DA162": [
+   "global_env_rockjungle01"
+  ],
+  "0x2A07E8B3": [
+   "gr_veh_truck_3bkbe5"
+  ],
+  "0x2A0C80DD": [
+   "hp_ruin_vux560"
+  ],
+  "0x2A9B9338": [
+   "hp_ukau28"
+  ],
+  "0x2B2BB6CD": [
+   "slice1a_1toic9"
+  ],
+  "0x2B2EC544": [
+   "slice1a_propattach00_zxxye5"
+  ],
+  "0x2B83339D": [
+   "vzoutpost_bld_helipad_drhy01"
+  ],
+  "0x2C03DBDB": [
+   "slice1a_zb3m41"
+  ],
+  "0x2C828DD1": [
+   "slice1a_propattach00_kkl22"
+  ],
+  "0x2C87E886": [
+   "global_env_banner_pn2w05"
+  ],
+  "0x2C8ECA6B": [
+   "bone_hub_on7di8"
+  ],
+  "0x2CB6355C": [
+   "island_bld_p8t808"
+  ],
+  "0x2E401BDB": [
+   "jungle_env_7ofbj6"
+  ],
+  "0x2E4BAB55": [
+   "ch_veh_helicopter_6gug14"
+  ],
+  "0x2ED22ACC": [
+   "oilrig_details_01_ia_6w85j8"
+  ],
+  "0x2F4C1835": [
+   "hp_ladder_bottom_wzij24"
+  ],
+  "0x2F76DA30": [
+   "bone_hatch_gpboq4"
+  ],
+  "0x2FBE9C29": [
+   "oc_veh_fb7h4"
+  ],
+  "0x310F8DD1": [
+   "hp_fx_p3uwl3"
+  ],
+  "0x3200D24B": [
+   "civ_veh_car_1ub00"
+  ],
+  "0x32054F79": [
+   "civ_veh_car_1ub02"
+  ],
+  "0x324C7273": [
+   "vz_hum_soldier_a_f_754"
+  ],
+  "0x325AB183": [
+   "hp_fx_43txz3"
+  ],
+  "0x32B152B6": [
+   "piece1a_iahaj9"
+  ],
+  "0x32DED0C1": [
+   "bone_hatch_c8wd64"
+  ],
+  "0x3368DD58": [
+   "vz_veh_boat_type4_hull02_sm"
+  ],
+  "0x33A90F08": [
+   "bone_stern_vx9ea8"
+  ],
+  "0x33B5D556": [
+   "bone_pitch_turret_vgfef6"
+  ],
+  "0x348F398E": [
+   "piece3e_gae360"
+  ],
+  "0x34A00CBB": [
+   "piece1a_iahaj0"
+  ],
+  "0x34C2388A": [
+   "piece1b_7mxza8"
+  ],
+  "0x3598419D": [
+   "piece1a_ijhtf4"
+  ],
+  "0x3662BAB5": [
+   "jungle_env_7ofbj8"
+  ],
+  "0x36994165": [
+   "global_env_banner_pn2w02"
+  ],
+  "0x370D58AC": [
+   "hp_fx_p3uwl2"
+  ],
+  "0x37484227": [
+   "margarita_bld_club01_ht2i87"
+  ],
+  "0x3752ECB6": [
+   "aloutpost_bld_garage01_door_boothrental_f94vl4"
+  ],
+  "0x377264BB": [
+   "bone_wheel_l_n8tix1"
+  ],
+  "0x3772699A": [
+   "bone_hatch_gpboq6"
+  ],
+  "0x38A6B26B": [
+   "piece1a_i4s5r4"
+  ],
+  "0x3921504C": [
+   "slice2c_hzgbu5"
+  ],
+  "0x39ACCFA3": [
+   "hp_winch_197675"
+  ],
+  "0x39BD472A": [
+   "village_bld_plantationsmall03_wall_xud32v0_pristine"
+  ],
+  "0x3B56E8F6": [
+   "ocoutpost_bld_ve56p3"
+  ],
+  "0x3B950B92": [
+   "floor00.slice6q_propattach28_ruin_lod6"
+  ],
+  "0x3B95389A": [
+   "bone_hub_4uxh70"
+  ],
+  "0x3B9A82A2": [
+   "hp_snap_f08nh1"
+  ],
+  "0x3BE86AC0": [
+   "slice1c_q9ktu0"
+  ],
+  "0x3C60A391": [
+   "slice1a_xt7600"
+  ],
+  "0x3D7F547D": [
+   "error_ds_exists_in_plastic_16"
+  ],
+  "0x3D88347C": [
+   "bone_wheel_l_y2f3t5"
+  ],
+  "0x3DC72E35": [
+   "bone_pitch_turret_vgfef1"
+  ],
+  "0x3DD9861F": [
+   "slice1b_propattach10_dyrp10"
+  ],
+  "0x3E57FC00": [
+   "hp_dock_bc60a4"
+  ],
+  "0x3EA9C429": [
+   "bone_5i6ay9"
+  ],
+  "0x3ED13025": [
+   "piece1a_propattach01_qv6te3"
+  ],
+  "0x3F950395": [
+   "bone_wheel_l_y2f3t0"
+  ],
+  "0x3FA7A5EB": [
+   "variable_q0epm7_pristine"
+  ],
+  "0x400A64E8": [
+   "hp_ruin_vux561"
+  ],
+  "0x402ECFB2": [
+   "bone_hatch_hab558"
+  ],
+  "0x41233D59": [
+   "civ_veh_car_qf0801"
+  ],
+  "0x41644595": [
+   "piece1e_cu8oo9"
+  ],
+  "0x416B3763": [
+   "al_veh_plane_a10_oilcon_u4"
+  ],
+  "0x418117A8": [
+   "vzoutpost_bld_helipad_drhy00"
+  ],
+  "0x420C59DE": [
+   "oc_veh_semi_austin_8vpz02"
+  ],
+  "0x425E6E6C": [
+   "slice1a_xt7601"
+  ],
+  "0x42667CE6": [
+   "proutpost_fueltanks_pice_01_info_a2"
+  ],
+  "0x426C2895": [
+   "industrial_bld_0pf8o4"
+  ],
+  "0x4275D304": [
+   "piece1a_qduv8"
+  ],
+  "0x42C577E1": [
+   "slice1a_propattach00_5uy8l1"
+  ],
+  "0x42D80B16": [
+   "commercial_bld_kkb2a4"
+  ],
+  "0x4329FD0A": [
+   "hp_snap_piece1B_yf8j4"
+  ],
+  "0x43744EDB": [
+   "vzoutpost_bld_helipad_drhy07"
+  ],
+  "0x437F75D6": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod4"
+  ],
+  "0x43E3FA2A": [
+   "slice1c_q9ktu2"
+  ],
+  "0x44877F6E": [
+   "slice1a_4bhaa0"
+  ],
+  "0x456841D5": [
+   "ocoutpost_bld_ve56p4"
+  ],
+  "0x4598BC15": [
+   "merida_bld_hotel_railing_d2"
+  ],
+  "0x45B8631D": [
+   "hp_barreltip_archer_fbheu9"
+  ],
+  "0x4608C307": [
+   "slice1a_k7sd59"
+  ],
+  "0x479D9E62": [
+   "hp_fx_artmq0"
+  ],
+  "0x47B29F54": [
+   "jungle_env_7ofbk6"
+  ],
+  "0x47C2908A": [
+   "bone_hatch_fwanc0"
+  ],
+  "0x47FCB404": [
+   "floor02.piece1b_pk60c4_pristine"
+  ],
+  "0x483B96DB": [
+   "civ_veh_car_ag9a66"
+  ],
+  "0x48D3C604": [
+   "bone_hatch_vi4l93"
+  ],
+  "0x48D84332": [
+   "bone_hatch_vi4l95"
+  ],
+  "0x4A0B1C4F": [
+   "white_o24624_pristine"
+  ],
+  "0x4A476473": [
+   "slice2b_propattach10_25xu90"
+  ],
+  "0x4A8CBB0E": [
+   "bone_hub_on7di9"
+  ],
+  "0x4BC46491": [
+   "village_bld_farming03_wall01_5dcw07"
+  ],
+  "0x4C3E5DFE": [
+   "hp_ny0vn1"
+  ],
+  "0x4C42385B": [
+   "bone_hub_legl1"
+  ],
+  "0x4CE4F862": [
+   "d1_bamboo_j20"
+  ],
+  "0x4D0723BE": [
+   "bone_fazeu3"
+  ],
+  "0x4D29B600": [
+   "hp_ladder_bottom_dyd7f5"
+  ],
+  "0x4D36D68B": [
+   "margarita_bld_club01_roof_nhz43"
+  ],
+  "0x4D3B53B9": [
+   "margarita_bld_club01_roof_nhz41"
+  ],
+  "0x4DA8B9CB": [
+   "industrial_bld_h2q934"
+  ],
+  "0x4E6F5D5C": [
+   "caracas_bld_theater01_pile_fis5h4"
+  ],
+  "0x4E8A5CA3": [
+   "global_env_banner_pn2w04"
+  ],
+  "0x4E9DD439": [
+   "al_veh_boat_rq8408"
+  ],
+  "0x4EBED574": [
+   "oilrig_details_01_ia_6w85j0"
+  ],
+  "0x4EC352A2": [
+   "oilrig_details_01_ia_6w85j6"
+  ],
+  "0x4F038C58": [
+   "white_o24625_pristine"
+  ],
+  "0x500A631C": [
+   "gr_veh_truck_3bkbe6"
+  ],
+  "0x51924120": [
+   "hp_fx_wye86"
+  ],
+  "0x51C22F6C": [
+   "village_bld_farming03_wall01_5dcw06"
+  ],
+  "0x51E0F7F7": [
+   "hp_ladder_qvxyr6"
+  ],
+  "0x5225EFB1": [
+   "bone_hub_legr1"
+  ],
+  "0x5285083A": [
+   "slice1a_propattach00_kkl25"
+  ],
+  "0x529144D4": [
+   "civ_veh_car_pony_08ppk1"
+  ],
+  "0x52C337B3": [
+   "slice2a_fnof12"
+  ],
+  "0x52E5C57D": [
+   "slice2n_e3i4g3"
+  ],
+  "0x535F3F71": [
+   "hp_ny0vn1_pristine"
+  ],
+  "0x537B6E26": [
+   "slice1b_propattach01_98z125"
+  ],
+  "0x5382B35E": [
+   "slice1a_propattach03_52jsl6"
+  ],
+  "0x53B9BD65": [
+   "proutpost_bld_shacksmall3"
+  ],
+  "0x54603399": [
+   "al_veh_plane_a10_atgm_pp6"
+  ],
+  "0x5465446B": [
+   "aloutpost_bld_garage01_door_boothrental_a21"
+  ],
+  "0x549E13ED": [
+   "civ_veh_car_pony_08ppk4"
+  ],
+  "0x5525456A": [
+   "hp_ladder_bottom_dyd7f7"
+  ],
+  "0x55D66343": [
+   "hp_ny0vn3_pristine"
+  ],
+  "0x564FB6DD": [
+   "hp_ny0vn6"
+  ],
+  "0x566CC50C": [
+   "pmc_veh_car_68valiant_xnoj04"
+  ],
+  "0x56C4ACA7": [
+   "piece1b_7mxza9"
+  ],
+  "0x57187C9D": [
+   "bone_fazeu4"
+  ],
+  "0x57744DB8": [
+   "slice1a_propattach00_s2bk18"
+  ],
+  "0x578FB271": [
+   "hp_fx_csixu6"
+  ],
+  "0x58799425": [
+   "pmc_veh_car_68valiant_xnoj01"
+  ],
+  "0x58BA9E52": [
+   "aloutpost_bld_garage01_door_boothrental_a6"
+  ],
+  "0x59258C6B": [
+   "bone_hub_4b2k46"
+  ],
+  "0x597D284E": [
+   "bone_front_ze2016"
+  ],
+  "0x5A4041C1": [
+   "bone_hatch_hab557"
+  ],
+  "0x5ABB0312": [
+   "bone_hub_l71t26"
+  ],
+  "0x5B767830": [
+   "hp_dock_byyqy2"
+  ],
+  "0x5B873D24": [
+   "slice1a_propattach03_52jsl4"
+  ],
+  "0x5BB64728": [
+   "hp_barreltip_archer_fbheu8"
+  ],
+  "0x5BD776C2": [
+   "slice1b_propattach10_dyrp11"
+  ],
+  "0x5BEAFE7A": [
+   "slice1b_propattach10_dyrp19"
+  ],
+  "0x5C783A89": [
+   "piece1a_qduv9"
+  ],
+  "0x5CB95037": [
+   "hp_ny0vn1_ruin"
+  ],
+  "0x5D27E761": [
+   "bone_hatch_wffbe2"
+  ],
+  "0x5EA92CD4": [
+   "piece1a_propattach11_y8cfv9"
+  ],
+  "0x5F4C013B": [
+   "bone_hub_97orl5_pristine"
+  ],
+  "0x618A23C5": [
+   "slice1a_propattach00_s2bk11"
+  ],
+  "0x6195816E": [
+   "hp_fx_2i3878"
+  ],
+  "0x62D62D89": [
+   "bone_hatch_vi4l92"
+  ],
+  "0x62E0B4AB": [
+   "floor01.slice1d_fup0e5"
+  ],
+  "0x631F49E6": [
+   "piece1b_9evyz6"
+  ],
+  "0x634F1F65": [
+   "pmcoutpost_interior_recruitheli"
+  ],
+  "0x640ECDFB": [
+   "oc_veh_semi_austin_8vpz03"
+  ],
+  "0x64134B29": [
+   "oc_veh_semi_austin_8vpz01"
+  ],
+  "0x6468F103": [
+   "proutpost_fueltanks_pice_01_info_a3"
+  ],
+  "0x652C7127": [
+   "hp_snap_piece1B_yf8j5"
+  ],
+  "0x65835506": [
+   "civ_veh_boat_saltonsea_y7pq05"
+  ],
+  "0x65C7A007": [
+   "hp_barreltip_archer_fbheu3"
+  ],
+  "0x65EAEB75": [
+   "slice1c_q9ktu1"
+  ],
+  "0x66ACC70F": [
+   "vzoutpost_bld_agp406"
+  ],
+  "0x685A7CB5": [
+   "hp_dock_bc60a5"
+  ],
+  "0x69A07096": [
+   "slice1a_propattach00_dcegm3"
+  ],
+  "0x69A6A47E": [
+   "floor01.slice1d_gamz7"
+  ],
+  "0x69C504A7": [
+   "bone_hatch_fwanc1"
+  ],
+  "0x6A7EF980": [
+   "bone_hub_legr"
+  ],
+  "0x6ADAB74F": [
+   "bone_hatch_vi4l94"
+  ],
+  "0x6B2CA7D8": [
+   "vzoutpost_bld_er4o9"
+  ],
+  "0x6C4D9AE8": [
+   "hp_ny0vn7"
+  ],
+  "0x6CD2B188": [
+   "bone_hatch_7ebi57"
+  ],
+  "0x6D2C2597": [
+   "piece1b_9evyz3"
+  ],
+  "0x6D3976F1": [
+   "vzoutpost_bld_er4o4"
+  ],
+  "0x6D87DECC": [
+   "civ_veh_boat_saltonsea_y7pq07"
+  ],
+  "0x6E40D21B": [
+   "hp_ny0vn0"
+  ],
+  "0x6E4B99A0": [
+   "hp_ladder_bottom_6ate83"
+  ],
+  "0x6E55301F": [
+   "hp_ny0vn7_pristine"
+  ],
+  "0x6EB2F772": [
+   "slice1a_propattach00_96f3m4"
+  ],
+  "0x6EEFA921": [
+   "oilrig_details_01_ia_gt95d0"
+  ],
+  "0x6F0997DB": [
+   "bone_fazeu2"
+  ],
+  "0x6F94ADE5": [
+   "civ_veh_boat_saltonsea_y7pq02"
+  ],
+  "0x6FDEE89A": [
+   "hp_ladder_qvxyr7"
+  ],
+  "0x6FEA5D84": [
+   "slice1d_o6mhj3"
+  ],
+  "0x70276CAC": [
+   "bone_647iw5"
+  ],
+  "0x7049DEDC": [
+   "slice2b_propattach10_25xu93"
+  ],
+  "0x70B36302": [
+   "floor02.piece1b_pk60c4_ruin"
+  ],
+  "0x71C6DEFA": [
+   "village_bld_farming03_wall01_5dcw00"
+  ],
+  "0x722BA7D1": [
+   "slice1a_propattach00_ujzd65"
+  ],
+  "0x734B6DAA": [
+   "slice1d_ucvdh1"
+  ],
+  "0x73AB3434": [
+   "industrial_bld_h2q937"
+  ],
+  "0x746EF4CA": [
+   "bone_hub_o0s9s8"
+  ],
+  "0x749BD174": [
+   "al_veh_boat_rq8409"
+  ],
+  "0x74EEA3D2": [
+   "piece1a_9aexd1"
+  ],
+  "0x750A4CAD": [
+   "hp_barreltip_missileR_8tke4"
+  ],
+  "0x7589A4A9": [
+   "slice1a_propattach03_52jsl5"
+  ],
+  "0x7601FD0A": [
+   "global_billboard_buy6c6"
+  ],
+  "0x770F6359": [
+   "bone_rearwing_uxy4l5"
+  ],
+  "0x77237D0E": [
+   "bone_hub_4b2k47"
+  ],
+  "0x7727B987": [
+   "hp_ladder_bottom_dyd7f6"
+  ],
+  "0x772C36B5": [
+   "hp_ladder_bottom_dyd7f4"
+  ],
+  "0x778807D0": [
+   "slice1a_propattach00_s2bk10"
+  ],
+  "0x778F1D95": [
+   "variable_q0epm7_ruin"
+  ],
+  "0x788C3B6A": [
+   "caracas_bld_theater01_pile_xx7"
+  ],
+  "0x78E763A4": [
+   "floor02.piece1c_u2bo02"
+  ],
+  "0x78F472FF": [
+   "jungle_env_tdz9i2"
+  ],
+  "0x791DF465": [
+   "aloutpost_bld_garage01_door_boothrental_cr4c86"
+  ],
+  "0x79834A37": [
+   "oleobj_s_oes8l7"
+  ],
+  "0x79EAF42B": [
+   "floor01.slice2c_j0smy2"
+  ],
+  "0x7A62AE02": [
+   "al_veh_plane_a10_atgm_pp1"
+  ],
+  "0x7A7F729D": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_nuj9e6"
+  ],
+  "0x7ABD126F": [
+   "aloutpost_bld_garage01_door_boothrental_a7"
+  ],
+  "0x7AC8FE19": [
+   "oilrig_att_pipes_flatbed_a7"
+  ],
+  "0x7B5B4438": [
+   "gr_att_starter1_role_374p5"
+  ],
+  "0x7C7F44E0": [
+   "proutpost_docka_bw0p2"
+  ],
+  "0x7C82F4B2": [
+   "village_bld_farming03_gyxbb7"
+  ],
+  "0x7E42B9D1": [
+   "bone_hatch_mnae16"
+  ],
+  "0x7F13ED1F": [
+   "bone_rearwing_uxy4l3"
+  ],
+  "0x7F8050BE": [
+   "global_billboard_useb8"
+  ],
+  "0x7FA2E300": [
+   "global_billboard_useb6"
+  ],
+  "0x7FE2C591": [
+   "ch_veh_ijxnj3"
+  ],
+  "0x804425B3": [
+   "groutpost_interior_job"
+  ],
+  "0x80B0F712": [
+   "floor01.slice1d_k9mau5"
+  ],
+  "0x80DEA54E": [
+   "floor01.slice1d_fup0e4"
+  ],
+  "0x80E5FFF6": [
+   "slice1a_propattach00_zldob0"
+  ],
+  "0x8152A918": [
+   "global_env_rockjungle03"
+  ],
+  "0x8176CE6D": [
+   "slice1a_propattach00_s2bk19"
+  ],
+  "0x82539AC4": [
+   "village_bld_plantationsmall03_wall_xud32v2_pristine"
+  ],
+  "0x82CD87DF": [
+   "oilrig_att_pipes_flatbed_a1"
+  ],
+  "0x8316C5ED": [
+   "piece1e_uf655"
+  ],
+  "0x831D36CB": [
+   "floor01.slice2c_h6wyi2"
+  ],
+  "0x8321B3F9": [
+   "floor01.slice2c_h6wyi0"
+  ],
+  "0x83E378B1": [
+   "village_bld_house02_roof01_69jd6"
+  ],
+  "0x844084AC": [
+   "bone_hatch_mnae17"
+  ],
+  "0x84FDD93A": [
+   "bone_amcrr49_left"
+  ],
+  "0x86D7CF92": [
+   "pmcoutpost_interior_recruitjet"
+  ],
+  "0x870DBD92": [
+   "bone_hatch_a6ozk6"
+  ],
+  "0x875736ED": [
+   "bone_hub_u0p5t1"
+  ],
+  "0x879E726A": [
+   "global_billboard_useb4"
+  ],
+  "0x87F15893": [
+   "city_bld_storefrontd_o1u_d"
+  ],
+  "0x880FBBB3": [
+   "hp_barreltip_e00ph6"
+  ],
+  "0x88B0E1C9": [
+   "slice1a_propattach00_96f3m3"
+  ],
+  "0x88E32F14": [
+   "floor01.slice1d_fup0e6"
+  ],
+  "0x8A693966": [
+   "hp_fx_d5o726"
+  ],
+  "0x8A76A3DF": [
+   "piece1a_iaham1"
+  ],
+  "0x8AEFFE2D": [
+   "floor01.slice1d_fup0e3"
+  ],
+  "0x8BE80277": [
+   "village_bld_house02_roof01_69jd0"
+  ],
+  "0x8CFF04DF": [
+   "piece1b_efbu06"
+  ],
+  "0x8D37B82B": [
+   "piece2a_7ozyr1"
+  ],
+  "0x8DBC70EE": [
+   "bone_front_cstok0"
+  ],
+  "0x8DFE1C24": [
+   "groutpost_mine_road10_0wj46"
+  ],
+  "0x8EBB4DFE": [
+   "piece1m_g2sa87"
+  ],
+  "0x8EE7C9AE": [
+   "jungle_env_tdz9i7"
+  ],
+  "0x8F6866C6": [
+   "bone_hatch_gpboq2"
+  ],
+  "0x8F85AB70": [
+   "oleobj_s_oes8l4"
+  ],
+  "0x8FE00A16": [
+   "slice1a_propattach00_2wvn95"
+  ],
+  "0x8FFFE761": [
+   "global_billboard_buy6c1"
+  ],
+  "0x907D56A8": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_nuj9e7"
+  ],
+  "0x9081D3D6": [
+   "caracas_bld_theater01_pile_xx3"
+  ],
+  "0x90E62080": [
+   "bone_hatch_c8wd61"
+  ],
+  "0x9206BB04": [
+   "slice1a_zb3m42"
+  ],
+  "0x92E54DFB": [
+   "floor02.piece1c_u2bo01"
+  ],
+  "0x92E9CB29": [
+   "floor02.piece1c_u2bo03"
+  ],
+  "0x939F8A58": [
+   "hp_snap_f08nh3"
+  ],
+  "0x9442FB04": [
+   "jungle_env_7ofbj5"
+  ],
+  "0x94477832": [
+   "jungle_env_7ofbj3"
+  ],
+  "0x946415E5": [
+   "bone_hub_97orl5_ruin"
+  ],
+  "0x947A9245": [
+   "hp_fx_d5o721"
+  ],
+  "0x952F288D": [
+   "vzoutpost_bld_er4o8"
+  ],
+  "0x954DE1C7": [
+   "slice1d_ucvdh0"
+  ],
+  "0x95B8AE33": [
+   "bone_pitch_turret_vgfef7"
+  ],
+  "0x95C17B52": [
+   "oc_veh_fb7h3"
+  ],
+  "0x96414B3C": [
+   "hp_ladder_bottom_6ate87"
+  ],
+  "0x967168E7": [
+   "bone_hub_o0s9s9"
+  ],
+  "0x9680DF09": [
+   "village_bld_farming03_gyxbb0"
+  ],
+  "0x9690DAFC": [
+   "slice1d_kagl88"
+  ],
+  "0x96968F99": [
+   "piece3e_gae363"
+  ],
+  "0x96E7D17A": [
+   "al_veh_plane_a10_atgm_768q92"
+  ],
+  "0x97D1DAE8": [
+   "hp_dock_smokh2"
+  ],
+  "0x97E8E4CE": [
+   "floor01.slice2c_j0smy3"
+  ],
+  "0x98047127": [
+   "global_billboard_buy6c7"
+  ],
+  "0x984E1A55": [
+   "hp_ladder_bottom_6ate82"
+  ],
+  "0x985D90AC": [
+   "hp_fx_43txz0"
+  ],
+  "0x98CCA6DD": [
+   "piece1m_g2sa80"
+  ],
+  "0x98E1AFEA": [
+   "bone_hatch_c8wd63"
+  ],
+  "0x98F9228D": [
+   "jungle_env_tdz9i0"
+  ],
+  "0x99ACC803": [
+   "village_bld_plantationsmall03_wall_xud32v0"
+  ],
+  "0x99B1E3F1": [
+   "hp_seat_44o828"
+  ],
+  "0x9A8EAF87": [
+   "caracas_bld_theater01_pile_xx6"
+  ],
+  "0x9A932CB5": [
+   "caracas_bld_theater01_pile_xx4"
+  ],
+  "0x9A94C1BE": [
+   "al_veh_truck_k7k831"
+  ],
+  "0x9B4C6C0E": [
+   "gr_att_starter1_role_374p3"
+  ],
+  "0x9B633B8E": [
+   "slice1a_propattach00_d2f9a5"
+  ],
+  "0x9C162FCC": [
+   "civ_veh_boat_oopqe9"
+  ],
+  "0x9C706CB6": [
+   "proutpost_docka_bw0p4"
+  ],
+  "0x9D25657A": [
+   "hp_barreltip_h1np03"
+  ],
+  "0x9D8BCEB7": [
+   "slice5d_8o32u9"
+  ],
+  "0x9D8D48CA": [
+   "bone_wheel_l_y2f3t3"
+  ],
+  "0x9D9C8EA5": [
+   "bone_hub_4uxh73"
+  ],
+  "0x9DABF47D": [
+   "bone_stern_vx9ea9"
+  ],
+  "0x9DAC9F68": [
+   "gr_att_starter1_role_road07"
+  ],
+  "0x9E8568CF": [
+   "village_bld_farming03_gyxbb6"
+  ],
+  "0x9F1563EA": [
+   "slice1a_propattach00_kkl50"
+  ],
+  "0x9FA2A618": [
+   "hp_fx_artmq2"
+  ],
+  "0xA0646DCA": [
+   "industrial_bld_0pf8o7"
+  ],
+  "0xA0895008": [
+   "merida_bld_ifano4"
+  ],
+  "0xA0CB7882": [
+   "oilrig_att_pipes_flatbed_a0"
+  ],
+  "0xA143D0EE": [
+   "global_env_rockjungle05"
+  ],
+  "0xA1704BB1": [
+   "al_veh_plane_a10_oilcon_u6"
+  ],
+  "0xA1B56B99": [
+   "jungle_env_7ofbk7"
+  ],
+  "0xA1EA63B0": [
+   "village_bld_house02_roof01_69jd3"
+  ],
+  "0xA2B36B2F": [
+   "floor01.slice1d_k9mau4"
+  ],
+  "0xA32971FE": [
+   "slice1a_propattach00_zxxye7"
+  ],
+  "0xA360870A": [
+   "ocoutpost_bld_ve56p7"
+  ],
+  "0xA391014A": [
+   "merida_bld_hotel_railing_d1"
+  ],
+  "0xA3A12D3D": [
+   "hp_ny0vn5_pristine"
+  ],
+  "0xA445343A": [
+   "bone_hatch_mnae11"
+  ],
+  "0xA46E81A8": [
+   "hp_ny0vn6_pristine"
+  ],
+  "0xA4C3CE58": [
+   "bone_hatch_hab549"
+  ],
+  "0xA4DAE3F3": [
+   "commercial_bld_kkb2a5"
+  ],
+  "0xA5824EB3": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod5"
+  ],
+  "0xA678E240": [
+   "caracas_bld_theater01_pile_fis5h0"
+  ],
+  "0xA681C595": [
+   "proutpost_docka_bw0p3"
+  ],
+  "0xA68A584B": [
+   "slice1a_4bhaa1"
+  ],
+  "0xA68ED579": [
+   "slice2b_aog4d4"
+  ],
+  "0xA6C85A58": [
+   "oilrig_details_01_ia_6w85j4"
+  ],
+  "0xA7FC067B": [
+   "groutpost_mine_road10_0wj45"
+  ],
+  "0xA8007B44": [
+   "hp_ladder_f2igq8"
+  ],
+  "0xA80083A9": [
+   "groutpost_mine_road10_0wj47"
+  ],
+  "0xA804F872": [
+   "hp_ruin_vux563"
+  ],
+  "0xA813E800": [
+   "gr_veh_truck_3bkbe2"
+  ],
+  "0xA81CA584": [
+   "vzoutpost_fueltanks_nu63"
+  ],
+  "0xA8749482": [
+   "piece1a_iaham0"
+  ],
+  "0xA8881C3A": [
+   "piece1a_iaham8"
+  ],
+  "0xA8A84051": [
+   "bone_door_e8mjn0"
+  ],
+  "0xA8B128C1": [
+   "aloutpost_interior_herochair"
+  ],
+  "0xA8D52971": [
+   "oilrig_details_01_ia_6w85j9"
+  ],
+  "0xA92EB0EC": [
+   "hp_ny0vn2_pristine"
+  ],
+  "0xA9772E04": [
+   "vzoutpost_bld_helipad_drhy04"
+  ],
+  "0xA97BAB32": [
+   "vzoutpost_bld_helipad_drhy02"
+  ],
+  "0xA9A0E687": [
+   "global_billboard_useb5"
+  ],
+  "0xA9A563B5": [
+   "global_billboard_useb7"
+  ],
+  "0xA9E5F31A": [
+   "village_bld_house02_roof01_69jd1"
+  ],
+  "0xAA4DEC8B": [
+   "groutpost_interior_hq"
+  ],
+  "0xAA7B0566": [
+   "slice1a_propattach00_kkl21"
+  ],
+  "0xAA87212F": [
+   "merida_bld_ifano7"
+  ],
+  "0xAAFCF582": [
+   "piece1b_efbu07"
+  ],
+  "0xAB35A8CE": [
+   "piece2a_7ozyr0"
+  ],
+  "0xAB5529CD": [
+   "global_env_rockjungle02"
+  ],
+  "0xABEF6C71": [
+   "piece1b_propattach03_27i6f4"
+  ],
+  "0xACC772A0": [
+   "piece1b_propattach00_q29vm5"
+  ],
+  "0xAD5F0852": [
+   "hp_ny0vn0_pristine"
+  ],
+  "0xADC61E48": [
+   "oc_veh_fb7h1"
+  ],
+  "0xAE12361C": [
+   "hp_barreltip_e00ph5"
+  ],
+  "0xAE456289": [
+   "jungle_env_7ofbj4"
+  ],
+  "0xAE7471AA": [
+   "caracas_bld_theater01_pile_fis5h2"
+  ],
+  "0xAE7F16A4": [
+   "pr_veh_i0eky6"
+  ],
+  "0xAEE44824": [
+   "merida_bld_oilwellland"
+  ],
+  "0xAEE7D13F": [
+   "d1_bamboo_j21"
+  ],
+  "0xAF080566": [
+   "hp_fx_p3uwl0"
+  ],
+  "0xAF4B0DFE": [
+   "error_ds_exists_in_4uc892"
+  ],
+  "0xB00CD198": [
+   "civ_veh_car_1ub07"
+  ],
+  "0xB05871C0": [
+   "vz_hum_soldier_a_f_753"
+  ],
+  "0xB0C62B7F": [
+   "oilrig_details_01_ia_6w85j7"
+  ],
+  "0xB16ADAE3": [
+   "bone_hatch_gpboq3"
+  ],
+  "0xB3244EF1": [
+   "slice2c_hzgbu4"
+  ],
+  "0xB33A3294": [
+   "piece2a_7ozyr2"
+  ],
+  "0xB390B932": [
+   "piece1a_ijhtf7"
+  ],
+  "0xB3FCFB11": [
+   "bone_hub_97orl4"
+  ],
+  "0xB487E117": [
+   "slice1a_propattach00_kkl24"
+  ],
+  "0xB48C5E45": [
+   "slice1a_propattach00_kkl26"
+  ],
+  "0xB4989ADF": [
+   "civ_veh_car_pony_08ppk6"
+  ],
+  "0xB540B9BC": [
+   "margarita_bld_club01_ht2i80"
+  ],
+  "0xB5BD5DC1": [
+   "bone_pitch_turret_vgfef5"
+  ],
+  "0xB649EC4F": [
+   "jungle_env_7ofbj2"
+  ],
+  "0xB74D88D5": [
+   "margarita_bld_club01_ht2i85"
+  ],
+  "0xB78B3321": [
+   "bone_wheel_l_y2f3t4"
+  ],
+  "0xB7C3EF6F": [
+   "oc_veh_fb7h2"
+  ],
+  "0xB854012A": [
+   "vz_hum_soldier_a_f_751"
+  ],
+  "0xB8ABF919": [
+   "piece1a_propattach11_y8cfv8"
+  ],
+  "0xB93A6908": [
+   "bone_hub_qiy6c8"
+  ],
+  "0xB95C66DD": [
+   "error_ds_exists_in_4uc895"
+  ],
+  "0xB9FAC5EC": [
+   "bone_hub_97orl5"
+  ],
+  "0xBA591B26": [
+   "slice1a_xt7603"
+  ],
+  "0xBACC341B": [
+   "hp_dock_6j5kc2"
+  ],
+  "0xBAE42407": [
+   "bone_hatch_c8wd62"
+  ],
+  "0xBAE8A135": [
+   "bone_hatch_c8wd60"
+  ],
+  "0xBB0CA4DE": [
+   "hp_snap_piece1B_yf8j8"
+  ],
+  "0xBB28D8B7": [
+   "slice2c_hzgbu2"
+  ],
+  "0xBB2ABCCE": [
+   "white_o24627_pristine"
+  ],
+  "0xBB2F3720": [
+   "hp_snap_piece1B_yf8j6"
+  ],
+  "0xBB77CC12": [
+   "error_ds_exists_in_plastic_15"
+  ],
+  "0xBB847E59": [
+   "bone_front_ze2015"
+  ],
+  "0xBB89BF5A": [
+   "slice5d_8o32u8"
+  ],
+  "0xBBAAB636": [
+   "bullbar_horn_cage_l_pristine"
+  ],
+  "0xBC9735DB": [
+   "al_veh_truck_k7k830"
+  ],
+  "0xBCA0827E": [
+   "vzoutpost_bld_agp403"
+  ],
+  "0xBD226E53": [
+   "hp_snap_piece1B_yf8j1"
+  ],
+  "0xBD5E7161": [
+   "ocoutpost_bld_ve56p0"
+  ],
+  "0xBDA20B0D": [
+   "hp_snap_f08nh2"
+  ],
+  "0xBDEDD757": [
+   "slice1b_propattach10_dyrp18"
+  ],
+  "0xBF382B84": [
+   "bone_hub_97orl4_pristine"
+  ],
+  "0xBF407188": [
+   "hp_fx_0h0q44"
+  ],
+  "0xBF7736B0": [
+   "al_veh_plane_a10_oilcon_u3"
+  ],
+  "0xBF8FBCE7": [
+   "bone_wheel_l_y2f3t2"
+  ],
+  "0xBF93CDEE": [
+   "hp_fx_artmq4"
+  ],
+  "0xBFC7CAA0": [
+   "bone_hatch_fwanc2"
+  ],
+  "0xC04BFCB3": [
+   "hp_dock_bc60a3"
+  ],
+  "0xC0B082DF": [
+   "piece1a_i4s5r0"
+  ],
+  "0xC0BDEF76": [
+   "slice1a_propattach00_5uy8l2"
+  ],
+  "0xC15EFEE7": [
+   "aloutpost_bld_garage01_door_boothrental_f94vl1"
+  ],
+  "0xC202E2C9": [
+   "hp_ladder_f2igq9"
+  ],
+  "0xC21F0D09": [
+   "vzoutpost_fueltanks_nu62"
+  ],
+  "0xC3799589": [
+   "vzoutpost_bld_helipad_drhy05"
+  ],
+  "0xC382B87B": [
+   "village_bld_plantationsmall03_wall_xud32v3_pristine"
+  ],
+  "0xC3985A4B": [
+   "hp_fx_2i3879"
+  ],
+  "0xC4347091": [
+   "floor02.piece1b_pk60c4"
+  ],
+  "0xC46E0551": [
+   "proutpost_fueltanks_pice_01_info_a1"
+  ],
+  "0xC4DF9381": [
+   "slice2a_muqba8"
+  ],
+  "0xC52BE61B": [
+   "slice1a_propattach00_zxxye6"
+  ],
+  "0xC54735B8": [
+   "bone_wheel_rva768"
+  ],
+  "0xC562FB27": [
+   "ocoutpost_bld_ve56p6"
+  ],
+  "0xC5795DA5": [
+   "hp_dock_byyqy3"
+  ],
+  "0xC586FE41": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod7"
+  ],
+  "0xC5937567": [
+   "merida_bld_hotel_railing_d0"
+  ],
+  "0xC605994C": [
+   "slice1b_l5pid7"
+  ],
+  "0xC639B480": [
+   "village_bld_farming03_in1_kyb1a4"
+  ],
+  "0xC66A0A16": [
+   "caracas_bld_theater01_pile_fis5h6"
+  ],
+  "0xC6B1DB5D": [
+   "vzoutpost_bld_agp404"
+  ],
+  "0xC6B9822E": [
+   "oilrig_details_01_ia_6w85j2"
+  ],
+  "0xC8050FD6": [
+   "gr_veh_truck_3bkbe4"
+  ],
+  "0xC840DD89": [
+   "civ_veh_car_ag9a64"
+  ],
+  "0xC8817E29": [
+   "pr_veh_i0eky7"
+  ],
+  "0xC93E42AF": [
+   "hp_fx_0h0q47"
+  ],
+  "0xC9A526CD": [
+   "hp_fx_artmq3"
+  ],
+  "0xCA076C8F": [
+   "hp_ruin_vux562"
+  ],
+  "0xCA323B6C": [
+   "floor02.piece1b_pk60c5"
+  ],
+  "0xCA8A4250": [
+   "slice1a_propattach00_kkl27"
+  ],
+  "0xCADD5E5C": [
+   "slice2a_muqba9"
+  ],
+  "0xCADFCB9D": [
+   "bone_hatch_vi4l96"
+  ],
+  "0xCB4C6EAB": [
+   "outpost_bld_shack"
+  ],
+  "0xCB84C91C": [
+   "maracaiboruins_bld_govtbld_door01_ruin_dm_propattach0_ruin_lod6"
+  ],
+  "0xCC7D7983": [
+   "slice1a_propattach00_kkl20"
+  ],
+  "0xCC8CD2B4": [
+   "slice1a_4bhaa2"
+  ],
+  "0xCC965BF0": [
+   "global_env_banner_pn2w03"
+  ],
+  "0xCCC43E1E": [
+   "bone_hatch_7ebi51"
+  ],
+  "0xCCF6F8E0": [
+   "oilrig_details_01_ia_gt95d5"
+  ],
+  "0xCDED0E11": [
+   "spiel_job_o0jko9"
+  ],
+  "0xCE3543EA": [
+   "village_bld_farming03_in1_kyb1a6"
+  ],
+  "0xCE3F9A41": [
+   "hp_fx_nmcwa6"
+  ],
+  "0xCEA661F7": [
+   "hk_update_junglewall_roof00"
+  ],
+  "0xCEC64F0D": [
+   "bone_hatch_hab548"
+  ],
+  "0xCEEA3013": [
+   "oilrig_details_01_ia_gt95d2"
+  ],
+  "0xCF5A4AE8": [
+   "error_ds_exists_in_4uc894"
+  ],
+  "0xCFFDF96E": [
+   "civ_veh_car_1ub01"
+  ],
+  "0xD076E5C7": [
+   "caracas_bld_theater01_pile_fis5h3"
+  ],
+  "0xD07B62F5": [
+   "caracas_bld_theater01_pile_fis5h1"
+  ],
+  "0xD0CADB0D": [
+   "oilrig_details_01_ia_6w85j5"
+  ],
+  "0xD0CF3700": [
+   "slice2a_fnof15"
+  ],
+  "0xD0DE3D12": [
+   "slice2n_e3i4g0"
+  ],
+  "0xD12B39F0": [
+   "slice2c_hzgbu1"
+  ],
+  "0xD14D821B": [
+   "error_ds_exists_in_4uc893"
+  ],
+  "0xD1F1E6DA": [
+   "piece1b_propattach03_27i6f3"
+  ],
+  "0xD211EB87": [
+   "gr_veh_truck_3bkbe1"
+  ],
+  "0xD21668B5": [
+   "gr_veh_truck_3bkbe3"
+  ],
+  "0xD267B5B8": [
+   "al_veh_plane_a10_atgm_pp3"
+  ],
+  "0xD3C9B7D7": [
+   "village_bld_farming03_wall01_5dcw01"
+  ],
+  "0xD3EAD8EC": [
+   "spiel_job_o0jko8"
+  ],
+  "0xD43D651C": [
+   "hp_fx_nmcwa7"
+  ],
+  "0xD443B144": [
+   "hp_ny0vn3"
+  ],
+  "0xD4482E72": [
+   "chinaoutpost_bld_evrbc8"
+  ],
+  "0xD45AECEB": [
+   "al_veh_plane_a10_atgm_pp4"
+  ],
+  "0xD491EB5A": [
+   "global_env_banner_pn2w01"
+  ],
+  "0xD4C8C7E4": [
+   "bone_hatch_7ebi53"
+  ],
+  "0xD4CE4AB0": [
+   "piece1a_propattach01_qv6te2"
+  ],
+  "0xD50C7704": [
+   "hp_ladder_bottom_dyd7f9"
+  ],
+  "0xD510F432": [
+   "bone_fazeu7"
+  ],
+  "0xD582F691": [
+   "slice1b_propattach01_98z126"
+  ],
+  "0xD58DAF3B": [
+   "floor00.slice6q_propattach28_ruin_lod3"
+  ],
+  "0xD6C9F355": [
+   "piece1b_propattach00_q29vm4"
+  ],
+  "0xD6D596FD": [
+   "bone_hatch_7ebi56"
+  ],
+  "0xD8744D77": [
+   "pmc_veh_car_68valiant_xnoj03"
+  ],
+  "0xD926C95A": [
+   "slice2c_hzgbu3"
+  ],
+  "0xD92AD319": [
+   "bone_hub_4b2k44"
+  ],
+  "0xD98D070A": [
+   "hp_fx_wye84"
+  ],
+  "0xDA5AF275": [
+   "vz_hum_soldier_a_f_752"
+  ],
+  "0xDB205EF6": [
+   "bone_hatch_wffbe1"
+  ],
+  "0xDCAFBF68": [
+   "vzoutpost_bld_agp405"
+  ],
+  "0xDCC28B7D": [
+   "bone_hub_l71t25"
+  ],
+  "0xDCC9DA1A": [
+   "piece1a_propattach01_qv6te0"
+  ],
+  "0xDD0F18FB": [
+   "hp_snap_piece1B_yf8j9"
+  ],
+  "0xDD6A78E3": [
+   "hp_dock_byyqy5"
+  ],
+  "0xDD7A402F": [
+   "error_ds_exists_in_plastic_14"
+  ],
+  "0xDD8CB3CC": [
+   "hp_fx_csixu7"
+  ],
+  "0xDDDF0AFB": [
+   "vz_veh_apc_m113_39b502"
+  ],
+  "0xDDE0E298": [
+   "bone_attach_rod_3w1f23"
+  ],
+  "0xDEAE7382": [
+   "piece1a_i4s5r1"
+  ],
+  "0xDF1BE74E": [
+   "civ_veh_car_qf0802"
+  ],
+  "0xE2E5FB59": [
+   "floor01.slice1d_fup0e7"
+  ],
+  "0xE42C295A": [
+   "gr_veh_apc_m113_50cal"
+  ],
+  "0xE526D251": [
+   "piece1b_9evyz5"
+  ],
+  "0xE531B7D5": [
+   "hp_snap_piece1B_yf8j7"
+  ],
+  "0xE54C0113": [
+   "floor01.slice1d_m1dp10"
+  ],
+  "0xE57478EE": [
+   "outpost_bld_office1"
+  ],
+  "0xE5F6C122": [
+   "slice1b_l5pid9"
+  ],
+  "0xE6A926FE": [
+   "slice1a_propattach00_96f3m0"
+  ],
+  "0xE6C06173": [
+   "piece1a_t1uv1"
+  ],
+  "0xE7207114": [
+   "civ_veh_car_qf0800"
+  ],
+  "0xE78ADD71": [
+   "civ_veh_boat_saltonsea_y7pq06"
+  ],
+  "0xE7E50A3E": [
+   "slice1d_o6mhj1"
+  ],
+  "0xE81089BB": [
+   "floor02.piece1b_pk60c5_pristine"
+  ],
+  "0xE8448B96": [
+   "slice2b_propattach10_25xu91"
+  ],
+  "0xE8E2E008": [
+   "slice2n_e3i4g2"
+  ],
+  "0xE9CA4B55": [
+   "bone_hatch_fwanc3"
+  ],
+  "0xE9CC1910": [
+   "village_bld_farming03_wall01_5dcw02"
+  ],
+  "0xEAEA851F": [
+   "floor01.slice1d_fup0e1"
+  ],
+  "0xEB249D2C": [
+   "piece1b_9evyz4"
+  ],
+  "0xEB33FDAE": [
+   "margarita_bld_club01_roof_nhz42"
+  ],
+  "0xEBA5E0EE": [
+   "industrial_bld_h2q935"
+  ],
+  "0xEBA7F901": [
+   "slice1a_propattach00_dcegm0"
+  ],
+  "0xEBBF5043": [
+   "village_bld_farming03_wall01_5dcw05"
+  ],
+  "0xEC945A4B": [
+   "slice1a_propattach00_kkl220"
+  ],
+  "0xECE820B6": [
+   "oilrig_details_01_ia_gt95d3"
+  ],
+  "0xED1CE880": [
+   "piece1a_iahal9"
+  ],
+  "0xED43DEF3": [
+   "slice1d_ucvdh4"
+  ],
+  "0xEDADDF1E": [
+   "slice1a_propattach05_akdk47"
+  ],
+  "0xEE073720": [
+   "global_billboard_buy6c4"
+  ],
+  "0xEE4618C9": [
+   "hp_ny0vn2"
+  ],
+  "0xEEC6B23B": [
+   "bone_hatch_7ebi50"
+  ],
+  "0xEF0EDE89": [
+   "hp_ladder_bottom_dyd7f8"
+  ],
+  "0xEF49B66D": [
+   "bone_wheel_rva769"
+  ],
+  "0xEF773806": [
+   "bone_stern_oaidy1"
+  ],
+  "0xEF8F6737": [
+   "civ_veh_boat_saltonsea_y7pq00"
+  ],
+  "0xEFC3C6F9": [
+   "bone_front_cstok3"
+  ],
+  "0xEFC61A34": [
+   "hp_ladder_qvxyr9"
+  ],
+  "0xEFFA6E53": [
+   "global_billboard_buy6c3"
+  ],
+  "0xF0241F66": [
+   "slice1a_propattach00_ujzd66"
+  ],
+  "0xF03C3535": [
+   "village_bld_farming03_in1_kyb1a5"
+  ],
+  "0xF060B62C": [
+   "hp_ny0vn0_ruin"
+  ],
+  "0xF0BA7FDD": [
+   "slice1a_propattach00_96f3m7"
+  ],
+  "0xF0C05ED6": [
+   "slice2a_fnof13"
+  ],
+  "0xF0EDBF00": [
+   "slice2n_ierl0"
+  ],
+  "0xF0EF1FB9": [
+   "jungle_env_tdz9i4"
+  ],
+  "0xF0FD328A": [
+   "civ_veh_hw2209"
+  ],
+  "0xF258DD8E": [
+   "al_veh_plane_a10_atgm_pp5"
+  ],
+  "0xF284ACB3": [
+   "caracas_bld_theater01_pile_xx2"
+  ],
+  "0xF2E0B12F": [
+   "slice2n_e3i4g1"
+  ],
+  "0xF302C442": [
+   "hp_barreltip_missileR_8tke7"
+  ],
+  "0xF479243E": [
+   "village_bld_farming03_gyxbb3"
+  ],
+  "0xF4ECAA7C": [
+   "oilrig_details_01_ia_gt95d1"
+  ],
+  "0xF516E578": [
+   "hp_barreltip_h1np09"
+  ],
+  "0xF520311C": [
+   "hp_ladder_bottom_dyd7f1"
+  ],
+  "0xF5B268E4": [
+   "slice1a_propattach05_akdk45"
+  ],
+  "0xF6465F8A": [
+   "hp_fx_u0cag9"
+  ],
+  "0xF64AA28F": [
+   "chinaoutpost_bld_evrbc9"
+  ],
+  "0xF6723E1A": [
+   "pmc_veh_car_68valiant_xnoj02"
+  ],
+  "0xF6B91665": [
+   "floor02.piece1b_pk60c5_ruin"
+  ],
+  "0xF6F97995": [
+   "oilrig_details_01_ia_gt95d4"
+  ],
+  "0xF70A1CAB": [
+   "bone_rearwing_uxy4l7"
+  ],
+  "0xF70BAF1D": [
+   "piece1a_iahal0"
+  ],
+  "0xF713684F": [
+   "bone_fazeu6"
+  ],
+  "0xF78A9E23": [
+   "hp_fx_csixu4"
+  ],
+  "0xF8D08038": [
+   "oilrig_att_pipes_flatbed_a2"
+  ],
+  "0xF8E94E6A": [
+   "slice2n_ierl2"
+  ],
+  "0xF8EAAA57": [
+   "al_veh_plane_a10_atgm_768q93"
+  ],
+  "0xF98890E5": [
+   "oleobj_s_oes8l5"
+  ],
+  "0xF9B1DC51": [
+   "village_bld_plantationsmall03_wall_xud32v2"
+  ],
+  "0xFA03C291": [
+   "floor01.slice2c_j0smy8"
+  ],
+  "0xFA0F5626": [
+   "variable_q0epm0_pristine"
+  ],
+  "0xFA5D6754": [
+   "al_veh_plane_a10_atgm_pp7"
+  ],
+  "0xFAC3B76B": [
+   "oilrig_att_pipes_flatbed_a5"
+  ],
+  "0xFACD3A87": [
+   "slice2a_fnof16"
+  ],
+  "0xFAD1B7B5": [
+   "slice2a_fnof14"
+  ],
+  "0xFB8F7B27": [
+   "hp_fx_wye85"
+  ],
+  "0xFC6A366D": [
+   "al_veh_plane_a10_atgm_pp2"
+  ],
+  "0xFD53C219": [
+   "gr_att_starter1_role_374p0"
+  ],
+  "0xFD6A9199": [
+   "slice1a_propattach00_d2f9a6"
+  ],
+  "0xFDDB3D26": [
+   "ch_veh_ijxnj0"
+  ],
+  "0xFFAFA72C": [
+   "village_bld_plantationsmall03_wall_xud32v3"
+  ]
+ }
+}

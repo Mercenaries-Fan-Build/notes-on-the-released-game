@@ -1,0 +1,34 @@
+{
+ "pandemic_hash_m2": {
+  "0xCBEE790F": [
+   "hpjiie_mount_fl_a"
+  ],
+  "0x2AA96F4D": [
+   "hpjiie_mount_fr_a"
+  ],
+  "0x41F17168": [
+   "hpjiie_mount_fl_b"
+  ],
+  "0xA8A1E6E2": [
+   "hpjiie_mount_fr_b"
+  ],
+  "0x4632394C": [
+   "bone_susp_rl"
+  ],
+  "0x45FC1F52": [
+   "bone_susp_rr"
+  ],
+  "0x713CB7E9": [
+   "bone_rod_fl_b"
+  ],
+  "0x9777DE93": [
+   "bone_rod_fr_b"
+  ],
+  "0x5FC65AC5": [
+   "bone_rod_rl_b"
+  ],
+  "0x5E057167": [
+   "bone_rod_rr_b"
+  ]
+ }
+}

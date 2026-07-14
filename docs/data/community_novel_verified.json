@@ -1,0 +1,277 @@
+{
+ "pandemic_hash_m2": {
+  "0x0B4C79B4": [
+   "aloutpost_bld_alarmtower_pristine_lod_propattach6"
+  ],
+  "0x10090795": [
+   "pmcoutpost_column_noreflection"
+  ],
+  "0x19676216": [
+   "proutpost_bld_hq_ruin_lod.propattach07_ruin_lod1"
+  ],
+  "0x27C46DD1": [
+   "pmcoutpost_column_noreflection_large"
+  ],
+  "0x36550AFF": [
+   "bone_fin_9ju7ee"
+  ],
+  "0x3F4FA6DF": [
+   "maracaibo_bridge_segmenta"
+  ],
+  "0x4EDB4F80": [
+   "port_crane02"
+  ],
+  "0x78D95307": [
+   "port_crane01"
+  ],
+  "0x7ACB426D": [
+   "outskirt_chickenfencelong"
+  ],
+  "0xB5529F38": [
+   "maracaibo_bridge_segmentb"
+  ],
+  "0xBEC05BF8": [
+   "ocoutpost_exterior_job"
+  ],
+  "0xE55C541A": [
+   "global_stain08"
+  ],
+  "0xFC881305": [
+   "commercial_wallcorner"
+  ],
+  "0x0346A9CB": [
+   "global_env_rockjungle04"
+  ],
+  "0x034B26F9": [
+   "global_env_rockjungle06"
+  ],
+  "0x06B863E8": [
+   "slice1a_propattach00_96f3m6"
+  ],
+  "0x0CC2DBDC": [
+   "piece1a_t1uv2"
+  ],
+  "0x0FB0533B": [
+   "slice1a_propattach05_akdk46"
+  ],
+  "0x0FB4D069": [
+   "slice1a_propattach05_akdk44"
+  ],
+  "0x1AEBC287": [
+   "slice2n_ierl3"
+  ],
+  "0x1AF03FB5": [
+   "slice2n_ierl1"
+  ],
+  "0x294DA162": [
+   "global_env_rockjungle01"
+  ],
+  "0x2B2EC544": [
+   "slice1a_propattach00_zxxye5"
+  ],
+  "0x2C03DBDB": [
+   "slice1a_zb3m41"
+  ],
+  "0x3368DD58": [
+   "vz_veh_boat_type4_hull02_sm"
+  ],
+  "0x3598419D": [
+   "piece1a_ijhtf4"
+  ],
+  "0x38A6B26B": [
+   "piece1a_i4s5r4"
+  ],
+  "0x3BE86AC0": [
+   "slice1c_q9ktu0"
+  ],
+  "0x3DD9861F": [
+   "slice1b_propattach10_dyrp10"
+  ],
+  "0x3ED13025": [
+   "piece1a_propattach01_qv6te3"
+  ],
+  "0x4275D304": [
+   "piece1a_qduv8"
+  ],
+  "0x42C577E1": [
+   "slice1a_propattach00_5uy8l1"
+  ],
+  "0x43E3FA2A": [
+   "slice1c_q9ktu2"
+  ],
+  "0x4598BC15": [
+   "merida_bld_hotel_railing_d2"
+  ],
+  "0x47A8E523": [
+   "commercial_wallbeachshort"
+  ],
+  "0x4A476473": [
+   "slice2b_propattach10_25xu90"
+  ],
+  "0x5382B35E": [
+   "slice1a_propattach03_52jsl6"
+  ],
+  "0x53B9BD65": [
+   "proutpost_bld_shacksmall3"
+  ],
+  "0x56451E9E": [
+   "maracaibo_wall06m"
+  ],
+  "0x5BD776C2": [
+   "slice1b_propattach10_dyrp11"
+  ],
+  "0x5BEAFE7A": [
+   "slice1b_propattach10_dyrp19"
+  ],
+  "0x5C783A89": [
+   "piece1a_qduv9"
+  ],
+  "0x5EA92CD4": [
+   "piece1a_propattach11_y8cfv9"
+  ],
+  "0x634F1F65": [
+   "pmcoutpost_interior_recruitheli"
+  ],
+  "0x65EAEB75": [
+   "slice1c_q9ktu1"
+  ],
+  "0x6EB2F772": [
+   "slice1a_propattach00_96f3m4"
+  ],
+  "0x7049DEDC": [
+   "slice2b_propattach10_25xu93"
+  ],
+  "0x74EEA3D2": [
+   "piece1a_9aexd1"
+  ],
+  "0x7589A4A9": [
+   "slice1a_propattach03_52jsl5"
+  ],
+  "0x79C16DBD": [
+   "ocoutpost_wallcorner"
+  ],
+  "0x7C7F44E0": [
+   "proutpost_docka_bw0p2"
+  ],
+  "0x804425B3": [
+   "groutpost_interior_job"
+  ],
+  "0x8152A918": [
+   "global_env_rockjungle03"
+  ],
+  "0x86D7CF92": [
+   "pmcoutpost_interior_recruitjet"
+  ],
+  "0x88B0E1C9": [
+   "slice1a_propattach00_96f3m3"
+  ],
+  "0x9206BB04": [
+   "slice1a_zb3m42"
+  ],
+  "0x9C706CB6": [
+   "proutpost_docka_bw0p4"
+  ],
+  "0xA143D0EE": [
+   "global_env_rockjungle05"
+  ],
+  "0xA391014A": [
+   "merida_bld_hotel_railing_d1"
+  ],
+  "0xA681C595": [
+   "proutpost_docka_bw0p3"
+  ],
+  "0xA8B128C1": [
+   "aloutpost_interior_herochair"
+  ],
+  "0xAA4DEC8B": [
+   "groutpost_interior_hq"
+  ],
+  "0xAB5529CD": [
+   "global_env_rockjungle02"
+  ],
+  "0xABEF6C71": [
+   "piece1b_propattach03_27i6f4"
+  ],
+  "0xAEE44824": [
+   "merida_bld_oilwellland"
+  ],
+  "0xB390B932": [
+   "piece1a_ijhtf7"
+  ],
+  "0xB8ABF919": [
+   "piece1a_propattach11_y8cfv8"
+  ],
+  "0xBDEDD757": [
+   "slice1b_propattach10_dyrp18"
+  ],
+  "0xC0B082DF": [
+   "piece1a_i4s5r0"
+  ],
+  "0xC0BDEF76": [
+   "slice1a_propattach00_5uy8l2"
+  ],
+  "0xC26DC525": [
+   "maracaibo_wall10m"
+  ],
+  "0xC5937567": [
+   "merida_bld_hotel_railing_d0"
+  ],
+  "0xC605994C": [
+   "slice1b_l5pid7"
+  ],
+  "0xCB4C6EAB": [
+   "outpost_bld_shack"
+  ],
+  "0xD1F1E6DA": [
+   "piece1b_propattach03_27i6f3"
+  ],
+  "0xD4CE4AB0": [
+   "piece1a_propattach01_qv6te2"
+  ],
+  "0xDCC9DA1A": [
+   "piece1a_propattach01_qv6te0"
+  ],
+  "0xDDDF0AFB": [
+   "vz_veh_apc_m113_39b502"
+  ],
+  "0xDEAE7382": [
+   "piece1a_i4s5r1"
+  ],
+  "0xE42C295A": [
+   "gr_veh_apc_m113_50cal"
+  ],
+  "0xE57478EE": [
+   "outpost_bld_office1"
+  ],
+  "0xE5F6C122": [
+   "slice1b_l5pid9"
+  ],
+  "0xE6A926FE": [
+   "slice1a_propattach00_96f3m0"
+  ],
+  "0xE6C06173": [
+   "piece1a_t1uv1"
+  ],
+  "0xE8448B96": [
+   "slice2b_propattach10_25xu91"
+  ],
+  "0xEDADDF1E": [
+   "slice1a_propattach05_akdk47"
+  ],
+  "0xF0BA7FDD": [
+   "slice1a_propattach00_96f3m7"
+  ],
+  "0xF0EDBF00": [
+   "slice2n_ierl0"
+  ],
+  "0xF5B268E4": [
+   "slice1a_propattach05_akdk45"
+  ],
+  "0xF8E94E6A": [
+   "slice2n_ierl2"
+  ],
+  "0xFFC77243": [
+   "global_soccergoal"
+  ]
+ }
+}

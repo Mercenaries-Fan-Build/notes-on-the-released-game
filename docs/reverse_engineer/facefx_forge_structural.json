@@ -1,0 +1,26 @@
+{
+  "_comment": "Block B - structural/control/accessory bones for the 8 non-FaceFX head/jaw targets (tracks 25,26,28-33). Zero hits at expected-false 0.001 this session. See naming_dialect_facefx.md sections 3 and 5.",
+  "arrays": {
+    "prefix": ["bone", "bone_attach", "hp", "hp_fx"],
+    "feature": [
+      "head", "face", "jaw", "mouth", "teeth", "tooth", "tongue", "chin", "lip", "gum",
+      "cheek", "ear", "eye", "temple", "mask", "cigar", "hat", "glasses", "headset",
+      "condyle", "hinge", "pivot", "aim", "look", "gaze", "root", "base", "nub", "end"
+    ],
+    "mod": ["", "base", "root", "top", "bottom", "upper", "lower", "front", "back", "mid", "aim", "end", "01", "02", "a", "b", "1", "2"],
+    "side": ["", "left", "right", "l", "r"]
+  },
+  "slot_orders": [
+    ["prefix", "feature", "mod", "side"],
+    ["prefix", "feature", "side", "mod"],
+    ["prefix", "mod", "feature", "side"],
+    ["prefix", "feature", "mod"],
+    ["prefix", "feature"]
+  ],
+  "templates": [
+    "bone_facefx", "bone_facial", "bone_faceroot", "bone_facebase", "bone_mouthbase",
+    "bone_jawbase", "bone_headbase", "bone_maskbase", "bone_headnub", "bone_headend",
+    "bone_tonguebase", "bone_tonguemid", "bone_tongueback", "bone_tongueroot",
+    "bone_teethupper", "bone_teethlower", "bone_eyeaim", "bone_look", "bone_gaze"
+  ]
+}

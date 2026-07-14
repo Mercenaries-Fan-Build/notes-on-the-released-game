@@ -1,0 +1,532 @@
+{
+ "pandemic_hash_m2": {
+  "0x9BFC81FB": [
+   "hp_fx_leaves_green_g"
+  ],
+  "0x1741E5C1": [
+   "slice3b_interior"
+  ],
+  "0x5F249AB5": [
+   "slice5d_interior"
+  ],
+  "0x2B259EB0": [
+   "hp_fx_leaves_palm_a"
+  ],
+  "0x20E17528": [
+   "slice2k_propattach00_ruin"
+  ],
+  "0xF3A03219": [
+   "piece5n_ruin"
+  ],
+  "0x77D06CF3": [
+   "piece1p_ruin"
+  ],
+  "0x2406526F": [
+   "hp_fx_leaves_green_c"
+  ],
+  "0x33DFE550": [
+   "piece5n"
+  ],
+  "0xA41F20D5": [
+   "hp_fx_leaves_green_i"
+  ],
+  "0x86A504BF": [
+   "floor01.piece1c_interior"
+  ],
+  "0x5997CF6E": [
+   "slice3c_interior"
+  ],
+  "0x599C3F4C": [
+   "piece2b_interior"
+  ],
+  "0xA97BF0AE": [
+   "slice2l_propattach00"
+  ],
+  "0x63F655D7": [
+   "floor01.slice1c_interior"
+  ],
+  "0x36B17C7B": [
+   "slice2k_interior"
+  ],
+  "0x7BDCFDFA": [
+   "slice2h_interior"
+  ],
+  "0x0217660A": [
+   "hp_fx_leaves_green_j"
+  ],
+  "0xD745E8C6": [
+   "slice2k_propattach00_pristine"
+  ],
+  "0xCDF3452A": [
+   "piece1p"
+  ],
+  "0xBE45C74D": [
+   "piece3p_ruin"
+  ],
+  "0x23E16875": [
+   "slice2i_propattach00"
+  ],
+  "0xC94CC254": [
+   "piece3p"
+  ],
+  "0xE6F0D073": [
+   "slice2o_propattach00"
+  ],
+  "0xA21251BC": [
+   "hp_fx_leaves_green_l"
+  ],
+  "0x75F4AF31": [
+   "piece5p_pristine"
+  ],
+  "0xCA09AE1D": [
+   "hp_parachute_a"
+  ],
+  "0x939547BE": [
+   "piece5p"
+  ],
+  "0x47F8CCDD": [
+   "slice3f_interior"
+  ],
+  "0x686BC4E9": [
+   "hp_fx_clothesline_a"
+  ],
+  "0x2B85C26E": [
+   "piece1i_pristine"
+  ],
+  "0x01435921": [
+   "slice1d_interior"
+  ],
+  "0x4B454035": [
+   "piece3m"
+  ],
+  "0xFF44EDFB": [
+   "piece5j_pristine"
+  ],
+  "0x26C47DC0": [
+   "slice2n_propattach00"
+  ],
+  "0x2EB03C6D": [
+   "bone_fanb"
+  ],
+  "0x588ED8B3": [
+   "piece8k_ruin"
+  ],
+  "0x6BB03514": [
+   "floor01.slice1b_interior"
+  ],
+  "0xD1A89E4D": [
+   "floor01.slice2d_interior"
+  ],
+  "0x44ACBF78": [
+   "piece1k_pristine"
+  ],
+  "0xE6630B09": [
+   "slice2n_propattach00_ruin"
+  ],
+  "0xE7812B27": [
+   "floor00.slice1b_interior"
+  ],
+  "0x08EC7737": [
+   "piece5n_pristine"
+  ],
+  "0xAAA2E88C": [
+   "slice2n_interior"
+  ],
+  "0xB27EBA8C": [
+   "bone_wind4"
+  ],
+  "0xC80484D9": [
+   "piece1o"
+  ],
+  "0x62693B24": [
+   "piece3k_ruin"
+  ],
+  "0x49DFD0D0": [
+   "slice2i_propattach00_pristine"
+  ],
+  "0x47FDA884": [
+   "hp_parachute_d"
+  ],
+  "0x973EFE6A": [
+   "slice6d_interior"
+  ],
+  "0x9BD5FBAC": [
+   "piece5j"
+  ],
+  "0xD0090E9F": [
+   "piece1i"
+  ],
+  "0x3E6A92FC": [
+   "piece1o_pristine"
+  ],
+  "0x3305907C": [
+   "piece1m_ruin"
+  ],
+  "0x79FA0DDE": [
+   "hp_fx_leaves_green_f"
+  ],
+  "0xBE15D044": [
+   "piece5k_pristine"
+  ],
+  "0xD8D845C7": [
+   "piece1b_interior"
+  ],
+  "0x41596DD3": [
+   "slice2j_propattach00_pristine"
+  ],
+  "0xF1CEFBF3": [
+   "slice9b_interior"
+  ],
+  "0x6C76AEA5": [
+   "piece8k_pristine"
+  ],
+  "0xACA8B402": [
+   "bone_fana"
+  ],
+  "0x7F8B3A98": [
+   "piece5m_ruin"
+  ],
+  "0x9A0DC7F6": [
+   "hp_fx_leaves_green_n"
+  ],
+  "0xE6734708": [
+   "hp_fx_clothesline_d"
+  ],
+  "0x31A12CF9": [
+   "floor01.slice1a_interior"
+  ],
+  "0x59F94175": [
+   "piece5l_pristine"
+  ],
+  "0xB51C42CB": [
+   "bone_plantd"
+  ],
+  "0x44EA0DA1": [
+   "slice2l_propattach00_pristine"
+  ],
+  "0x2012F947": [
+   "slice2g_interior"
+  ],
+  "0x04ADBBB8": [
+   "bone_fanc"
+  ],
+  "0x840B66BD": [
+   "hp_fx_leaves_green_a"
+  ],
+  "0xF9DEE7C0": [
+   "slice2i_propattach01"
+  ],
+  "0x33284218": [
+   "bone_plantc"
+  ],
+  "0x5E34D076": [
+   "slice2d_interior"
+  ],
+  "0xC7A1A32C": [
+   "floor00.slice2b_interior"
+  ],
+  "0x5284339A": [
+   "bone_wind2"
+  ],
+  "0xBA7D3585": [
+   "slice2a_interior"
+  ],
+  "0xCDCAF298": [
+   "slice2j_interior"
+  ],
+  "0x6A0499CF": [
+   "hp_parachute_c"
+  ],
+  "0x2CE7C909": [
+   "slice2i_propattach01_ruin"
+  ],
+  "0x6EAC7CE5": [
+   "piece1p_pristine"
+  ],
+  "0x96693736": [
+   "piece5m_pristine"
+  ],
+  "0x700E87AD": [
+   "piece1k"
+  ],
+  "0x2380D1EA": [
+   "piece8k"
+  ],
+  "0x7A3027D8": [
+   "hp_fx_leaves_green_p"
+  ],
+  "0xBBDAAB3A": [
+   "piece5l"
+  ],
+  "0x9B897C9E": [
+   "floor01.slice2a_interior"
+  ],
+  "0x4664D39E": [
+   "hp_fx_clothesline_b"
+  ],
+  "0xAE86DDC2": [
+   "floor01.slice1d_interior"
+  ],
+  "0x531F7B53": [
+   "piece3p_pristine"
+  ],
+  "0xBC19060A": [
+   "slice3g_interior"
+  ],
+  "0x074CEC0B": [
+   "slice3d_interior"
+  ],
+  "0x95DE9932": [
+   "piece1e_interior"
+  ],
+  "0x31780CA6": [
+   "floor01.piece2a_interior"
+  ],
+  "0xEBC94A43": [
+   "piece5l_ruin"
+  ],
+  "0xD2F475E7": [
+   "slice2k_propattach00"
+  ],
+  "0x5D2AC2CD": [
+   "bone_plantb"
+  ],
+  "0xB8F0EB68": [
+   "slice3e_interior"
+  ],
+  "0x199F3990": [
+   "piece3m_pristine"
+  ],
+  "0xC2393EA7": [
+   "slice2l_propattach00_ruin"
+  ],
+  "0x9216FF77": [
+   "floor01.piece2b_interior"
+  ],
+  "0x15233D77": [
+   "hp_fx_leaves_palm_b"
+  ],
+  "0xA7989DB1": [
+   "slice2m_interior"
+  ],
+  "0x2C81B931": [
+   "bone_wind5"
+  ],
+  "0x17BC4C00": [
+   "piece1i_ruin"
+  ],
+  "0xA7947B9D": [
+   "piece3b_interior"
+  ],
+  "0x348642F7": [
+   "bone_wind3"
+  ],
+  "0x08A1F1EA": [
+   "piece4b_interior"
+  ],
+  "0xD580875C": [
+   "slice3a_interior"
+  ],
+  "0x88108D8D": [
+   "piece2e_interior"
+  ],
+  "0x6B73E082": [
+   "slice8b_interior"
+  ],
+  "0xEFF28D04": [
+   "piece1c_interior"
+  ],
+  "0x4FDCA56A": [
+   "slice1a_interior"
+  ],
+  "0x5075A876": [
+   "slice2i_propattach00_ruin"
+  ],
+  "0x2419DA27": [
+   "hp_fx_leaves_green_k"
+  ],
+  "0x4803A5D4": [
+   "slice2j_propattach00"
+  ],
+  "0x671227EB": [
+   "slice1b_interior"
+  ],
+  "0x73EE4336": [
+   "piece3m_ruin"
+  ],
+  "0x3DD75162": [
+   "piece1m_pristine"
+  ],
+  "0x6D65B90C": [
+   "floor01.slice2c_interior"
+  ],
+  "0x39AECC34": [
+   "floor01.piece2c_interior"
+  ],
+  "0x16FA1CF6": [
+   "piece1a_interior"
+  ],
+  "0x4EC27F11": [
+   "floor02.piece1b_interior"
+  ],
+  "0xAA7A30C6": [
+   "bone_wind6"
+  ],
+  "0x5B633AA7": [
+   "slice2n_propattach00_pristine"
+  ],
+  "0xF9E56F16": [
+   "slice4b_interior"
+  ],
+  "0x8BFC4DCE": [
+   "slice1e_interior"
+  ],
+  "0xCC7CA4E3": [
+   "bone_wind7"
+  ],
+  "0x81FE97A4": [
+   "hp_fx_leaves_green_d"
+  ],
+  "0x0EE5CDCD": [
+   "slice2i_interior"
+  ],
+  "0x0203DE52": [
+   "hp_fx_leaves_green_b"
+  ],
+  "0x5CF5D8A7": [
+   "slice2i_propattach01_pristine"
+  ],
+  "0x652D91CD": [
+   "slice2j_propattach00_ruin"
+  ],
+  "0xFF1DDCEE": [
+   "piece1k_ruin"
+  ],
+  "0x1DDD8417": [
+   "piece5m"
+  ],
+  "0x1C155061": [
+   "hp_fx_leaves_green_m"
+  ],
+  "0x7C0FD753": [
+   "hp_fx_leaves_green_o"
+  ],
+  "0x73428205": [
+   "piece1d_interior"
+  ],
+  "0x7A1CA020": [
+   "hp_fx_leaves_green_h"
+  ],
+  "0x3F4C9356": [
+   "floor00.slice1a_interior"
+  ],
+  "0x6652E48F": [
+   "slice2o_interior"
+  ],
+  "0xD8C6AC1E": [
+   "slice2l_interior"
+  ],
+  "0x480225B2": [
+   "hp_parachute_b"
+  ],
+  "0x2DDB4AA5": [
+   "piece5j_ruin"
+  ],
+  "0x47FF3E2B": [
+   "piece1m"
+  ],
+  "0xA605CD69": [
+   "slice2e_interior"
+  ],
+  "0xB4413364": [
+   "slice2o_propattach00_ruin"
+  ],
+  "0xA336C033": [
+   "piece3k"
+  ],
+  "0x11BB90E7": [
+   "slice4a_interior"
+  ],
+  "0xB48B89A5": [
+   "bone_wind1"
+  ],
+  "0x4C9F8D30": [
+   "slice2b_interior"
+  ],
+  "0x6479A51A": [
+   "slice2o_propattach00_pristine"
+  ],
+  "0x2915B50F": [
+   "floor01.slice2b_interior"
+  ],
+  "0x351C361C": [
+   "piece3e_interior"
+  ],
+  "0xBEEB18F7": [
+   "piece5p_ruin"
+  ],
+  "0xAE98BC63": [
+   "slice8a_interior"
+  ],
+  "0x1B1663DA": [
+   "piece3k_pristine"
+  ],
+  "0xEACCDF12": [
+   "slice9a_interior"
+  ],
+  "0x9C00FF29": [
+   "hp_fx_leaves_green_e"
+  ],
+  "0x372D4084": [
+   "slice2f_interior"
+  ],
+  "0x5788EAD1": [
+   "floor00.slice2a_interior"
+  ],
+  "0xF112E14A": [
+   "piece1o_ruin"
+  ],
+  "0xDB233A62": [
+   "bone_planta"
+  ],
+  "0x79FD3B48": [
+   "slice1c_interior"
+  ],
+  "0xCC93B86C": [
+   "floor02.piece1a_interior"
+  ],
+  "0x2840BF61": [
+   "floor01.piece1a_interior"
+  ],
+  "0x53544793": [
+   "slice2c_interior"
+  ],
+  "0x5CC3A94F": [
+   "piece2c_interior"
+  ],
+  "0x686747BB": [
+   "hp_fx_clothesline_c"
+  ],
+  "0xD414A842": [
+   "piece5k_ruin"
+  ],
+  "0x36FE137C": [
+   "floor01.piece1b_interior"
+  ],
+  "0x5B30D171": [
+   "piece2a_interior"
+  ],
+  "0x95D830D1": [
+   "piece5k"
+  ],
+  "0x1A0F9B7F": [
+   "slice1f_interior"
+  ],
+  "0x4A88A430": [
+   "bone_wind0"
+  ],
+  "0x6BD7B37D": [
+   "floor00.slice3b_interior"
+  ]
+ }
+}

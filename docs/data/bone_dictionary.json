@@ -1,0 +1,8 @@
+{
+ "pandemic_hash_m2": {
+  "0x9FCC326C": ["piece1a_propdebris"]
+ },
+ "_notes": {
+  "0x9FCC326C": "Debris-series bare stem (rubble_stem_states, form %02d, 93 members). Shared prefix of piece1a_propdebris00..92, whose late members (piece1a_propdebris74..79) are already in the rainbow table -- this peel confirms the stem. Cracked by a piece1a_<word> shard-grammar sweep (EF(T=1)=0.0033). Verified: m2('piece1a_propdebris')==0x9FCC326C and m2('piece1a_propdebris00')==0x2136251C (a named node)."
+ }
+}

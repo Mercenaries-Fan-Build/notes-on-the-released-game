@@ -1,0 +1,1993 @@
+{
+ "pandemic_hash_m2": {
+  "0x193BB9F4": [
+   "slice2a_propattach05"
+  ],
+  "0x517D877A": [
+   "slice3e_ruin"
+  ],
+  "0xFB5BDE65": [
+   "slice2a_propattach08"
+  ],
+  "0x939FD97B": [
+   "piece3f_ruin"
+  ],
+  "0x55AB2FB0": [
+   "slice2a_propattach11_ruin"
+  ],
+  "0x7482AEBF": [
+   "piece5h_ruin"
+  ],
+  "0x79314016": [
+   "piece6a"
+  ],
+  "0xA6DDC95F": [
+   "piece4a_propattach08"
+  ],
+  "0xFC248E34": [
+   "piece1b_propattach17_ruin"
+  ],
+  "0x3862A9AC": [
+   "slice3g_ruin"
+  ],
+  "0xF4601B7F": [
+   "slice2b_propattach02_ruin"
+  ],
+  "0x8B26D705": [
+   "slice1d_propattach01_ruin"
+  ],
+  "0xD6B8F64D": [
+   "piece9c"
+  ],
+  "0x18200717": [
+   "piece2h"
+  ],
+  "0xD0239A86": [
+   "piece1b_propattach11_ruin"
+  ],
+  "0xB39CCD32": [
+   "piece4b_pristine"
+  ],
+  "0xCDA0EDF7": [
+   "slice4a_propattach13"
+  ],
+  "0x4BBA0841": [
+   "piece1b_propattach18_ruin"
+  ],
+  "0xAA3A8CB8": [
+   "piece5g_pristine"
+  ],
+  "0xFB381298": [
+   "piece9c_pristine"
+  ],
+  "0x31EA0604": [
+   "piece1a_propattach12_ruin"
+  ],
+  "0xBB10154B": [
+   "slice2h_propattach00_ruin"
+  ],
+  "0x1B4E8A03": [
+   "piece1b_propattach12_ruin"
+  ],
+  "0xB3543461": [
+   "sign07"
+  ],
+  "0xE65BC20B": [
+   "slice3a_propattach10"
+  ],
+  "0xF33DBCB9": [
+   "slice2a_propattach04"
+  ],
+  "0xD4AB58A5": [
+   "slice3b_propattach01_ruin"
+  ],
+  "0x8A6181E1": [
+   "piece1b_propattach07_ruin"
+  ],
+  "0x13435E10": [
+   "slice2b_propattach04"
+  ],
+  "0xCBB93734": [
+   "piece1e_propattach05_ruin"
+  ],
+  "0x2954831A": [
+   "slice8b_pristine"
+  ],
+  "0xD92F2B81": [
+   "piece5f_ruin"
+  ],
+  "0xFF088165": [
+   "slice2b_propattach00_ruin"
+  ],
+  "0x9212D5AC": [
+   "slice3b_propattach01"
+  ],
+  "0x97EF4F02": [
+   "piece1b_propattach15_ruin"
+  ],
+  "0xCD0A7879": [
+   "piece1b_propattach02"
+  ],
+  "0x3B32865F": [
+   "slice4a_propattach04"
+  ],
+  "0x9435540D": [
+   "piece1d_propattach00"
+  ],
+  "0x60B61491": [
+   "piece1b_propattach15"
+  ],
+  "0x2E1D9DBB": [
+   "piece1f_pristine"
+  ],
+  "0x6548B1C8": [
+   "slice2a_propattach19_ruin"
+  ],
+  "0x37EEA8AB": [
+   "piece3h_pristine"
+  ],
+  "0x2B31861D": [
+   "piece3e"
+  ],
+  "0x91069654": [
+   "piece1b_propattach08_ruin"
+  ],
+  "0x2C0FF683": [
+   "slice3b_propattach02"
+  ],
+  "0x0D86399A": [
+   "slice1d_propattach07"
+  ],
+  "0xBF65290F": [
+   "slice3c"
+  ],
+  "0x8CC4916A": [
+   "slice2a_propattach18"
+  ],
+  "0x25A9AE8E": [
+   "slice1c_propattach12_ruin"
+  ],
+  "0xFE9E76EB": [
+   "hp_spawn_g"
+  ],
+  "0xC2DBF3AD": [
+   "floor01.slice2c"
+  ],
+  "0x3CF47BD0": [
+   "piece4a_propattach03"
+  ],
+  "0xB93757B5": [
+   "piece1a_propattach11_ruin"
+  ],
+  "0xDB394935": [
+   "piece2b_propattach01"
+  ],
+  "0x1B52BCBF": [
+   "slice3b_propattach03_ruin"
+  ],
+  "0xC18C5599": [
+   "piece4a_propattach03_ruin"
+  ],
+  "0x0401D023": [
+   "slice4a_propattach12_ruin"
+  ],
+  "0xC327E809": [
+   "piece3a"
+  ],
+  "0xB6B446BF": [
+   "piece9a"
+  ],
+  "0x83DC5BDE": [
+   "slice3a_ruin"
+  ],
+  "0xE5784777": [
+   "slice4b"
+  ],
+  "0xC4432BD2": [
+   "slice1d"
+  ],
+  "0x7C4B662D": [
+   "slice1a_propattach15_ruin"
+  ],
+  "0x32EE393E": [
+   "piece4d_ruin"
+  ],
+  "0xFDCBD8D9": [
+   "piece1b_ruin"
+  ],
+  "0xB6E7F788": [
+   "slice1a_propattach09_ruin"
+  ],
+  "0xF40E3289": [
+   "piece5h_pristine"
+  ],
+  "0x13CC2B38": [
+   "piece5f"
+  ],
+  "0xADF034DF": [
+   "slice1b_propattach08"
+  ],
+  "0x2D7DFEDA": [
+   "slice1c_ruin"
+  ],
+  "0x31A59D88": [
+   "slice1e_propattach06"
+  ],
+  "0x09D0F3C7": [
+   "slice2b_propattach10"
+  ],
+  "0xB2C8BB5D": [
+   "slice1b_ruin"
+  ],
+  "0x5EABF76D": [
+   "piece1c_propattach01"
+  ],
+  "0x999BB3E4": [
+   "slice1e_propattach02"
+  ],
+  "0xD8C96258": [
+   "piece1b_propattach13_ruin"
+  ],
+  "0x49C8F2BB": [
+   "slice1c_propattach06_ruin"
+  ],
+  "0xCE15D76C": [
+   "piece1f"
+  ],
+  "0x4ABEB64B": [
+   "slice7f_ruin"
+  ],
+  "0x1CE53EE6": [
+   "piece4a_propattach05"
+  ],
+  "0x4DA2CDEF": [
+   "piece6a_ruin"
+  ],
+  "0x15BF626B": [
+   "piece5a"
+  ],
+  "0xB69ECEFC": [
+   "slice1a_propattach20"
+  ],
+  "0x989E4A15": [
+   "slice5c"
+  ],
+  "0xA4EA922C": [
+   "piece4a_propattach07"
+  ],
+  "0xCD970805": [
+   "piece1e_propattach03"
+  ],
+  "0x382CF313": [
+   "slice1b_propattach13"
+  ],
+  "0xA3F9084B": [
+   "slice1a_propattach16"
+  ],
+  "0x838B8286": [
+   "piece1c_ruin"
+  ],
+  "0x7A0BDB51": [
+   "slice3a_propattach05"
+  ],
+  "0xE8750830": [
+   "piece3g_ruin"
+  ],
+  "0x73838F8E": [
+   "slice2c_propattach02_ruin"
+  ],
+  "0x6132C80E": [
+   "piece9a_pristine"
+  ],
+  "0x6C4F57DE": [
+   "slice1a_propattach03_ruin"
+  ],
+  "0x562AE3B6": [
+   "slice1b_propattach12"
+  ],
+  "0x3EA94EE2": [
+   "slice2c_propattach01"
+  ],
+  "0xEAE33303": [
+   "piece1e_propattach00_ruin"
+  ],
+  "0x612DF481": [
+   "piece2c_ruin"
+  ],
+  "0xB7609F49": [
+   "slice3e"
+  ],
+  "0x1755073A": [
+   "piece2a_propattach14"
+  ],
+  "0xCD4EE31F": [
+   "slice4a_propattach16_ruin"
+  ],
+  "0xF84305AE": [
+   "piece5e_pristine"
+  ],
+  "0x2C5F68A6": [
+   "piece6d_pristine"
+  ],
+  "0x969E55ED": [
+   "slice3a_propattach13_ruin"
+  ],
+  "0x3E628502": [
+   "piece9e_pristine"
+  ],
+  "0x078A0398": [
+   "piece2h_ruin"
+  ],
+  "0x9FF0593C": [
+   "piece5c_pristine"
+  ],
+  "0xCD05FB4B": [
+   "piece1b_propattach00"
+  ],
+  "0x3D309B49": [
+   "piece1d_pristine"
+  ],
+  "0x395135BC": [
+   "sign06"
+  ],
+  "0xDE260AAF": [
+   "piece5f_pristine"
+  ],
+  "0x56055623": [
+   "slice1b_pristine"
+  ],
+  "0x6237F34C": [
+   "slice1c_pristine"
+  ],
+  "0x239580C6": [
+   "slice1b_propattach02_ruin"
+  ],
+  "0xA96389CD": [
+   "floor00.slice2b"
+  ],
+  "0x0179FE06": [
+   "slice2f_ruin"
+  ],
+  "0xE342D351": [
+   "slice6c_ruin"
+  ],
+  "0x60E4B819": [
+   "slice1b_propattach03_ruin"
+  ],
+  "0xFA608660": [
+   "slice2f_pristine"
+  ],
+  "0xA4B5ACA8": [
+   "slice2a_propattach12"
+  ],
+  "0xFAD780B2": [
+   "slice1a_pristine"
+  ],
+  "0x34CE9E99": [
+   "hp_ladder_top_d"
+  ],
+  "0x353907C2": [
+   "slice3a_propattach05_ruin"
+  ],
+  "0x8E09C804": [
+   "piece1g_pristine"
+  ],
+  "0x4EC709DC": [
+   "slice1c_propattach08"
+  ],
+  "0x1959B097": [
+   "piece4c_ruin"
+  ],
+  "0xB8CA9ACE": [
+   "floor01.slice2d"
+  ],
+  "0x0376381A": [
+   "slice4c"
+  ],
+  "0xFD2A3858": [
+   "piece7a_pristine"
+  ],
+  "0x50BA410F": [
+   "slice1c_propattach07"
+  ],
+  "0x94E6ACA2": [
+   "piece7b"
+  ],
+  "0xBB58BE27": [
+   "sign01"
+  ],
+  "0xB1357EB8": [
+   "slice4a_propattach07"
+  ],
+  "0x9B84B50A": [
+   "slice7a_ruin"
+  ],
+  "0xB9B56DC3": [
+   "piece4a_propattach01_ruin"
+  ],
+  "0x2E048617": [
+   "slice1b_propattach00"
+  ],
+  "0x91972A1E": [
+   "slice1e_propattach00"
+  ],
+  "0xB328B5EB": [
+   "slice4a_propattach00"
+  ],
+  "0x851204E2": [
+   "slice2h_pristine"
+  ],
+  "0x9EECC751": [
+   "piece4a_propattach06"
+  ],
+  "0x7B430FFF": [
+   "slice2a_propattach02"
+  ],
+  "0x9B1FD0A5": [
+   "slice1b_propattach07_ruin"
+  ],
+  "0xE6459FEF": [
+   "slice1e"
+  ],
+  "0x0F8D34BC": [
+   "piece5a_ruin"
+  ],
+  "0x332DFC99": [
+   "slice4a_propattach02"
+  ],
+  "0xE5882343": [
+   "piece1e_propattach05"
+  ],
+  "0x1D1A949D": [
+   "slice1d_pristine"
+  ],
+  "0x158CD1A2": [
+   "piece5a_pristine"
+  ],
+  "0x426ED23F": [
+   "piece4a_propattach05_ruin"
+  ],
+  "0x871EC5EC": [
+   "sign15"
+  ],
+  "0x8D815E43": [
+   "piece2a_propattach14_ruin"
+  ],
+  "0xCB174146": [
+   "piece1b_propattach09"
+  ],
+  "0xDEAE8C26": [
+   "piece1b_propattach16"
+  ],
+  "0xDD380D34": [
+   "slice2b_propattach03_ruin"
+  ],
+  "0x561B51CA": [
+   "slice9a_pristine"
+  ],
+  "0x412F6A28": [
+   "piece3d"
+  ],
+  "0xA74130EA": [
+   "piece9g_ruin"
+  ],
+  "0xF77DE871": [
+   "slice1c_propattach04_ruin"
+  ],
+  "0x94807A1C": [
+   "piece1b_propattach00_ruin"
+  ],
+  "0x877EAAE3": [
+   "slice1d_propattach02"
+  ],
+  "0xD76DF349": [
+   "slice1a_propattach07"
+  ],
+  "0xA5704F3C": [
+   "slice4a_propattach00_ruin"
+  ],
+  "0xCB54D246": [
+   "slice1f_propattach01"
+  ],
+  "0xB2D191F2": [
+   "piece2a_propattach00_ruin"
+  ],
+  "0x6A230954": [
+   "slice1f_propattach00_ruin"
+  ],
+  "0xB325D2E0": [
+   "piece1c_pristine"
+  ],
+  "0xC9FFFFE2": [
+   "slice1a_propattach13"
+  ],
+  "0xA2C5C985": [
+   "slice1f_propattach03_ruin"
+  ],
+  "0xD28DA279": [
+   "piece1a_propattach06_ruin"
+  ],
+  "0x48C93F01": [
+   "slice1c_propattach09"
+  ],
+  "0x46391A6C": [
+   "piece3c_ruin"
+  ],
+  "0x8E8CF136": [
+   "slice5d"
+  ],
+  "0xB215F7CB": [
+   "slice1b_propattach09_ruin"
+  ],
+  "0xD41866CB": [
+   "slice2g_propattach00"
+  ],
+  "0x26AE2A89": [
+   "slice2a_propattach17"
+  ],
+  "0x09D6C3D0": [
+   "slice1e_ruin"
+  ],
+  "0x4406E750": [
+   "slice1b_propattach03"
+  ],
+  "0x8266174E": [
+   "piece7a_ruin"
+  ],
+  "0x4A122353": [
+   "piece2h_propattach12"
+  ],
+  "0xC027A2D3": [
+   "piece5b_pristine"
+  ],
+  "0x3BA36EAF": [
+   "slice1e_propattach05"
+  ],
+  "0xF3342126": [
+   "slice2b_propattach02"
+  ],
+  "0x8C314A58": [
+   "piece1a_ruin"
+  ],
+  "0xE440E237": [
+   "slice3d_propattach00"
+  ],
+  "0x74490808": [
+   "slice2b_propattach10_ruin"
+  ],
+  "0x6B03226E": [
+   "piece1b_propattach01"
+  ],
+  "0xF25EAADC": [
+   "slice3a_propattach10_ruin"
+  ],
+  "0xB333A1F6": [
+   "slice2b_propattach12_ruin"
+  ],
+  "0x48B5B749": [
+   "slice1c_propattach01"
+  ],
+  "0x8E4D62CA": [
+   "slice8b_propattach00"
+  ],
+  "0x5560E477": [
+   "slice1f_propattach04"
+  ],
+  "0x0B63C35C": [
+   "slice2a_propattach06_ruin"
+  ],
+  "0x78DF4C4D": [
+   "slice7f_pristine"
+  ],
+  "0xA5EA2A23": [
+   "piece1a_propattach04_ruin"
+  ],
+  "0x9942C252": [
+   "sign08"
+  ],
+  "0x41592E42": [
+   "slice1b_propattach06_ruin"
+  ],
+  "0x6B8FB1FA": [
+   "piece1e_propattach00"
+  ],
+  "0x72B80F22": [
+   "slice1f_propattach02_ruin"
+  ],
+  "0x0CB04032": [
+   "slice2a_propattach10"
+  ],
+  "0xC4EF41BA": [
+   "piece4a_propattach01"
+  ],
+  "0x7902CE02": [
+   "slice2b_propattach01_ruin"
+  ],
+  "0x75CCBC42": [
+   "piece2a_propattach13_ruin"
+  ],
+  "0xA3FD8579": [
+   "slice1a_propattach14"
+  ],
+  "0xB0BF555D": [
+   "slice1c_propattach05"
+  ],
+  "0xA4B809A0": [
+   "slice1c_propattach10_ruin"
+  ],
+  "0x7D1138B1": [
+   "slice2a_propattach12_ruin"
+  ],
+  "0xAE9A4536": [
+   "slice1a_propattach22"
+  ],
+  "0x9C59E59E": [
+   "floor01.piece1e"
+  ],
+  "0x7AE4B642": [
+   "slice3b_propattach00_ruin"
+  ],
+  "0xABFCFDAC": [
+   "slice1b_propattach07"
+  ],
+  "0x6011EA39": [
+   "slice2e_propattach00"
+  ],
+  "0x9ED28816": [
+   "slice4b_pristine"
+  ],
+  "0x2EB34FC4": [
+   "slice1c_propattach00"
+  ],
+  "0xCBEE2582": [
+   "slice1b_propattach09"
+  ],
+  "0x38732FFF": [
+   "slice1f_pristine"
+  ],
+  "0x1273519E": [
+   "floor00.slice3b"
+  ],
+  "0xD92B3054": [
+   "slice4a_propattach03"
+  ],
+  "0x95C4A919": [
+   "piece5c"
+  ],
+  "0xAF8C7634": [
+   "piece1e_ruin"
+  ],
+  "0x11392F0C": [
+   "piece4b_ruin"
+  ],
+  "0xE0C7C900": [
+   "floor01.slice1c"
+  ],
+  "0xECCFC098": [
+   "slice1b_propattach00_ruin"
+  ],
+  "0x99F51FD4": [
+   "piece1a_propattach01_ruin"
+  ],
+  "0x16EE350D": [
+   "piece7a"
+  ],
+  "0x8EB7C89D": [
+   "slice2a_propattach13"
+  ],
+  "0xD3595C0C": [
+   "slice1f_propattach03"
+  ],
+  "0x501D5FD7": [
+   "piece1a"
+  ],
+  "0x62BBC9B3": [
+   "floor01.slice1d"
+  ],
+  "0x275C0162": [
+   "floor00.slice2a"
+  ],
+  "0x20D5A5AC": [
+   "slice1a_propattach05_ruin"
+  ],
+  "0x843D1E46": [
+   "piece4a_propattach02_ruin"
+  ],
+  "0x9FB84386": [
+   "piece1e_propattach03_ruin"
+  ],
+  "0x4D775E18": [
+   "piece4a_propattach00_ruin"
+  ],
+  "0x27599BBF": [
+   "piece1a_propattach26_ruin"
+  ],
+  "0xBD7008F2": [
+   "slice1a_propattach00"
+  ],
+  "0xCBDE6977": [
+   "piece3b_ruin"
+  ],
+  "0x6F373D1F": [
+   "piece1a_propattach00_ruin"
+  ],
+  "0x3DCEABED": [
+   "piece5g"
+  ],
+  "0xC9393A9C": [
+   "piece3h"
+  ],
+  "0xD64A964C": [
+   "slice1e_propattach01_ruin"
+  ],
+  "0xF4F2362E": [
+   "piece5g_ruin"
+  ],
+  "0x72397724": [
+   "piece2a_propattach02_ruin"
+  ],
+  "0x4EFC77A9": [
+   "slice1a_propattach24_ruin"
+  ],
+  "0x115B8420": [
+   "sign02"
+  ],
+  "0xA0AC27BF": [
+   "slice2c_propattach00"
+  ],
+  "0x1C6096ED": [
+   "slice2e_propattach01_ruin"
+  ],
+  "0x752821D9": [
+   "slice2b_propattach09"
+  ],
+  "0x97B1BDA0": [
+   "slice1a_propattach12_ruin"
+  ],
+  "0x8009A62C": [
+   "slice3a_propattach04"
+  ],
+  "0x7955A3DE": [
+   "slice1c_propattach05_ruin"
+  ],
+  "0xC5584C95": [
+   "slice8a_ruin"
+  ],
+  "0x9DC932DF": [
+   "piece5e"
+  ],
+  "0xE7CE7FAA": [
+   "slice2b_propattach11"
+  ],
+  "0xC6B4847F": [
+   "piece1d_ruin"
+  ],
+  "0x443DE524": [
+   "slice1b"
+  ],
+  "0x9D6F039C": [
+   "piece1a_propattach09_ruin"
+  ],
+  "0x19A0FA92": [
+   "slice1e_propattach04"
+  ],
+  "0x19403722": [
+   "slice2a_propattach03"
+  ],
+  "0xFD40FCD7": [
+   "slice2b_propattach07"
+  ],
+  "0x67734C1F": [
+   "slice9b_propattach00"
+  ],
+  "0x34A8EBD7": [
+   "slice1e_propattach00_ruin"
+  ],
+  "0xED19B563": [
+   "piece1b_propattach08"
+  ],
+  "0x8B73369A": [
+   "slice1e_propattach03_ruin"
+  ],
+  "0xB7B474DC": [
+   "slice8a"
+  ],
+  "0x3C685908": [
+   "floor01.piece1c"
+  ],
+  "0x4D5C5AB1": [
+   "slice1f_propattach02"
+  ],
+  "0x71453ED8": [
+   "slice2a_propattach01"
+  ],
+  "0x09D570F5": [
+   "slice2b_propattach12"
+  ],
+  "0x30A54879": [
+   "slice4a_propattach10_ruin"
+  ],
+  "0xE8BB67D7": [
+   "piece1b_propattach13"
+  ],
+  "0xCD928AD7": [
+   "piece1e_propattach01"
+  ],
+  "0xAD8F149B": [
+   "slice1d_ruin"
+  ],
+  "0x8D264BCF": [
+   "piece2h_propattach13_ruin"
+  ],
+  "0xD5A70E3F": [
+   "slice3a_propattach06_ruin"
+  ],
+  "0x5E3BCF7B": [
+   "slice1a"
+  ],
+  "0x503E4FF5": [
+   "piece2h_propattach11_ruin"
+  ],
+  "0xA6A8E3DB": [
+   "slice2a_propattach15"
+  ],
+  "0x495D7CA3": [
+   "slice4c_ruin"
+  ],
+  "0xC3EA23B7": [
+   "floor00.slice1a"
+  ],
+  "0xE5AA166A": [
+   "piece1e_pristine"
+  ],
+  "0x30A1CDA1": [
+   "slice1a_propattach21"
+  ],
+  "0x7BBA5459": [
+   "slice2g_ruin"
+  ],
+  "0xEF8848F7": [
+   "slice1d_propattach06"
+  ],
+  "0x4B11FA98": [
+   "piece1b_propattach07"
+  ],
+  "0x00314939": [
+   "slice2a_propattach09_ruin"
+  ],
+  "0x023ED2DA": [
+   "slice3d_propattach01"
+  ],
+  "0xB15276CD": [
+   "piece5b_ruin"
+  ],
+  "0x333E611C": [
+   "slice1a_propattach16_ruin"
+  ],
+  "0x00B10043": [
+   "piece1b_propattach17"
+  ],
+  "0x3CC2A6BB": [
+   "slice1a_propattach00_ruin"
+  ],
+  "0x45F0B6F4": [
+   "slice3a_propattach07_ruin"
+  ],
+  "0xA6ADFC7E": [
+   "slice1c_propattach02"
+  ],
+  "0xE0F3DD78": [
+   "piece1a_propattach05_ruin"
+  ],
+  "0x80CF3AB2": [
+   "slice8a_propattach01"
+  ],
+  "0x15369543": [
+   "slice2b_propattach03"
+  ],
+  "0x69526477": [
+   "slice2g_pristine"
+  ],
+  "0x7F5D64AB": [
+   "slice1a_propattach13_ruin"
+  ],
+  "0xDD8D7F2D": [
+   "piece1b_propattach03_ruin"
+  ],
+  "0x5021DD05": [
+   "piece1c"
+  ],
+  "0x4DB8309C": [
+   "piece9g_pristine"
+  ],
+  "0x590DD043": [
+   "slice1b_propattach01_ruin"
+  ],
+  "0x6A32D358": [
+   "piece1d_propattach01"
+  ],
+  "0x258863AF": [
+   "piece2c_pristine"
+  ],
+  "0x978BFDBC": [
+   "piece2d_ruin"
+  ],
+  "0xE693140D": [
+   "floor02.piece1a"
+  ],
+  "0x2B7A8B0A": [
+   "slice4a_propattach02_ruin"
+  ],
+  "0x91B1FA73": [
+   "slice8b"
+  ],
+  "0xE394EC10": [
+   "piece1e_propattach02"
+  ],
+  "0x2EB2B44F": [
+   "slice2a_propattach11"
+  ],
+  "0x206376F6": [
+   "piece1a_pristine"
+  ],
+  "0x0CABC304": [
+   "slice2a_propattach16"
+  ],
+  "0xFBC76E25": [
+   "piece4a_propattach07_ruin"
+  ],
+  "0xAAFF819E": [
+   "piece3e_ruin"
+  ],
+  "0x0ACA49B5": [
+   "floor01.slice1b"
+  ],
+  "0x5CEF2AA2": [
+   "piece2d_pristine"
+  ],
+  "0xAA5FBFBF": [
+   "hp_ladder_bottom_d"
+  ],
+  "0x7558513B": [
+   "slice2c_pristine"
+  ],
+  "0x753BA991": [
+   "slice2b_propattach01"
+  ],
+  "0xFF1972A6": [
+   "sign17"
+  ],
+  "0x4C428A99": [
+   "slice7a"
+  ],
+  "0xF700B05F": [
+   "piece3d_pristine"
+  ],
+  "0x3BC1DCD4": [
+   "piece5b"
+  ],
+  "0xC0AED8BD": [
+   "slice3b_pristine"
+  ],
+  "0xE1C734BF": [
+   "slice1b_propattach05_ruin"
+  ],
+  "0x8EFFAA25": [
+   "slice3a_propattach04_ruin"
+  ],
+  "0xDDDDD433": [
+   "piece2a_propattach02"
+  ],
+  "0x34A976B8": [
+   "piece1c_propattach00"
+  ],
+  "0x85A7F6D2": [
+   "slice1b_propattach11_ruin"
+  ],
+  "0xFDE283C1": [
+   "piece2a_propattach00"
+  ],
+  "0x26F697C5": [
+   "piece4a_propattach02"
+  ],
+  "0x67716194": [
+   "slice9a_ruin"
+  ],
+  "0xA4BB43B7": [
+   "slice3f_ruin"
+  ],
+  "0xEDA015E0": [
+   "slice2a_propattach02_ruin"
+  ],
+  "0x0A65C93F": [
+   "slice4a_propattach09_ruin"
+  ],
+  "0xCFE72B1C": [
+   "piece9e_ruin"
+  ],
+  "0xC9E4272C": [
+   "piece3a_pristine"
+  ],
+  "0xDC47CEC8": [
+   "slice1f"
+  ],
+  "0x2EB7CCF2": [
+   "slice1c_propattach06"
+  ],
+  "0x345A87A0": [
+   "piece9a_ruin"
+  ],
+  "0x26F21A97": [
+   "piece4a_propattach00"
+  ],
+  "0xFC620903": [
+   "slice2b_propattach06_ruin"
+  ],
+  "0xB2B87AF4": [
+   "piece4a_propattach04_ruin"
+  ],
+  "0xF3393F8B": [
+   "slice2a_propattach06"
+  ],
+  "0x30969070": [
+   "slice3c_ruin"
+  ],
+  "0xB1371986": [
+   "slice2b_propattach05_ruin"
+  ],
+  "0xCB2C71CF": [
+   "piece3g"
+  ],
+  "0x4239D9B2": [
+   "slice6d_pristine"
+  ],
+  "0x134EBB53": [
+   "sign05"
+  ],
+  "0x2202566D": [
+   "slice3a_propattach09"
+  ],
+  "0x5AD11902": [
+   "hp_ladder_top_c"
+  ],
+  "0xDB37FF6D": [
+   "slice4a_propattach06"
+  ],
+  "0x22D67A9F": [
+   "floor01.slice2a"
+  ],
+  "0x735ED51A": [
+   "slice1f_propattach05"
+  ],
+  "0xD5662B25": [
+   "slice1f_propattach06"
+  ],
+  "0xF30CF2E2": [
+   "piece1b_propattach05"
+  ],
+  "0xD2956767": [
+   "piece1b_propattach01_ruin"
+  ],
+  "0x909C5493": [
+   "slice1a_propattach23"
+  ],
+  "0x134C9C7F": [
+   "piece1b_propattach16_ruin"
+  ],
+  "0xF19CE5B8": [
+   "piece2b_pristine"
+  ],
+  "0x0789FBD3": [
+   "piece2g_pristine"
+  ],
+  "0x18138FD0": [
+   "slice3a_propattach00"
+  ],
+  "0xC0B0D74D": [
+   "slice2c_propattach02"
+  ],
+  "0x0C5E3C74": [
+   "slice3a_propattach13"
+  ],
+  "0x2E090345": [
+   "slice1b_propattach02"
+  ],
+  "0xEA423FCD": [
+   "piece5d_pristine"
+  ],
+  "0x092ACB85": [
+   "sign10"
+  ],
+  "0x8D2E3FB7": [
+   "slice1a_propattach04_ruin"
+  ],
+  "0x3639BBE0": [
+   "slice1b_propattach14"
+  ],
+  "0x4CA4ED83": [
+   "slice2e_ruin"
+  ],
+  "0x44D171CB": [
+   "piece5d_ruin"
+  ],
+  "0x5E404CA9": [
+   "slice1c"
+  ],
+  "0x708F0093": [
+   "slice5e"
+  ],
+  "0xFEBDC910": [
+   "piece1b_propattach10"
+  ],
+  "0x6F8D8FA5": [
+   "slice1d_propattach04"
+  ],
+  "0x86B88EFA": [
+   "piece1b_propattach12"
+  ],
+  "0x73A4F0B5": [
+   "slice1b_propattach10_ruin"
+  ],
+  "0x6E65E0C0": [
+   "piece4a_propattach08_ruin"
+  ],
+  "0xF1528CD1": [
+   "piece2a_propattach13"
+  ],
+  "0x8C150AD1": [
+   "slice3b_propattach00"
+  ],
+  "0x8B9C6574": [
+   "slice3b_propattach02_ruin"
+  ],
+  "0x679E2A76": [
+   "slice2d_pristine"
+  ],
+  "0xC945B282": [
+   "slice2b_ruin"
+  ],
+  "0x9D4A9CBF": [
+   "slice1c_propattach10"
+  ],
+  "0xCA4E04C9": [
+   "piece2b_propattach00_ruin"
+  ],
+  "0x0A0D8266": [
+   "slice3b_propattach03"
+  ],
+  "0xB121C6F8": [
+   "slice1f_propattach04_ruin"
+  ],
+  "0x704CEAF0": [
+   "slice9a_propattach02"
+  ],
+  "0x587E527B": [
+   "slice6d"
+  ],
+  "0xC17C2D28": [
+   "slice3a_pristine"
+  ],
+  "0x9597708A": [
+   "piece5c_ruin"
+  ],
+  "0xB139FBE6": [
+   "slice4a_propattach09"
+  ],
+  "0xE783BF31": [
+   "slice1d_propattach00"
+  ],
+  "0x38112EED": [
+   "piece2b"
+  ],
+  "0xD297E005": [
+   "piece1a_propattach02_ruin"
+  ],
+  "0xD6F439A0": [
+   "floor01.piece2b"
+  ],
+  "0x84A66FBE": [
+   "slice2a_propattach14"
+  ],
+  "0x46108426": [
+   "piece1d"
+  ],
+  "0xF291EAA0": [
+   "slice2c_propattach00_ruin"
+  ],
+  "0x8C485C92": [
+   "piece3c_pristine"
+  ],
+  "0x70149DBC": [
+   "piece2h_propattach11"
+  ],
+  "0x7B39746C": [
+   "slice2b_propattach00"
+  ],
+  "0x2E2A07F9": [
+   "piece6a_pristine"
+  ],
+  "0x648EA53A": [
+   "piece3a_ruin"
+  ],
+  "0x375B589B": [
+   "slice3g"
+  ],
+  "0x3F77915D": [
+   "slice1a_propattach03"
+  ],
+  "0x4CEDA9C3": [
+   "slice3a_propattach02_ruin"
+  ],
+  "0x2EFC5A0F": [
+   "slice5d_ruin"
+  ],
+  "0x5768AC9B": [
+   "slice1a_propattach05"
+  ],
+  "0x9D5E37C4": [
+   "slice3d"
+  ],
+  "0xD33C7003": [
+   "slice4a_propattach08"
+  ],
+  "0x2E8D65BC": [
+   "slice7a_pristine"
+  ],
+  "0xA8501E36": [
+   "piece2b_propattach01_ruin"
+  ],
+  "0x681013F6": [
+   "piece2h_propattach13"
+  ],
+  "0x3EE7B303": [
+   "piece4a_propattach04"
+  ],
+  "0x176F560F": [
+   "slice1a_propattach22_ruin"
+  ],
+  "0xA85E0B58": [
+   "piece1e_propattach01_ruin"
+  ],
+  "0xE0AF9A18": [
+   "slice3a_propattach03_ruin"
+  ],
+  "0x0094C4EB": [
+   "slice8a_pristine"
+  ],
+  "0x4218C1B0": [
+   "slice1a_propattach19"
+  ],
+  "0xA77CDCB5": [
+   "slice2e_pristine"
+  ],
+  "0x314CABF6": [
+   "sign04"
+  ],
+  "0x6E0BA76B": [
+   "piece7b_ruin"
+  ],
+  "0xA0CAEA97": [
+   "slice4a_pristine"
+  ],
+  "0x96AE5698": [
+   "slice2c_propattach03"
+  ],
+  "0xAF814A7D": [
+   "slice3d_ruin"
+  ],
+  "0x23F7AA66": [
+   "slice1b_propattach05"
+  ],
+  "0xA200CBC2": [
+   "piece4a_propattach06_ruin"
+  ],
+  "0x2B776FD9": [
+   "slice2b_propattach04_ruin"
+  ],
+  "0x5242815E": [
+   "piece3g_pristine"
+  ],
+  "0x2C02D8BF": [
+   "slice1a_propattach12"
+  ],
+  "0xCA6CB3D2": [
+   "slice3g_pristine"
+  ],
+  "0xC6BD3968": [
+   "slice1c_propattach04"
+  ],
+  "0x02112E97": [
+   "slice3a_propattach03"
+  ],
+  "0x1F6A3D5D": [
+   "slice3a"
+  ],
+  "0xE2E1457F": [
+   "piece1e_propattach04_ruin"
+  ],
+  "0x044A87C5": [
+   "slice9b_ruin"
+  ],
+  "0xADA1FFB9": [
+   "slice5e_propattach11_ruin"
+  ],
+  "0x13D0A866": [
+   "piece5h"
+  ],
+  "0x9B3E23FA": [
+   "slice2b_propattach06"
+  ],
+  "0x2EAEF379": [
+   "piece9g"
+  ],
+  "0xEA779C71": [
+   "slice1a_propattach02_ruin"
+  ],
+  "0x5A4A89B7": [
+   "slice9a_propattach01"
+  ],
+  "0x8458E92E": [
+   "slice3a_propattach11"
+  ],
+  "0xA929FDB2": [
+   "piece3f"
+  ],
+  "0xC8180C91": [
+   "piece1g"
+  ],
+  "0xD15CEA65": [
+   "piece1f_ruin"
+  ],
+  "0xD8326C21": [
+   "slice1b_propattach11"
+  ],
+  "0x81D38F38": [
+   "slice9a_propattach01_ruin"
+  ],
+  "0x50868008": [
+   "piece6d_ruin"
+  ],
+  "0x5210DD74": [
+   "slice1b_propattach04_ruin"
+  ],
+  "0xD07D801B": [
+   "slice9b_pristine"
+  ],
+  "0x39F0837A": [
+   "slice1a_propattach07_ruin"
+  ],
+  "0xD9EC84F0": [
+   "floor00.slice1b"
+  ],
+  "0x2B73664C": [
+   "slice9b"
+  ],
+  "0x21202D3E": [
+   "piece3b"
+  ],
+  "0x16A3E34A": [
+   "slice1a_propattach26"
+  ],
+  "0xF5FB20A7": [
+   "slice2a_propattach07_ruin"
+  ],
+  "0x4F4B65E5": [
+   "slice2c_ruin"
+  ],
+  "0x22050798": [
+   "slice1a_propattach11"
+  ],
+  "0x3566387E": [
+   "slice1a_propattach04"
+  ],
+  "0x2217B0F7": [
+   "piece1b_pristine"
+  ],
+  "0xDA3D91AB": [
+   "slice2c_propattach01_ruin"
+  ],
+  "0x8C63B0AB": [
+   "slice1c_propattach11_ruin"
+  ],
+  "0x550FCBBF": [
+   "piece1b_propattach04"
+  ],
+  "0x8B89E688": [
+   "piece4d_pristine"
+  ],
+  "0x291F68E1": [
+   "slice1a_propattach11_ruin"
+  ],
+  "0x0A9866EA": [
+   "slice1a_propattach14_ruin"
+  ],
+  "0x4DE03FA4": [
+   "hp_fx_light10"
+  ],
+  "0xC385AF26": [
+   "piece1e_propattach04"
+  ],
+  "0x6812F843": [
+   "piece1e"
+  ],
+  "0xC59C6431": [
+   "slice4a_propattach15"
+  ],
+  "0xD68A51C8": [
+   "slice6c"
+  ],
+  "0x5E792123": [
+   "slice1d_propattach07_ruin"
+  ],
+  "0x8F27AA8C": [
+   "slice1a_ruin"
+  ],
+  "0x46F6CF7A": [
+   "slice1c_propattach01_ruin"
+  ],
+  "0x2EAA764B": [
+   "piece9e"
+  ],
+  "0x1B255594": [
+   "slice2b_propattach08"
+  ],
+  "0x04F0D28D": [
+   "slice2b_propattach08_ruin"
+  ],
+  "0x4615C57E": [
+   "slice1e_pristine"
+  ],
+  "0x913666AE": [
+   "slice2a_propattach07"
+  ],
+  "0x8C79EE55": [
+   "piece2a_propattach01_ruin"
+  ],
+  "0xEB9EDE9A": [
+   "slice4a_propattach12"
+  ],
+  "0x1DF50265": [
+   "piece1b_propattach14_ruin"
+  ],
+  "0x3A538B01": [
+   "slice3a_propattach08_ruin"
+  ],
+  "0xB9DCE158": [
+   "slice2b_propattach07_ruin"
+  ],
+  "0x80F173A7": [
+   "floor01.piece2a"
+  ],
+  "0x860FE774": [
+   "slice2e_propattach01"
+  ],
+  "0x4394DBC6": [
+   "slice4a_propattach16"
+  ],
+  "0xA28A25A2": [
+   "piece1a_propattach03_ruin"
+  ],
+  "0x457150A3": [
+   "slice9a"
+  ],
+  "0x78487A5A": [
+   "slice9a_propattach00"
+  ],
+  "0x8A0F55BD": [
+   "piece4d"
+  ],
+  "0x761813A3": [
+   "slice1f_propattach05_ruin"
+  ],
+  "0xDEAA0EF8": [
+   "piece1b_propattach18"
+  ],
+  "0x9A348BB7": [
+   "slice1c_propattach02_ruin"
+  ],
+  "0x83FF95E1": [
+   "slice2c_propattach03_ruin"
+  ],
+  "0x4C07884D": [
+   "slice1a_propattach10"
+  ],
+  "0x1001E56B": [
+   "piece2d"
+  ],
+  "0x3B47C3E2": [
+   "slice1c_propattach11"
+  ],
+  "0x63266BF3": [
+   "slice1a_propattach08_ruin"
+  ],
+  "0xDB95EC51": [
+   "piece4c_pristine"
+  ],
+  "0xAEC70587": [
+   "slice2a_propattach19"
+  ],
+  "0x846B4EC9": [
+   "slice2a_pristine"
+  ],
+  "0xB1058926": [
+   "piece1a_propattach07_ruin"
+  ],
+  "0xF914ED24": [
+   "piece3a_propattach00"
+  ],
+  "0x7CA9B255": [
+   "piece3h_ruin"
+  ],
+  "0x33D8DC9C": [
+   "slice2g_propattach00_ruin"
+  ],
+  "0x18A3628E": [
+   "slice1a_propattach10_ruin"
+  ],
+  "0xA20070FB": [
+   "piece4b"
+  ],
+  "0x21889081": [
+   "slice2f_propattach00_ruin"
+  ],
+  "0x8CA46F33": [
+   "floor03.piece1b"
+  ],
+  "0x706CEAF1": [
+   "slice3f_pristine"
+  ],
+  "0x9D2ABB85": [
+   "piece3b_propattach00"
+  ],
+  "0xA2D1AECF": [
+   "slice8a_propattach00"
+  ],
+  "0x513F8A90": [
+   "slice1e_propattach05_ruin"
+  ],
+  "0x54C49199": [
+   "slice3a_propattach00_ruin"
+  ],
+  "0xA4FA927D": [
+   "slice1c_propattach00_ruin"
+  ],
+  "0xBB45366F": [
+   "sign09"
+  ],
+  "0x00D600FB": [
+   "slice2a_propattach10_ruin"
+  ],
+  "0xE09C2632": [
+   "slice1c_propattach09_ruin"
+  ],
+  "0x08EC87B1": [
+   "piece3b_pristine"
+  ],
+  "0x41F62F6E": [
+   "slice1a_propattach17"
+  ],
+  "0x20877C73": [
+   "slice2b_propattach11_ruin"
+  ],
+  "0x36C4317D": [
+   "piece3f_pristine"
+  ],
+  "0x4B573702": [
+   "piece1g_ruin"
+  ],
+  "0x818416CE": [
+   "slice2a_propattach00_ruin"
+  ],
+  "0xB54C2C8E": [
+   "piece9c_ruin"
+  ],
+  "0x5E2F6D7C": [
+   "slice1b_propattach10"
+  ],
+  "0x1A06C703": [
+   "slice3a_propattach07"
+  ],
+  "0xE3A34F30": [
+   "slice4a_propattach10"
+  ],
+  "0xAC1BA725": [
+   "slice1a_propattach18"
+  ],
+  "0xB0D45A87": [
+   "piece2e_ruin"
+  ],
+  "0x88408070": [
+   "slice5e_propattach11"
+  ],
+  "0xCCD03ACB": [
+   "piece2a_ruin"
+  ],
+  "0xDF727D0F": [
+   "slice1a_propattach01"
+  ],
+  "0xDF466784": [
+   "slice5e_ruin"
+  ],
+  "0x36045FD4": [
+   "piece2g"
+  ],
+  "0xC8B0709B": [
+   "slice1c_propattach03"
+  ],
+  "0xE87F9599": [
+   "slice5d_pristine"
+  ],
+  "0x5B440A51": [
+   "slice1f_ruin"
+  ],
+  "0xE8C3586A": [
+   "floor01.slice1a"
+  ],
+  "0xDB83F0E7": [
+   "piece1a_propattach08_ruin"
+  ],
+  "0xDDCB9036": [
+   "piece2h_pristine"
+  ],
+  "0x4B99658C": [
+   "slice4a_propattach14"
+  ],
+  "0xC8A579E8": [
+   "piece3e_pristine"
+  ],
+  "0x78159870": [
+   "slice5c_pristine"
+  ],
+  "0xE6603F39": [
+   "slice3a_propattach12"
+  ],
+  "0x67E2A729": [
+   "hp_fx_light11"
+  ],
+  "0x79E57B8E": [
+   "piece1b_propattach06_ruin"
+  ],
+  "0x544FAABB": [
+   "slice3b_ruin"
+  ],
+  "0x9158F8F0": [
+   "slice2a_propattach09"
+  ],
+  "0x03E04E9C": [
+   "piece2a_propattach01"
+  ],
+  "0x0E0EAE38": [
+   "piece2c"
+  ],
+  "0x44A2FFFF": [
+   "slice2a_ruin"
+  ],
+  "0x0F1D2F26": [
+   "slice4a_propattach11_ruin"
+  ],
+  "0x058AAA30": [
+   "slice1d_propattach05"
+  ],
+  "0x3D845A2A": [
+   "slice1a_propattach08"
+  ],
+  "0x19F899D9": [
+   "piece1e_propattach02_ruin"
+  ],
+  "0x7FD588FF": [
+   "slice6c_pristine"
+  ],
+  "0x0DBE4340": [
+   "slice1b_propattach08_ruin"
+  ],
+  "0xED574663": [
+   "slice1f_propattach00"
+  ],
+  "0xF7FFD5B8": [
+   "slice3a_propattach08"
+  ],
+  "0xB39E1B69": [
+   "slice1e_propattach03"
+  ],
+  "0x6109BB52": [
+   "slice1a_propattach21_ruin"
+  ],
+  "0x17755A46": [
+   "slice3a_propattach01_ruin"
+  ],
+  "0x70CAA616": [
+   "slice5c_ruin"
+  ],
+  "0x131754A9": [
+   "piece3a_propattach01"
+  ],
+  "0x2DFFD60E": [
+   "piece2e"
+  ],
+  "0x4322A15B": [
+   "piece3c"
+  ],
+  "0x657C36C6": [
+   "slice1d_propattach03"
+  ],
+  "0xA2ACD111": [
+   "slice1e_propattach06_ruin"
+  ],
+  "0xA079BD40": [
+   "piece5e_ruin"
+  ],
+  "0xB136C880": [
+   "piece2b_propattach00"
+  ],
+  "0xFD457A05": [
+   "slice2b_propattach05"
+  ],
+  "0xB3999E3B": [
+   "slice1e_propattach01"
+  ],
+  "0x7600F4F9": [
+   "slice4a_ruin"
+  ],
+  "0x5B801D06": [
+   "piece2h_propattach00"
+  ],
+  "0xBBC72382": [
+   "piece5d"
+  ],
+  "0xE8BFE505": [
+   "piece1b_propattach11"
+  ],
+  "0x7FFDFCDE": [
+   "piece4c"
+  ],
+  "0x98D972F8": [
+   "floor01.slice2b"
+  ],
+  "0x39513FCD": [
+   "piece2g_ruin"
+  ],
+  "0x5B191CA2": [
+   "slice1d_propattach00_ruin"
+  ],
+  "0xF30875B4": [
+   "piece1b_propattach03"
+  ],
+  "0xB0F40BFC": [
+   "slice2h_ruin"
+  ],
+  "0x485869B4": [
+   "hp_ladder_bottom_c"
+  ],
+  "0x3F65269F": [
+   "slice1f_propattach01_ruin"
+  ],
+  "0x9D62B4F2": [
+   "slice3b"
+  ],
+  "0x0215ABC5": [
+   "slice3a_propattach01"
+  ],
+  "0x6D80C08C": [
+   "slice1d_propattach01"
+  ],
+  "0x8EA91D60": [
+   "slice1a_propattach24"
+  ],
+  "0x1558E47E": [
+   "slice3f"
+  ],
+  "0x880286A4": [
+   "piece4a"
+  ],
+  "0x260FD870": [
+   "slice1c_propattach07_ruin"
+  ],
+  "0x685CFFF9": [
+   "slice1a_propattach19_ruin"
+  ],
+  "0x2229512A": [
+   "slice2a_propattach04_ruin"
+  ],
+  "0xA5FF32D1": [
+   "slice1b_propattach06"
+  ],
+  "0x19098C70": [
+   "slice1a_propattach01_ruin"
+  ],
+  "0x1CBEF9D0": [
+   "hp_spawn_h"
+  ],
+  "0xAFA36E6D": [
+   "slice2a_propattach05_ruin"
+  ],
+  "0x0FDB1131": [
+   "piece3d_ruin"
+  ],
+  "0x9B47BF8D": [
+   "slice2a_propattach00"
+  ],
+  "0x4DD0B7B7": [
+   "floor01.piece3b"
+  ],
+  "0xC9FB82B4": [
+   "slice1a_propattach15"
+  ],
+  "0xBE0A3164": [
+   "slice8b_ruin"
+  ],
+  "0x72450502": [
+   "slice7f"
+  ],
+  "0x833E1BC7": [
+   "piece6d"
+  ],
+  "0x31A498CD": [
+   "piece2a_pristine"
+  ],
+  "0xB609A682": [
+   "piece2a"
+  ],
+  "0xF7F0B6BA": [
+   "slice5e_pristine"
+  ],
+  "0x0A1FC5D8": [
+   "slice2d_ruin"
+  ],
+  "0x34DA3FDD": [
+   "piece4a_ruin"
+  ],
+  "0xC63C5C6C": [
+   "slice3e_pristine"
+  ],
+  "0xA66B3E7D": [
+   "floor01.piece1b"
+  ],
+  "0xF80452E6": [
+   "slice3a_propattach06"
+  ],
+  "0x72E40EC3": [
+   "slice3d_pristine"
+  ],
+  "0x5F86CE47": [
+   "slice1a_propattach09"
+  ],
+  "0xD5447B84": [
+   "slice2b_pristine"
+  ],
+  "0x97F4467D": [
+   "slice1a_propattach06_ruin"
+  ],
+  "0x150A18ED": [
+   "piece7b_pristine"
+  ],
+  "0x4DA634A5": [
+   "slice4a_propattach11"
+  ],
+  "0x1046F001": [
+   "piece2e_pristine"
+  ],
+  "0xB93257EA": [
+   "piece2b_propattach02"
+  ],
+  "0xBD6B8BC4": [
+   "slice1a_propattach06"
+  ],
+  "0x2463B612": [
+   "floor01.piece1a"
+  ],
+  "0x3BBBE238": [
+   "slice2f_propattach00"
+  ],
+  "0xD126A68E": [
+   "slice4a_propattach01"
+  ],
+  "0xB8AB9E15": [
+   "slice1a_propattach25"
+  ],
+  "0x59307702": [
+   "slice4a_propattach05"
+  ],
+  "0xCC827E06": [
+   "piece3b_propattach00_ruin"
+  ],
+  "0x0ECAA2A3": [
+   "piece4a_pristine"
+  ],
+  "0x6D29A6EB": [
+   "slice2a_propattach03_ruin"
+  ],
+  "0x3AF5F044": [
+   "piece2h_propattach12_ruin"
+  ],
+  "0x1726738C": [
+   "slice6d_ruin"
+  ],
+  "0x45FA1E83": [
+   "slice1b_propattach04"
+  ],
+  "0x4735914D": [
+   "slice4a_propattach03_ruin"
+  ],
+  "0xA00E55BA": [
+   "slice3a_propattach02"
+  ],
+  "0x7CF0FF2E": [
+   "piece2b_ruin"
+  ],
+  "0x38973A02": [
+   "slice2h_propattach00"
+  ],
+  "0xB2A6E99C": [
+   "floor03.piece1a"
+  ],
+  "0x55757568": [
+   "slice1a_propattach02"
+  ],
+  "0x66B3DF6C": [
+   "piece1b_propattach14"
+  ],
+  "0x638AFBD5": [
+   "slice4c_pristine"
+  ],
+  "0x75147B4D": [
+   "piece1b_propattach06"
+  ],
+  "0x7F0DC121": [
+   "slice2a_propattach01_ruin"
+  ],
+  "0xCC01AD3A": [
+   "slice1b_propattach01"
+  ],
+  "0x3AF9D39E": [
+   "slice3c_pristine"
+  ],
+  "0x57A765A4": [
+   "floor02.piece2a"
+  ],
+  "0x8EE679AA": [
+   "slice2e_propattach00_ruin"
+  ],
+  "0xBD4F4C4D": [
+   "slice1c_propattach12"
+  ],
+  "0x59DB5579": [
+   "hp_gunmount_a"
+  ],
+  "0xF7D3FF6E": [
+   "hp_gunmount_b"
+  ],
+  "0x344A24C8": [
+   "hp_mount_antenna_b"
+  ],
+  "0x3E47F5EF": [
+   "hp_mount_antenna_a"
+  ],
+  "0x6221CBBC": [
+   "bonebottom_gunbl03"
+  ],
+  "0xA431DB2B": [
+   "hp_lowerfcleftd"
+  ],
+  "0x4A399C42": [
+   "hp_lowerfclefta"
+  ],
+  "0x59074E3D": [
+   "hp_ruin_mlmlb"
+  ],
+  "0x882BF191": [
+   "hp_archer"
+  ],
+  "0xCEBB55EB": [
+   "hp_seat"
+  ],
+  "0x6E249CBC": [
+   "bone_hatchl"
+  ],
+  "0xEE3D6B22": [
+   "bone_hatchr"
+  ],
+  "0x47893CDB": [
+   "hp_mount_antenna"
+  ]
+ }
+}

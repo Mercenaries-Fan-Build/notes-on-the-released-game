@@ -16,9 +16,20 @@ Across all 11,369 VZ block paths there are zero filenames matching `skel|skl|rig
 
 Surveying 35 distinct asset type hashes across 3,997 VZ blocks: only textures (`0xF011157A`, ratio 1.25) and meshes (`0x5B724250`, ratio 1.15) are shared cross-block. Every other type has a ratio of 1.00 entries per asset. There is no texture-streaming-style shared skeleton system.
 
-### Bone names are stripped
+### Bone names are stripped from the HIER chunk (but NOT absent from the data)
 
-`Bip01` / `Pelvis` / `Spine` / `Clavicle` / `Hand` / `Foot` / `Head` strings do not appear in any extracted block (raw mesh blocks, animgroup blocks, or decompressed WAD data). Bone names are not on disk.
+A `HIER` node stores only `pandemic_hash_m2(bone_name)` at `+0` — no name string. That much stands.
+
+**CORRECTED (2026-07-13):** the original claim here — that `Bip01`/`Pelvis`/`Spine`/`Clavicle`/`Hand`/`Foot`/`Head`
+strings "do not appear in any extracted block", therefore "bone names are not on disk" — was a **false negative
+caused by testing the wrong grammar**. This engine does not use the 3ds Max Biped naming scheme (`Bip01` count in
+the exe and in every block dump: **0**). The real grammar is `Bone_<Part>` / `bone_<part>` / `hp_<name>`, and those
+strings *do* survive on disk: `output/block_strings.txt` (strings of the decompressed WAD blocks) carries ~121 of
+them (`bone_chest`, `bone_jaw`, `bone_eyeball_left`, `hp_barreltip_a`, ...), and the shipped exe carries the 12
+`Bone_*` ragdoll constants plus `hp_wheel_fl..rr`.
+
+The names are simply not carried *by the HIER node*; they live in other string tables. See
+[bone_census.md](reverse_engineer/bone_census.md) for the full name census and where each name comes from.
 
 ### Skeleton data is embedded inside mesh UCFX (asset type `0x5B724250`)
 

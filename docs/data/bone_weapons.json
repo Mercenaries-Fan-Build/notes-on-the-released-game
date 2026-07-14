@@ -1,0 +1,187 @@
+{
+ "pandemic_hash_m2": {
+  "0x3DF6AA10": [
+   "magazineA_loaded"
+  ],
+  "0x8DE5AD74": [
+   "magazineA_prop"
+  ],
+  "0x02DED334": [
+   "hp_40mmgrenade"
+  ],
+  "0xD2B8A582": [
+   "hp_aarocket"
+  ],
+  "0x900FD25B": [
+   "hp_amraam"
+  ],
+  "0xB1EB4812": [
+   "hp_bullpup"
+  ],
+  "0xF05734F4": [
+   "hp_bunkerbuster"
+  ],
+  "0x52C27776": [
+   "hp_clusterbomb"
+  ],
+  "0x1EB650A5": [
+   "hp_coilgun"
+  ],
+  "0xCF0FA427": [
+   "hp_daisycutter"
+  ],
+  "0x11C34839": [
+   "hp_deserteagle"
+  ],
+  "0x67B7E928": [
+   "hp_dshk"
+  ],
+  "0x901B7534": [
+   "hp_dumbbomb"
+  ],
+  "0x45EB5430": [
+   "hp_fae"
+  ],
+  "0xC8C1FA21": [
+   "hp_ffarrocket"
+  ],
+  "0xFEE4DBED": [
+   "hp_grapplinghook"
+  ],
+  "0xB3EBE359": [
+   "hp_hellfire"
+  ],
+  "0xE61ADDF8": [
+   "hp_jdam"
+  ],
+  "0xDCDD8469": [
+   "hp_kvsk"
+  ],
+  "0x16516BB1": [
+   "hp_m34wp"
+  ],
+  "0x5EED0FFA": [
+   "hp_microuzi"
+  ],
+  "0x0B711E0A": [
+   "hp_mlrsrocket"
+  ],
+  "0x895F92F1": [
+   "hp_moab"
+  ],
+  "0x619A3655": [
+   "hp_mp5sd"
+  ],
+  "0x99552B1E": [
+   "hp_pf97rocket"
+  ],
+  "0xD2897F9F": [
+   "hp_qbzlmg"
+  ],
+  "0x8B9C6A41": [
+   "hp_recoilessrifle"
+  ],
+  "0x811521C9": [
+   "hp_rpgrocket"
+  ],
+  "0x7FFB0A7D": [
+   "hp_rpk"
+  ],
+  "0x08F8524B": [
+   "hp_sawmg"
+  ],
+  "0xE5DDF776": [
+   "hp_tankshell"
+  ],
+  "0xF83F0253": [
+   "hp_tmp"
+  ],
+  "0x82AB78FA": [
+   "hp_towrocket"
+  ],
+  "0xCB9DC9FD": [
+   "global_weapon_ied1"
+  ],
+  "0xBA884EDC": [
+   "global_weapon_m21at1"
+  ],
+  "0x203D31C7": [
+   "global_weapon_m86pdm1"
+  ],
+  "0x4D9589EF": [
+   "global_weapon_smaw1"
+  ],
+  "0x62335897": [
+   "global_weapon_beaconlight1"
+  ],
+  "0x79A519D6": [
+   "hp_ammo"
+  ],
+  "0x39BE1BA9": [
+   "hp_crateaid"
+  ],
+  "0x7D2B5405": [
+   "hp_deliverycrate"
+  ],
+  "0x1ADDCAF6": [
+   "hp_zippo"
+  ],
+  "0xBB472E45": [
+   "hp_munitions_bunkerbuster"
+  ],
+  "0xD86B4A9B": [
+   "hp_munitions_fae"
+  ],
+  "0xD66F32FD": [
+   "hp_munitions_hackedairstrike"
+  ],
+  "0x69E4B707": [
+   "hp_al_deliverycrate"
+  ],
+  "0xC9F86A6D": [
+   "hp_ch_deliverycrate"
+  ],
+  "0x1BA54ADF": [
+   "hp_gr_deliverycrate"
+  ],
+  "0xEB69C10E": [
+   "hp_pr_deliverycrate"
+  ],
+  "0x408F8A07": [
+   "hp_up_deliverycrate"
+  ],
+  "0x68119FD8": [
+   "hp_vz_deliverycrate"
+  ],
+  "0xB8995D04": [
+   "global_propanetanklargeb1"
+  ],
+  "0x94E808CE": [
+   "global_ramp_roadlessrider1"
+  ],
+  "0x3D4A21F7": [
+   "global_searchlighta1"
+  ],
+  "0xF4AAF606": [
+   "chinaoutpost_bld_prison_fence1"
+  ],
+  "0x41855F7C": [
+   "cumana_bld_segment32x32d1"
+  ],
+  "0x93C2962A": [
+   "mar_commercial_roadstraight10_crater"
+  ],
+  "0x31D61713": [
+   "pmcoutpost_fountain1"
+  ],
+  "0xBD2FD71A": [
+   "vzoutpost_bld_guardtower_al1"
+  ],
+  "0x87F05472": [
+   "vzoutpost_bld_guardtower_gr1"
+  ],
+  "0xC1238CA6": [
+   "vzoutpost_bld_hangar_oc1"
+  ]
+ }
+}

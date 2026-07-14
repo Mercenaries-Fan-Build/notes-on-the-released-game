@@ -1,0 +1,157 @@
+{
+ "pandemic_hash_m2": {
+  "0xC6C5E924": [
+   "floor01.piece1a_propattach11_ruin"
+  ],
+  "0x69B95FF0": [
+   "floor01.piece1b_propattach00"
+  ],
+  "0x861ED1D7": [
+   "floor01.piece1b_propattach00_pristine"
+  ],
+  "0xBF30BE39": [
+   "floor01.piece1b_propattach00_ruin"
+  ],
+  "0x4CE6A01E": [
+   "floor01.piece1c_propattach11_ruin"
+  ],
+  "0x3586F7FB": [
+   "floor01.piece1c_propattach12_ruin"
+  ],
+  "0x08F5CDE5": [
+   "floor01.piece2a_propattach11_ruin"
+  ],
+  "0x63637BA0": [
+   "floor02.piece1a_propattach00"
+  ],
+  "0x80384907": [
+   "floor02.piece1a_propattach00_pristine"
+  ],
+  "0x0E721DE9": [
+   "floor02.piece1a_propattach00_ruin"
+  ],
+  "0x437AE261": [
+   "floor02.piece1b_propattach00"
+  ],
+  "0x0B362554": [
+   "floor02.piece1b_propattach00_pristine"
+  ],
+  "0x1A8E5612": [
+   "floor02.piece1b_propattach00_ruin"
+  ],
+  "0xC977E3BC": [
+   "floor02.piece1b_propattach01"
+  ],
+  "0x3D701ECB": [
+   "floor02.piece1b_propattach01_pristine"
+  ],
+  "0x9946A1F5": [
+   "floor02.piece1b_propattach01_ruin"
+  ],
+  "0xC166A4C3": [
+   "floor02.piece2a_propattach01_ruin"
+  ],
+  "0x8BEE5546": [
+   "floor02.piece2a_propattach02_ruin"
+  ],
+  "0xC93D8C99": [
+   "floor02.piece2a_propattach03_ruin"
+  ],
+  "0xA74FDEF0": [
+   "floor03.piece1a_propattach00_ruin"
+  ],
+  "0x496FBE86": [
+   "floor03.piece1b_propattach10_ruin"
+  ],
+  "0x0FF16E33": [
+   "global_feather_fxmodel_b"
+  ],
+  "0xC68ADB00": [
+   "global_pile07"
+  ],
+  "0xF386B18C": [
+   "sign28"
+  ],
+  "0x6D89B031": [
+   "sign29"
+  ],
+  "0x820AA92F": [
+   "sign30"
+  ],
+  "0xFAE59609": [
+   "Y7EzN3L0"
+  ],
+  "0x7AE04F5B": [
+   "Y7EzN3L2"
+  ],
+  "0x58DDDB3E": [
+   "Y7EzN3L3"
+  ],
+  "0x62EF341D": [
+   "Y7EzN3L4"
+  ],
+  "0x78ED1828": [
+   "Y7EzN3L5"
+  ],
+  "0x02EA1FCF": [
+   "Y7EzN3L6"
+  ],
+  "0xE42C295A": [
+   "gr_veh_apc_m113_50cal"
+  ],
+  "0x558A7A33": [
+   "floor01.piece1a_propattach11"
+  ],
+  "0x7C0FF1DA": [
+   "floor01.piece1a_propattach11_pristine"
+  ],
+  "0xB1CA859D": [
+   "floor01.piece1c_propattach11"
+  ],
+  "0xA7800068": [
+   "floor01.piece1c_propattach11_pristine"
+  ],
+  "0x2FC2FD32": [
+   "floor01.piece1c_propattach12"
+  ],
+  "0x159EB7FD": [
+   "floor01.piece1c_propattach12_pristine"
+  ],
+  "0xA0BEADEC": [
+   "floor01.piece2a_propattach11"
+  ],
+  "0x9941393B": [
+   "floor01.piece2a_propattach11_pristine"
+  ],
+  "0xB13CBEBA": [
+   "floor02.piece2a_propattach01"
+  ],
+  "0xD0B1C3F5": [
+   "floor02.piece2a_propattach01_pristine"
+  ],
+  "0x134414C5": [
+   "floor02.piece2a_propattach02"
+  ],
+  "0x6375E7A0": [
+   "floor02.piece2a_propattach02_pristine"
+  ],
+  "0x2941F8D0": [
+   "floor02.piece2a_propattach03"
+  ],
+  "0x7FA4F9B7": [
+   "floor02.piece2a_propattach03_pristine"
+  ],
+  "0xF4F0388F": [
+   "floor03.piece1a_propattach00"
+  ],
+  "0x35998A1E": [
+   "floor03.piece1a_propattach00_pristine"
+  ],
+  "0x2F24F105": [
+   "floor03.piece1b_propattach10"
+  ],
+  "0x5211CEE0": [
+   "floor03.piece1b_propattach10_pristine"
+  ]
+ }
+}

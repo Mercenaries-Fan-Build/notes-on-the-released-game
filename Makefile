@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-havok-extract build-destruction-extract wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native winsock-redirect-asi dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings extract-strings build-wad-crates
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-havok-extract build-destruction-extract wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native winsock-redirect-asi dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings roster-names fold-aset-rainbow extract-strings build-wad-crates
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -165,6 +165,8 @@ help:
 	@echo "                      DLC patch WAD asset names → fold new hashes into tools/rainbow_table.json"
 	@echo "  make export-console-strings"
 	@echo "                      Xbox 360 + PS3 WAD names+blocks → game-files/<stem>.{blocks,strings,unique-strings}.txt (+table)"
+	@echo "  make roster-names"
+	@echo "                      Name unresolved model roots from the vehicle/weapon rosters → docs/data/aset_roster_names.json"
 	@echo "  make extract-strings OUTPUT=./output"
 	@echo "                      Both of the above (vars: PATCH_WAD XBOX_WAD PS3_WAD; STRINGS_MERGE=0 to skip table writes)"
 	@echo ""
@@ -1187,6 +1189,19 @@ harvest-dlc-strings:
 	  echo "Harvesting DLC strings from $$WAD"; \
 	  "$(PYTHON)" "$(REPO_ROOT)/tools/harvest_dlc_strings.py" --wad "$$WAD" --quality $(STRINGS_MERGE_FLAG)
 
+roster-names:
+	@echo "Mining model-root names from the game vehicle/weapon rosters (structured, own error bar)"
+	@"$(REPO_ROOT)/tools/wad_simulator/target/release/aset_external_mine" \
+	  --names "$(REPO_ROOT)/docs/data/aset_names.csv" \
+	  --roster "$(REPO_ROOT)/docs/data/lua_vehicle_hashes.csv" \
+	  --roster "$(REPO_ROOT)/docs/data/spawnable_templates.csv" \
+	  --emit "$(REPO_ROOT)/docs/data/aset_roster_names.json"
+	@echo "-> docs/data/aset_roster_names.json (run 'make fold-aset-rainbow' to publish to census/workshop)"
+
+fold-aset-rainbow:
+	@echo "Publishing ASET-cracked names into the rainbow table (what the census/workshop read)"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/fold_aset_into_rainbow.py"
+
 export-console-strings:
 	@test -f "$(XBOX_WAD)" || test -f "$(PS3_WAD)" || \
 	  (echo "error: neither XBOX_WAD ($(XBOX_WAD)) nor PS3_WAD ($(PS3_WAD)) found — set XBOX_WAD=/PS3_WAD=" >&2; exit 1)
@@ -1196,4 +1211,4 @@ export-console-strings:
 	  --out-dir "$(REPO_ROOT)/game-files" \
 	  $(STRINGS_MERGE_FLAG)
 
-extract-strings: harvest-dlc-strings export-console-strings
+extract-strings: harvest-dlc-strings export-console-strings roster-names fold-aset-rainbow

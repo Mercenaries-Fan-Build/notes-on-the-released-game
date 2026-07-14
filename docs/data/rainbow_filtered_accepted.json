@@ -1,0 +1,724 @@
+{
+ "pandemic_hash_m2": {
+  "0x03157B3D": [
+   "hp_barreltip_cannon"
+  ],
+  "0x031AB782": [
+   "bone_wheel_rl_roll"
+  ],
+  "0x03765872": [
+   "hp_fx_flame_a"
+  ],
+  "0x03C2C29F": [
+   "bone_hatch_fr"
+  ],
+  "0x04742A8A": [
+   "bone_attach_piston_d"
+  ],
+  "0x078E8D36": [
+   "hp_seat_ciwsrl"
+  ],
+  "0x07BBFF80": [
+   "hp_seat_driver"
+  ],
+  "0x0842761F": [
+   "bone_propeller_a"
+  ],
+  "0x08A1D17D": [
+   "bone_pitch_turret"
+  ],
+  "0x08D14BA6": [
+   "bone_h"
+  ],
+  "0x0AE956F2": [
+   "hp_seat_ciwsfl"
+  ],
+  "0x0BFB95AC": [
+   "hp_dock_rr"
+  ],
+  "0x0D9EBAE5": [
+   "bone_strut_rl"
+  ],
+  "0x0FA95FB7": [
+   "bone_strut_fr"
+  ],
+  "0x1181220C": [
+   "hp_fx_explosionb"
+  ],
+  "0x11C1CA54": [
+   "hp_playerb_enter"
+  ],
+  "0x1247DD93": [
+   "bone_stabiliser_r"
+  ],
+  "0x12540AE0": [
+   "hp_snap_a"
+  ],
+  "0x13C0965E": [
+   "hp_antenna_r"
+  ],
+  "0x143A725A": [
+   "hp_dock_driver"
+  ],
+  "0x15DC2CC5": [
+   "bone_frontwheel_l"
+  ],
+  "0x16FA354B": [
+   "hp_seat_gun_rr"
+  ],
+  "0x17CA9A9B": [
+   "bone_bomb_l"
+  ],
+  "0x17E74C76": [
+   "bone_yaw_mast_r"
+  ],
+  "0x187F601E": [
+   "bone_steering_fr"
+  ],
+  "0x1969E010": [
+   "bone_wheel_rr_roll"
+  ],
+  "0x1A5D5F78": [
+   "hp_barreltip_ciwsfr_a"
+  ],
+  "0x1C9C678E": [
+   "hp_spawn_f"
+  ],
+  "0x1E7214E1": [
+   "bone_attach_piston_c"
+  ],
+  "0x2226A731": [
+   "bone_axle_fl"
+  ],
+  "0x23DA1BE7": [
+   "hp_seat_gun_fr"
+  ],
+  "0x24A0F154": [
+   "hp_spawn_d"
+  ],
+  "0x26ADC06D": [
+   "hp_spawn_a"
+  ],
+  "0x2768DE29": [
+   "bone_strut_fl"
+  ],
+  "0x27EA681D": [
+   "bone_shock_fl"
+  ],
+  "0x29A567C3": [
+   "bone_ramp_rl"
+  ],
+  "0x2CEBCB0F": [
+   "hp_seat_ciwsfm"
+  ],
+  "0x2F31DBFE": [
+   "hp_barreltip_h"
+  ],
+  "0x2F4F6789": [
+   "bone_pitch_rear"
+  ],
+  "0x2F546E40": [
+   "hp_barreltip_f"
+  ],
+  "0x314B9994": [
+   "bone_wheel_r"
+  ],
+  "0x31F55432": [
+   "bone_weapon_door_r"
+  ],
+  "0x3304964A": [
+   "bone_light"
+  ],
+  "0x33CFD1A4": [
+   "bone_piston_d"
+  ],
+  "0x340A6A70": [
+   "hp_antenna_l"
+  ],
+  "0x35DCA0BD": [
+   "bone_piston_a"
+  ],
+  "0x37728FEC": [
+   "hp_barreltip_r"
+  ],
+  "0x38C93430": [
+   "bone_steering_fl"
+  ],
+  "0x39B5EF06": [
+   "bone_brake_l"
+  ],
+  "0x3A6AAECD": [
+   "bone_stabiliser_l"
+  ],
+  "0x3AAE29E1": [
+   "bone_rear_wheel_l"
+  ],
+  "0x3CF0A7E9": [
+   "bone_gun_ruin"
+  ],
+  "0x3D5F0473": [
+   "bone_axle_rr"
+  ],
+  "0x3D658C19": [
+   "hp_dock_gunner_top"
+  ],
+  "0x402D31AD": [
+   "bone_fan"
+  ],
+  "0x40B21FFD": [
+   "hp_dock_gun_rr"
+  ],
+  "0x41026897": [
+   "bone_yaw_minigun"
+  ],
+  "0x42043D41": [
+   "bone_shock_rl"
+  ],
+  "0x459EAE5B": [
+   "hp_cargo_b"
+  ],
+  "0x46DD9091": [
+   "bone_door_top_rr"
+  ],
+  "0x4869630E": [
+   "bone_dish_a"
+  ],
+  "0x4AD99080": [
+   "bone_radarb"
+  ],
+  "0x4B3A5E93": [
+   "hp_seat_mr"
+  ],
+  "0x4E2EF0EB": [
+   "hp_barreltip_minigun"
+  ],
+  "0x4EF4D4BC": [
+   "bone_piston_bottom_l"
+  ],
+  "0x4F98004C": [
+   "bone_wind"
+  ],
+  "0x55FE1443": [
+   "bone_barrel_ruin"
+  ],
+  "0x56279F72": [
+   "bone_suspension_f"
+  ],
+  "0x56587483": [
+   "bone_pitch_rr"
+  ],
+  "0x56AC1E21": [
+   "hp_dock_gun_fr"
+  ],
+  "0x56FF6E56": [
+   "hp_fx_flame"
+  ],
+  "0x580D3A4D": [
+   "bone_pitch_sensor"
+  ],
+  "0x59191BBD": [
+   "bone_hatch_turret"
+  ],
+  "0x595271C7": [
+   "hp_barreltip_e"
+  ],
+  "0x5956EEF5": [
+   "hp_barreltip_g"
+  ],
+  "0x598901C8": [
+   "bone_brake_r"
+  ],
+  "0x5BC73FE1": [
+   "bone_prop"
+  ],
+  "0x5BF879AB": [
+   "bone_rotor_ruin"
+  ],
+  "0x5CADC08F": [
+   "bone_rocket_mount_r"
+  ],
+  "0x5E54C764": [
+   "bone_pitch_minigun"
+  ],
+  "0x5E92A40B": [
+   "bone_yaw_sidegun"
+  ],
+  "0x5F1DB2A5": [
+   "bone_pitch_mast_l"
+  ],
+  "0x62F0AA46": [
+   "bone_piston_top_r"
+  ],
+  "0x62FFA04E": [
+   "bone_suspension_wheel_r"
+  ],
+  "0x6413BFB3": [
+   "bone_elevator_r_roll"
+  ],
+  "0x6442569D": [
+   "bone_engine_l_roll"
+  ],
+  "0x64462DDD": [
+   "bone_elevator_l_roll"
+  ],
+  "0x653AD620": [
+   "hp_beacon"
+  ],
+  "0x6581D5AD": [
+   "bone_axle_rl"
+  ],
+  "0x65AE39EA": [
+   "bone_pitch_turret_b"
+  ],
+  "0x661F1DF1": [
+   "hp_trailerhitch"
+  ],
+  "0x67EBD596": [
+   "bone_steer_r"
+  ],
+  "0x688C4858": [
+   "hp_dock_fr"
+  ],
+  "0x6995DC01": [
+   "hp_snap_oilrig_catwalkd"
+  ],
+  "0x6A099AA1": [
+   "hp_fx_flame3"
+  ],
+  "0x6A7779CA": [
+   "bone_yaw_missile"
+  ],
+  "0x6D598373": [
+   "bone_engine_r_roll"
+  ],
+  "0x6E45DA4E": [
+   "bone_suspension_r"
+  ],
+  "0x707F409E": [
+   "bone_wing_l"
+  ],
+  "0x7224E6A6": [
+   "bone_suspension_rear"
+  ],
+  "0x72AF3E19": [
+   "bone_flap_rear_l"
+  ],
+  "0x72ECEC88": [
+   "bone_hub_f"
+  ],
+  "0x735D2FCD": [
+   "hp_seat_ml"
+  ],
+  "0x74D79407": [
+   "bone_radara"
+  ],
+  "0x74FA1F37": [
+   "hp_winch_bottom"
+  ],
+  "0x76D3C601": [
+   "bone_engine_l"
+  ],
+  "0x7806F1A5": [
+   "bone_glass_f"
+  ],
+  "0x796EE9D9": [
+   "bone_weapon_r"
+  ],
+  "0x7A10A764": [
+   "bone_recoil"
+  ],
+  "0x7BEE7F6F": [
+   "hp_fx_exhaust_c"
+  ],
+  "0x7E6C9BD3": [
+   "bone_attach_piston_a"
+  ],
+  "0x7EA3BD99": [
+   "hp_spawn_e"
+  ],
+  "0x7EA91FDD": [
+   "hp_barreltip_maingun"
+  ],
+  "0x7F64DAD1": [
+   "bone_pitch_mlrs"
+  ],
+  "0x8014E005": [
+   "bone_bomb_r"
+  ],
+  "0x823CF5E6": [
+   "hp_barreltip_ciwsrl_a"
+  ],
+  "0x82C3BD08": [
+   "bone_piston_top_l"
+  ],
+  "0x82CFC768": [
+   "hp_light"
+  ],
+  "0x857DE0DD": [
+   "hp_fx_flame_b"
+  ],
+  "0x86A8475F": [
+   "hp_spawn_c"
+  ],
+  "0x86B3D504": [
+   "bone_trunk"
+  ],
+  "0x870FA8E7": [
+   "bone_front_hook"
+  ],
+  "0x874AEE1B": [
+   "bone_rigid"
+  ],
+  "0x87B52B35": [
+   "bone_pitch_turret_a"
+  ],
+  "0x8869E876": [
+   "hp_dock_fl"
+  ],
+  "0x8A1CC9D5": [
+   "bone_panel_ruin"
+  ],
+  "0x8B203A6C": [
+   "hp_seat_ciwsfr"
+  ],
+  "0x8B8420B1": [
+   "hp_fx_explosionc"
+  ],
+  "0x8BC4B232": [
+   "hp_dock_rl"
+  ],
+  "0x8C0EE937": [
+   "bone_door_ruin"
+  ],
+  "0x8D54CCF3": [
+   "bone_pitch_r"
+  ],
+  "0x8DE4C486": [
+   "hp_dock_r"
+  ],
+  "0x8F724568": [
+   "bone_yaw_sensor"
+  ],
+  "0x90C914B0": [
+   "bone_wing_r"
+  ],
+  "0x913D262A": [
+   "bone_wheel_l"
+  ],
+  "0x9178EBDD": [
+   "bone_ramp_rr"
+  ],
+  "0x927B9B46": [
+   "bone_pitch_rocket_l"
+  ],
+  "0x948D9162": [
+   "hp_barreltip_ciwsfl_a"
+  ],
+  "0x95A1C89D": [
+   "bone_hatch_ruin"
+  ],
+  "0x95C6BC0A": [
+   "hp_dock_f"
+  ],
+  "0x95EF2E39": [
+   "hp_antenna_a"
+  ],
+  "0x96BF9077": [
+   "bone_door_bottom_rr"
+  ],
+  "0x97D3AA24": [
+   "hp_mount_r"
+  ],
+  "0x9A5C7464": [
+   "bone_hatch"
+  ],
+  "0x9A9DE3A5": [
+   "bone_stabilizer"
+  ],
+  "0x9AA07287": [
+   "bone_flap_rear_r"
+  ],
+  "0x9C812A4A": [
+   "hp_dock_gunner_r"
+  ],
+  "0x9EC479C6": [
+   "bone_door_cr"
+  ],
+  "0x9F2CF401": [
+   "hp_fx_fire"
+  ],
+  "0xA062A696": [
+   "bone_ramp"
+  ],
+  "0xA0732FFE": [
+   "hp_dock_recruitheli"
+  ],
+  "0xA1349E30": [
+   "bone_pitch_sidegun"
+  ],
+  "0xA1601E47": [
+   "bone_weapon_l"
+  ],
+  "0xA17592D8": [
+   "bone_flap_r"
+  ],
+  "0xA2C6D27F": [
+   "bone_rear_wheel_r"
+  ],
+  "0xA3A334F4": [
+   "hp_barreltip_ciwsrr_a"
+  ],
+  "0xA3C6543A": [
+   "bone_dish"
+  ],
+  "0xA46F163C": [
+   "bone_attach_piston_b"
+  ],
+  "0xA4A63802": [
+   "hp_spawn_b"
+  ],
+  "0xA554757B": [
+   "bone_strut_rr"
+  ],
+  "0xA85C6E87": [
+   "hp_barreltip_ciwsfm_a"
+  ],
+  "0xA92E4168": [
+   "bone_wheel_f"
+  ],
+  "0xAA1CE5DF": [
+   "bone_shock_rr"
+  ],
+  "0xAA70B919": [
+   "bone_dish_b"
+  ],
+  "0xABA13ED1": [
+   "bone_pitch_bowgun"
+  ],
+  "0xABA18D84": [
+   "hp_cargo_a"
+  ],
+  "0xAD91E75B": [
+   "bone_frontwheel_r"
+  ],
+  "0xAE501B46": [
+   "bone_hatch_gunner"
+  ],
+  "0xAE7F0EE9": [
+   "bone_door_bottom_rl"
+  ],
+  "0xAE8F67DF": [
+   "hp_rockets"
+  ],
+  "0xAF88ED71": [
+   "bone_anchor"
+  ],
+  "0xAFA9D3E2": [
+   "hp_mount_rr"
+  ],
+  "0xB1813D38": [
+   "hp_dock_recruitmechanic"
+  ],
+  "0xB2216B4A": [
+   "bone_door_ml"
+  ],
+  "0xB22C37AC": [
+   "bone_weapon_door_l"
+  ],
+  "0xB24EAE08": [
+   "bone_pitch_rocket_r"
+  ],
+  "0xB2AC1083": [
+   "bone_yaw_turret_b"
+  ],
+  "0xB2FE994A": [
+   "bone_steering_l"
+  ],
+  "0xB3D51852": [
+   "bone_piston_b"
+  ],
+  "0xB4E46511": [
+   "bone_rocket_mount_l"
+  ],
+  "0xB5779E2D": [
+   "bone_pitch_l"
+  ],
+  "0xB73BAC72": [
+   "hp_barreltip_l"
+  ],
+  "0xB7B74863": [
+   "hp_winch"
+  ],
+  "0xB81483DA": [
+   "hp_mount_l"
+  ],
+  "0xB86F5F47": [
+   "hp_dock_recruitjet"
+  ],
+  "0xB931616F": [
+   "bone_ramp_ruin"
+  ],
+  "0xBA358160": [
+   "bone_wheel_cover_r"
+  ],
+  "0xBC906734": [
+   "hp_dock_gunner_l"
+  ],
+  "0xBD9ACB06": [
+   "bone_missile"
+  ],
+  "0xBEC4C6BF": [
+   "hp_dock_gun_fl"
+  ],
+  "0xBEF52D95": [
+   "hp_seat_gun_rl"
+  ],
+  "0xC016E403": [
+   "bone_shock_fr"
+  ],
+  "0xC0B48944": [
+   "bone_stabiliser"
+  ],
+  "0xC15332F6": [
+   "bone_flap_l"
+  ],
+  "0xC2FA2740": [
+   "bone_suspension_wheel_l"
+  ],
+  "0xC4403B60": [
+   "bone_turret"
+  ],
+  "0xC45E0BFF": [
+   "hp_winch_top"
+  ],
+  "0xC4C68DC9": [
+   "bone_yaw_maingun"
+  ],
+  "0xC5F3E9EF": [
+   "hp_fx_spotlight"
+  ],
+  "0xC79D2BC0": [
+   "hp_snap_oilrig_catwalka"
+  ],
+  "0xC7CE8761": [
+   "hp_seat_cannon"
+  ],
+  "0xC80EFEF8": [
+   "bone_steer_l"
+  ],
+  "0xC949C773": [
+   "hp_dock_ml"
+  ],
+  "0xC9F002AF": [
+   "bone_axle_fr"
+  ],
+  "0xCB7C6AF3": [
+   "hp_dock_ai_rl"
+  ],
+  "0xCDD6739B": [
+   "bone_door_l"
+  ],
+  "0xCE406140": [
+   "bone_suspension_l"
+  ],
+  "0xCF0DA322": [
+   "bone_piston_bottom_r"
+  ],
+  "0xCF98BB2A": [
+   "hp_snap_oilrig_catwalkc"
+  ],
+  "0xD230A834": [
+   "bone_door_mr"
+  ],
+  "0xD30DD634": [
+   "bone_steering_r"
+  ],
+  "0xD4E17053": [
+   "bone_door_rear"
+  ],
+  "0xD5823AA0": [
+   "bone_yaw_mlrs"
+  ],
+  "0xD5D78C6F": [
+   "bone_piston_c"
+  ],
+  "0xD6780303": [
+   "bone_hatch_b"
+  ],
+  "0xD8DE9BE3": [
+   "hp_dock_gun_rl"
+  ],
+  "0xD973B75D": [
+   "bone_attach_steering"
+  ],
+  "0xD9E6C4A4": [
+   "hp_fx_exhaust_d"
+  ],
+  "0xDA3A30EE": [
+   "bone_wheel_cover_l"
+  ],
+  "0xDC66F509": [
+   "hp_fx_barrel_a"
+  ],
+  "0xDE03AD2F": [
+   "bone_steering"
+  ],
+  "0xDEEC6E9F": [
+   "bone_engine_r"
+  ],
+  "0xDF086F30": [
+   "bone_pitch_front"
+  ],
+  "0xE11CA51E": [
+   "bone_yaw_barrel"
+  ],
+  "0xE3DC28A8": [
+   "hp_seat_r"
+  ],
+  "0xE5E52223": [
+   "bone_roll_turret_b"
+  ],
+  "0xE6D56345": [
+   "bone_pitch_missile"
+  ],
+  "0xE7B0ED18": [
+   "hp_seat_ciwsrr"
+  ],
+  "0xE97A0046": [
+   "bone_pitch_maingun"
+  ],
+  "0xEEA6EC0F": [
+   "bone_door_top_rl"
+  ],
+  "0xF131D0FE": [
+   "bone_door"
+  ],
+  "0xF16C98AD": [
+   "hp_dock_mr"
+  ],
+  "0xF39F3C2D": [
+   "hp_dock_ai_rr"
+  ],
+  "0xF6D36D3B": [
+   "bone_pitch_mast_r"
+  ],
+  "0xF809AC58": [
+   "bone_yaw_mast_l"
+  ],
+  "0xFBADA738": [
+   "bone_yaw_bowgun"
+  ],
+  "0xFBE8E779": [
+   "hp_seat_gun_fl"
+  ],
+  "0xFD133A7B": [
+   "bone_door_rl"
+  ],
+  "0xFD26139F": [
+   "hp_barreltip_sidegun"
+  ],
+  "0xFECE04B0": [
+   "bone_flap_rear"
+  ]
+ }
+}
