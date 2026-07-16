@@ -61,14 +61,21 @@ Still ❌: shadows, multi-pass z-prepass/reflection, decals, LOD imposters, ECS 
   `PgRoadShadowVP`, `PgBillboardTreeShadowVP`); `ShadowBounds`/`GetShadowBaseDistance`.
 - ❌ `BlobShadow` (cheap fallback).
 
-### E. Particles / FX — ❌ not started (the biggest gap)
+### E. Particles / FX — 🟡 sim + render + real-data wire done; job-parallel/ribbons pending
 Mercs2 is explosion/smoke/fire-heavy; the Lua drives emitters constantly (`ObjectState.StartEmitter/
-StopEmitter`, `global_particle_*` templates). None of this exists in-engine.
-- ❌ **`fxdict`/DICT** (`FUN_00491320`): 630×20B effect-parameter records (name_hash + 4 floats/flags),
-  the effect param namespace. (reg §7.)
-- ❌ **Effect template** cluster: `EFCT` header, `EMTR` emitter, `EMIT` timing, `ATRB` attributes,
-  `FRCE` forces (gravity/drag/vortex hash→reader), `COLR` 200B gradient palette (age-sampled), `TEXT`
-  texture refs, `PTYP` flags, `POFF` offset, `TRFM` matrix. (reg §7, loader 0x492AF0.)
+StopEmitter`, `global_particle_*` templates). The CPU billboard sim + additive/alpha render exist
+(`mercs2_engine::particles`), and authored effect data now drives them.
+- 🟡 **`fxdict`/DICT** (`FUN_00491320`): parser lands the 20B effect-parameter records
+  (`mercs2_formats::fxdict::parse_fxdict`). (reg §7.)
+- ✅ **Effect template → runtime wire**: `EffectTemplate::from_chunks` parses the cluster (`EFCT`/`EMTR`/
+  `EMIT`/`COLR`/`FRCE`/`PTYP`/`POFF`/`TRFM`/`TEXT`), `game_world::load_effect_template` reads it from the
+  `effects` block by name-hash, and `EmitterDesc::from_effect_template` converts the **reliably-parsed**
+  chunks (COLR gradient, FRCE gravity/drag/wind, PTYP blend) into the runtime emitter — replacing the
+  `demo_*` name-heuristic (`world.rs` resolves each `global_particle_*` at load, WAD open). Informed by
+  the WildStar `WSParticleEmitter/Transformer` recovery (`saboteur_mercs2_crossval_render_physics.md`).
+  RESIDUAL: `EMIT` timing float order is **unpinned** (positional reflection) → lifetime/spawn_rate stay
+  at the base preset until a live capture pins it; `FRCE` kind classification is the FRCE hypothesis;
+  Vortex force + `ATRB` attributes not modelled by the billboard sim.
 - ❌ **ECS spawners**: `ParticleEmitter` (0xe595ab2f, `FUN_00661190`), `RedEffectComponent`
   (0x60a13e3e), `EffectTemplate` (0xabaa1f3c), `EffectAiOccluder`.
 - ❌ **Runtime**: hardpoint-attached emitters (`hp_fx_*` nodes), billboard/soft particles, additive
