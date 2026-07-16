@@ -1,0 +1,175 @@
+{
+  "_readme": [
+    "Narrow candidate pools for the CHARACTER dialect (humanoid deform rig + FaceFX facial rig).",
+    "Companion doc: docs/reverse_engineer/dialect_character.md  -- READ IT FIRST.",
+    "Run:  python tools/bone_forge.py --config tools/bone_forge_character.json --gpu",
+    "",
+    "THESE POOLS ARE DELIBERATELY SMALL. Expected false positives = S * T / 2^32. A big vocabulary is",
+    "self-defeating: a chance hit into a large dictionary READS like a real name and destroys the only",
+    "witness we have. Every pool below has been RUN and returned ZERO (see doc section 5). They are kept",
+    "so nobody re-tests them, and so a future source can be matched against the right grammar.",
+    "",
+    "BEFORE ADDING ANYTHING, APPLY THE THREE FREE FILTERS IN 'laws' BELOW. They cost nothing and they",
+    "kill most candidates outright -- including, provably, every candidate any previous attack ever",
+    "generated for the trk3/trk10 pair."
+  ],
+
+  "laws": {
+    "parity_law": {
+      "statement": "bit0(m2(name)) == bit0(FNV_OFFSET) XOR parity(number of ODD bytes in the name after |0x20).",
+      "why": "FNV-1a: the prime is odd so multiplication preserves bit 0, and XOR feeds bit 0 straight through.",
+      "corollary": "'l'=0x6C and 'r'=0x72 are BOTH EVEN, so a glued l<->r rename cannot change hash bit 0. Any glued l/r mirror pair MUST agree in bit 0. Verified 11/11 on the known pairs of the 105-bone rig.",
+      "use_as": "A free 1-bit filter on EVERY candidate: required_odd_byte_parity = 1 XOR (hash & 1).",
+      "required_odd_byte_parity": {
+        "trk3_0x491E8967": 0, "trk10_0xE6FF1D72": 1, "trk17_0xFAADBFFF": 0, "trk22_0x11815D82": 1,
+        "trk25_0x00A8F086": 1, "trk26_0xEB221048": 1, "trk28_0x0D29320C": 1, "trk29_0x1E4780FA": 1,
+        "trk30_0xFE747044": 1, "trk31_0x409403C6": 1, "trk32_0xFBFA3B2C": 1, "trk33_0xA3EEDAF2": 1,
+        "trk54_0x87E8C062": 1, "trk76_0x7D2C9CA4": 1, "trk104_0x9EC352CF": 0
+      }
+    },
+    "mirror_sieve": {
+      "statement": "Every FNV-1a byte step is invertible, so a mirror pair's shared STEM can be solved for WITHOUT knowing the prefix: unwind STEM then the side token from both hashes; a true stem makes both land on the SAME prefix-state s0.",
+      "no_false_negatives": true,
+      "payoff": "The recovered s0 identifies the prefix as a SEPARATE 32-bit problem, so the name factors into two independent facts instead of one. Positive controls: recovers 'bicep' from bone_l/rbicep and fold('bone_cheek_') from bone_cheek_left/right, prefix withheld.",
+      "implementation_sketch": "state_end(H) = (H * PRIME^-1) ^ 0x2A ; U(s,c) = (s * PRIME^-1) ^ (c|0x20)"
+    },
+    "length_gate": {
+      "statement": "Stem characters XOR into both sides of a mirror pair identically, so they cancel out of the LOW BITS of the consistency value. Those bits depend only on the two hashes and the stem's LENGTH -- so a stem LENGTH can be refused for free, at any length, enumerating nothing."
+    }
+  },
+
+  "proven_exclusions": {
+    "trk3_trk10": "NOT a glued l/r mirror pair -- hash bit0 differs (1 vs 0). PROOF, any stem, any length, any prefix. Also excluded: <any>left<stem<=6>, <any>lft<stem<=6>. Their bind-pose local offsets are NOT mirror images either -- trk3/trk10 are probably not a name-mirror pair at all. bone_forge.py's SLOTS asserts they are; that assertion is wrong.",
+    "trk54_trk76": "glued-l/r consistent, but NO stem of <=6 chars exists behind ANY prefix (2.64e9 stems sieved, zero survivors). Stem is >=7 chars.",
+    "trk28_trk31": "same: no glued-l/r stem <=6 behind any prefix. Stem is >=7 chars.",
+    "all_three_pairs": "No pair ends in a side token (12 spellings checked, expected-false 2.3e-10 each). Side is MEDIAL. => the FaceFX Convention-C grammar bone_<feature>_<side> is EXCLUDED for the jaw pair trk28/31.",
+    "saboteur_face_rig": "Does NOT transfer. 79 mined literals + 42,442 re-spellings vs all 8,561 unnamed hashes, expected-false <=0.085, ZERO hits. The sibling game gives a concept checklist, never a literal Mercs2 face string."
+  },
+
+  "mined_literals": {
+    "_source_body": "output/_ghidra_saboteur/saboteur_all_functions_decomp.txt -- args to the find-bone-by-name helper FUN_00db7e10(const char*, int)",
+    "saboteur_body_rig": [
+      "Bone_Root", "Bone_Spine1", "Bone_Chest", "Bone_Neck", "Bone_Head", "Bone_HeadBase",
+      "Bone_LThigh", "Bone_LShin", "Bone_LFootBone1", "Bone_LFootBone2",
+      "Bone_RThigh", "Bone_RShin", "Bone_RFootBone1", "Bone_RFootBone2",
+      "Bone_LShoulder", "Bone_LBicep", "Bone_LForearm", "Bone_LHand",
+      "Bone_RShoulder", "Bone_RBicep", "Bone_RForearm", "Bone_RHand",
+      "Bone_Attach_LHand", "Bone_Attach_RHand", "Bone_LowerLip_Left",
+      "GlobalSRT", "DefaultBone", "Bone_bone1"
+    ],
+    "_note_bone_bone1": "Bone_bone1 is a DCC DEFAULT AUTO-NAME shipped into a retail Pandemic rig. It is PROOF that these riggers leave non-lexical tokens in the skeleton -- the same class as Mercs2's bone_ub / bone_lb. It is the shape of the remaining unknowns, and it is why a bigger dictionary cannot help.",
+    "_source_face": "/c/GOG Games/The Saboteur/FaceFX/{Male,Female}.fxa -- the complete FxMasterBoneList (36 bones)",
+    "saboteur_facefx_master_bone_list": [
+      "Bone_Head", "Bone_HeadBase", "Bone_JawBone", "Bone_MouthBase", "Bone_Neck",
+      "Bone_Brow_Left", "Bone_Brow_Right", "Bone_OutBrow_Left", "Bone_OutBrow_Right",
+      "Bone_Eye_Left", "Bone_Eye_Right", "Bone_EyeBlink_Left", "Bone_EyeBlink_Right",
+      "Bone_LowLid_Left", "Bone_LowLid_Right", "Bone_UnderEye_Left", "Bone_UnderEye_Right",
+      "Bone_Cheek_Left", "Bone_Cheek_Right", "Bone_LowerCheek_Left", "Bone_LowerCheek_Right",
+      "Bone_UpperLip_Left", "Bone_UpperLip_Right", "Bone_LowerLip_Left", "Bone_LowerLip_Right",
+      "Bone_InnerUpperLip_Left", "Bone_InnerUpperLip_Right",
+      "Bone_InnerLowLip_Left", "Bone_InnerLowLip_Right",
+      "Bone_OuterUpperLip_Left", "Bone_OuterUpperLip_Right",
+      "Bone_LipCorner_Left", "Bone_LipCorner_Right",
+      "Bone_Sneer", "Bone_Teeth_Top", "Bone_Teeth_Bottom", "Bone_Tongue_Mid"
+    ],
+    "saboteur_facefx_curves_NOT_BONES": [
+      "jawOpen", "jawClench", "jawForward", "jawBack", "jawSideLeft", "jawSideRight",
+      "jawRotateUp", "jawRotateDown", "upperLipCurlIn", "upperLipCurlOut",
+      "lowerLipCurlIn", "lowerLipCurlOut", "lowerLipUpLeft", "lowerLipDownLeft",
+      "cheekPuff", "cheekLeft", "cheekRight", "noseUp", "noseDown", "wideEyeLeft",
+      "wideEyeRight", "lowLidLeftUp", "innerBrowLeftUp", "outBrowLeftUp",
+      "smileJawClench", "smileOmouthLeft", "expBrowAngry", "expBrowSmile",
+      "Gaze Eye Pitch", "Gaze Eye Yaw", "Head Pitch", "Head Roll", "Head Yaw",
+      "head_RX+", "eye_Left_RY-", "neck_RZ+", "O_mouth"
+    ],
+    "_curve_note": "Stock OC3 FaceFX curve names. Curves drive bones; they are NOT bones and never appear in a HIER. Do not hash them against bone hashes.",
+    "hash_result": "ALL of the above tested verbatim against all 8,561 unnamed census hashes: expected-false 0.00016, ZERO hits."
+  },
+
+  "deform_vocab": {
+    "_grammar": "bone_ <side(l|r, GLUED, prefix)> <part> <twist?> <num?>   -- CamelCase-ish, side glued to the part. Casing is evidentially VOID (the hash folds |0x20).",
+    "_status": "Confirmed by 208 witnessed names AND by The Saboteur's identical literals. The grammar is right; the vocabulary is the wall.",
+    "prefix": ["bone_", "bone_attach_", "hp_"],
+    "side_glued": ["l", "r"],
+    "side_word": ["left", "right"],
+    "part_spine_torso": [
+      "spine", "chest", "back", "front", "ub", "lb", "ribcage", "ribs", "sternum", "thorax",
+      "torso", "trunk", "pelvis", "abdomen", "waist", "collar", "clavicle", "nape", "yoke",
+      "scapula", "blade", "shoulderblade", "trap", "lat", "pec"
+    ],
+    "part_arm": [
+      "shoulder", "bicep", "forearm", "forearmroll", "hand", "deltoid", "delt", "upperarm",
+      "uparm", "clav", "collarbone", "tricep", "rotator", "shoulderpad", "socket"
+    ],
+    "part_leg": [
+      "thigh", "shin", "foot", "hip", "upperleg", "upleg", "glute", "quad", "hamstring",
+      "femur", "groin", "legroot", "thighroot", "calf", "knee", "ankle", "toe"
+    ],
+    "part_finger": ["thumb", "index", "middle", "ring", "pinky"],
+    "twist": ["", "roll", "twist", "bend", "swing", "flex"],
+    "helperkind": [
+      "", "bone", "null", "helper", "drv", "driver", "ctrl", "control", "aim", "ik", "fk",
+      "tgt", "nub", "root", "base", "tip", "end", "mid", "up", "upper", "lower", "aux"
+    ],
+    "num": ["", "1", "2", "3", "4", "01", "02", "03", "a", "b", "c", "d", "e"],
+    "studio_terse_codes_WITNESSED": ["ub", "lb"],
+    "dcc_default_autonames_MINED": [
+      "bone1", "bone2", "bone3", "bone001", "bone002", "object01", "dummy01", "point01",
+      "joint1", "helper01", "bip01", "biped"
+    ]
+  },
+
+  "facefx_vocab": {
+    "_grammar": "bone_<feature>[_<position>]_<side>  -- snake_case, descriptive, side TRAILING as a FULL WORD (left|right|center). l/r is NEVER used on a FaceFX bone.",
+    "_status": "Regenerates all 20 confirmed facial bones at expected-false 0.000 (positive control passes). It produces NOTHING for the 8 head/jaw unknowns -- and section 3.1 of the doc PROVES why for trk28/31: that pair does not end in a side token, so it is not this grammar at all.",
+    "feature": [
+      "mouth", "jaw", "lip", "chin", "tongue", "teeth", "tooth", "gum", "cheek", "face",
+      "head", "nose", "nostril", "sneer", "jowl", "dimple", "philtrum", "brow", "eyebrow",
+      "eyelid", "lid", "eye", "eyeball", "temple", "forehead", "throat"
+    ],
+    "feature_misspellings_RIGGERS_DO_THIS": ["tounge", "tonge", "tung", "teath", "eyelash", "moustache"],
+    "position": [
+      "", "top", "bottom", "upper", "lower", "inner", "outer", "mid", "middle", "back",
+      "front", "corner", "center", "tip", "base", "root", "blink", "puff", "under", "over"
+    ],
+    "side": ["", "left", "right", "center"],
+    "control_layer_from_saboteur_concepts": [
+      "headbase", "mouthbase", "jawbone", "jawbase", "facebase", "faceroot", "facefx", "facial"
+    ],
+    "_control_layer_status": "All tested. ZERO hits. Saboteur HAS this control layer (Bone_HeadBase / Bone_MouthBase / Bone_JawBone); Mercs2 spells its equivalents differently or not at all."
+  },
+
+  "patterns": [
+    "bone_{{side_glued}}{{part_arm}}{{twist}}{{num}}",
+    "bone_{{side_glued}}{{part_leg}}{{twist}}{{num}}",
+    "bone_{{side_glued}}{{part_finger}}{{num}}",
+    "bone_{{part_spine_torso}}{{num}}",
+    "bone_{{part_spine_torso}}{{side_word}}",
+    "bone_attach_{{part_spine_torso}}{{side_word}}",
+    "bone_{{feature}}_{{position}}_{{side}}",
+    "bone_{{feature}}_{{side}}",
+    "bone_{{feature}}"
+  ],
+
+  "geometric_witnesses": {
+    "_source": "docs/data/bone_skeleton.csv, model 0x03C70F0A. NOTE: the parent/depth columns of that CSV are UNRELIABLE for these models (self-contradictory rows). The wx/wy/wz LOCAL bind offsets are self-consistent and are what these readings use.",
+    "mirror_axis_is_per_parent": "bone_cheek_left/right mirror in z (head-space); bone_mouth_bottom_left/right mirror in x (jaw-space). Pick the axis from the parent, not globally.",
+    "trk28_trk31": "(+0.0241,-0.0864,+0.0814) / (-0.0239,-0.0864,+0.0814) -- mirror in x sharing z, the exact signature of bone_mouth_bottom_left/right. Jaw children, ~6cm BELOW the mouth-bottom bones: the CHIN / JAWLINE band. trk28=+x=LEFT, trk31=-x=RIGHT. INFERENCE, not a crack.",
+    "trk29_30_32_33": "~(0,0,+0.02) each -- four near-identical MIDLINE bones each ~2cm forward of its parent = a serial midline chain. The only serial midline chain in a head is the TONGUE (bone_tongue_tip sits further along at (0,-0.0276,+0.0565)). INFERENCE, not a crack -- the full tongue/teeth vocabulary incl. misspellings returned zero.",
+    "trk3_trk10": "(+0.1544,+0.0336,-0.0118) / (0.0000,+0.0256,-0.0921) -- NOT mirror images. Corroborates the parity proof that these two are not an l/r name pair."
+  },
+
+  "notes": [
+    "ZERO new names were cracked this session. Everything above is either MINED (literal, certain) or PROVEN NEGATIVE (m2 is deterministic, so a miss is an exclusion).",
+    "",
+    "THE ESCAPE HATCH IS CLOSED. Both earlier dialect docs conclude the route to these names is 'an unstripped dev/debug build'. We HAVE one -- the Jul-11-2008 devkit prototype with a real PDB (output/jul08_prototype/) -- and a full string sweep of it yields only the 25 bone literals we ALREADY knew. The missing names are not in it.",
+    "",
+    "DO NOT run a wider blind sweep. Coverage is already solved (the prior <=13-char exhaustive sweep covers bone_l + 7 chars and returned ~70,000 chance hits). Recognition is the wall, and a wider dictionary makes recognition strictly WORSE because a chance hit into a big dictionary reads like a real name.",
+    "",
+    "DO use the three laws above before generating anything -- they are free and they are proofs. In particular, the parity law retroactively invalidates every candidate ever generated for trk3/trk10.",
+    "",
+    "The remaining routes are all EXTERNAL: a Pandemic .max/.ma source rig, an exporter script, an art-side naming doc, or a build with the bone-name string table intact. Until one appears, keep these 15 as hashes -- the engine addresses bones by hash anyway, so nothing is blocked.",
+    "",
+    "A WRONG NAME IS WORSE THAN AN UNKNOWN ONE. Never accept a lone hit from a wide sweep."
+  ]
+}

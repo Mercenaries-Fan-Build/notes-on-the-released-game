@@ -1,0 +1,204 @@
+{
+  "_meta": {
+    "department": "WEAPONS and PROPS",
+    "hash": "pandemic_hash_m2 (tools/fnv.py m2()) - CASE-INSENSITIVE, casing carries no evidence",
+    "doctrine": "NARROW + CORRECT beats BIG. expected_false = S * T / 2^32. Keep T small (one model / one family) and S stays affordable. A big dictionary is self-defeating: a chance hit into it READS like a real name and destroys the readability witness.",
+    "produced_by": "naming-dialect analyst, weapons+props department",
+    "see": "docs/reverse_engineer/dialect_weapons_props.md"
+  },
+
+  "mined_literals": {
+    "_note": "LITERALS recovered from real sources - not guessed. Each carries a provenance. These are the ONLY strings in this file that are evidence rather than hypothesis.",
+    "saboteur_binary": {
+      "source": "output/_ghidra_saboteur/saboteur_all_functions_decomp.txt (The Saboteur, Pandemic Studios, CLEAN binary with real names)",
+      "value": "Confirms Mercs2 uses the SAME hardpoint dialect. hp_shelleject is verbatim-shared.",
+      "literals": [
+        "hp_shelleject", "hp_shelleject1", "hp_shelleject2",
+        "hp_centerofmass", "hp_buoyancy", "hp_buoyancy_xyz",
+        "hp_wepspawnleft", "hp_wepspawnright",
+        "hp_particleeject", "hp_particleeject1",
+        "hp_hat", "wp_rf_gewehr_scope_silencer"
+      ]
+    },
+    "console_string_tables": {
+      "source": "game-files/xbox-vz.unique-strings.txt + ps3-VZ.unique-strings.txt",
+      "verdict": "NEGATIVE RESULT - the console name table does NOT carry bone/hardpoint names.",
+      "evidence": "S=6,335,885 distinct candidates hashed against T=7,521 unnamed bone hashes. expected_false=11.09, actual hits=11, ALL garbage (l3_7, tO1cxxpp, BDf3O, S4T2, ...). Signal = ZERO. The console table covers ASSET/BLOCK PATHS, not rig node names.",
+      "do_not_repeat": true,
+      "weapon_part_literals_present": ["hp_barreltip_a", "hp_shelleject", "hp_fx_light", "hp_fx_parachute", "bone_ak47", "bone_pistol", "bone_grenade"]
+    },
+    "lua_corpus": {
+      "source": "docs/mercs2-luacd/ + docs/mercs2-dlc-luacd/",
+      "literals": ["hp_fx_jetexhaust", "hp_fx_exhaust_a", "hp_fx_exhaust_b", "hp_veh_spawn", "hp_starter", "hp_menu_camera", "hp_camera_a", "hp_camera_b", "bone_frame"],
+      "note": "Lua yields VEHICLE/mission hardpoints and the weapon SHORT-NAMES (ak47, rpg, deserteagle, ...) that feed the root rule; it does not name weapon sub-parts."
+    }
+  },
+
+  "patterns": [
+    {
+      "id": "ROOT_RULE",
+      "status": "PROVEN - 59 nodes cracked, expected_false = 0.0002",
+      "rule": "The depth-0 root node of a model is named from THE MODEL'S OWN NAME, in one of these forms (first match wins):",
+      "forms": ["<model>", "hp_<tail>", "bone_<tail>", "<model>1", "hp_<tail>1"],
+      "tail": "the model name with zero or more leading family tokens stripped (global_weapon_deserteagle -> deserteagle, weapon_deserteagle, ...)",
+      "evidence": "Self-referential witness: the candidate is built from the model's OWN name, so a hit is not a dictionary lookup. Corroborated by 2 pre-existing names (hp_minigun, hp_mgl) and independently by literal-mining (hp_clusterbomb / hp_moab / hp_daisycutter / hp_bunkerbuster / hp_grapplinghook were reached BOTH by this rule AND by hashing mined Lua/ECS tokens).",
+      "confidence": "CERTAIN",
+      "generalizes_beyond_weapons": "YES - also cracked global_pickup_ammo -> hp_ammo, global_deliverycrate -> hp_deliverycrate, {al,ch,gr,pr,up,vz}_deliverycrate -> hp_<x>_deliverycrate, global_zippo -> hp_zippo, global_munitions_* -> hp_munitions_*"
+    },
+    {
+      "id": "MAGAZINE_SWITCH",
+      "status": "PROVEN - 2 nodes cracked, expected_false = 0.000009 / 0.066",
+      "rule": "The named node `magazineA` is a SWIT (switch) parent with exactly two alternate children:",
+      "children": {"magazineA_loaded": "0x3DF6AA10 - the magazine as fitted in the weapon", "magazineA_prop": "0x8DE5AD74 - the magazine as a detached PHYSICS PROP (the one that drops out on reload)"},
+      "evidence": "Structural: both are in_swit children of magazineA on 22-29 handheld-weapon models, co-located with the parent. Semantic: loaded/prop is exactly the reload-FX switch a shooter needs. The pair reads as a coherent authored pair, not two chance strings.",
+      "confidence": "CERTAIN",
+      "corollary": "`_prop` is a live suffix in this dialect meaning 'the detachable physics-prop version of this part'. Reuse it when forging other detachable parts."
+    },
+    {
+      "id": "WEAPON_HARDPOINT_TEMPLATE",
+      "status": "OBSERVED (these are already-named, listed as the ground-truth dialect)",
+      "rule": "Every handheld weapon carries a near-identical hardpoint set at depth 1 off the root:",
+      "nodes": {
+        "hp_barreltip_a": "muzzle - the far +z end. _a.._d on multi-barrel mounts (quad50).",
+        "hp_shelleject": "brass ejection port. _a.._d on multi-barrel mounts.",
+        "hp_dock_left / hp_dock_right": "the two HAND grip points (+x=left, -x=right, obeys the side law)",
+        "hp_CenterOfMass": "physics COM at the origin",
+        "hp_attach": "carry/holster attach point",
+        "magazineA": "magazine switch parent (see MAGAZINE_SWITCH)"
+      },
+      "confidence": "CERTAIN (pre-existing names, re-confirmed here across 86 weapon models)"
+    },
+    {
+      "id": "MOUNTED_WEAPON_TEMPLATE",
+      "status": "OBSERVED",
+      "rule": "Emplaced/mounted weapons (dshk, m60, mk19, tow, recoilessrifle, m250cal, tripodmount, quad50) add a destructible base + a traverse chain:",
+      "nodes": {
+        "piece1a": "destructible base, a SWIT parent",
+        "piece1a_pristine": "intact state",
+        "bone_yaw / bone_yaw_turret": "traverse (horizontal)",
+        "bone_pitch": "elevation (vertical)",
+        "hp_gunmount_a": "the gun attach on the pitch bone",
+        "hp_seat_gunner / hp_dock_gunner": "gunner seat + hand dock"
+      },
+      "confidence": "CERTAIN (pre-existing names)"
+    },
+    {
+      "id": "SIDE_LAW",
+      "status": "FREE WITNESS - used to reject candidates, never to accept them alone",
+      "rule": "+x = LEFT (99.8%), -x = RIGHT (98.4%). Any candidate whose side token contradicts its node's x-sign is NOISE.",
+      "confidence": "CERTAIN"
+    }
+  ],
+
+  "weapon_vocab": {
+    "_use": "NARROW pools. Compose prefix x mid x part x suffix and keep S in the 1e4-1e6 range against a SMALL T (one weapon's 3-10 nodes, or one shared-template hash). Quote expected_false = S*T/2^32 every time.",
+    "prefix": ["hp_", "bone_", ""],
+    "mid": ["", "fx_", "attach_", "wpn_"],
+    "part_muzzle": ["muzzle", "muzzleflash", "barrel", "barreltip", "barrelend", "flash", "flashhider", "suppressor", "silencer", "brake", "compensator"],
+    "part_feed": ["magazine", "mag", "clip", "ammo", "ammobelt", "belt", "link", "drum", "feed", "feedtray", "round", "bullet", "shell", "casing", "cartridge", "shelleject", "eject", "ejectport"],
+    "part_action": ["bolt", "slide", "charginghandle", "cockinglever", "lever", "hammer", "trigger", "safety", "selector", "firingpin", "receiver", "pump", "cylinder", "rotor", "rotate"],
+    "part_furniture": ["stock", "buttstock", "grip", "foregrip", "pistolgrip", "handguard", "bipod", "tripod", "sling", "rail", "mount", "gunmount", "body", "frame"],
+    "part_optics": ["sight", "frontsight", "rearsight", "ironsight", "scope", "reticle", "optic", "laser", "flashlight", "light"],
+    "part_ordnance": ["warhead", "fin", "rocket", "missile", "nose", "tail", "tip", "fuse", "payload", "charge", "detonator", "wire", "chute", "canopy"],
+    "part_rig": ["root", "attach", "dock", "seat", "centerofmass", "pivot", "yaw", "pitch", "recoil", "beacon"],
+    "state_suffix": ["_loaded", "_prop", "_pristine", "_ruin"],
+    "index_suffix": ["", "_a", "_b", "_c", "_d", "a", "b", "c", "d", "_l", "_r", "_left", "_right", "_01", "_02", "1", "2"],
+    "weapon_shortnames": [
+      "40mmgrenade","aarocket","ak103","ak47","amraam","anm14","archer","ataka","beacon","beaconlight",
+      "binoculars","bullpup","bunkerbuster","c4land_projectile","c4water","camera","clusterbomb","coilgun",
+      "cruisemissile","daisycutter","deserteagle","detonator","dshk","dumbbomb","emplaced_tow","fae",
+      "ffarrocket","finrocket","flaregun","fraggrenade","gbu16","gm94","gpsshell","grapplinghook","hellfire",
+      "ied","jdam","kvsk","laserrangefinder","m1014shotgun","m21at","m250cal_noammo","m34wp","m4","m60",
+      "m86pdm","m95","mac11","mgl","microuzi","minigun","mk19","mlrsrocket","moab","mp5sd","parachute","pda",
+      "pf97","pf97rocket","pistol","pp2000","qbu88sniper","qbzlmg","qjy88","quad50","recoilessrifle","rpg",
+      "rpgrocket","rpk","sawmg","sidewinder","smaw","smg","sniperdragunov","stinger","sw500","tankshell",
+      "thinner1","thinner2","tmp","tow","towrocket","towtripod","tripodmount","xm8","xm84"
+    ]
+  },
+
+  "prop_vocab": {
+    "_use": "Same doctrine. Prop rigs are dominated by the DESTRUCTION dialect, not by part names.",
+    "prefix": ["hp_", "bone_", ""],
+    "destruction": ["piece1a", "piece1b", "piece1c", "piece2a", "piece2b", "pristine", "ruin", "intact", "break_piece", "slice2a", "slice2b", "slice2c", "slice2d"],
+    "state_suffix": ["_pristine", "_ruin", "_prop", "_loaded"],
+    "part_env": ["barrel", "crate", "sign", "fence", "planter", "fueltank", "propanetank", "deliverycrate", "wheelchair", "toolbox", "billboard", "statue", "generator", "listeningpost", "dish", "antenna", "searchlight", "winch", "magnet", "locationmarker", "anchor", "chute", "flag", "trunk", "frame", "hub", "wheel", "ladder", "door", "lid", "handle"],
+    "part_rig": ["skinned", "rigid", "trunk", "wind", "anchor", "dish", "h", "attach", "snap"],
+    "fx": ["hp_fx_light", "hp_fx_flare", "hp_fx_parachute", "hp_fx_exhaust_a", "hp_fx_exhaust_b", "hp_fx_jetexhaust", "hp_fx_explosiona", "hp_phone"],
+    "snap": {
+      "form": "hp_snap_<piece>_<model>",
+      "example": ["hp_snap_oilrig_towerdrill", "hp_snap_piece1A_oilrig_cranelargeA", "hp_snap_mv_piece1B_oilrig_helipadsmallA"],
+      "note": "MINED VERBATIM from the console string tables - certain."
+    }
+  },
+
+  "cracked": {
+    "_note": "61 nodes, ALL verified by hash round-trip (m2(name) == hash) AND structurally corroborated. Full evidence in docs/reverse_engineer/dialect_weapons_props.md.",
+    "_not_merged": "These are NOT written into tools/rainbow_table.json by this department; hand off for merge.",
+    "shared_weapon_template": {
+      "0x3DF6AA10": "magazineA_loaded",
+      "0x8DE5AD74": "magazineA_prop"
+    },
+    "roots_weapon": {
+      "0x02DED334": "hp_40mmgrenade", "0xD2B8A582": "hp_aarocket", "0x900FD25B": "hp_amraam",
+      "0xB1EB4812": "hp_bullpup", "0xF05734F4": "hp_bunkerbuster", "0x52C27776": "hp_clusterbomb",
+      "0x1EB650A5": "hp_coilgun", "0xCF0FA427": "hp_daisycutter", "0x11C34839": "hp_deserteagle",
+      "0x67B7E928": "hp_dshk", "0x901B7534": "hp_dumbbomb", "0x45EB5430": "hp_fae",
+      "0xC8C1FA21": "hp_ffarrocket", "0xFEE4DBED": "hp_grapplinghook", "0xB3EBE359": "hp_hellfire",
+      "0xE61ADDF8": "hp_jdam", "0xDCDD8469": "hp_kvsk", "0x16516BB1": "hp_m34wp",
+      "0x5EED0FFA": "hp_microuzi", "0x0B711E0A": "hp_mlrsrocket", "0x895F92F1": "hp_moab",
+      "0x619A3655": "hp_mp5sd", "0x99552B1E": "hp_pf97rocket", "0xD2897F9F": "hp_qbzlmg",
+      "0x8B9C6A41": "hp_recoilessrifle", "0x811521C9": "hp_rpgrocket", "0x7FFB0A7D": "hp_rpk",
+      "0x08F8524B": "hp_sawmg", "0xE5DDF776": "hp_tankshell", "0xF83F0253": "hp_tmp",
+      "0x82AB78FA": "hp_towrocket",
+      "0xCB9DC9FD": "global_weapon_ied1", "0xBA884EDC": "global_weapon_m21at1",
+      "0x203D31C7": "global_weapon_m86pdm1", "0x4D9589EF": "global_weapon_smaw1",
+      "0x62335897": "global_weapon_beaconlight1"
+    },
+    "roots_prop": {
+      "0x79A519D6": "hp_ammo", "0x39BE1BA9": "hp_crateaid", "0x7D2B5405": "hp_deliverycrate",
+      "0x1ADDCAF6": "hp_zippo",
+      "0xBB472E45": "hp_munitions_bunkerbuster", "0xD86B4A9B": "hp_munitions_fae",
+      "0xD66F32FD": "hp_munitions_hackedairstrike",
+      "0x69E4B707": "hp_al_deliverycrate", "0xC9F86A6D": "hp_ch_deliverycrate",
+      "0x1BA54ADF": "hp_gr_deliverycrate", "0xEB69C10E": "hp_pr_deliverycrate",
+      "0x408F8A07": "hp_up_deliverycrate", "0x68119FD8": "hp_vz_deliverycrate",
+      "0xB8995D04": "global_propanetanklargeb1", "0x94E808CE": "global_ramp_roadlessrider1",
+      "0x3D4A21F7": "global_searchlighta1",
+      "0xF4AAF606": "chinaoutpost_bld_prison_fence1", "0x41855F7C": "cumana_bld_segment32x32d1",
+      "0x93C2962A": "mar_commercial_roadstraight10_crater", "0x31D61713": "pmcoutpost_fountain1",
+      "0xBD2FD71A": "vzoutpost_bld_guardtower_al1", "0x87F05472": "vzoutpost_bld_guardtower_gr1",
+      "0xC1238CA6": "vzoutpost_bld_hangar_oc1"
+    }
+  },
+
+  "open_targets": {
+    "_note": "Reported UNSOLVED on purpose. A wrong name is worse than an unknown one.",
+    "0x2C4AB49F": {
+      "what": "depth-1 leaf hardpoint on 23 handheld weapons (ak47, rpg, deserteagle, pistol, m4, ...). x=0 exactly (centred), y>0 (above the bore), z varies. bbox 0.03 = a locator point. state=static.",
+      "eliminated": "EXHAUSTIVELY ruled out: hp_ + any <=6 chars, bone_ + any <=6 chars, bare <=6 chars (S=7.9e9 wildcard, expected_false 1.84, only garbage returned). Also ruled out a 18,515-name curated firearms pool.",
+      "conclusion": "The name is >=7 characters after its prefix, or uses a prefix outside {hp_, bone_, none}. Needs a >=7-char wildcard (GPU) or a new literal source."
+    },
+    "0xE68BCD4D / 0xA99F98B3": {
+      "what": "a LEFT/RIGHT PAIR at the REAR of mounted MGs (dshk, m60, mk19, tow, recoilessrifle, m250cal). +x=+0.10..0.14 (LEFT) / -x=-0.12..-0.14 (RIGHT), z~-0.6, bore height. Almost certainly the twin SPADE GRIPS / rear handles (the mounted-gun equivalent of hp_dock_left/right, which these rigs lack).",
+      "eliminated": "3,168-candidate pair-constrained sweep over {grip,handle,spade,hand,dock,...} x {l/r, left/right, lt/rt, a/b, 1/2} - no hit.",
+      "conclusion": "Function is confident; the exact spelling is not. NOT NAMED."
+    },
+    "destruction_chunk_series": {
+      "what": "~247 unnamed hashes, all in_swit children of piece1a_ruin, states = break_piece|intact. They form a MONOTONE-DECREASING indexed series by model count (353, 339, 338, 316, 292, 282, 281, 257, 248, ...) = models with more debris chunks use more indices. Top members: 0x1B385A41, 0x2136251C, 0x8DCB305A, 0x9930D1D6, 0xEFD28665, 0xFB33AAB3, 0x85CFA0F0, 0x793FAA00, 0x07C3A1A3.",
+      "eliminated": "piece1a[_ruin]_{propattach,prop,debris,chunk,part,frag}{00,0,000,a} (19,440 names); a 63,640-name stem x index sweep.",
+      "HARD_RESULT": {
+        "finding": "The chunks are LETTER-indexed (Xa, Xb, Xc, Xd) and the real stem's FNV internal state is RECOVERED.",
+        "stem_fnv_state": "0x43F535A1",
+        "quadruple": {"Xa": "0xD0B0CDDE (32 instances)", "Xb": "0xF2B7BF29 (23)", "Xc": "0xD8B557A4 (15)", "Xd": "0x7ABD126F (8)"},
+        "how": "series-consistency wildcard: S=381,391,560, T=247, require >=3 simultaneous index hits -> expected_false ~7e-14. Returned a 4/4 hit on the stem '935k'. '935k' is NOT a name - it is a hash-STATE COLLISION with the real stem. FNV-1a is invertible, so state -> (state+a,..,state+d) is injective; P(a random state sends all 4 into a 247-set) = (247/2^32)^4 = 1.1e-29, expected count over the 1.87M states searched = 2e-23. Observing one PROVES the target set contains a real quadruple {Xa..Xd}. Monotone-decreasing instance counts 32/23/15/8 confirm an authored a/b/c/d family.",
+        "next_step": "Find ANY string X with h_prefix(X) == 0x43F535A1 (running FNV state, NOT the finalized hash). Then Xa/Xb/Xc/Xd name 4 nodes immediately, and the same technique unlocks the main 247-node series.",
+        "already_eliminated_for_X": "{'', hp_, bone_, piece1a_, piece1a_ruin_, ruin_, piece_, prop_, debris_, chunk_, break_, global_, piece1b_, piece1c_} + <=5 wildcard chars (S=1.07e9 - only the 935k collision itself came back); plus a 33,250-name curated stem list. X is LONGER than that.",
+        "tooling": "scratchpad wpseries.py (series-consistency brute) + wpstate.py (FNV state preimage search). Port to GPU for >=6-char stems."
+      },
+      "method_note": "Requiring k simultaneous index hits drives expected_false to S*(T/2^32)^k. At k=3-4 that is ~1e-14, so a WIDE stem search is statistically SAFE - the multi-hit constraint replaces the readability witness. This is the ONE place where going big is correct, and it found structure every narrow grammar sweep missed.",
+      "conclusion": "HIGH VALUE - one correct stem names a whole chunk family; the main series is ~247 nodes across ~350 prop models. Biggest single lever left in the department."
+    }
+  },
+
+  "notes": "Two methods carried this department: (1) the ROOT RULE (self-referential - build the candidate from the model's own name; a hit is not a dictionary lookup, so it needs no readability witness) and (2) SWIT/parent structure (magazineA's two switch children). Both are NARROW and CORRECT. The big-dictionary trap was demonstrated live and negatively: hashing 6.3M console strings against 7,521 targets produced 11 hits against 11.09 expected noise - i.e. exactly zero signal, and every one of those 11 'hits' is a garbage string that a careless reader could have rationalised. Do not repeat that sweep."
+}

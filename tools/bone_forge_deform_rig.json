@@ -1,0 +1,43 @@
+{
+  "_comment": "bone_forge config encoding the CHARACTER DEFORM-RIG dialect (docs/reverse_engineer/naming_dialect_deform_rig.md). Body limb bones use a GLUED bone_l/bone_r prefix; torso halves + attach use a GLUED left/right suffix; face uses a SEPARATED _left/_right suffix. Run: python tools/bone_forge.py --config tools/bone_forge_deform_rig.json --gpu  (targets the 15 unnamed rig bones). NOTE: ~11k of these tokens were already CPU-tested and MISSED for the 6 headline targets -- this config is for widening, not a claim any of it hits.",
+  "arrays": {
+    "prefix": ["bone", "joint", "jnt", "eff", "helper", "dummy", "hp"],
+
+    "side": ["l", "r"],
+    "side_word": ["left", "right"],
+
+    "part": [
+      "pelvis", "hip", "hipbone", "thigh", "thighbone", "upperleg", "upleg", "legroot", "leg",
+      "glute", "gluteus", "quad", "hamstring", "ham", "femur", "groin", "waist", "loin", "rump", "seat",
+      "shoulder", "sholder", "shldr", "deltoid", "delt", "clavicle", "clav", "collar", "collarbone",
+      "scapula", "trap", "trapezius", "upperarm", "uparm", "arm", "bicep", "biceps", "tricep",
+      "rotator", "pec", "pectoral", "muscle",
+      "spine", "chest", "ribcage", "rib", "sternum", "thorax", "torso", "back", "trunk",
+      "neck", "neckbase", "nape", "yoke", "head",
+      "ub", "lb", "upperbody", "lowerbody",
+      "hair", "ponytail", "braid", "bang", "cap", "hat", "beret", "helmet", "visor", "goggles",
+      "mask", "scarf", "bandana", "cape", "cloak", "coat", "hood", "strap", "belt", "backpack",
+      "pack", "radio", "antenna", "dogtag", "holster", "sheath", "pouch", "ammo", "bandolier",
+      "vest", "patch", "badge", "earpiece", "headset", "prop", "acc", "extra", "misc"
+    ],
+
+    "twist": ["", "roll", "twist", "bend", "swing", "flex"],
+    "helperkind": ["", "bone", "null", "helper", "drv", "driver", "ctrl", "control", "aim", "ik", "fk", "tgt", "nub", "root", "base", "tip", "end", "mid", "up", "upper", "lower"],
+
+    "num": ["", "1", "2", "3", "4", "01", "02", "03", "0", "a", "b", "c", "d", "e"]
+  },
+
+  "slot_orders": [
+    ["prefix", "side", "part", "twist", "num"],
+    ["prefix", "side", "part", "helperkind", "num"],
+    ["prefix", "part", "side_word", "num"],
+    ["prefix", "part", "twist", "side_word"],
+    ["prefix", "part", "num"],
+    ["prefix", "part", "helperkind", "num"]
+  ],
+
+  "templates": [
+    "bone_{{side}}{{part}}bone{{num}}",
+    "bone_{{part}}{{side_word}}"
+  ]
+}

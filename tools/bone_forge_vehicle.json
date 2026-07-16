@@ -1,0 +1,3677 @@
+{
+ "_meta": {
+  "title": "Vehicle-rigging lexicon for bone_forge (Mercenaries 2: World in Flames)",
+  "scope": "168 vehicle models: truck 39, car 36, boat 25, tank 13, helicopter 12, plane 10, motorcycle 8, apc 7, semi 5, towed 4, trailer 3, airstrike 2, vtol 1, bus 1",
+  "hash": "pandemic_hash_m2 (FNV-1a, |0x20 case-fold, ^0x2A finalisation). CASE-INSENSITIVE - casing is not evidence.",
+  "expected_false": "S*T/2^32. Shrink T, not S: fire at a named structural family, never at all-unknowns.",
+  "pool_sizes_per_class": {
+   "tank": 466372,
+   "apc": 378234,
+   "helicopter": 502540,
+   "plane": 587490,
+   "boat": 788136,
+   "truck": 450732,
+   "car": 414158,
+   "motorcycle": 419740,
+   "semi": 409376,
+   "towed": 398912
+  },
+  "companion_doc": "docs/reverse_engineer/dialect_vehicle_rig.md",
+  "cracked_this_session": 175,
+  "unnamed_before": 2506,
+  "unnamed_after": 2331
+ },
+ "patterns": [
+  "{{pre}}_{{part}}_{{side}}{{num}}",
+  "{{pre}}_{{part}}{{side}}{{num}}",
+  "{{pre}}_{{side}}_{{part}}{{num}}",
+  "{{pre}}_{{part}}_{{side}}{{mod}}",
+  "{{pre}}_yaw_{{part}}{{num}}",
+  "{{pre}}_pitch_{{part}}{{num}}",
+  "{{pre}}_roll_{{part}}{{num}}",
+  "{{pre}}_{{part}}_yaw",
+  "{{pre}}_{{part}}_pitch",
+  "{{pre}}_{{part}}_roll",
+  "{{pre}}_fx_{{part}}_{{side}}{{num}}",
+  "{{pre}}_{{part}}_ruin",
+  "{{pre}}_ruin_{{part}}"
+ ],
+ "classes": {
+  "tank": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "drivewheel",
+    "roadwheel",
+    "track",
+    "tread",
+    "hatch_gunner",
+    "hatch_turret",
+    "driverhatch",
+    "rearhatch",
+    "front_hook",
+    "pistol",
+    "grenade",
+    "ruin_barrel",
+    "barrel_ruin",
+    "ruindoor",
+    "door_cr",
+    "door_lt",
+    "door_rt",
+    "smoke",
+    "hijack"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "apc": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "drivewheel",
+    "ramp",
+    "mg",
+    "yaw_mg"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "helicopter": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "rotor",
+    "rotor_blade",
+    "tailrotor",
+    "blade",
+    "mast",
+    "shaft",
+    "piston",
+    "skid",
+    "gear",
+    "door_top",
+    "door_bottom",
+    "doorla",
+    "doorlb",
+    "doorra",
+    "doorrb",
+    "archer",
+    "hellfire",
+    "minigun",
+    "chin",
+    "stub",
+    "pylon",
+    "cabin",
+    "canopy",
+    "pitch_rocket",
+    "pitch_missile"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "plane": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "wing",
+    "leftwing",
+    "rightwing",
+    "rearwing",
+    "flap",
+    "flap1",
+    "flap2",
+    "flap_rear",
+    "rearflap",
+    "elevator",
+    "aileron",
+    "rudder",
+    "fin",
+    "bottomfin",
+    "stab",
+    "gear",
+    "geardoor",
+    "prop",
+    "propeller",
+    "spinner",
+    "nacelle",
+    "intake",
+    "nozzle",
+    "jet_exhaust",
+    "sidegun",
+    "guns",
+    "bomb",
+    "droptank",
+    "canopy",
+    "cockpit",
+    "cargo",
+    "frontdoor"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper",
+    "_null",
+    "_roll"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m",
+    "rr",
+    "in",
+    "out"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "boat": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "propeller",
+    "prop",
+    "screw",
+    "rudder",
+    "yaw_rudder",
+    "jet",
+    "outboard",
+    "hull",
+    "deck",
+    "bridge",
+    "mast",
+    "dish",
+    "funnel",
+    "davit",
+    "lifeboat",
+    "cleat",
+    "anchor",
+    "capstan",
+    "crane",
+    "ciws",
+    "sam",
+    "turretmount",
+    "jetexhaust",
+    "seat_dock",
+    "front_cable",
+    "glass_f",
+    "missile_turret"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m",
+    "fa",
+    "fb",
+    "ra",
+    "rb",
+    "fore",
+    "aft",
+    "fml",
+    "fmr",
+    "fc",
+    "ft",
+    "mm",
+    "mt"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "truck": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "cab",
+    "bed",
+    "truckbed",
+    "tarp",
+    "tank",
+    "tanker",
+    "mlrs",
+    "cargo",
+    "trailer",
+    "fifthwheel",
+    "yaw_front",
+    "yaw_rear",
+    "yaw_gun",
+    "pitch_gun",
+    "ringmount"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "car": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "spoiler",
+    "hatchl",
+    "hatchr",
+    "roof",
+    "boot",
+    "fender",
+    "grille",
+    "rollcage"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "motorcycle": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "handlebar",
+    "fork",
+    "swingarm",
+    "chain",
+    "sprocket",
+    "roller",
+    "kickstand",
+    "tank",
+    "pitch_front"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "semi": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "cab",
+    "trailer",
+    "fifthwheel",
+    "kingpin",
+    "tank",
+    "tanker",
+    "fuel"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  },
+  "towed": {
+   "parts": [
+    "frame",
+    "body",
+    "door",
+    "doorhandle",
+    "hatch",
+    "glass",
+    "window",
+    "windshield",
+    "mirror",
+    "wiper",
+    "bumper",
+    "hood",
+    "trunk",
+    "tailgate",
+    "ramp",
+    "panel",
+    "plate",
+    "light",
+    "seat",
+    "dock",
+    "wheel",
+    "hub",
+    "axle",
+    "tire",
+    "rim",
+    "brake",
+    "steering",
+    "strut",
+    "shock",
+    "susp",
+    "suspension",
+    "spring",
+    "rod",
+    "attach_rod",
+    "damper",
+    "link",
+    "arm",
+    "frontwheel",
+    "rearwheel",
+    "drivewheel",
+    "exhaust",
+    "engine",
+    "fan",
+    "radiator",
+    "radar",
+    "antenna",
+    "winch",
+    "hook",
+    "cable",
+    "ladder",
+    "step",
+    "rail",
+    "guard",
+    "mudflap",
+    "sideskirt",
+    "turret",
+    "barrel",
+    "gun",
+    "mg",
+    "cannon",
+    "recoil",
+    "missile",
+    "rocket",
+    "launcher",
+    "weapon",
+    "barreltip",
+    "shelleject",
+    "gunmount",
+    "mount",
+    "sensor",
+    "grapple",
+    "fx",
+    "trail",
+    "spade",
+    "carriage",
+    "pitch_barrel",
+    "yaw_turret"
+   ],
+   "mods": [
+    "",
+    "_attach",
+    "_mount",
+    "_open",
+    "_close",
+    "_null",
+    "_ruin",
+    "_pristine",
+    "_t",
+    "_b",
+    "_top",
+    "_bottom",
+    "_roll",
+    "_pitch",
+    "_yaw",
+    "_spin",
+    "_tip",
+    "_end",
+    "_helper"
+   ],
+   "sides": [
+    "",
+    "l",
+    "r",
+    "fl",
+    "fr",
+    "rl",
+    "rr",
+    "bl",
+    "br",
+    "ml",
+    "mr",
+    "ll",
+    "lf",
+    "lg",
+    "lr",
+    "rf",
+    "rg",
+    "left",
+    "right",
+    "f",
+    "b",
+    "m"
+   ],
+   "nums": [
+    "",
+    "_a",
+    "_b",
+    "_c",
+    "_d",
+    "_e",
+    "_f",
+    "_g",
+    "_h",
+    "_01",
+    "_02",
+    "_03",
+    "_04",
+    "_05",
+    "_06",
+    "_07",
+    "_1",
+    "_2",
+    "_3",
+    "_4",
+    "_5",
+    "a",
+    "b",
+    "1",
+    "2"
+   ]
+  }
+ },
+ "grammar_rules": [
+  "prefix is ONLY bone_ (animated node) or hp_ (hardpoint). joint_/jnt_/dummy_/grp_/node_ all return zero.",
+  "DOF is named: bone_yaw_X / bone_pitch_X / bone_roll_X AND the reversed bone_X_yaw / _pitch / _roll. BOTH orderings ship; they are different nodes, not spelling variants.",
+  "side tokens: l/r (separate or glued). DOUBLED ll/rr means OUTBOARD (bone_propeller_ll = C-130 outer engine at x=+9.76).",
+  "position grid: fl fr rl rr bl br ml mr; ALSO side-first lf lg lr rf rg; ALSO fml fmr fc ft mm mt; ALSO fa fb ra rb (fore/aft turret x barrel a/b).",
+  "series: _a.._h, glued la/lb/ra/rb, _0.._5, _01.._07. Model-frequency DECREASES monotonically along a series, so the series is visible in census counts before you know a single letter.",
+  "suffix modifiers: _attach _mount _open _null _t/_b (top/bottom) _pristine _ruin.",
+  "destroyed-state variants: BOTH bone_<part>_ruin AND bone_ruin_<part> ship.",
+  "LIGHTS CARRY NO SIDE TOKEN - they are a flat hp_fx_light<N> series (1..23, already named). Do NOT generate headlight_l / taillight_r."
+ ],
+ "negative_results": [
+  "tank turret furniture (mantlet, cupola, coax, torsion bar, return roller, bogie, smoke launcher, periscope, glacis, stowage, fender): 53,100 candidates, exp-false 0.004, ZERO hits. Those concepts are ABSENT from the dialect - the studio rigged tanks with a generic wheel ladder, not real running-gear anatomy. Do not add them.",
+  "headlight/taillight/brakelight/lamp/blinker with any side token: 639,932 candidates, exp-false 0.38, ZERO hits. See grammar rule 8.",
+  "damage/LOD/state vocabulary for the 3 universal group nodes: 1,659,348 + 826,143 candidates, ZERO hits.",
+  "all 648k witnessed WAD string tokens x 240 affixes vs the 5 universal hashes: 155.5M candidates, exp-false 0.18, ZERO hits. Bone names are NOT in any shipped string table - every name must be cracked."
+ ],
+ "open_targets": [
+  {
+   "hash": "0x765CD254",
+   "role": "universal SWIT parent",
+   "models": 149,
+   "note": "in_swit=0, max_bbox 0.03 => a bare pivot, i.e. the switch node itself"
+  },
+  {
+   "hash": "0x255EAB53",
+   "role": "universal INTACT group",
+   "models": 149,
+   "note": "carries the whole functional rig; 674 distinct children"
+  },
+  {
+   "hash": "0x75F1F74D",
+   "role": "universal RUIN group",
+   "models": 149,
+   "note": "role PROVEN: bone_door_ruin_rr (cracked) hangs under it on the AH-1Z, as bone_ruin_barrel does under the tank ruin turret"
+  },
+  {
+   "hash": "0xC851B695",
+   "role": "tank turret SWIT parent",
+   "models": 13
+  },
+  {
+   "hash": "0x54C595F0",
+   "role": "tank INTACT turret",
+   "models": 13,
+   "note": "parents bone_yaw_turret"
+  },
+  {
+   "hash": "0x510DCB96",
+   "role": "tank RUIN turret",
+   "models": 13,
+   "note": "parents bone_ruin_barrel"
+  },
+  {
+   "hash": "0x715F5613",
+   "role": "body-panel group",
+   "models": 75,
+   "note": "51 distinct children (doors/hood/glass); naming it unlocks a large sub-tree"
+  },
+  {
+   "hashes": [
+    "0x2C3EDC3C",
+    "0xA641DAE1",
+    "0x063C61D3",
+    "0x243A5276",
+    "0xC88A3631",
+    "0x70B6D66B",
+    "0x2E4BAB55",
+    "0x04492AA0",
+    "0xAE4664A7",
+    "0x8C43F08A",
+    "0x262D89A9",
+    "0x17AA5B86"
+   ],
+   "role": "ruin-group debris series (12 members, ordered by descending model count)",
+   "note": "PROVEN by suffix-unwinding (2^-32) to be STEM + <single index char>, all sharing one FNV stem-state. Stem unknown: a 161,853-candidate destruction lexicon (exp-false 0.003) returned zero, so the stem is NOT piece/part/chunk/debris/frag/gib/break/ruin/wreck/scrap/junk/shard/hunk, and it is longer than bone_ + 6 chars. Next move: exhaustive wild search on the STEM-STATE (single 32-bit target) at lengths 7-9, on GPU."
+  },
+  {
+   "pairs": [
+    [
+     "0x8BC21F85",
+     "0xFE1F4EA3"
+    ],
+    [
+     "0xD871B369",
+     "0xFA92EE23"
+    ],
+    [
+     "0x98B76A82",
+     "0x4119F5A8"
+    ]
+   ],
+   "role": "3 near-universal front/rear mirror pairs, 89-106 models each",
+   "note": "the R-node of the front pair and of rear-B sits at x=0 on all 8 motorcycles - the single-lamp signature - so these READ as lights. But hp_fx_light<N> carries no side token and a 639,932-candidate light grammar (exp-false 0.38) returned zero. Leading alternative: bumper/fender destruction anchors (they are tagged destruction-piece). UNRESOLVED - do not guess a name."
+  }
+ ],
+ "technique_notes": [
+  "STEM-SHARE (zero-cost witness): FNV-1a is invertible, so unwind(h,suf) recovers the FNV state after the stem. unwind(h1,s1)==unwind(h2,s2) <=> the two names share a stem - a 2^-32 proof of siblinghood costing ZERO candidates. Anchor on an already-named sibling and the unnamed members get named for free. This produced 131 of the 175 names at exp-false 0.22.",
+  "TRAP - the mirror-pair constraint is NOT independent. h(X_l) and h(X_r) are BOTH determined by the FNV state after X, so once one lands the other follows automatically: no extra entropy. Also a..g (0x61..0x67) and 1..7 (0x31..0x37) differ by a constant XOR of 0x50, so a genuine _a.._g series silently manifests as a phantom _1.._7 series and as _01.._07. An exhaustive 2.28e9-stem pair-brute returned bone_rjfmj_bl / bone_z7p3w_fl / hp_cwos5_l - garbage at exactly the SINGLE-target rate, not the illusory 2^-64 rate.",
+  "The one deliberately high-noise run (unnamed-unnamed stem families, S=2.08M x T=24,100, exp-false 11.7) produced ~12 nonsense names - exactly the predicted count. Readability + side law + domain sense removed every one. The three real finds that survived (bone_sideskirt_*, bone_mudflap_l/r, bone_jet_l/r_yaw) each did so because they were ALSO mirror pairs with correct side law."
+ ],
+ "cracked": [
+  {
+   "hash": "0x51AA1E41",
+   "name": "bone_attach_rod_fl_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;family:bone_attach_rod_fl_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0xD777BBE3",
+   "name": "bone_attach_rod_fr_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;family:bone_attach_rod_fr_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0xC6E7C98D",
+   "name": "bone_attach_rod_rl_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;family:bone_attach_rod_rl_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0x9461F7B7",
+   "name": "bone_attach_rod_rr_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;family:bone_attach_rod_rr_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0x389C056B",
+   "name": "bone_axle_fl_attach",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150"
+   ]
+  },
+  {
+   "hash": "0x5241C38D",
+   "name": "bone_axle_fr_attach",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150"
+   ]
+  },
+  {
+   "hash": "0x5871D997",
+   "name": "bone_axle_rl_attach",
+   "class": "car",
+   "instances": 4,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150",
+    "global_veh_scorpiondpv",
+    "pmc_veh_car_offroad_buggy",
+    "pmc_veh_car_rocket_buggy"
+   ]
+  },
+  {
+   "hash": "0x6D7B2521",
+   "name": "bone_axle_rr_attach",
+   "class": "car",
+   "instances": 4,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150",
+    "global_veh_scorpiondpv",
+    "pmc_veh_car_offroad_buggy",
+    "pmc_veh_car_rocket_buggy"
+   ]
+  },
+  {
+   "hash": "0x30C28014",
+   "name": "bone_b",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_c",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; child of bone_yaw_outboard; low confidence"
+  },
+  {
+   "hash": "0xE1FBD6FD",
+   "name": "bone_b1",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_c1",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; low confidence"
+  },
+  {
+   "hash": "0x8AC54C59",
+   "name": "bone_c",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_b",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; low confidence"
+  },
+  {
+   "hash": "0xC5CAFEE6",
+   "name": "bone_c1",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_b1",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; low confidence"
+  },
+  {
+   "hash": "0xB0C7C6C2",
+   "name": "bone_d",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_b",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; low confidence"
+  },
+  {
+   "hash": "0xDC67D187",
+   "name": "bone_d1",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_outboard;family:bone_b1",
+   "models": [
+    "oc_veh_boat_turbosquid"
+   ],
+   "flag": "generic; low confidence"
+  },
+  {
+   "hash": "0xA0EF9BBF",
+   "name": "bone_door_lf",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "family:bone_door_lt",
+   "models": [
+    "ch_veh_helicopter_wz10",
+    "oc_veh_helicopter_wz10"
+   ]
+  },
+  {
+   "hash": "0x6E17A0BF",
+   "name": "bone_door_rl_bottom",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0xCE4AF7F7",
+   "name": "bone_door_rl_top",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x81C5C8E5",
+   "name": "bone_door_rr_bottom",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x8AC4D031",
+   "name": "bone_door_rr_top",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x7D4E9B23",
+   "name": "bone_door_rt",
+   "class": "tank",
+   "instances": 2,
+   "evidence": "parent:bone_yaw_turret;family:bone_door_rl",
+   "models": [
+    "al_veh_tank_m2a3",
+    "al_veh_tank_m2a3_m6"
+   ]
+  },
+  {
+   "hash": "0x82E62D7A",
+   "name": "bone_door_ruin_rr",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "sidelaw",
+   "models": [
+    "al_veh_helicopter_ah1z"
+   ]
+  },
+  {
+   "hash": "0xFB45E9A3",
+   "name": "bone_doorlb_open",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "parent-derived:bone_doorlb",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x35EFDCBD",
+   "name": "bone_doorrb_open",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "parent-derived:bone_doorrb",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x82747812",
+   "name": "bone_drivewheel_l",
+   "class": "apc",
+   "instances": 11,
+   "evidence": "mirror:bone_drivewheel_r;sidelaw;parent:bone_suspension;family:bone_drivewheel_r",
+   "models": [
+    "al_veh_tank_m1a2",
+    "al_veh_tank_m2a3",
+    "al_veh_tank_m2a3_m6",
+    "ch_veh_tank_ztz98"
+   ]
+  },
+  {
+   "hash": "0x463720BC",
+   "name": "bone_drivewheel_l_01",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "mirror:bone_drivewheel_r_01;sidelaw;parent:bone_suspension;family:bone_drivewheel_r_01",
+   "models": [
+    "vz_veh_tank_scorpion90"
+   ]
+  },
+  {
+   "hash": "0x82AA920C",
+   "name": "bone_drivewheel_r",
+   "class": "apc",
+   "instances": 11,
+   "evidence": "mirror:bone_drivewheel_l;sidelaw;parent:bone_suspension;family:bone_drivewheel_l",
+   "models": [
+    "al_veh_tank_m1a2",
+    "al_veh_tank_m2a3",
+    "al_veh_tank_m2a3_m6",
+    "ch_veh_tank_ztz98"
+   ]
+  },
+  {
+   "hash": "0x51C478A6",
+   "name": "bone_drivewheel_r_01",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "mirror:bone_drivewheel_l_01;sidelaw;parent:bone_suspension;family:bone_drivewheel_l_01",
+   "models": [
+    "vz_veh_tank_scorpion90"
+   ]
+  },
+  {
+   "hash": "0xC55750ED",
+   "name": "bone_flap1_l",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "mirror:bone_flap1_r;sidelaw;family:bone_flap1_r",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0xFFAB1A62",
+   "name": "bone_flap1_l_pitch",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "mirror:bone_flap1_r_pitch;sidelaw;parent:bone_wing_l",
+   "models": [
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0x9D347FB3",
+   "name": "bone_flap1_r",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "mirror:bone_flap1_l;sidelaw;family:bone_flap1_l",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0x10D510A8",
+   "name": "bone_flap1_r_pitch",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "mirror:bone_flap1_l_pitch;sidelaw;parent:bone_wing_r",
+   "models": [
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0xAB7D0456",
+   "name": "bone_flap2_l",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "mirror:bone_flap2_r;sidelaw;family:bone_flap2_r",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0x0BA02DB8",
+   "name": "bone_flap2_r",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "mirror:bone_flap2_l;sidelaw;family:bone_flap2_l",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0xA2B537F4",
+   "name": "bone_gear_f",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x34DCBD27",
+   "name": "bone_gear_f_pitch",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "parent:bone_frame",
+   "models": [
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0xAA077902",
+   "name": "bone_geardoor_fl_roll",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_frame",
+   "models": [
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0xC056A190",
+   "name": "bone_geardoor_fr_roll",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_frame",
+   "models": [
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0x31673024",
+   "name": "bone_glass__br",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "civ_veh_truck_bank"
+   ],
+   "flag": "double underscore - smell; the _pristine/_ruin children are structurally coherent though"
+  },
+  {
+   "hash": "0x84778723",
+   "name": "bone_glass__br_pristine",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent-derived:bone_glass__br",
+   "models": [
+    "civ_veh_truck_bank"
+   ],
+   "flag": "see bone_glass__br"
+  },
+  {
+   "hash": "0xBA09DC5D",
+   "name": "bone_glass__br_ruin",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent-derived:bone_glass__br",
+   "models": [
+    "civ_veh_truck_bank"
+   ],
+   "flag": "see bone_glass__br"
+  },
+  {
+   "hash": "0xD2849EC3",
+   "name": "bone_guns",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "parent:bone_frame",
+   "models": [
+    "al_veh_plane_ac130_spooky"
+   ]
+  },
+  {
+   "hash": "0x6DCE6593",
+   "name": "bone_handlebar_yaw",
+   "class": "motorcycle",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "civ_veh_motorcycle_chopper"
+   ]
+  },
+  {
+   "hash": "0x6E249CBC",
+   "name": "bone_hatchl",
+   "class": "car",
+   "instances": 1,
+   "evidence": "mirror:bone_hatchr;family:bone_hatchr",
+   "models": [
+    "pmc_veh_car_panhard"
+   ],
+   "flag": "REAL pair but SIDE-LAW VIOLATING (x=-0.34 yet named l); the Panhard own named bones obey +x=left => authored mislabel, not a break in the law"
+  },
+  {
+   "hash": "0xEE3D6B22",
+   "name": "bone_hatchr",
+   "class": "car",
+   "instances": 1,
+   "evidence": "mirror:bone_hatchl;family:bone_hatchl",
+   "models": [
+    "pmc_veh_car_panhard"
+   ],
+   "flag": "REAL pair but SIDE-LAW VIOLATING (x=+0.33 yet named r); see bone_hatchl"
+  },
+  {
+   "hash": "0xB6478F1A",
+   "name": "bone_jet_l_yaw",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:bone_jet_r_yaw;sidelaw",
+   "models": [
+    "al_veh_boat_lcur"
+   ]
+  },
+  {
+   "hash": "0xBB79A564",
+   "name": "bone_jet_r_yaw",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:bone_jet_l_yaw;sidelaw",
+   "models": [
+    "al_veh_boat_lcur"
+   ]
+  },
+  {
+   "hash": "0x9F5E9F77",
+   "name": "bone_missile_turret",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "vz_veh_boat_type14311"
+   ]
+  },
+  {
+   "hash": "0xAF7B302C",
+   "name": "bone_mudflap_l",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "mirror:bone_mudflap_r;sidelaw;family:bone_mudflap_r",
+   "models": [
+    "civ_veh_truck_garbage"
+   ]
+  },
+  {
+   "hash": "0x2F444CB2",
+   "name": "bone_mudflap_r",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "mirror:bone_mudflap_l;sidelaw;family:bone_mudflap_l",
+   "models": [
+    "civ_veh_truck_garbage"
+   ]
+  },
+  {
+   "hash": "0x78393CDD",
+   "name": "bone_pitch_ai",
+   "class": "helicopter",
+   "instances": 7,
+   "evidence": "",
+   "models": [
+    "al_veh_helicopter_ah1z",
+    "ch_veh_boat_huangfeng",
+    "ch_veh_helicopter_wz10",
+    "oc_veh_helicopter_md500"
+   ],
+   "flag": "semantically opaque, spans classes (incl. a boat) - likely stem-share alias; DO NOT MERGE without a 2nd witness"
+  },
+  {
+   "hash": "0x0D71F647",
+   "name": "bone_pitch_barrel_a",
+   "class": "towed",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_turret",
+   "models": [
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0x3A338417",
+   "name": "bone_pitch_gun",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_gun",
+   "models": [
+    "al_veh_truck_hmmwv_armored"
+   ]
+  },
+  {
+   "hash": "0x4ADD7A83",
+   "name": "bone_pitch_ll",
+   "class": "helicopter",
+   "instances": 3,
+   "evidence": "",
+   "models": [
+    "ch_veh_helicopter_ka29b",
+    "pr_veh_helicopter_alouetteiii",
+    "vz_veh_helicopter_alouetteiii"
+   ]
+  },
+  {
+   "hash": "0x4B5639EC",
+   "name": "bone_pitch_missile_l",
+   "class": "helicopter",
+   "instances": 3,
+   "evidence": "mirror:bone_pitch_missile_r;sidelaw;family:bone_pitch_missile_r",
+   "models": [
+    "vz_veh_helicopter_alouetteiii",
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0xCB1F5672",
+   "name": "bone_pitch_missile_r",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "mirror:bone_pitch_missile_l;sidelaw;family:bone_pitch_missile_l",
+   "models": [
+    "vz_veh_helicopter_alouetteiii"
+   ]
+  },
+  {
+   "hash": "0x683E08BB",
+   "name": "bone_pitch_missilel",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "mirror:bone_pitch_missiler;family:bone_pitch_missiler",
+   "models": [
+    "oc_veh_helicopter_md500"
+   ]
+  },
+  {
+   "hash": "0xD0884E25",
+   "name": "bone_pitch_missiler",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "mirror:bone_pitch_missilel;family:bone_pitch_missilel",
+   "models": [
+    "oc_veh_helicopter_md500"
+   ]
+  },
+  {
+   "hash": "0x7E085073",
+   "name": "bone_pitch_rocket_la",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "family:bone_pitch_rocket_lb",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0xA40ACADC",
+   "name": "bone_pitch_rocket_lb",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "family:bone_pitch_rocket_la",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x5B01AE52",
+   "name": "bone_propeller_ll",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "parent:bone_frame;family:bone_propeller_rl",
+   "models": [
+    "al_veh_plane_ac130_spooky",
+    "al_veh_plane_c130"
+   ]
+  },
+  {
+   "hash": "0xF50BF5F7",
+   "name": "bone_propeller_roll",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "al_veh_boat_destroyer"
+   ]
+  },
+  {
+   "hash": "0x2DA47122",
+   "name": "bone_radar_yaw",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_turret",
+   "models": [
+    "vz_veh_tank_amx30_aa"
+   ]
+  },
+  {
+   "hash": "0x5969B1BF",
+   "name": "bone_rod_fl_t",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_axle_fr;family:bone_rod_fl_b",
+   "models": [
+    "pmc_veh_truck_ext"
+   ]
+  },
+  {
+   "hash": "0x1FAECEA5",
+   "name": "bone_rod_fr_t",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_axle_fr;family:bone_rod_fr_b",
+   "models": [
+    "pmc_veh_truck_ext"
+   ]
+  },
+  {
+   "hash": "0x57903433",
+   "name": "bone_rod_rl_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;parent:bone_axle_rr;family:bone_rod_rl_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0xB6288E31",
+   "name": "bone_rod_rr_t",
+   "class": "truck",
+   "instances": 4,
+   "evidence": "sidelaw;parent:bone_axle_rr;family:bone_rod_rr_b",
+   "models": [
+    "pmc_veh_truck_cougar",
+    "pmc_veh_truck_ext",
+    "pmc_veh_truck_monster_ridgeline",
+    "pmc_veh_truck_monster_rtr"
+   ]
+  },
+  {
+   "hash": "0x134E4AA6",
+   "name": "bone_roller",
+   "class": "motorcycle",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "pmc_veh_motorcycle_tankbike"
+   ]
+  },
+  {
+   "hash": "0x8A78A563",
+   "name": "bone_roller1",
+   "class": "motorcycle",
+   "instances": 1,
+   "evidence": "family:bone_roller2",
+   "models": [
+    "pmc_veh_motorcycle_tankbike"
+   ]
+  },
+  {
+   "hash": "0x707ABB0C",
+   "name": "bone_roller2",
+   "class": "motorcycle",
+   "instances": 1,
+   "evidence": "family:bone_roller1",
+   "models": [
+    "pmc_veh_motorcycle_tankbike"
+   ]
+  },
+  {
+   "hash": "0xE6810AC0",
+   "name": "bone_rotor_blade_0",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_1",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0x10838B75",
+   "name": "bone_rotor_blade_1",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_0",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0xEE7C9A2A",
+   "name": "bone_rotor_blade_2",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_0",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0x107F0E47",
+   "name": "bone_rotor_blade_3",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_0",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0x8E7785DC",
+   "name": "bone_rotor_blade_4",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_0",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0x8879BB01",
+   "name": "bone_rotor_blade_5",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:bone_rotor_blade_0",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0x3A2D1198",
+   "name": "bone_rudder_yaw",
+   "class": "boat",
+   "instances": 2,
+   "evidence": "parent:bone_frame",
+   "models": [
+    "al_veh_boat_destroyer",
+    "civ_veh_plane_727jet"
+   ]
+  },
+  {
+   "hash": "0xFF41F83F",
+   "name": "bone_sensor_pitch",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "parent:bone_radar_yaw",
+   "models": [
+    "vz_veh_tank_amx30_aa"
+   ]
+  },
+  {
+   "hash": "0x9E8AE12C",
+   "name": "bone_sensor_yaw",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "parent:bone_sensor_pitch",
+   "models": [
+    "vz_veh_tank_amx30_aa"
+   ]
+  },
+  {
+   "hash": "0xFCF31FA2",
+   "name": "bone_sideskirt_la",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_ra;sidelaw;family:bone_sideskirt_lb",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x7EFAA80D",
+   "name": "bone_sideskirt_lb",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_rb;sidelaw;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x54F82758",
+   "name": "bone_sideskirt_lc",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_rc;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0xD6EC280B",
+   "name": "bone_sideskirt_ld",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_rd;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x74E94F2E",
+   "name": "bone_sideskirt_le",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_re;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0xD6F0A539",
+   "name": "bone_sideskirt_lf",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_rf;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0xFCEEA274",
+   "name": "bone_sideskirt_lg",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "mirror:bone_sideskirt_rg;family:bone_sideskirt_la",
+   "models": [
+    "ch_veh_tank_ztz98"
+   ]
+  },
+  {
+   "hash": "0x88554B3C",
+   "name": "bone_sideskirt_ra",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_la;sidelaw;family:bone_sideskirt_rb",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x6252D0D3",
+   "name": "bone_sideskirt_rb",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_lb;sidelaw;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x8050C176",
+   "name": "bone_sideskirt_rc",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_lc;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x8A621A55",
+   "name": "bone_sideskirt_rd",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_ld;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x605F99A0",
+   "name": "bone_sideskirt_re",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_le;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0x0A5CD3A7",
+   "name": "bone_sideskirt_rf",
+   "class": "car",
+   "instances": 2,
+   "evidence": "mirror:bone_sideskirt_lf;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray"
+   ]
+  },
+  {
+   "hash": "0xE85A5F8A",
+   "name": "bone_sideskirt_rg",
+   "class": "tank",
+   "instances": 1,
+   "evidence": "mirror:bone_sideskirt_lg;family:bone_sideskirt_ra",
+   "models": [
+    "ch_veh_tank_ztz98"
+   ]
+  },
+  {
+   "hash": "0x77239500",
+   "name": "bone_steering_fl_attach",
+   "class": "car",
+   "instances": 4,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150",
+    "global_veh_scorpiondpv",
+    "pmc_veh_car_offroad_buggy",
+    "pmc_veh_car_rocket_buggy"
+   ]
+  },
+  {
+   "hash": "0x18A9E282",
+   "name": "bone_steering_fr_attach",
+   "class": "car",
+   "instances": 4,
+   "evidence": "sidelaw",
+   "models": [
+    "global_veh_fordf150",
+    "global_veh_scorpiondpv",
+    "pmc_veh_car_offroad_buggy",
+    "pmc_veh_car_rocket_buggy"
+   ]
+  },
+  {
+   "hash": "0x0D28FEAC",
+   "name": "bone_susp_rl_attach",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_hub_rl",
+   "models": [
+    "global_veh_fordf150"
+   ]
+  },
+  {
+   "hash": "0x544D2AB6",
+   "name": "bone_susp_rr_attach",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_hub_rr",
+   "models": [
+    "global_veh_fordf150"
+   ]
+  },
+  {
+   "hash": "0xD113A590",
+   "name": "bone_wheel_f_null",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0x351ECB4E",
+   "name": "bone_wheel_fb",
+   "class": "motorcycle",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_front;family:bone_wheel_fl",
+   "models": [
+    "pmc_veh_motorcycle_tankbike"
+   ]
+  },
+  {
+   "hash": "0xFA162ED4",
+   "name": "bone_wheel_rl_null",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0xBDE72B66",
+   "name": "bone_wheel_rr_null",
+   "class": "plane",
+   "instances": 2,
+   "evidence": "sidelaw",
+   "models": [
+    "al_veh_plane_a10",
+    "ch_veh_plane_q5"
+   ]
+  },
+  {
+   "hash": "0x6B7C4B73",
+   "name": "bone_wiper",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "global_veh_rib36"
+   ]
+  },
+  {
+   "hash": "0x6D7D0993",
+   "name": "bone_yaw_front",
+   "class": "truck",
+   "instances": 5,
+   "evidence": "",
+   "models": [
+    "gr_veh_truck_m35_guntruck_50cal",
+    "gr_veh_truck_m35_tanker",
+    "oc_veh_truck_mtv_guntruck",
+    "vz_veh_truck_m35_guntruck_50cal"
+   ]
+  },
+  {
+   "hash": "0x30BA7274",
+   "name": "bone_yaw_gun",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_turret",
+   "models": [
+    "al_veh_truck_hmmwv_armored"
+   ]
+  },
+  {
+   "hash": "0x5F602F7A",
+   "name": "bone_yaw_ll",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "parent:bone_pitch_ll",
+   "models": [
+    "pr_veh_helicopter_alouetteiii",
+    "vz_veh_helicopter_alouetteiii"
+   ]
+  },
+  {
+   "hash": "0xD566E2BC",
+   "name": "bone_yaw_mg_mount",
+   "class": "apc",
+   "instances": 1,
+   "evidence": "parent-derived:bone_yaw_mg",
+   "models": [
+    "ch_veh_apc_zbd2000"
+   ]
+  },
+  {
+   "hash": "0x2B80B63E",
+   "name": "bone_yaw_outboard",
+   "class": "boat",
+   "instances": 3,
+   "evidence": "",
+   "models": [
+    "global_veh_turbosquid",
+    "gr_veh_boat_turbosquid",
+    "oc_veh_boat_turbosquid"
+   ]
+  },
+  {
+   "hash": "0x9998A208",
+   "name": "bone_yaw_rear",
+   "class": "truck",
+   "instances": 5,
+   "evidence": "",
+   "models": [
+    "global_veh_rib36",
+    "gr_veh_truck_m35_guntruck_50cal",
+    "oc_veh_truck_mtv_guntruck",
+    "pmc_veh_motorcycle_tankbike"
+   ]
+  },
+  {
+   "hash": "0xC08DEB55",
+   "name": "bone_yaw_rudder_l",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:bone_yaw_rudder_r;sidelaw;family:bone_yaw_rudder_r",
+   "models": [
+    "civ_veh_boat_swamp"
+   ]
+  },
+  {
+   "hash": "0x1892F30B",
+   "name": "bone_yaw_rudder_r",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:bone_yaw_rudder_l;sidelaw;family:bone_yaw_rudder_l",
+   "models": [
+    "civ_veh_boat_swamp"
+   ]
+  },
+  {
+   "hash": "0xF4BBB31C",
+   "name": "hp_barreltip_aa",
+   "class": "towed",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_barrel_a;family:hp_barreltip_ab",
+   "models": [
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0xCEB938B3",
+   "name": "hp_barreltip_ab",
+   "class": "towed",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_barrel_a;family:hp_barreltip_aa",
+   "models": [
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0x43A6FCC5",
+   "name": "hp_barreltip_ba",
+   "class": "towed",
+   "instances": 2,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_bb",
+   "models": [
+    "al_veh_truck_hmmwv_avenger",
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0xE19FA6BA",
+   "name": "hp_barreltip_bb",
+   "class": "towed",
+   "instances": 2,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger",
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0x43A27F97",
+   "name": "hp_barreltip_bc",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xC19AF72C",
+   "name": "hp_barreltip_bd",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xBB9D2C51",
+   "name": "hp_barreltip_be",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x3995A3E6",
+   "name": "hp_barreltip_bf",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x5B981803",
+   "name": "hp_barreltip_bg",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x399126B8",
+   "name": "hp_barreltip_bh",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_barreltip_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xC681014C",
+   "name": "hp_barreltip_rocket_la",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_barreltip_rocket_ra;sidelaw;parent:bone_pitch_rocket_la;family:hp_barreltip_rocket_lb",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0xE07EEBA3",
+   "name": "hp_barreltip_rocket_lb",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_barreltip_rocket_rb;sidelaw;parent:bone_pitch_rocket_lb;family:hp_barreltip_rocket_la",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x9D0B9C92",
+   "name": "hp_barreltip_rocket_ra",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_barreltip_rocket_la;sidelaw;parent:bone_pitch_rocket_la;family:hp_barreltip_rocket_rb",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0x1F1324FD",
+   "name": "hp_barreltip_rocket_rb",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_barreltip_rocket_lb;sidelaw;parent:bone_pitch_rocket_lb;family:hp_barreltip_rocket_ra",
+   "models": [
+    "vz_veh_helicopter_mi35hind",
+    "vz_veh_helicopter_mi35hind_solano"
+   ]
+  },
+  {
+   "hash": "0xD9A9B6F4",
+   "name": "hp_barreltip_turret_fa",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret_f;family:hp_barreltip_turret_fb",
+   "models": [
+    "ch_veh_boat_huangfeng"
+   ]
+  },
+  {
+   "hash": "0xB3A73C8B",
+   "name": "hp_barreltip_turret_fb",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret_f;family:hp_barreltip_turret_fa",
+   "models": [
+    "ch_veh_boat_huangfeng"
+   ]
+  },
+  {
+   "hash": "0xB3AF9FA0",
+   "name": "hp_barreltip_turret_ra",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "!!SIDELAW-VIOLATION;parent:bone_pitch_turret_r;family:hp_barreltip_turret_rb",
+   "models": [
+    "ch_veh_boat_huangfeng"
+   ]
+  },
+  {
+   "hash": "0x5DACD9A7",
+   "name": "hp_barreltip_turret_rb",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "sidelaw;parent:bone_pitch_turret_r;family:hp_barreltip_turret_ra",
+   "models": [
+    "ch_veh_boat_huangfeng"
+   ]
+  },
+  {
+   "hash": "0x7267873D",
+   "name": "hp_dock_fc",
+   "class": "boat",
+   "instances": 2,
+   "evidence": "family:hp_dock_fl",
+   "models": [
+    "global_veh_turbosquid",
+    "gr_veh_boat_turbosquid"
+   ]
+  },
+  {
+   "hash": "0xE867A77D",
+   "name": "hp_dock_fml",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:hp_dock_fmr;family:hp_dock_fmr",
+   "models": [
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0x80942363",
+   "name": "hp_dock_fmr",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:hp_dock_fml;family:hp_dock_fml",
+   "models": [
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0x887D702E",
+   "name": "hp_dock_ft",
+   "class": "boat",
+   "instances": 4,
+   "evidence": "family:hp_dock_fc",
+   "models": [
+    "ch_veh_boat_huangfeng",
+    "global_veh_rib36",
+    "vz_veh_boat_patrol",
+    "vz_veh_boat_type14311"
+   ]
+  },
+  {
+   "hash": "0x82FC5B22",
+   "name": "hp_dock_lf",
+   "class": "tank",
+   "instances": 6,
+   "evidence": "mirror:hp_dock_rf;parent:bone_yaw_turret;family:hp_dock_lg",
+   "models": [
+    "al_veh_tank_m2a3",
+    "al_veh_tank_m2a3_m6",
+    "ch_veh_helicopter_wz10",
+    "ch_veh_tank_ztz63a"
+   ]
+  },
+  {
+   "hash": "0xE4FF33FF",
+   "name": "hp_dock_lg",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_dock_rg;family:hp_dock_lf",
+   "models": [
+    "global_veh_uh1huey",
+    "pmc_veh_helicopter_uh1huey"
+   ]
+  },
+  {
+   "hash": "0xDACB48DE",
+   "name": "hp_dock_lr",
+   "class": "tank",
+   "instances": 8,
+   "evidence": "family:hp_dock_lf",
+   "models": [
+    "ch_veh_tank_ztz63a",
+    "ch_veh_tank_ztz98",
+    "global_veh_stingray",
+    "gr_veh_tank_m551sheridan"
+   ]
+  },
+  {
+   "hash": "0x6746EE96",
+   "name": "hp_dock_mm",
+   "class": "boat",
+   "instances": 4,
+   "evidence": "family:hp_dock_ml",
+   "models": [
+    "ch_veh_truck_nglv_armored_50cal",
+    "civ_veh_boat_dinghy",
+    "civ_veh_boat_smallfishing",
+    "civ_veh_bus_escort"
+   ]
+  },
+  {
+   "hash": "0x03DD7400",
+   "name": "hp_dock_rf",
+   "class": "tank",
+   "instances": 3,
+   "evidence": "mirror:hp_dock_lf;family:hp_dock_rg",
+   "models": [
+    "al_veh_tank_m2a3",
+    "al_veh_tank_m2a3_m6",
+    "oc_veh_helicopter_md500"
+   ]
+  },
+  {
+   "hash": "0x2DDFF4B5",
+   "name": "hp_dock_rg",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_dock_lg;family:hp_dock_rf",
+   "models": [
+    "global_veh_uh1huey",
+    "pmc_veh_helicopter_uh1huey"
+   ]
+  },
+  {
+   "hash": "0xB881403B",
+   "name": "hp_doorhandle_fl",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "mirror:hp_doorhandle_fr;sidelaw;family:hp_doorhandle_fr",
+   "models": [
+    "civ_veh_truck_bank"
+   ]
+  },
+  {
+   "hash": "0x20CB85A5",
+   "name": "hp_doorhandle_fr",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "mirror:hp_doorhandle_fl;sidelaw;family:hp_doorhandle_fl",
+   "models": [
+    "civ_veh_truck_bank"
+   ]
+  },
+  {
+   "hash": "0xC41486C1",
+   "name": "hp_doorhandle_r",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "sidelaw",
+   "models": [
+    "civ_veh_truck_bank"
+   ]
+  },
+  {
+   "hash": "0xD57E1F82",
+   "name": "hp_fx_exhaust_a1",
+   "class": "car",
+   "instances": 1,
+   "evidence": "",
+   "models": [
+    "pmc_veh_car_offroad_buggy"
+   ]
+  },
+  {
+   "hash": "0x91460107",
+   "name": "hp_fx_exhaust_ba",
+   "class": "towed",
+   "instances": 1,
+   "evidence": "family:hp_fx_exhaust_bb",
+   "models": [
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0x6747FD80",
+   "name": "hp_fx_exhaust_bb",
+   "class": "towed",
+   "instances": 1,
+   "evidence": "family:hp_fx_exhaust_ba",
+   "models": [
+    "vz_veh_towed_zu23aa"
+   ]
+  },
+  {
+   "hash": "0xCF17C599",
+   "name": "hp_fx_jet_exhaust_a",
+   "class": "airstrike",
+   "instances": 2,
+   "evidence": "parent:bone_frame;family:hp_fx_jet_exhaust_b",
+   "models": [
+    "al_veh_airstrike_b2",
+    "pmc_veh_plane_mig27"
+   ]
+  },
+  {
+   "hash": "0x6D106F8E",
+   "name": "hp_fx_jet_exhaust_b",
+   "class": "airstrike",
+   "instances": 1,
+   "evidence": "parent:bone_frame;family:hp_fx_jet_exhaust_a",
+   "models": [
+    "al_veh_airstrike_b2"
+   ]
+  },
+  {
+   "hash": "0x53D4A7D8",
+   "name": "hp_gunmount_ll",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "parent:bone_yaw_ll;family:hp_gunmount_fl",
+   "models": [
+    "pr_veh_helicopter_alouetteiii",
+    "vz_veh_helicopter_alouetteiii"
+   ]
+  },
+  {
+   "hash": "0xC22FCBCE",
+   "name": "hp_lowerfclefte",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "family:hp_lowerfclefta",
+   "models": [
+    "oc_veh_boat_oiltanker"
+   ],
+   "flag": "REJECTED - side-law incoherent within its own family, unreadable stem"
+  },
+  {
+   "hash": "0x243721D9",
+   "name": "hp_lowerfcleftf",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "family:hp_lowerfclefta",
+   "models": [
+    "oc_veh_boat_oiltanker"
+   ],
+   "flag": "REJECTED - see hp_lowerfclefte"
+  },
+  {
+   "hash": "0xCA345594",
+   "name": "hp_lowerfcleftg",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "family:hp_lowerfclefta",
+   "models": [
+    "oc_veh_boat_oiltanker"
+   ],
+   "flag": "REJECTED - see hp_lowerfclefte"
+  },
+  {
+   "hash": "0x179DDBA6",
+   "name": "hp_mount_ll",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_ll",
+   "models": [
+    "ch_veh_helicopter_ka29b"
+   ]
+  },
+  {
+   "hash": "0xE23A9A22",
+   "name": "hp_seat_dock_fr",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:hp_seat_dock_fl;sidelaw;family:hp_seat_dock_fl",
+   "models": [
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0xBC3C05A0",
+   "name": "hp_seat_dock_rl",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:hp_seat_dock_rr;sidelaw;family:hp_seat_dock_rr",
+   "models": [
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0xDC40B52E",
+   "name": "hp_seat_dock_rr",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "mirror:hp_seat_dock_rl;sidelaw;family:hp_seat_dock_rl",
+   "models": [
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0xE0DB3907",
+   "name": "hp_seat_fml",
+   "class": "boat",
+   "instances": 2,
+   "evidence": "mirror:hp_seat_fmr;family:hp_seat_fmr",
+   "models": [
+    "global_veh_rib36",
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0xB8EA0499",
+   "name": "hp_seat_fmr",
+   "class": "boat",
+   "instances": 2,
+   "evidence": "mirror:hp_seat_fml;family:hp_seat_fml",
+   "models": [
+    "global_veh_rib36",
+    "vz_veh_boat_patrol"
+   ]
+  },
+  {
+   "hash": "0x56E69BE4",
+   "name": "hp_seat_ft",
+   "class": "boat",
+   "instances": 4,
+   "evidence": "parent:bone_yaw_turret_front;family:hp_seat_fc",
+   "models": [
+    "ch_veh_boat_huangfeng",
+    "global_veh_rib36",
+    "vz_veh_boat_patrol",
+    "vz_veh_boat_type14311"
+   ]
+  },
+  {
+   "hash": "0xDC8F89E0",
+   "name": "hp_seat_lf",
+   "class": "helicopter",
+   "instances": 3,
+   "evidence": "mirror:hp_seat_rf;family:hp_seat_lg",
+   "models": [
+    "ch_veh_helicopter_wz10",
+    "oc_veh_helicopter_md500",
+    "oc_veh_helicopter_wz10"
+   ]
+  },
+  {
+   "hash": "0x06920A95",
+   "name": "hp_seat_lg",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_seat_rg;family:hp_seat_lf",
+   "models": [
+    "global_veh_uh1huey",
+    "pmc_veh_helicopter_uh1huey"
+   ]
+  },
+  {
+   "hash": "0x64ACE20C",
+   "name": "hp_seat_lr",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "family:hp_seat_lf",
+   "models": [
+    "oc_veh_helicopter_md500"
+   ]
+  },
+  {
+   "hash": "0x495AAF18",
+   "name": "hp_seat_mm",
+   "class": "boat",
+   "instances": 4,
+   "evidence": "parent:bone_yaw_turret;family:hp_seat_ml",
+   "models": [
+    "ch_veh_truck_nglv_armored_50cal",
+    "civ_veh_boat_dinghy",
+    "civ_veh_boat_smallfishing",
+    "civ_veh_bus_escort"
+   ]
+  },
+  {
+   "hash": "0x7349A815",
+   "name": "hp_seat_mt",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "family:hp_seat_ml",
+   "models": [
+    "global_veh_rib36"
+   ]
+  },
+  {
+   "hash": "0x5E28DA02",
+   "name": "hp_seat_rf",
+   "class": "helicopter",
+   "instances": 1,
+   "evidence": "mirror:hp_seat_lf;family:hp_seat_rg",
+   "models": [
+    "oc_veh_helicopter_md500"
+   ]
+  },
+  {
+   "hash": "0x402AE95F",
+   "name": "hp_seat_rg",
+   "class": "helicopter",
+   "instances": 2,
+   "evidence": "mirror:hp_seat_lg;family:hp_seat_rf",
+   "models": [
+    "global_veh_uh1huey",
+    "pmc_veh_helicopter_uh1huey"
+   ]
+  },
+  {
+   "hash": "0x6315BA1B",
+   "name": "hp_seat_samrr",
+   "class": "boat",
+   "instances": 1,
+   "evidence": "parent:bone_yaw_samrr",
+   "models": [
+    "al_veh_boat_destroyer"
+   ]
+  },
+  {
+   "hash": "0x6A0F405B",
+   "name": "hp_shelleject_ba",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_bb",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xD0121F84",
+   "name": "hp_shelleject_bb",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xEA148709",
+   "name": "hp_shelleject_bc",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xD0169CB2",
+   "name": "hp_shelleject_bd",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xF21910CF",
+   "name": "hp_shelleject_be",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x681C0928",
+   "name": "hp_shelleject_bf",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x521E251D",
+   "name": "hp_shelleject_bg",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0x68208656",
+   "name": "hp_shelleject_bh",
+   "class": "truck",
+   "instances": 1,
+   "evidence": "parent:bone_pitch_turret;family:hp_shelleject_ba",
+   "models": [
+    "al_veh_truck_hmmwv_avenger"
+   ]
+  },
+  {
+   "hash": "0xE7B8D4CB",
+   "name": "hp_weapon_b",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "family:hp_weapon_a",
+   "models": [
+    "vz_veh_plane_tucano"
+   ]
+  },
+  {
+   "hash": "0x85B5FBEE",
+   "name": "hp_weapon_c",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "family:hp_weapon_a",
+   "models": [
+    "vz_veh_plane_tucano"
+   ]
+  },
+  {
+   "hash": "0x8FC754CD",
+   "name": "hp_weapon_d",
+   "class": "plane",
+   "instances": 1,
+   "evidence": "family:hp_weapon_a",
+   "models": [
+    "vz_veh_plane_tucano"
+   ]
+  }
+ ]
+}

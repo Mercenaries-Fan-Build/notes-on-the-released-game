@@ -1,0 +1,154 @@
+{
+  "_comment": "DESTRUCTION / ENVIRONMENT bone-name grammar for the bone_forge cracker. Companion analysis: docs/reverse_engineer/dialect_destruction.md. Designed for a NARROW cross-product: the full expansion below is S = 60,088 candidates, which against T = 7,176 unnamed hashes gives an expected-false of 0.100. Do NOT widen the vocab lists without re-checking S*T/2^32 -- this dialect is cracked by narrowness, not volume.",
+
+  "hash": "pandemic_hash_m2 (FNV-1a, per-byte |0x20 case fold, ^0x2A finalisation). CASE-INSENSITIVE: emit lowercase only, casing carries zero evidence.",
+
+  "vocab": {
+    "kind": ["piece", "slice"],
+    "_kind_note": "CLOSED SET. A joint-constraint sweep of 38,169 in-domain words requiring both W1a_pristine and W1a_ruin to hit (expected-false 1.1e-7) found ZERO additional kinds. Do not add chunk/frag/shard/block/panel.",
+
+    "digit": ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+    "letter": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"],
+    "_letter_note": "Observed up to 'p' (piece3p, slice2o, piece5l, piece2m). Previously believed a..h.",
+
+    "state": ["", "_pristine", "_ruin", "_interior"],
+    "_state_note": "_interior is NEW and is a child of _pristine (interior geometry of the intact building), NOT a sibling of the bare shard. Tested and REJECTED: _damaged _destroyed _intact _broken _static _foundation _base _rubble _debris _collapse _fx _col _collision _shadow _lod _lod1 _lod2 _tiny _imposter _glass _props _attachments.",
+
+    "propattach_state": ["", "_pristine", "_ruin"],
+    "propattach_index": "00..39 (2-digit zero-padded)",
+
+    "component": ["floor"],
+    "_component_note": "CLOSED, effectively. Joint sweep (>=3 simultaneous hits, expected-false 2.1e-13) over 38k words returned only 'floor' (52 hits) plus two opaque tokens 'ghw'/'bbd' (3 hits each) which are PARENT-INCONSISTENT and deliberately EXCLUDED. There is no wall/roof/corner/column/awning/balcony/stair component: buildings are sliced by STOREY, not by architectural element.",
+    "component_index": "00..19 (2-digit zero-padded)",
+
+    "hardpoint_family": [
+      "spawn", "ladder_top", "ladder_bottom", "fx_light", "fx_clothesline",
+      "parachute", "civilian", "fx_fire", "fx_flame", "fx_smoke", "light",
+      "rope", "fx_spotlight"
+    ],
+    "leaves_variant": ["green", "palm", "brown", "dead", "dry"],
+    "_leaves_note": "hp_fx_leaves_green_a..p (16 members) is confirmed on 14 tree models under piece1a_ruin -- leaf-burst FX when the tree breaks. hp_fx_leaves_palm_a/b has only 2 members (medium confidence). brown/dead/dry are UNCONFIRMED probes, kept only because the family frame is proven.",
+
+    "env_bone_stem": ["bone_wind", "bone_plant", "bone_fan", "bone_rope"],
+    "_env_bone_note": "bone_wind0..7 confirmed on 41 tree models under bone_skinned (the known parent of bone_trunk/bone_wind). Per-branch wind-sway bones."
+  },
+
+  "patterns": [
+    {
+      "id": "shard",
+      "template": "{kind}{digit}{letter}{state}",
+      "example": ["piece1a", "piece1a_pristine", "piece1a_ruin", "slice1a_interior"],
+      "evidence": "named + hash-verified",
+      "confidence": "very high"
+    },
+    {
+      "id": "shard_propattach",
+      "template": "{kind}{digit}{letter}_propattach{NN:02d}{propattach_state}",
+      "range": {"NN": [0, 39]},
+      "example": ["piece1a_propattach00", "slice1a_propattach00_pristine", "piece1a_propattach00_ruin"],
+      "evidence": "named (_ruin sibling pre-known) + hash-verified (_pristine is NEW, 100/97 models)",
+      "confidence": "very high"
+    },
+    {
+      "id": "dot_compound",
+      "template": "{component}{NN:02d}.{kind}{digit}{letter}{state}",
+      "range": {"NN": [0, 19]},
+      "example": ["floor02.piece1b", "floor00.slice1a", "floor02.piece1b_pristine", "floor01.piece1a_interior"],
+      "evidence": "named (floor02.piece1b) + hash-verified (state suffixes on the compound are NEW)",
+      "confidence": "high"
+    },
+    {
+      "id": "hardpoint_letter_series",
+      "template": ["hp_{hardpoint_family}_{letter}", "hp_{hardpoint_family}{letter}"],
+      "letter_range": "a..l",
+      "example": ["hp_spawn_a", "hp_ladder_top_a", "hp_parachute_a", "hp_fx_clothesline_a", "hp_ropea"],
+      "evidence": "named + hash-verified",
+      "confidence": "high"
+    },
+    {
+      "id": "hardpoint_numeric_series",
+      "template": ["hp_{hardpoint_family}{NN:02d}", "hp_{hardpoint_family}_{NN:02d}", "hp_{hardpoint_family}{N}"],
+      "range": {"NN": [0, 20]},
+      "example": ["hp_fx_light10", "hp_fx_light11"],
+      "evidence": "named",
+      "confidence": "high"
+    },
+    {
+      "id": "fx_leaves",
+      "template": "hp_fx_leaves_{leaves_variant}_{letter}",
+      "letter_range": "a..t",
+      "example": ["hp_fx_leaves_green_a", "hp_fx_leaves_green_p", "hp_fx_leaves_palm_a"],
+      "evidence": "hash-verified, 16 joint members, all 14 models are *_env_tree*, parent piece1a_ruin",
+      "confidence": "very high (green) / medium (palm) / unconfirmed (brown, dead, dry)"
+    },
+    {
+      "id": "env_sway_bones",
+      "template": ["{env_bone_stem}{N}", "{env_bone_stem}{NN:02d}", "{env_bone_stem}{letter}", "{env_bone_stem}_{letter}"],
+      "range": {"N": [0, 19]},
+      "letter_range": "a..p",
+      "example": ["bone_wind0", "bone_wind7", "bone_planta", "bone_fana"],
+      "evidence": "hash-verified, 8 joint members, 41 tree models, parent bone_skinned",
+      "confidence": "very high (bone_wind) / medium-high (plant, fan, rope)"
+    }
+  ],
+
+  "negative_constraints": {
+    "_comment": "Generated and MISSED. Encoded so the cracker does not re-spend budget on them.",
+    "no_nesting": [
+      "floor02.piece1b.propattach03",
+      "floor02.piece1b_propattach03",
+      "piece1a.propattach00",
+      "floor01.piece1a_propattach00"
+    ],
+    "_no_nesting_note": "The grammar is FLAT: either {shard} or {component}{NN}.{shard}, then one state suffix. propattach only ever attaches to a plain (non-dotted) shard.",
+    "rejected_states": ["_damaged", "_destroyed", "_intact", "_broken", "_static", "_foundation", "_base", "_rubble", "_debris", "_collapse", "_fx", "_col", "_collision", "_shadow", "_lod", "_lod1", "_lod2", "_tiny", "_imposter", "_glass", "_props", "_attachments"],
+    "rejected_components": ["wall", "roof", "corner", "column", "awning", "balcony", "stair"],
+    "rejected_chunk_frames": ["{shard}_ruin_{NN}", "{shard}_ruin{NN}", "{shard}.{word}", "{shard}_ruin.{word}", "chunk{NN}", "debris{NN}", "rubble{NN}", "frag{NN}", "shard{NN}", "gib{NN}", "Box001-style DCC defaults"],
+    "rejected_names": {
+      "slice2b_propattach08_pristine": "32-bit collision with the KNOWN name global_env_multitudes_left -- the known name wins. This is the one real false positive in the 0.100 expected-false budget.",
+      "ghw{NN}.{shard}": "hash-real but parent-inconsistent and semantically opaque; needs a 2nd witness",
+      "bbd{NN}.{shard}": "hash-real but parent-inconsistent (bbd02.piece4f_interior sits under floor00.slice1a_pristine); needs a 2nd witness",
+      "hp_wel_4/5/7": "broken index set (no _1/_2/_3/_6), no semantics -- not accepted"
+    },
+    "no_strings_in_dumps": "Bone-name strings appear in NO shipped dump (PS3/Xbox WAD strings, Jul-08 devkit PE, block strings, wad_vocab). ~4M distinct tokens hashed against 8,561 unnamed hashes yielded 16 hits, all garbage, vs ~8 expected by chance. Do not re-mine string dumps for bone names."
+  },
+
+  "open_problems": {
+    "rubble_chunks": {
+      "description": "5,628 unnamed nodes (1,155 distinct hashes) hang under piece*_ruin / slice*_ruin. Depth-3 leaves, in_swit=1, tiling the building facade. Every generated frame missed.",
+      "method": "Suffix-peeling (FNV-1a is invertible) reduces them to a handful of exact 32-bit STEM STATES. Feed these to the GPU cracker as SINGLE-STATE targets: a full 37^6-37^7 sweep then costs only S/2^32 (~0.02-0.6 expected-false per family), and any hit is instantly cross-checked against the other members of its own numbered series.",
+      "stem_states": [
+        {"state": "0x8038EAF3", "alt_state_underscore_parse": "0x3BF2CD5E", "members": 44, "index_scheme": "00..43 (2-digit)", "parent": "piece2a_ruin (exclusively)", "models": 22, "example_models": ["aloutpost_bld_garage01", "caracas_rampgovernment01", "caracas_walllong", "chinaoutpost_bld_hangar01"]},
+        {"state": "0x8CA59F8D", "members": 18, "index_scheme": "_00.."},
+        {"state": "0x8C5E672D", "members": 18, "index_scheme": "_00.."},
+        {"state": "0x30AB3D30", "members": 18, "index_scheme": "00.."},
+        {"state": "0x8094D357", "members": 17, "index_scheme": "00.."},
+        {"state": "0xD5C3023D", "members": 17, "index_scheme": "_01.."},
+        {"state": "0x0BF4304F", "members": 17, "index_scheme": "_1.."}
+      ],
+      "already_excluded": "Stems are NOT reachable from any known bone/model name plus <=3 free chars (expected-false 0.05), and NOT of the form prefix + curated-word + '_' + in-domain-word (a 68M-stem space)."
+    },
+    "aset_named_nodes": "388 unnamed bone hashes are also ASET asset hashes (vs 0.06 expected by chance). These nodes are prop instances named after the prop asset -- resolvable from the ASET name corpus, not by generation."
+  },
+
+  "peel_recipe": {
+    "_comment": "Reference implementation of the technique that cracked hp_fx_leaves_green with no vocabulary at all.",
+    "P": "0x01000193",
+    "P_inv_mod_2_32": "pow(0x01000193, -1, 2**32)",
+    "undo_finalisation": "S_n = (H * P_inv) & 0xFFFFFFFF ^ 0x2A",
+    "undo_one_byte": "S_{k-1} = ((S_k * P_inv) & 0xFFFFFFFF) ^ (byte | 0x20)",
+    "usage": "Peel a small index-suffix grammar (a..z, _a.._z, 00..99, _00.._99) off every unnamed hash and GROUP BY the resulting state. States reached by many targets under DIFFERENT suffixes are authored stems, proven jointly with zero vocabulary. Contiguity of the recovered index set (a,b,c,...,p with no gaps) is the coherence witness. Then match that ONE state against a vocabulary: cost is only |V|/2^32, so a 68M-stem space is affordable per family.",
+    "validated_on": ["hp_spawn_", "hp_ladder_top_", "hp_barreltip_"]
+  },
+
+  "stats": {
+    "pool_S": 60088,
+    "pool_S_after_rejected_names": 60087,
+    "targets_T": 7176,
+    "expected_false_positives": 0.100,
+    "known_census_names_reproduced_exactly": 1021,
+    "collisions_with_known_names": 1,
+    "new_bones_cracked": 182,
+    "new_node_instances_named": 966
+  }
+}

@@ -1,0 +1,2806 @@
+{
+ "_meta": {
+  "dialect": "hardpoints / gameplay-systems attach points (hp_*) + propattach/state",
+  "hash": "pandemic_hash_m2 (tools/fnv.py m2()); CASE-INSENSITIVE - casing carries no evidence",
+  "expected_false_formula": "S * T / 2^32",
+  "total_expected_false_all_passes": 0.41,
+  "new_bones_cracked": 405,
+  "verified": "hash re-checked vs name; all absent from bone_census.csv beforehand; no duplicates",
+  "doc": "docs/reverse_engineer/dialect_hardpoints.md"
+ },
+ "mined_literals": {
+  "_note": "Literal hp_* strings recovered from shipped string tables / binaries. ALL 99 were ALREADY named in bone_census.csv -- the literal oracle is EXHAUSTED and yielded zero new bones. Kept because they define the grammar.",
+  "sources": [
+   "game-files/ps3-VZ.unique-strings.txt",
+   "game-files/xbox-vz.unique-strings.txt",
+   "output/jul08_wad/jul08-vz.strings.txt",
+   "output/jul08_prototype/mercs2_xenon_p.pe_full_strings.txt (devkit EXE, real PDB build)",
+   "docs/mercs2-luacd/ + docs/mercs2-dlc-luacd/",
+   "docs/mercs2-pdb-analysis/vehicles.md",
+   "output/_ghidra_saboteur/saboteur_all_functions_decomp.txt (sibling Pandemic title)"
+  ],
+  "literals": [
+   "HP_Truckbed",
+   "Hp_papershredder",
+   "hp_CenterOfMass",
+   "hp_MonsterRTR",
+   "hp_actionhijack_grenadeexplosion",
+   "hp_al01_player",
+   "hp_al01_starter",
+   "hp_al02_player",
+   "hp_al02_starter",
+   "hp_al04_player",
+   "hp_al04_starter",
+   "hp_barreltip_a",
+   "hp_buoyancy",
+   "hp_buoyancy_xyz",
+   "hp_camera_a",
+   "hp_camera_b",
+   "hp_ch01_player",
+   "hp_ch01_starter",
+   "hp_ch02_player",
+   "hp_ch02_starter",
+   "hp_ch04_player",
+   "hp_ch04_starter",
+   "hp_fx_exhaust_a",
+   "hp_fx_exhaust_b",
+   "hp_fx_explosionA",
+   "hp_fx_explosionD",
+   "hp_fx_explosionE",
+   "hp_fx_explosionF",
+   "hp_fx_explosionI",
+   "hp_fx_explosionJ",
+   "hp_fx_explosionK",
+   "hp_fx_explosionL",
+   "hp_fx_explosionM",
+   "hp_fx_explosionN",
+   "hp_fx_jetexhaust",
+   "hp_fx_light",
+   "hp_fx_sl",
+   "hp_gr001_player",
+   "hp_gr001_starter",
+   "hp_gr002_player",
+   "hp_gr002_starter",
+   "hp_hat",
+   "hp_menu_camera",
+   "hp_oc01_player",
+   "hp_oc01_starter",
+   "hp_oc02_player",
+   "hp_oc02_starter",
+   "hp_particleEject",
+   "hp_particleEject1",
+   "hp_playerA",
+   "hp_playerA_enter",
+   "hp_pmc02_player",
+   "hp_pmc02_starter",
+   "hp_pmc03_player",
+   "hp_pmc03_starter",
+   "hp_seat_lt",
+   "hp_shelleject",
+   "hp_shelleject1",
+   "hp_shelleject2",
+   "hp_snap_mv_piece1A_oilrig_bld_helipadsmallA",
+   "hp_snap_mv_piece1B_oilrig_helipadsmallA",
+   "hp_snap_mv_piece1b_oilrig_smokestack",
+   "hp_snap_oilrig_bld_buildingA",
+   "hp_snap_oilrig_bld_buildingB",
+   "hp_snap_oilrig_bld_buildingC",
+   "hp_snap_oilrig_bld_buildingD",
+   "hp_snap_oilrig_bld_helipadlargeA",
+   "hp_snap_oilrig_catwalkB",
+   "hp_snap_oilrig_fueltanklargeA",
+   "hp_snap_oilrig_fueltanklargeA_A",
+   "hp_snap_oilrig_fueltanklargeA_B",
+   "hp_snap_oilrig_fueltanklargeA_C",
+   "hp_snap_oilrig_scaffold",
+   "hp_snap_oilrig_towerblowoutdiagonal",
+   "hp_snap_oilrig_towerdrill",
+   "hp_snap_oilrig_towerdrillpipesA",
+   "hp_snap_oilrig_towerdrillpipesB",
+   "hp_snap_piece1A_oilrig_cranelargeA",
+   "hp_snap_piece1A_oilrig_towerblowoutsmallA",
+   "hp_snap_piece1B_oilrig_cranelargeA",
+   "hp_snap_piece1B_oilrig_cranesmallA",
+   "hp_snap_piece1B_oilrig_radiojammer",
+   "hp_snap_piece1C_oilrig_cranesmallA",
+   "hp_snap_piece1C_oilrig_tankmedA_c",
+   "hp_snap_piece1C_oilrig_towerblowoutlargeA",
+   "hp_snap_piece1b_oilrig_att_pipeblowout",
+   "hp_snap_piece1b_oilrig_tankmedA_a",
+   "hp_snap_piece1b_oilrig_tankmedA_b",
+   "hp_snap_piece2A_oilrig_cranesmallA",
+   "hp_snap_piece2B_oilrig_cranelargeA",
+   "hp_sportscar",
+   "hp_starter",
+   "hp_veh_spawn",
+   "hp_wheel_fl",
+   "hp_wheel_fr",
+   "hp_wheel_ml",
+   "hp_wheel_mr",
+   "hp_wheel_rl",
+   "hp_wheel_rr"
+  ]
+ },
+ "vocab": {
+  "prefix": [
+   "hp_"
+  ],
+  "family": [
+   "seat",
+   "dock",
+   "mount",
+   "gunmount",
+   "turretmount",
+   "barreltip",
+   "shelleject",
+   "wheel",
+   "winch",
+   "hijack",
+   "actionhijack",
+   "camera",
+   "menu_camera",
+   "spawn",
+   "ladder_top",
+   "ladder_bottom",
+   "light",
+   "antenna",
+   "mount_antenna",
+   "flag",
+   "entrance",
+   "weapon",
+   "backpack_roof",
+   "piston_attach",
+   "snap",
+   "climb",
+   "cover",
+   "starter",
+   "player"
+  ],
+  "family_fx": [
+   "fx_light",
+   "fx_exhaust",
+   "fx_explosion",
+   "fx_jetexhaust",
+   "fx_flare",
+   "fx_parachute",
+   "jetexhaust"
+  ],
+  "qualifier": [
+   "cannon",
+   "hellfire",
+   "sam",
+   "ciws",
+   "missile",
+   "rocket",
+   "archer",
+   "turret",
+   "rr",
+   "rcketlgR"
+  ],
+  "index_letter": [
+   "a",
+   "b",
+   "c",
+   "d",
+   "e",
+   "f",
+   "g",
+   "h",
+   "i",
+   "j",
+   "k"
+  ],
+  "index_upper_series": [
+   "A",
+   "B",
+   "C",
+   "D",
+   "E",
+   "F",
+   "G",
+   "H",
+   "I",
+   "J",
+   "K",
+   "L",
+   "M",
+   "N",
+   "O"
+  ],
+  "index_numeric": [
+   "0",
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14",
+   "15",
+   "16",
+   "17",
+   "18",
+   "19",
+   "20",
+   "21",
+   "22",
+   "23",
+   "00",
+   "01",
+   "02",
+   "03",
+   "04",
+   "05",
+   "06",
+   "07",
+   "08",
+   "09",
+   "10",
+   "11"
+  ],
+  "side_axle": [
+   "fl",
+   "fr",
+   "bl",
+   "br",
+   "rl",
+   "rr",
+   "ml",
+   "mr",
+   "fm",
+   "rm",
+   "lt",
+   "rt",
+   "l",
+   "r"
+  ],
+  "grid_position": [
+   "fl",
+   "fm",
+   "fr",
+   "rl",
+   "rr"
+  ],
+  "state": [
+   "pristine",
+   "ruin"
+  ],
+  "building_part": [
+   "slice",
+   "piece"
+  ],
+  "building_socket": [
+   "propattach"
+  ]
+ },
+ "patterns": [
+  {
+   "id": "hp.simple",
+   "pattern": "hp_<family>",
+   "example": "hp_starter"
+  },
+  {
+   "id": "hp.indexed",
+   "pattern": "hp_<family>_<index_letter>",
+   "example": "hp_barreltip_a"
+  },
+  {
+   "id": "hp.numeric",
+   "pattern": "hp_<family><index_numeric>",
+   "example": "hp_fx_light11",
+   "note": "NO separator before a numeric index on fx_light"
+  },
+  {
+   "id": "hp.sided",
+   "pattern": "hp_<family>_<side_axle>",
+   "example": "hp_seat_fl",
+   "witness": "SIDE LAW: +x=LEFT (99.8%), -x=RIGHT (98.4%). Contradiction => reject."
+  },
+  {
+   "id": "hp.qualified",
+   "pattern": "hp_<family>_<qualifier>_<index_letter>",
+   "example": "hp_barreltip_hellfire_e"
+  },
+  {
+   "id": "hp.grid",
+   "pattern": "hp_<family>_<qualifier><grid_position>_<index_letter>",
+   "example": "hp_barreltip_ciwsfl_a / hp_barreltip_samrr_h",
+   "note": "weapon-battery grid: position token FUSED to qualifier, then _<letter> cell"
+  },
+  {
+   "id": "hp.upperseries",
+   "pattern": "hp_fx_explosion<index_upper_series>",
+   "example": "hp_fx_explosionA",
+   "note": "hash is case-insensitive; A==a"
+  },
+  {
+   "id": "hp.snap",
+   "pattern": "hp_snap_[mv_]piece<N><A>_<target_model_name>",
+   "example": "hp_snap_piece1B_oilrig_cranelargeA",
+   "note": "prefab snap socket; name embeds the model that snaps IN. oilrig_* only."
+  },
+  {
+   "id": "hp.shellscene",
+   "pattern": "hp_<faction><NN>_{player|starter}",
+   "example": "hp_pmc02_player",
+   "note": "menu/shell scene anchors, not world hardpoints"
+  },
+  {
+   "id": "rule.mirror",
+   "pattern": "swap side token on a mirrored sibling (same y,z; opposite x)",
+   "example": "hp_seat_lt @ x=+0.478  =>  hp_seat_rt @ x=-0.478",
+   "note": "1-candidate pool, expected_false ~1e-6. Predicted then hash-confirmed."
+  },
+  {
+   "id": "rule.state",
+   "pattern": "<parent_name>_<state>",
+   "example": "slice1a_propattach00 -> slice1a_propattach00_pristine / _ruin",
+   "note": "parent-derived: prefix is KNOWN, not guessed. Part node has co-located state children."
+  },
+  {
+   "id": "rule.propattach",
+   "pattern": "{slice|piece}<N><a-h>_propattach<NN>[_pristine|_ruin]",
+   "example": "slice1b_propattach00_pristine",
+   "note": "socket bbox=0.03 depth=3; state children bbox large depth=4, states=break_piece|intact"
+  }
+ ],
+ "structural_filter": {
+  "_note": "Free witness. Profiled over 307 named hp_ nodes vs 2322 named non-hp and 7570 unnamed.",
+  "hp_node_profile": {
+   "is_leaf": 0.98,
+   "is_root": 0.03,
+   "anim_tracks": 0.0,
+   "in_swit": 0.01
+  },
+  "gate": "leaf AND anim_tracks==0 AND max_bbox < 1.0",
+  "effect": "cuts unnamed targets 7570 -> 3204 before generating any candidate",
+  "rationale": "a hardpoint is a point MARKER (max_bbox ~= 0.03), never geometry"
+ },
+ "cracked": {
+  "0x028611F4": {
+   "name": "slice1c_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x039772BA": {
+   "name": "slice1a_propattach23_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x0443C135": {
+   "name": "piece1b_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x053B2B2E": {
+   "name": "hp_barreltip_sam_h",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x055DBD70": {
+   "name": "hp_barreltip_sam_f",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x056985A4": {
+   "name": "slice4a_propattach15_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x058A9BBC": {
+   "name": "slice4a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x058AF2FF": {
+   "name": "hp_playerb",
+   "rule": "D_hp_grammar",
+   "n_models": 11,
+   "confidence": "low"
+  },
+  "0x059EA245": {
+   "name": "hp_shelleject_missile_l",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x06C115C5": {
+   "name": "hp_spawn_i",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x0767FCC2": {
+   "name": "slice3a_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x07F0BFAF": {
+   "name": "slice2f_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x08081D66": {
+   "name": "slice2a_propattach19_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x0B923BBB": {
+   "name": "hp_fx_light6",
+   "rule": "D_hp_grammar",
+   "n_models": 9,
+   "confidence": "high"
+  },
+  "0x0B96B8E9": {
+   "name": "hp_fx_light4",
+   "rule": "D_hp_grammar",
+   "n_models": 21,
+   "confidence": "high"
+  },
+  "0x0CD05E38": {
+   "name": "hp_barreltip_hellfire_j",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x0D236BE5": {
+   "name": "slice1a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0x0D594CDA": {
+   "name": "hp_barreltip_sam_d",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x0DBB4F34": {
+   "name": "hp_weapon_a",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x0FD4CF38": {
+   "name": "slice4a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x10C925CD": {
+   "name": "slice1b_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x10F5A969": {
+   "name": "slice1f_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x1128A39F": {
+   "name": "slice1c_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x13444B20": {
+   "name": "slice1b_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 39,
+   "confidence": "high"
+  },
+  "0x138DF125": {
+   "name": "hp_fx_explosiong",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x13B4DA95": {
+   "name": "hp_fx_light8",
+   "rule": "D_hp_grammar",
+   "n_models": 9,
+   "confidence": "high"
+  },
+  "0x1701F436": {
+   "name": "piece1a_propattach23_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x17AFCD2D": {
+   "name": "slice1c_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x18A0198B": {
+   "name": "piece1a_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x1923F496": {
+   "name": "slice1d_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x19DB685E": {
+   "name": "slice8a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x1A7FD411": {
+   "name": "floor01.piece1e_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x1A951889": {
+   "name": "slice1b_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 18,
+   "confidence": "high"
+  },
+  "0x1AC46580": {
+   "name": "slice4a_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x1B1C5717": {
+   "name": "slice1d_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x1B5D092B": {
+   "name": "floor00.slice2a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x1B79F40E": {
+   "name": "hp_shelleject_missile_c",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x1C381D6A": {
+   "name": "slice2b_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x1EC9EBAE": {
+   "name": "slice1b_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x2309EF21": {
+   "name": "slice3a_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x23563F3E": {
+   "name": "slice1e_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x236C8D3F": {
+   "name": "floor01.piece1c_pristine",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x237E7DD4": {
+   "name": "hp_shelleject_missile_a",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x24C26AAA": {
+   "name": "slice3b_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x2567CF0B": {
+   "name": "slice1a_propattach20_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x258B4CED": {
+   "name": "hp_shelleject_missile_d",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x25C1E553": {
+   "name": "slice4a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x25CBD3FB": {
+   "name": "slice1b_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 10,
+   "confidence": "high"
+  },
+  "0x26F69968": {
+   "name": "slice2a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x27822391": {
+   "name": "floor01.piece1c_ruin",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x27B9ABEF": {
+   "name": "Slice2O_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x27C61D42": {
+   "name": "slice2a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x283546AC": {
+   "name": "slice2a_propattach17_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x29062DAD": {
+   "name": "floor00.slice2a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x297380DA": {
+   "name": "floor03.piece1b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x29C8B9F3": {
+   "name": "slice2e_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x2A239915": {
+   "name": "slice9a_propattach00_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x2AE418F5": {
+   "name": "slice3a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x2C00453A": {
+   "name": "hp_dock_rt",
+   "rule": "D_hp_grammar",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0x2C64D7E9": {
+   "name": "floor01.piece2b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x2CE61608": {
+   "name": "hp_winch_bottom_mid",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x2E7ED981": {
+   "name": "slice4a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x2ED024E1": {
+   "name": "piece1a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x2ED74F83": {
+   "name": "hp_barreltip_hellfire_e",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x2EDB47F6": {
+   "name": "piece1e_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x2F735D37": {
+   "name": "slice1b_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 32,
+   "confidence": "high"
+  },
+  "0x2FCF8257": {
+   "name": "floor00.slice3b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x308F81F7": {
+   "name": "piece1e_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x311CA307": {
+   "name": "floor01.piece2b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x320B6004": {
+   "name": "piece1b_propattach15_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x32666A0E": {
+   "name": "slice1c_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x34DC8D96": {
+   "name": "piece1a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x35103FCF": {
+   "name": "slice2a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 10,
+   "confidence": "high"
+  },
+  "0x3525AA51": {
+   "name": "hp_barreltip_samrr_c",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3583466E": {
+   "name": "floor01.slice2a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x364A8147": {
+   "name": "piece1a_propattach15_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x36D4F017": {
+   "name": "piece1a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x374C2D5D": {
+   "name": "slice1e_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x383B2444": {
+   "name": "piece2a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x3A027C0B": {
+   "name": "Slice2M_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3A08AFD8": {
+   "name": "slice2a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 16,
+   "confidence": "high"
+  },
+  "0x3B1802D5": {
+   "name": "slice1f_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3B23752C": {
+   "name": "hp_barreltip_samrr_b",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3B94C507": {
+   "name": "hp_gunmount_rm",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3B97DA61": {
+   "name": "slice1a_propattach17_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x3D38AC14": {
+   "name": "piece1a_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x3D641CF5": {
+   "name": "piece4a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3DCC9BA0": {
+   "name": "hp_barreltip_samfm_a",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3EAE8D44": {
+   "name": "piece1a_propattach25_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3EF833EB": {
+   "name": "slice1c_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x3FB1A80A": {
+   "name": "slice1d_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x3FB4ACCB": {
+   "name": "piece2h_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x3FBFD2D3": {
+   "name": "hp_barreltip_samfm_f",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x40CDF67A": {
+   "name": "piece2h_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x41228361": {
+   "name": "piece1b_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x4242A598": {
+   "name": "slice2c_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x430CB4C1": {
+   "name": "floor01.slice2d_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x431236C7": {
+   "name": "slice1a_propattach24_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x43680FA1": {
+   "name": "slice2a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x439CA597": {
+   "name": "slice1a_propattach19_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x43C04D2F": {
+   "name": "slice4a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x45599A95": {
+   "name": "slice3d_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x45DBB5DE": {
+   "name": "hp_fx_light12",
+   "rule": "E_hp_family_ext",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x464BC5AB": {
+   "name": "floor03.piece1a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x466A542A": {
+   "name": "slice3a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4674A0BD": {
+   "name": "slice1c_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x46A08F9E": {
+   "name": "slice1a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 75,
+   "confidence": "high"
+  },
+  "0x4741F528": {
+   "name": "slice1c_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x47BB623D": {
+   "name": "hp_barreltip_samfm_h",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x48A57048": {
+   "name": "floor01.piece1b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x48A79B4D": {
+   "name": "slice2h_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x49B845C5": {
+   "name": "hp_barreltip_missile_b",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4A006194": {
+   "name": "slice1a_propattach21_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x4B329B56": {
+   "name": "floor01.piece3b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4BA86C49": {
+   "name": "piece1e_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4C02246C": {
+   "name": "slice1c_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 16,
+   "confidence": "high"
+  },
+  "0x4D03C490": {
+   "name": "piece2b_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x4DE368F3": {
+   "name": "slice3a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4EAA4378": {
+   "name": "floor01.slice2c_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4EB34DE8": {
+   "name": "hp_winch_sidea",
+   "rule": "D_hp_grammar",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x4FDC824D": {
+   "name": "slice4a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x4FED0EBD": {
+   "name": "hp_fx_light15",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x50306A5B": {
+   "name": "slice4a_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x50327BD2": {
+   "name": "slice1c_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0x5044E6A4": {
+   "name": "slice1d_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x5134501B": {
+   "name": "hp_barreltip_i",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x51DA67B4": {
+   "name": "piece2a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x51E47F8C": {
+   "name": "Slice00_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x51E8906D": {
+   "name": "slice2a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x524CA898": {
+   "name": "slice1a_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x536C9CE7": {
+   "name": "floor01.slice1c_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5417C7E8": {
+   "name": "floor01.piece2a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5533B70D": {
+   "name": "Slice2K_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5551CFDF": {
+   "name": "slice2a_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x55F874C1": {
+   "name": "hp_shelleject_rocket_l",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x56063B28": {
+   "name": "hp_seat_rt",
+   "rule": "C_mirror",
+   "n_models": 9,
+   "confidence": "high"
+  },
+  "0x56F17DF6": {
+   "name": "slice2b_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x57276AE0": {
+   "name": "piece1b_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x57D75198": {
+   "name": "piece1b_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5878E0A5": {
+   "name": "piece2b_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x58A5B7F7": {
+   "name": "slice2b_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x58EA582A": {
+   "name": "piece4a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x59959300": {
+   "name": "hp_fx_light21",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x59A50465": {
+   "name": "slice2b_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x59A70C40": {
+   "name": "slice2a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x59A87509": {
+   "name": "slice4a_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5B2824BA": {
+   "name": "hp_barreltip_samrr_d",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5B6A410A": {
+   "name": "piece1a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 52,
+   "confidence": "high"
+  },
+  "0x5DBDC376": {
+   "name": "hp_barreltip_samfm_g",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5DDD482E": {
+   "name": "slice4a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5F4AC808": {
+   "name": "hp_ruin_mlmlb_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5F7E22EE": {
+   "name": "slice9b_propattach00_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x5FB629D0": {
+   "name": "hp_barreltip_missile_c",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6191226A": {
+   "name": "hp_fx_light23",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x61A96103": {
+   "name": "hp_barreltip_missile_d",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x61D49509": {
+   "name": "hp_shelleject_missiler_b",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x64ABA4BB": {
+   "name": "slice2b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 14,
+   "confidence": "high"
+  },
+  "0x659FC680": {
+   "name": "slice1d_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x65C24D3C": {
+   "name": "hp_barreltip_samfm_e",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x673A190D": {
+   "name": "Slice2M_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x673DA731": {
+   "name": "slice2a_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x67540EB6": {
+   "name": "slice3a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x67DE29FB": {
+   "name": "hp_fx_light13",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x68DEADE9": {
+   "name": "slice4a_propattach16_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6A6BF7D3": {
+   "name": "hp_dock_fm",
+   "rule": "D_hp_grammar",
+   "n_models": 24,
+   "confidence": "high"
+  },
+  "0x6BFD7FA4": {
+   "name": "piece1a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 20,
+   "confidence": "high"
+  },
+  "0x6D53D3CC": {
+   "name": "hp_barreltip_sam_b",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x6D562220": {
+   "name": "piece1a_propattach21_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6D58BE44": {
+   "name": "slice3b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x6D7B08F8": {
+   "name": "hp_winch_rear",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6DBC9F8A": {
+   "name": "piece1b_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6DF3F9BC": {
+   "name": "hp_fx_light18",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6E03078C": {
+   "name": "piece1a_propattach18_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6E418973": {
+   "name": "slice2a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x6E66FFB6": {
+   "name": "floor01.slice1b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x6EB9FA35": {
+   "name": "piece1e_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6F015CCA": {
+   "name": "Slice2J_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x6F60A2E5": {
+   "name": "hp_barreltip_sam_g",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x6FA57329": {
+   "name": "piece2h_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x71842BC7": {
+   "name": "Slice2I_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x71999812": {
+   "name": "hp_fx_light3",
+   "rule": "D_hp_grammar",
+   "n_models": 35,
+   "confidence": "high"
+  },
+  "0x72C075EE": {
+   "name": "Slice2L_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x73BEA249": {
+   "name": "slice2b_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x74A6EF89": {
+   "name": "piece1a_propattach26_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x74F899FC": {
+   "name": "slice2b_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x75E9E558": {
+   "name": "floor02.piece1a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0x765F8F16": {
+   "name": "slice1f_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x76F49EF0": {
+   "name": "piece1a_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x79D412B6": {
+   "name": "piece4a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7AD9BC48": {
+   "name": "hp_dock_lt",
+   "rule": "D_hp_grammar",
+   "n_models": 11,
+   "confidence": "high"
+  },
+  "0x7AE3E250": {
+   "name": "slice2b_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7B256438": {
+   "name": "slice3a_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7B271422": {
+   "name": "slice4a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x7C13A6F1": {
+   "name": "slice1a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 29,
+   "confidence": "high"
+  },
+  "0x7CC2AB57": {
+   "name": "slice5e_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7D0C586E": {
+   "name": "Slice2N_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7D106BC1": {
+   "name": "Slice2O_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x7E8ACAC3": {
+   "name": "slice1a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 19,
+   "confidence": "high"
+  },
+  "0x7E8F3441": {
+   "name": "floor01.slice2b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x7F40D826": {
+   "name": "slice1a_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0x7FDDAAFB": {
+   "name": "piece1a_propattach24_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8049E441": {
+   "name": "Slice2I_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x80802775": {
+   "name": "slice1b_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 49,
+   "confidence": "high"
+  },
+  "0x81585F80": {
+   "name": "piece1a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x81D2E75C": {
+   "name": "slice2e_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x82498D13": {
+   "name": "Slice2K_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x83657525": {
+   "name": "slice2a_propattach18_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x83939687": {
+   "name": "hp_fx_light22",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x839813B5": {
+   "name": "hp_fx_light20",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x83BC5470": {
+   "name": "slice1a_propattach25_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8421EE23": {
+   "name": "piece3a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x846BC2D7": {
+   "name": "slice9a_propattach02_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8480906F": {
+   "name": "piece1b_propattach18_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x850179F3": {
+   "name": "hp_turretmount_rm",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x85A5467C": {
+   "name": "Slice2J_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x85B5FBEE": {
+   "name": "hp_weapon_c",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x871BB41A": {
+   "name": "Slice00_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8751BE23": {
+   "name": "hp_barreltip_sam_a",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x878A4FA3": {
+   "name": "floor02.piece2a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x880FBBB3": {
+   "name": "hp_shelleject_missilel_b",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x8868ED39": {
+   "name": "floor00.slice1b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x88AF6582": {
+   "name": "piece1a_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x88D2DF33": {
+   "name": "slice1a_propattach15_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x89853437": {
+   "name": "piece1a_propattach20_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x899E3B08": {
+   "name": "hp_fx_light1",
+   "rule": "D_hp_grammar",
+   "n_models": 76,
+   "confidence": "high"
+  },
+  "0x89ABAE6A": {
+   "name": "piece1b_propattach17_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8BE772F8": {
+   "name": "Slice2N_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8C355A72": {
+   "name": "slice1e_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x8D4CC519": {
+   "name": "slice1b_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x8D710660": {
+   "name": "piece3b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8D86BE2D": {
+   "name": "slice2c_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0x8DC9C5ED": {
+   "name": "floor02.piece1b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x8E201500": {
+   "name": "slice1a_propattach18_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x8E5D8833": {
+   "name": "piece1b_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8EDC63D1": {
+   "name": "hp_barreltip_hellfire_g",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x8F00A7C4": {
+   "name": "slice3a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x8FC754CD": {
+   "name": "hp_weapon_d",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x90548B4C": {
+   "name": "piece3a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x9054F156": {
+   "name": "slice9a_propattach01_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x905DD6DA": {
+   "name": "hp_dock_turret",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x90E93738": {
+   "name": "piece1c_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x92491CDD": {
+   "name": "floor02.piece2a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x92D1AA0C": {
+   "name": "slice1e_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x93010755": {
+   "name": "slice4a_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x939C0C2F": {
+   "name": "hp_fx_light2",
+   "rule": "D_hp_grammar",
+   "n_models": 56,
+   "confidence": "high"
+  },
+  "0x94DA2EAC": {
+   "name": "hp_barreltip_hellfire_f",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x951550FD": {
+   "name": "slice2a_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x95771B02": {
+   "name": "slice1a_propattach16_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x95944BDB": {
+   "name": "floor01.piece1a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0x95AAC780": {
+   "name": "Slice2L_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x96CD65DF": {
+   "name": "hp_barreltip_hellfire_i",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x96D03035": {
+   "name": "slice2b_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0x9709979F": {
+   "name": "slice1a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 51,
+   "confidence": "high"
+  },
+  "0x97299000": {
+   "name": "floor01.slice2a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x994C1105": {
+   "name": "piece1a_propattach17_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x9B01C402": {
+   "name": "piece1b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 9,
+   "confidence": "high"
+  },
+  "0x9B07D991": {
+   "name": "slice1e_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0x9B0BCB5B": {
+   "name": "slice1d_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0x9B33FEAA": {
+   "name": "hp_entrance",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0x9C0662AA": {
+   "name": "slice1b_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 23,
+   "confidence": "high"
+  },
+  "0x9CBDE63A": {
+   "name": "slice1b_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x9CED428A": {
+   "name": "slice1f_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x9D545CDB": {
+   "name": "hp_shelleject_missile_r",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0x9D90C12D": {
+   "name": "slice1a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xA180ABC4": {
+   "name": "piece4a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA31B6A2D": {
+   "name": "piece1b_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA3512089": {
+   "name": "slice3b_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xA3F492BF": {
+   "name": "slice1e_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA4B9BFBA": {
+   "name": "hp_spawn_j",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA4CCC69C": {
+   "name": "slice1a_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xA5A15811": {
+   "name": "floor00.slice3b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA5ED965C": {
+   "name": "slice3a_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA60A3BDB": {
+   "name": "hp_barreltip_turret_f",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA613C685": {
+   "name": "slice1a_propattach26_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA62FE04E": {
+   "name": "slice2a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 7,
+   "confidence": "high"
+  },
+  "0xA6C13263": {
+   "name": "piece1a_propattach19_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA7773FC6": {
+   "name": "piece1a_propattach16_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xA83D5B0E": {
+   "name": "slice2c_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0xA968796E": {
+   "name": "hp_fx_explosionh",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xAA576F9C": {
+   "name": "piece1b_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xAB8AF2D6": {
+   "name": "slice3d_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xAD808124": {
+   "name": "slice1f_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xADC7264F": {
+   "name": "hp_dock_rm",
+   "rule": "D_hp_grammar",
+   "n_models": 20,
+   "confidence": "high"
+  },
+  "0xAE12361C": {
+   "name": "hp_shelleject_missilel_a",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0xAE87DBFB": {
+   "name": "slice3b_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xAF10E22F": {
+   "name": "slice3a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB01BDD38": {
+   "name": "floor00.slice1a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xB093A0DE": {
+   "name": "slice2a_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xB379D24D": {
+   "name": "hp_fx_explosiono",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB3BA0EE9": {
+   "name": "slice1d_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xB4A3070E": {
+   "name": "floor00.slice2b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xB4CB5682": {
+   "name": "hp_barreltip_hellfire_h",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xB5B6B4A3": {
+   "name": "hp_winch_front",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB6AE5FDA": {
+   "name": "piece2a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB6C427DD": {
+   "name": "floor01.piece1a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0xB6C4645B": {
+   "name": "piece1a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 29,
+   "confidence": "high"
+  },
+  "0xB7372F44": {
+   "name": "hp_barreltip_j",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB797CD05": {
+   "name": "slice8b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xB8475E0E": {
+   "name": "slice1a_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0xB97E3E57": {
+   "name": "floor01.piece1e_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBB3C02BE": {
+   "name": "hp_ruin_mlmlb_ruin",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBBD8AA7E": {
+   "name": "hp_flag",
+   "rule": "D_hp_grammar",
+   "n_models": 7,
+   "confidence": "low"
+  },
+  "0xBCF01D36": {
+   "name": "slice1b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 70,
+   "confidence": "high"
+  },
+  "0xBD2AFD97": {
+   "name": "hp_barreltip_samrr_e",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBD2F7AC5": {
+   "name": "hp_barreltip_samrr_g",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBDA83CA0": {
+   "name": "slice3a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xBDD2070E": {
+   "name": "piece1b_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBE111D5F": {
+   "name": "hp_shelleject_rocket_r",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBE8E428B": {
+   "name": "slice1b_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xBEAC90DB": {
+   "name": "hp_seat_sam",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xBFCCDA3E": {
+   "name": "hp_shelleject_missiler_a",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0xBFE64FFE": {
+   "name": "floor01.piece1b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xC0BF9B9E": {
+   "name": "slice1c_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xC19DA3E0": {
+   "name": "piece1e_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC2DB6100": {
+   "name": "slice1f_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC4650EF6": {
+   "name": "piece1b_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC497CF04": {
+   "name": "slice2b_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 9,
+   "confidence": "high"
+  },
+  "0xC4D4B52F": {
+   "name": "piece1c_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xC4F90A09": {
+   "name": "slice3a_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC57E8824": {
+   "name": "floor03.piece1b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xC5C7618A": {
+   "name": "hp_barreltip_samfm_c",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC61948F7": {
+   "name": "piece1b_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC64BB6DC": {
+   "name": "slice2a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xC840F103": {
+   "name": "slice2a_propattach16_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xC8692367": {
+   "name": "piece2b_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xCA6AF0D7": {
+   "name": "floor00.slice1b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xCB08CC33": {
+   "name": "floor01.slice1a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xCB7A846B": {
+   "name": "floor02.piece1b_ruin",
+   "rule": "B_parent_state",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xCB8FD4E3": {
+   "name": "slice1e_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xCBC270A6": {
+   "name": "slice2b_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xCC5594BD": {
+   "name": "slice1a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 100,
+   "confidence": "high"
+  },
+  "0xCC6BB498": {
+   "name": "slice1c_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xCD22E928": {
+   "name": "slice1a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 41,
+   "confidence": "high"
+  },
+  "0xCDE58652": {
+   "name": "hp_fx_light16",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xCE05878F": {
+   "name": "slice2c_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xCE489396": {
+   "name": "slice4a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xCF72A7E9": {
+   "name": "piece1a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 97,
+   "confidence": "high"
+  },
+  "0xD02840A0": {
+   "name": "piece4a_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD02FC57B": {
+   "name": "slice3a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xD040F617": {
+   "name": "slice4a_propattach10_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD13996C9": {
+   "name": "hp_barreltip_k",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD1E3186C": {
+   "name": "slice1a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 14,
+   "confidence": "high"
+  },
+  "0xD21F35BB": {
+   "name": "piece1b_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD30ACC8E": {
+   "name": "hp_barreltip_samrr_h",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD32D5ED0": {
+   "name": "hp_barreltip_samrr_f",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD386A4AB": {
+   "name": "piece2a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0xD40FF186": {
+   "name": "floor01.piece2a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD41E9575": {
+   "name": "piece2a_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xD474A659": {
+   "name": "piece2h_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD5209603": {
+   "name": "hp_barreltip_samrr_a",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD6136FD2": {
+   "name": "slice1a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 23,
+   "confidence": "high"
+  },
+  "0xD6541F56": {
+   "name": "floor00.slice1a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xD7790E09": {
+   "name": "piece4a_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD8073E10": {
+   "name": "floor01.slice1b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 5,
+   "confidence": "high"
+  },
+  "0xD8B0558F": {
+   "name": "hp_winch_sideb",
+   "rule": "D_hp_grammar",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0xD97E685A": {
+   "name": "floor01.slice1d_pristine",
+   "rule": "B_parent_state",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xD9D74EB7": {
+   "name": "slice3a_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0xDA91FE75": {
+   "name": "piece1a_propattach22_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDB19BF2A": {
+   "name": "slice4a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDBADE12E": {
+   "name": "piece4a_propattach08_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDC38AA47": {
+   "name": "slice1b_propattach14_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDD5D0CD7": {
+   "name": "slice2a_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xDDBA0B61": {
+   "name": "hp_dock",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDDC21518": {
+   "name": "floor00.slice2b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xDDDC6855": {
+   "name": "slice1d_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xDE0F8A8F": {
+   "name": "slice1a_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 10,
+   "confidence": "high"
+  },
+  "0xDE1DCE82": {
+   "name": "slice2g_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDFBEFF55": {
+   "name": "floor03.piece1a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xDFC54BE1": {
+   "name": "hp_barreltip_samfm_d",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xDFD4F44E": {
+   "name": "floor02.piece1a_ruin",
+   "rule": "B_parent_state",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0xE1323349": {
+   "name": "piece1b_propattach16_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE1C50669": {
+   "name": "piece1b_propattach09_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE2AFC97B": {
+   "name": "piece4a_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE326D514": {
+   "name": "slice1b_propattach11_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 6,
+   "confidence": "high"
+  },
+  "0xE37C5A25": {
+   "name": "floor01.slice1a_pristine",
+   "rule": "B_parent_state",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0xE39A338F": {
+   "name": "piece1b_propattach07_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE49CB644": {
+   "name": "slice1b_propattach06_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 14,
+   "confidence": "high"
+  },
+  "0xE5EA2948": {
+   "name": "hp_fx_light14",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xE756D271": {
+   "name": "hp_barreltip_sam_c",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xE75E9C19": {
+   "name": "piece1a_propattach13_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE7B0EFBA": {
+   "name": "hp_backpack_roof01",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE7B8D4CB": {
+   "name": "hp_weapon_b",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "low"
+  },
+  "0xE7C9D5A7": {
+   "name": "hp_barreltip_samfm_b",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE7F6F861": {
+   "name": "hp_fx_light19",
+   "rule": "E_hp_family_ext",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xE98FC79E": {
+   "name": "hp_fx_light7",
+   "rule": "D_hp_grammar",
+   "n_models": 11,
+   "confidence": "high"
+  },
+  "0xE9B259E0": {
+   "name": "hp_fx_light9",
+   "rule": "E_hp_family_ext",
+   "n_models": 8,
+   "confidence": "high"
+  },
+  "0xE9B3D9E0": {
+   "name": "slice2b_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xEA7C7C6F": {
+   "name": "floor01.slice2b_pristine",
+   "rule": "B_parent_state",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xEA997C12": {
+   "name": "slice2a_propattach15_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xEC5752B7": {
+   "name": "piece4a_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xEF5B5C37": {
+   "name": "hp_barreltip_sam_e",
+   "rule": "D_hp_grammar",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xEFE7FA6F": {
+   "name": "hp_fx_light17",
+   "rule": "E_hp_family_ext",
+   "n_models": 2,
+   "confidence": "high"
+  },
+  "0xF1945164": {
+   "name": "hp_fx_light5",
+   "rule": "D_hp_grammar",
+   "n_models": 18,
+   "confidence": "high"
+  },
+  "0xF1F4354F": {
+   "name": "piece1d_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xF421E76A": {
+   "name": "piece1e_propattach05_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xF4265199": {
+   "name": "slice1a_propattach22_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 3,
+   "confidence": "high"
+  },
+  "0xF61839AA": {
+   "name": "piece1a_propattach27_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xF632B2F1": {
+   "name": "slice1c_propattach02_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 11,
+   "confidence": "high"
+  },
+  "0xF6CFBD3A": {
+   "name": "piece1a_propattach12_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 4,
+   "confidence": "high"
+  },
+  "0xF6ECA558": {
+   "name": "piece1d_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xF84765DB": {
+   "name": "slice1f_propattach03_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xF8A9D6C3": {
+   "name": "slice1c_propattach00_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 24,
+   "confidence": "high"
+  },
+  "0xF9950155": {
+   "name": "piece1a_propattach04_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 15,
+   "confidence": "high"
+  },
+  "0xFD7C036B": {
+   "name": "hp_shelleject_missile_b",
+   "rule": "D_hp_grammar",
+   "n_models": 1,
+   "confidence": "high"
+  },
+  "0xFE5D187D": {
+   "name": "slice8a_propattach01_pristine",
+   "rule": "A_propattach_pristine",
+   "n_models": 1,
+   "confidence": "high"
+  }
+ },
+ "open_questions": [
+  "0x765CD254 / 0x75F1F74D / 0x255EAB53 -- universal vehicle state subtrees, present in 172 vehicle models. HIGHEST-VALUE open target: naming them cascades across every vehicle. A 28,617-string part vocabulary under a double-hash (X_pristine AND X_ruin) constraint (expected_false 3.5e-11) returned ZERO -- names are outside conventional part/state vocabulary.",
+  "Three-child part nodes (bone_wheel_rr -> 3 co-located children) imply a THIRD damage state; only pristine/ruin ever hit. Third token unknown.",
+  "hp_snap_* appears ONLY on oilrig_*. Is the prefab snap system used elsewhere?",
+  "hp_buoyancy / hp_hat / hp_particleEject exist in The Saboteur but are NOT Mercs2 bones.",
+  "bone_attach_* (character-rig cousin of hp_) not swept here -- belongs to the deform-rig dept."
+ ],
+ "notes": "MINE FIRST, GUESS SECOND was followed. The literal sweep is the headline NEGATIVE result: all 99 mined hp_ literals were already known, so the string-table oracle for this dialect is exhausted -- do not re-run it. All 405 new bones came from GRAMMAR + STRUCTURE, at a combined expected-false of 0.41. Zero of the 97 side-tokened hits contradicted the side law (noise would contradict ~half). The single most reliable technique was the parent-derived rule (rule.state / rule.propattach): because the child prefix is dictated by its parent name, the pool collapses to a suffix vocabulary of 4 and expected-false drops to ~0.02. Prefer parent-derived and mirror rules over any dictionary sweep. 11 names are flagged confidence=low: they have no series or side-law witness and should be treated as hypotheses, not facts."
+}
