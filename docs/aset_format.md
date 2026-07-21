@@ -79,6 +79,35 @@ Clone a multi-rung asset by copying only its `_P000` block and you ship the coar
 finer rungs behind it. Use `AsetEntry::lod_chain()` (`mercs2_formats::ffcs`) rather than
 re-deriving the packing.
 
+### ⚠ The Xbox layout is MIRRORED — do not apply the PC decode to a 360 WAD
+
+Everything above is measured on **PC** `vz.wad`. The 360 bake packs the same two block indices in
+the **opposite half order**, so reasoning about an Xbox-side tool using the PC rule is invalid.
+Same asset, `civ_hum_beachfemale_a` (`0xFA572E52`):
+
+| | `packed_block_ref` | hi16 | lo16 |
+|---|---|---|---|
+| PC | `0x083E11EB` | 2110 → `c32143_P000_Q3` (**primary**) | 4587 → `c32143-c21152_P001_Q2` (`_P001`) |
+| Xbox | `0x11E2083E` | 4578 → `c32143-c21152_P001_Q2` (`_P001`) | 2110 → `c32143_P000_Q3` (**primary**) |
+
+Two further traps in the 360 file:
+
+- **The ASET chunk is mixed-endian.** The container detects as `Big` and each `u16` block index
+  reads correctly big-endian, but `type_id` comes back as `0x13000000` rather than `19` — it is
+  stored little-endian. `ffcs::parse_aset_entries` applies one endianness to the whole row, so
+  **30,552 of 30,553 Xbox rows decode with a nonsense `type_id`**. Any filter on `type_id == 19`
+  silently matches nothing on a 360 WAD. (Consistent with the known "BE container is a MIX" rule.)
+- Consequently, `mercs2_probe --bin aset_decode` prints a loud warning and refuses to interpret its
+  own numbers when more than half the rows show `type_id > 64`. A measurement that silently returns
+  zeros is worse than one that fails.
+
+**Practical consequence.** `ucfx_byteswap::recompute_block_aset_subs` writes a physical entry-table
+ordinal into the low half. Under the PC rule that would be plainly wrong — but it operates on
+**Xbox** input, where that half is the primary block index and the converter's job is precisely to
+re-lay the pair for PC. It was reported as a latent shipping bug; **that report is not supported by
+evidence** and the function is unchanged pending a measurement of the Xbox semantics in their own
+terms.
+
 ### What this corrects
 
 - `secondary_ref` was documented as *"secondary block reference **hashes** for streaming
