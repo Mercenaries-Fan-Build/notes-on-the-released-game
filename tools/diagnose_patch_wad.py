@@ -429,9 +429,22 @@ def diagnose(wad_path: Path, *, retail_block_path: Path | None = None) -> int:
 
     if indexed_refs:
         max_sub = max(e["sub_entry"] for e in indexed_refs)
-        print(f"  Max sub_entry index: {max_sub}")
-        if max_sub >= entry_count:
-            errors.append(f"ASET sub_entry {max_sub} >= block entry_count {entry_count}")
+        print(f"  Max sub_entry (packed_block_ref low16): {max_sub}")
+        # NOT an error condition, and the old `max_sub >= entry_count` assertion here was a
+        # category error. That low16 is not an ordinal inside this block: it is the asset's
+        # `_P001` LOD BLOCK INDEX, WAD-wide (0..~11,370), while `entry_count` counts sub-entries
+        # within one decompressed block (typically tens). Measured on retail vz.wad: 10,798 rows
+        # carry one, 100% naming a `_P001` block in the primary's own cell subtree. So any
+        # legitimately LOD-chained asset -- e.g. civ_hum_beachfemale_a, whose low16 is block 4587
+        # -- tripped this unconditionally.
+        #
+        # It only ever looked plausible because `ucfx_byteswap::recompute_block_aset_subs` writes
+        # a physical entry ordinal into that half for DLC-new assets, so the check validated our
+        # own converter's convention rather than the format. See docs/aset_format.md
+        # "The LOD chain lives in the ASET row".
+        if max_sub != 0xFFFF and max_sub >= entry_count:
+            print(f"    (note: {max_sub} >= entry_count {entry_count} -- expected for a real "
+                  f"_P001 block index; not an error)")
 
     # Check ASET asset_hash matches block entry name_hash
     block_hashes = {e["name_hash"] for e in block_entries}
