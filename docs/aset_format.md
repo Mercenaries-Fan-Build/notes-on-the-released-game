@@ -1,7 +1,23 @@
+---
+status: current
+evidence: proven
+verified_on: 2026-07-21
+witness: whole-WAD sweep (mercs2_probe --bin aset_decode) over 16,347 model+texture rows, cross-checked against independent geometry scans (model_blocks) for civ_hum_beachfemale_a and ch_veh_tank_ztz98
+supersedes: [docs/aset_format.md@2026-05-18]
+---
+
 # ASET chunk — row layout (Mercenaries 2 `vz.wad`)
 
-**Date:** 2026-05-18  
+**Date:** 2026-05-18 · **field decode corrected 2026-07-21**  
 **Status:** **Fully verified** — all four fields decoded. `u32_0` = asset name hash, `u32_2 >> 16` = block index confirmed by decompressing blocks and matching sub-entry headers.  
+
+> **⚠ CORRECTION (2026-07-21).** The `+4` and `+8` low-half descriptions below were **wrong** for
+> two months and were marked "Verified: Yes" the whole time, which is worse than having been
+> absent. `secondary_ref` does not hold *dependency hashes*, and `packed_block_ref` low16 is not a
+> *sub-entry offset*. **Both words hold BLOCK INDICES, and together they encode the asset's entire
+> LOD chain.** See "LOD chain" below. Reproduce with
+> `cargo run -p mercs2_probe --bin aset_decode`.
+
 **Decoder:** [`tools/aset_decoder.py`](../tools/aset_decoder.py) → [`output/block_dependency_graph.json`](../output/block_dependency_graph.json)  
 **Tracer:** [`tools/aset_prop_tracer.py`](../tools/aset_prop_tracer.py) — traces asset hashes through ASET→PTHS
 
@@ -22,9 +38,58 @@ Each row is four `uint32`:
 | Offset | Field | Verified? | Notes |
 |--------|-------|-------------|-------|
 | +0 | `asset_hash` | **Yes** | FNV-1a hash (with `\|0x20` case suppression and `^0x2A * prime` finalization) of the asset's internal name. Matches `name_hash` field in decompressed block sub-entry headers. **30,006 unique hashes** across 30,645 rows. Confirmed identical between Mercenaries 2 and The Saboteur. |
-| +4 | `secondary_ref` | **Yes** | `0xFFFFFFFF` = single-block asset (22,196 rows). Non-sentinel values are secondary block reference hashes for streaming dependencies (3,002 rows pointing to c3 cells, `resident2`, etc.). |
-| +8 | `packed_block_ref` | **Yes** | **High 16 bits** = block index into PTHS/INDX (verified: 3,581 unique blocks referenced). **Low 16 bits** = `0xFFFF` for primary reference (19,847 rows), otherwise a sub-entry offset within the block. |
+| +4 | `secondary_ref` | **Yes** (2026-07-21) | **Two block indices, not hashes.** `0xFFFFFFFF` = neither rung present. **High 16** = the `_P002` block index; **low 16** = the `_P003` block index (`0xFFFF` = absent). Measured: of model+texture rows, 8,449 name a `_P002` block and 5,537 name a `_P003` block — **100%** in the primary's own cell subtree, **0** out of range. |
+| +8 | `packed_block_ref` | **Yes** | **High 16 bits** = block index into PTHS/INDX (verified: 3,581 unique blocks referenced) — the `_P000` resident rung. **Low 16 bits** = `0xFFFF` when there is no finer rung (19,847 rows), otherwise **the `_P001` block index** — *not* a sub-entry offset. Measured: 10,798 non-sentinel rows, **100%** naming a `_P001` block in the same cell subtree, exactly one LOD level finer, **0** out of range. |
 | +12 | `type_id` | **Yes** | Type discriminator (0–35). Maps 1:1 to the `type_hash` field in decompressed block sub-entry headers. See type table below. |
+
+## The LOD chain lives in the ASET row
+
+A row does not name one block. It names **up to four**, one per LOD rung, packed into the two
+u32s as `[hi16][lo16]` pairs:
+
+| rung | field | half | sentinel |
+|---|---|---|---|
+| `_P000` (resident, coarsest) | `packed_block_ref` | hi16 | — always present |
+| `_P001` | `packed_block_ref` | lo16 | `0xFFFF` |
+| `_P002` | `secondary_ref` | hi16 | `0xFFFF` (whole word `0xFFFFFFFF` = neither) |
+| `_P003` (finest) | `secondary_ref` | lo16 | `0xFFFF` |
+
+Worked example — `ch_veh_tank_ztz98` (`0xF88147A1`):
+
+```
+packed_block_ref = 0x0DED14D7   ->  hi16 3565 = ch_veh_tank_ztz98_P000_Q3   (4,435 tri)
+                                    lo16 5335 = ch_veh_tank_ztz98_P001_Q2  (18,333 tri)
+secondary_ref    = 0x2093FFFF   ->  hi16 8339 = ch_veh_tank_ztz98_P002_Q1  (28,620 tri)
+                                    lo16 0xFFFF = no _P003 rung
+```
+
+An independent geometry scan (`mercs2_probe --bin model_blocks`) finds chunks for that hash in
+exactly blocks 3565, 5335 and 8339 — the three the row names, and no others.
+
+**Why this matters for authoring.** "Is this asset safe to clone?" is **not** answered by the
+primary block alone, and not by a single `sub` field either. An asset is genuinely single-block
+only when **both** halves are sentinel:
+
+```rust
+let single_block = entry.packed_block_ref & 0xFFFF == 0xFFFF
+                && entry.secondary_ref == 0xFFFF_FFFF;
+```
+
+Clone a multi-rung asset by copying only its `_P000` block and you ship the coarsest tier with no
+finer rungs behind it. Use `AsetEntry::lod_chain()` (`mercs2_formats::ffcs`) rather than
+re-deriving the packing.
+
+### What this corrects
+
+- `secondary_ref` was documented as *"secondary block reference **hashes** for streaming
+  dependencies"*. They are **block indices**, and they are this asset's own finer LOD rungs.
+- `packed_block_ref` low16 was documented as *"a sub-entry offset within the block"*. It is a
+  **block index**. Anything treating it as an intra-block ordinal is wrong — including
+  `ucfx_byteswap::recompute_block_aset_subs`, which writes a physical entry ordinal into it, and
+  the `max_sub >= entry_count` check in `tools/diagnose_patch_wad.py`, which validates against the
+  wrong quantity entirely.
+- The claim that `_P002`/`_P003` blocks are *never referenced from ASET* is false: 8,449 and 5,537
+  rows name them respectively. They are simply named by the **other** word.
 
 ## Type discriminator table
 
