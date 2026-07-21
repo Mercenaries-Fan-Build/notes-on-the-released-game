@@ -90,6 +90,19 @@ Same asset, `civ_hum_beachfemale_a` (`0xFA572E52`):
 | PC | `0x083E11EB` | 2110 → `c32143_P000_Q3` (**primary**) | 4587 → `c32143-c21152_P001_Q2` (`_P001`) |
 | Xbox | `0x11E2083E` | 4578 → `c32143-c21152_P001_Q2` (`_P001`) | 2110 → `c32143_P000_Q3` (**primary**) |
 
+Measured across the whole 360 WAD (16,260 model+texture rows), the mirror is exact — every `u32`
+has its two `u16` halves swapped relative to PC:
+
+| word | PC | Xbox |
+|---|---|---|
+| `packed_block_ref` | `[hi16 _P000][lo16 _P001]` | `[hi16 _P001][lo16 _P000]` |
+| `secondary_ref` | `[hi16 _P002][lo16 _P003]` | `[hi16 _P003][lo16 _P002]` |
+
+Xbox `packed_block_ref` low16: 16,260 non-sentinel rows, **100%** naming a `_P000` block.
+Xbox `secondary_ref` low16: 9,365 rows, **100%** `_P002`, **100%** in the primary's own cell subtree.
+That half-swap is exactly a u16-granular byteswap of each word, which is what the Xbox→PC
+conversion performs.
+
 Two further traps in the 360 file:
 
 - **The ASET chunk is mixed-endian.** The container detects as `Big` and each `u16` block index
