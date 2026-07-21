@@ -2,6 +2,7 @@ import { openTable, esc } from './db.js';
 import { embedQuery } from './embed.js';
 import { normAddr } from './chunk.js';
 import { sourceFreshness } from './sources.js';
+import { readMeta, standingWeight, STATUS } from './knowledge.js';
 
 function sourceFilter(sources, pathPrefix) {
   const parts = [];
@@ -43,7 +44,7 @@ export const SOURCE_AUTHORITY = {
 const UNREVIEWED = new Set(['conversation']);
 
 /** Hybrid (vector + BM25) search merged with authority-weighted reciprocal-rank fusion. */
-export async function search({ query, k = 8, sources, pathPrefix }) {
+export async function search({ query, k = 8, sources, pathPrefix, includeRetracted = false }) {
   const table = await requireTable();
   const filter = sourceFilter(sources, pathPrefix);
   // Fetch deeper than k: demotion reorders the list, so a doc that a transcript displaced out of
@@ -65,16 +66,21 @@ export async function search({ query, k = 8, sources, pathPrefix }) {
   const byId = new Map();
   const K = 60;
   const bump = (r, i) => {
-    const w = SOURCE_AUTHORITY[r.source] ?? 1.0;
+    // authority (which source) x standing (what the document says about itself)
+    const w = (SOURCE_AUTHORITY[r.source] ?? 1.0) * standingWeight(readMeta(r.meta));
     scores.set(r.id, (scores.get(r.id) ?? 0) + w / (K + i));
     byId.set(r.id, r);
   };
   vres.forEach(bump);
   fres.forEach(bump);
 
-  return [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, k)
+  let ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  if (!includeRetracted) {
+    // Retracted knowledge stays in the index on purpose - "we tried this and it was wrong" is
+    // worth finding - but it must be asked for, never volunteered as an answer.
+    ranked = ranked.filter(([id]) => readMeta(byId.get(id).meta).status !== STATUS.RETRACTED);
+  }
+  return ranked.slice(0, k)
     .map(([id, score]) => ({ score: Number(score.toFixed(4)), ...pick(byId.get(id)) }));
 }
 
@@ -86,9 +92,16 @@ function isoDate(mtime) {
 }
 
 function pick(r) {
+  const m = readMeta(r.meta);
   return {
     id: r.id, source: r.source, path: r.path, title: r.title, chunk: r.chunk,
     date: isoDate(r.mtime),
+    // standing, when the document declares any
+    status: m.status || undefined,
+    evidence: m.evidence || undefined,
+    verified_on: m.verified_on || undefined,
+    supersedes: m.supersedes || undefined,
+    superseded_by: m.superseded_by || undefined,
     // Say it in the payload, not just in the source name: a reader skimming hits should not have
     // to know that `conversation` means "nobody checked this".
     unreviewed: UNREVIEWED.has(r.source) || undefined,

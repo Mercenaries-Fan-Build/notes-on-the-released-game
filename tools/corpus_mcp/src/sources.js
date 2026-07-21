@@ -7,6 +7,7 @@ import {
   MAX_FILE_BYTES, CONVO_WINDOW,
 } from './config.js';
 import { chunkMarkdown, chunkText, chunkCode, sha256, extractAddrs, normAddr } from './chunk.js';
+import { knowledgeMeta } from './knowledge.js';
 
 /** A document = one ingestion unit: { source, path, title, mtime, fileHash, chunks: [text] , fnAddr?, meta? } */
 
@@ -103,6 +104,9 @@ export function* fileDocs(sourceName) {
     try { stat = fs.statSync(file); } catch { continue; }
     if (stat.size > MAX_FILE_BYTES || stat.size === 0) continue;
     const text = fs.readFileSync(file, 'utf8');
+    // Front-matter standing (status/supersedes/evidence) rides in `meta`, so a corrected doc can
+    // outrank the one it corrects. Only markdown declares it; everything else stores nothing.
+    const km = path.extname(file).toLowerCase() === '.md' ? knowledgeMeta(text) : null;
     yield {
       source: sourceName,
       path: rel(file),
@@ -110,6 +114,7 @@ export function* fileDocs(sourceName) {
       mtime: stat.mtimeMs,
       fileHash: sha256(text),
       chunks: chunksFor(file, text),
+      meta: km ? JSON.stringify(km) : undefined,
     };
   }
 }
@@ -129,6 +134,7 @@ export function* memoryDocs() {
       mtime: stat.mtimeMs,
       fileHash: sha256(text),
       chunks: chunkMarkdown(text),
+      meta: (() => { const km = knowledgeMeta(text); return km ? JSON.stringify(km) : undefined; })(),
     };
   }
 }

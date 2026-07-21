@@ -26,16 +26,21 @@ server.registerTool('corpus_search', {
   description:
     'Hybrid semantic + keyword search over the whole Mercenaries 2 project corpus: research docs, decompiled Lua, ' +
     'persistent memory, past Claude conversations, tools/mods source, commit messages, and the 27k-function Ghidra ' +
-    'decompilation of the unpacked exe. Use this FIRST when asking "what do we already know about X" before re-deriving anything.',
+    'decompilation of the unpacked exe. Use this FIRST when asking "what do we already know about X" before re-deriving anything. ' +
+    'Every hit carries `date`; transcripts are marked `unreviewed` and rank below written-up docs; documents may declare ' +
+    '`status` (current/superseded/retracted), `evidence` (proven/inferred/speculative) and `supersedes` - prefer a current, ' +
+    'proven, recent hit over an older one that merely sounds confident.',
   inputSchema: {
     query: z.string().describe('natural-language or keyword query'),
     k: z.number().int().min(1).max(50).default(8).describe('number of results'),
     sources: sourcesParam,
     path_prefix: z.string().optional().describe("restrict by path prefix, e.g. 'docs/mercs2-pdb-analysis'"),
+    include_retracted: z.boolean().default(false)
+      .describe('also return documents marked status:retracted (knowledge we tried and disproved) - hidden by default'),
   },
-}, async ({ query, k, sources, path_prefix }) => {
+}, async ({ query, k, sources, path_prefix, include_retracted }) => {
   try {
-    const results = await search({ query, k, sources, pathPrefix: path_prefix });
+    const results = await search({ query, k, sources, pathPrefix: path_prefix, includeRetracted: include_retracted });
     // Carry index freshness with every answer. A stale corpus returns yesterday's knowledge with
     // full confidence, which is indistinguishable from a correct answer at the moment it matters.
     let index;
