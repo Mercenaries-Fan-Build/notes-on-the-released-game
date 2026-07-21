@@ -1,0 +1,8 @@
+{"type":"summary","summary":"Investigated the wavelet decoder and FUN_00478120"}
+{"type":"user","message":{"content":"How does FUN_00478120 decode the animation?"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"It calls FUN_00478200 to decode each clip and matches the live capture."}]}}
+{"type":"user","message":{"content":"<system-reminder>only-a-reminder should be dropped</system-reminder>"}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"x"}}]}}
+{"type":"user","message":{"content":"Please check <system-reminder>secret-inline</system-reminder> the streaming budget code path."}}
+{"type":"user","message":{"content":"API Error: rate limited, retrying"}}
+{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"Sub-agent note about hibernation distances."}]}}

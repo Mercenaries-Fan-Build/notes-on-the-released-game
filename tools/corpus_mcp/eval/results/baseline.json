@@ -1,0 +1,127 @@
+{
+  "summary": {
+    "k": 10,
+    "incident": {
+      "n": 7,
+      "hit1": 1,
+      "hit3": 3,
+      "hits": 5,
+      "misses": 2,
+      "mrr": 0.3262
+    },
+    "decision": {
+      "n": 6,
+      "hit1": 2,
+      "hit3": 4,
+      "hits": 6,
+      "misses": 0,
+      "mrr": 0.5519
+    }
+  },
+  "rows": [
+    {
+      "id": "inc-waitforgame",
+      "class": "incident",
+      "rank": 0,
+      "error": null,
+      "top": "conversation:conversations/5b6bbfe2-6d3c-4b62-a0e8-358ae70332c8.jsonl",
+      "topSources": "conversation,conversation,conversation"
+    },
+    {
+      "id": "inc-residency-preload",
+      "class": "incident",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/cj-foreign-model-import.md",
+      "topSources": "memory,conversation,conversation"
+    },
+    {
+      "id": "inc-novel-outfit-delivery",
+      "class": "incident",
+      "rank": 2,
+      "error": null,
+      "top": "conversation:conversations/5b6bbfe2-6d3c-4b62-a0e8-358ae70332c8.jsonl",
+      "topSources": "conversation,memory,conversation"
+    },
+    {
+      "id": "inc-hash-provenance",
+      "class": "incident",
+      "rank": 3,
+      "error": null,
+      "top": "doc:docs/modernization/model_name_map.md",
+      "topSources": "doc,conversation,memory"
+    },
+    {
+      "id": "inc-lod-block-chain",
+      "class": "incident",
+      "rank": 4,
+      "error": null,
+      "top": "conversation:conversations/5d98c42f-ed8b-42aa-ad6e-70318b1ff16b.jsonl",
+      "topSources": "conversation,conversation,conversation"
+    },
+    {
+      "id": "inc-submodule-git",
+      "class": "incident",
+      "rank": 5,
+      "error": null,
+      "top": "memory:memory/dlc-skin-swap-via-pmc-wardrobe.md",
+      "topSources": "memory,conversation,conversation"
+    },
+    {
+      "id": "inc-skin-positional-compare",
+      "class": "incident",
+      "rank": 0,
+      "error": null,
+      "top": "conversation:conversations/dea58ce7-7675-4dff-a55a-7e7f9fe43d9b.jsonl",
+      "topSources": "conversation,tool,tool"
+    },
+    {
+      "id": "dec-which-host-block",
+      "class": "decision",
+      "rank": 9,
+      "error": null,
+      "top": "conversation:conversations/dea58ce7-7675-4dff-a55a-7e7f9fe43d9b.jsonl",
+      "topSources": "conversation,tool,tool"
+    },
+    {
+      "id": "dec-additive-vs-replace",
+      "class": "decision",
+      "rank": 2,
+      "error": null,
+      "top": "conversation:conversations/e48edb18-f64d-4774-8a83-14e03c88d9f1.jsonl",
+      "topSources": "conversation,memory,tool"
+    },
+    {
+      "id": "dec-name-a-new-asset",
+      "class": "decision",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/no-arbitrary-hashes.md",
+      "topSources": "memory,conversation,doc"
+    },
+    {
+      "id": "dec-is-host-safe-to-clone",
+      "class": "decision",
+      "rank": 5,
+      "error": null,
+      "top": "doc:docs/modernization/model_render_gate_spec.md",
+      "topSources": "doc,tool,memory"
+    },
+    {
+      "id": "dec-ship-character-checklist",
+      "class": "decision",
+      "rank": 1,
+      "error": null,
+      "top": "doc:docs/modding/field_guide.md",
+      "topSources": "doc,conversation,doc"
+    },
+    {
+      "id": "dec-page-count",
+      "class": "decision",
+      "rank": 2,
+      "error": null,
+      "top": "tool:tools/wad_patcher.py",
+      "topSources": "tool,tool,tool"
+    }
+  ]
+}

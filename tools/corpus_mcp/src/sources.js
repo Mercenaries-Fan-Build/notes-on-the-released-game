@@ -30,6 +30,53 @@ function* walk(dir, excludeDirs = []) {
   }
 }
 
+/**
+ * Stat-only sweep of the file-backed sources: newest on-disk mtime and how many files are newer
+ * than a given cutoff. Deliberately does NOT read or hash anything, so it is cheap enough to run
+ * behind a search; `fileDocs` reads every file, which is not.
+ *
+ * This exists because the index has no way to announce that it is out of date. A stale corpus
+ * answers confidently with yesterday's knowledge, which is indistinguishable from a correct
+ * answer at the moment you need it most.
+ */
+export function sourceFreshness(cutoffByName = {}) {
+  const out = {};
+  for (const [name, spec] of Object.entries(SOURCES)) {
+    // memory/conversations/commits/ghidra are `special` walkers; handle the two that are cheap
+    // and file-backed, and report the rest as unknown rather than guessing.
+    let files = [];
+    if (spec.dirs) {
+      for (const d of spec.dirs) {
+        for (const f of walk(path.join(REPO_ROOT, d), spec.excludeDirs || [])) {
+          if (!spec.exts || spec.exts.includes(path.extname(f).toLowerCase())) files.push(f);
+        }
+      }
+      for (const extra of spec.extraFiles || []) {
+        const f = path.join(REPO_ROOT, extra);
+        if (fs.existsSync(f)) files.push(f);
+      }
+    } else if (spec.special === 'memory') {
+      try {
+        files = fs.readdirSync(MEMORY_DIR).filter((n) => n.endsWith('.md')).map((n) => path.join(MEMORY_DIR, n));
+      } catch { files = []; }
+    } else {
+      out[name] = { known: false };
+      continue;
+    }
+    const cutoff = cutoffByName[name] ?? 0;
+    let newest = 0;
+    const newer = [];
+    for (const f of files) {
+      let st;
+      try { st = fs.statSync(f); } catch { continue; }
+      if (st.mtimeMs > newest) newest = st.mtimeMs;
+      if (st.mtimeMs > cutoff + 1000) newer.push(rel(f)); // 1s slack for fs/index timestamp skew
+    }
+    out[name] = { known: true, files: files.length, newest, newerThanIndex: newer.length, examples: newer.slice(0, 5) };
+  }
+  return out;
+}
+
 function chunksFor(file, text) {
   const ext = path.extname(file).toLowerCase();
   if (ext === '.md') return chunkMarkdown(text);

@@ -1,6 +1,7 @@
 import { openTable, esc } from './db.js';
 import { embedQuery } from './embed.js';
 import { normAddr } from './chunk.js';
+import { sourceFreshness } from './sources.js';
 
 function sourceFilter(sources, pathPrefix) {
   const parts = [];
@@ -15,13 +16,39 @@ async function requireTable() {
   return table;
 }
 
-const RESULT_COLS = ['id', 'source', 'path', 'title', 'chunk', 'text', 'fn_addr', 'meta'];
+const RESULT_COLS = ['id', 'source', 'path', 'title', 'chunk', 'text', 'fn_addr', 'meta', 'mtime'];
 
-/** Hybrid (vector + BM25) search merged with reciprocal-rank fusion. */
+/**
+ * Per-source authority, applied as a multiplier on the fusion score.
+ *
+ * Rank fusion alone treats every source as equally trustworthy, which is false and was measurably
+ * harmful: session transcripts are 6,427 chunks from 60 files (~19% of all non-Ghidra prose) and
+ * were taking the top slot on 5 of 13 eval queries — including returning the transcript of a
+ * FAILED session as the best answer to the very question that session got wrong. A transcript is
+ * unreviewed thinking-out-loud: it records wrong turns, abandoned theories and self-corrections
+ * with the same weight as the conclusion. It stays searchable (there are real derivations in
+ * there that were never written up) but it must never outrank a written-up document.
+ */
+export const SOURCE_AUTHORITY = {
+  doc: 1.0,        // written-up research
+  memory: 1.0,     // curated one-fact-per-file
+  project: 1.0,    // AGENTS.md / repo config
+  ghidra: 1.0,     // the decompilation is ground truth
+  tool: 0.9,       // source + READMEs: real, but incidental prose
+  commit: 0.9,     // terse, and the diff is the real record
+  mod: 0.9,
+  conversation: 0.25, // unreviewed transcript
+};
+
+const UNREVIEWED = new Set(['conversation']);
+
+/** Hybrid (vector + BM25) search merged with authority-weighted reciprocal-rank fusion. */
 export async function search({ query, k = 8, sources, pathPrefix }) {
   const table = await requireTable();
   const filter = sourceFilter(sources, pathPrefix);
-  const fetchN = Math.max(k * 3, 20);
+  // Fetch deeper than k: demotion reorders the list, so a doc that a transcript displaced out of
+  // the top k must still be present to be promoted back into it.
+  const fetchN = Math.max(k * 6, 40);
 
   let vq = table.vectorSearch(await embedQuery(query)).select(RESULT_COLS).limit(fetchN);
   if (filter) vq = vq.where(filter);
@@ -37,8 +64,13 @@ export async function search({ query, k = 8, sources, pathPrefix }) {
   const scores = new Map();
   const byId = new Map();
   const K = 60;
-  vres.forEach((r, i) => { scores.set(r.id, (scores.get(r.id) ?? 0) + 1 / (K + i)); byId.set(r.id, r); });
-  fres.forEach((r, i) => { scores.set(r.id, (scores.get(r.id) ?? 0) + 1 / (K + i)); byId.set(r.id, r); });
+  const bump = (r, i) => {
+    const w = SOURCE_AUTHORITY[r.source] ?? 1.0;
+    scores.set(r.id, (scores.get(r.id) ?? 0) + w / (K + i));
+    byId.set(r.id, r);
+  };
+  vres.forEach(bump);
+  fres.forEach(bump);
 
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -46,12 +78,78 @@ export async function search({ query, k = 8, sources, pathPrefix }) {
     .map(([id, score]) => ({ score: Number(score.toFixed(4)), ...pick(byId.get(id)) }));
 }
 
+/** `mtime` is stored at ingest but was never surfaced, so no result could be dated. */
+function isoDate(mtime) {
+  const ms = Number(mtime);
+  if (!ms) return undefined;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 function pick(r) {
   return {
     id: r.id, source: r.source, path: r.path, title: r.title, chunk: r.chunk,
+    date: isoDate(r.mtime),
+    // Say it in the payload, not just in the source name: a reader skimming hits should not have
+    // to know that `conversation` means "nobody checked this".
+    unreviewed: UNREVIEWED.has(r.source) || undefined,
     fn_addr: r.fn_addr || undefined, text: r.text,
   };
 }
+
+/**
+ * Index freshness: per source, newest indexed mtime vs newest on-disk mtime, and how many files
+ * changed since the last ingest. Cached briefly so `search` can carry a warning without paying a
+ * directory walk per query.
+ */
+let freshCache = { at: 0, value: null };
+const FRESH_TTL_MS = 30_000;
+
+export async function status({ force = false } = {}) {
+  if (!force && freshCache.value && Date.now() - freshCache.at < FRESH_TTL_MS) return freshCache.value;
+  const table = await openTable();
+  if (!table) return { indexed: false, stale: true, reason: 'corpus table does not exist — run npm run ingest' };
+
+  const rows = await table.query().select(['source', 'mtime']).toArray();
+  const indexedNewest = {};
+  const counts = {};
+  for (const r of rows) {
+    counts[r.source] = (counts[r.source] ?? 0) + 1;
+    const m = Number(r.mtime) || 0;
+    if (m > (indexedNewest[r.source] ?? 0)) indexedNewest[r.source] = m;
+  }
+
+  const disk = sourceFreshness(indexedNewest);
+  const sources = {};
+  let staleTotal = 0;
+  for (const [name, d] of Object.entries(disk)) {
+    const indexedAt = indexedNewest[name] ?? 0;
+    const entry = {
+      chunks: counts[name] ?? 0,
+      indexedNewest: indexedAt ? new Date(indexedAt).toISOString().slice(0, 10) : null,
+    };
+    if (d.known) {
+      entry.filesOnDisk = d.files;
+      entry.changedSinceIngest = d.newerThanIndex;
+      if (d.newerThanIndex > 0) { entry.examples = d.examples; staleTotal += d.newerThanIndex; }
+    } else {
+      entry.changedSinceIngest = null; // special walker (conversations/commits/ghidra) — not stat-able cheaply
+    }
+    sources[name] = entry;
+  }
+
+  const value = {
+    indexed: true,
+    stale: staleTotal > 0,
+    changedSinceIngest: staleTotal,
+    hint: staleTotal > 0 ? 'run `npm run ingest` in tools/corpus_mcp — results below may predate recent edits' : undefined,
+    sources,
+  };
+  freshCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Invalidate the freshness cache (called after an in-session ingest). */
+export function clearFreshness() { freshCache = { at: 0, value: null }; }
 
 /** Exact cross-reference: every chunk in the corpus mentioning an address,
  *  regardless of spelling (FUN_00478120, 0x478120, 0x00478120...). */
@@ -88,6 +186,7 @@ let mentionCache = null;  // fn_addr -> Set(source)
 export function clearCaches() {
   fnCache = null;
   mentionCache = null;
+  clearFreshness(); // an in-session ingest changes what "stale" means
 }
 
 /** All decompiled functions with their call-graph edges (chunk 0 carries identity). */

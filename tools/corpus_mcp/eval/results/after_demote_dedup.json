@@ -1,0 +1,127 @@
+{
+  "summary": {
+    "k": 10,
+    "incident": {
+      "n": 7,
+      "hit1": 3,
+      "hit3": 5,
+      "hits": 6,
+      "misses": 1,
+      "mrr": 0.5762
+    },
+    "decision": {
+      "n": 6,
+      "hit1": 1,
+      "hit3": 4,
+      "hits": 6,
+      "misses": 0,
+      "mrr": 0.4639
+    }
+  },
+  "rows": [
+    {
+      "id": "inc-waitforgame",
+      "class": "incident",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/dlc-skin-swap-via-pmc-wardrobe.md",
+      "topSources": "memory,doc,memory"
+    },
+    {
+      "id": "inc-residency-preload",
+      "class": "incident",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/cj-foreign-model-import.md",
+      "topSources": "memory,memory,doc"
+    },
+    {
+      "id": "inc-novel-outfit-delivery",
+      "class": "incident",
+      "rank": 2,
+      "error": null,
+      "top": "memory:memory/no-destructive-replacements.md",
+      "topSources": "memory,memory,doc"
+    },
+    {
+      "id": "inc-hash-provenance",
+      "class": "incident",
+      "rank": 3,
+      "error": null,
+      "top": "commit:commit/da600b0fdcb8",
+      "topSources": "commit,doc,memory"
+    },
+    {
+      "id": "inc-lod-block-chain",
+      "class": "incident",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/model-lod-block-chain.md",
+      "topSources": "memory,doc,memory"
+    },
+    {
+      "id": "inc-submodule-git",
+      "class": "incident",
+      "rank": 0,
+      "error": null,
+      "top": "memory:memory/dlc-skin-swap-via-pmc-wardrobe.md",
+      "topSources": "memory,memory,memory"
+    },
+    {
+      "id": "inc-skin-positional-compare",
+      "class": "incident",
+      "rank": 5,
+      "error": null,
+      "top": "memory:memory/cj-foreign-model-import.md",
+      "topSources": "memory,tool,doc"
+    },
+    {
+      "id": "dec-which-host-block",
+      "class": "decision",
+      "rank": 3,
+      "error": null,
+      "top": "tool:tools/wad_simulator/crates/mercs2_formats/src/model_inject.rs",
+      "topSources": "tool,doc,memory"
+    },
+    {
+      "id": "dec-additive-vs-replace",
+      "class": "decision",
+      "rank": 2,
+      "error": null,
+      "top": "tool:tools/mercs2-skinner/README.md",
+      "topSources": "tool,memory,memory"
+    },
+    {
+      "id": "dec-name-a-new-asset",
+      "class": "decision",
+      "rank": 1,
+      "error": null,
+      "top": "memory:memory/no-arbitrary-hashes.md",
+      "topSources": "memory,doc,memory"
+    },
+    {
+      "id": "dec-is-host-safe-to-clone",
+      "class": "decision",
+      "rank": 5,
+      "error": null,
+      "top": "doc:docs/patch_wad_format.md",
+      "topSources": "doc,memory,memory"
+    },
+    {
+      "id": "dec-ship-character-checklist",
+      "class": "decision",
+      "rank": 2,
+      "error": null,
+      "top": "tool:tools/build_patch_wad.py",
+      "topSources": "tool,doc,doc"
+    },
+    {
+      "id": "dec-page-count",
+      "class": "decision",
+      "rank": 4,
+      "error": null,
+      "top": "ghidra:ghidra/___sbh_resize_block",
+      "topSources": "ghidra,doc,doc"
+    }
+  ]
+}

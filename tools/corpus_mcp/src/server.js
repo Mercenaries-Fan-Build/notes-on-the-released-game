@@ -3,7 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { search, xref, getDoc, coverage, callgraph, stats, clearCaches } from './search.js';
+import { search, xref, getDoc, coverage, callgraph, stats, status, clearCaches } from './search.js';
 import { ingest } from './ingest.js';
 import { SOURCES } from './config.js';
 
@@ -34,7 +34,30 @@ server.registerTool('corpus_search', {
     path_prefix: z.string().optional().describe("restrict by path prefix, e.g. 'docs/mercs2-pdb-analysis'"),
   },
 }, async ({ query, k, sources, path_prefix }) => {
-  try { return json(await search({ query, k, sources, pathPrefix: path_prefix })); } catch (e) { return err(e); }
+  try {
+    const results = await search({ query, k, sources, pathPrefix: path_prefix });
+    // Carry index freshness with every answer. A stale corpus returns yesterday's knowledge with
+    // full confidence, which is indistinguishable from a correct answer at the moment it matters.
+    let index;
+    try {
+      const st = await status();
+      if (st.stale) index = { stale: true, changedSinceIngest: st.changedSinceIngest, hint: st.hint };
+    } catch { /* freshness is advisory - never fail a search over it */ }
+    return json(index ? { index, results } : { results });
+  } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_status', {
+  title: 'Index freshness',
+  description:
+    'Is the corpus index up to date? Per source: indexed chunk count, newest indexed date, and how many files on ' +
+    'disk have changed since the last ingest (with examples). Use when a search result looks older than something ' +
+    'you know was just written - a silently stale index is why freshly-recorded knowledge appears to not exist.',
+  inputSchema: {
+    force: z.boolean().default(false).describe('bypass the 30s freshness cache'),
+  },
+}, async ({ force }) => {
+  try { return json(await status({ force })); } catch (e) { return err(e); }
 });
 
 server.registerTool('corpus_xref', {

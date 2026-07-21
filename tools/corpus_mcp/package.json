@@ -7,7 +7,9 @@
   "scripts": {
     "ingest": "node src/ingest.js",
     "query": "node src/query.js",
-    "server": "node src/server.js"
+    "server": "node src/server.js",
+    "test": "node --test",
+    "test:unit": "node --test test/env.test.js test/chunk.test.js test/db.test.js test/config.test.js test/sources.test.js test/sources_empty.test.js"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.5.0",
