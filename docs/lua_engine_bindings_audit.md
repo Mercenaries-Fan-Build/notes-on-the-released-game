@@ -1,7 +1,78 @@
+---
+status: superseded
+evidence: inferred
+verified_on: 2026-07-21
+witness: "Mechanically re-checked 227 binding rows from §3 against a full offline walk of the luaL_Reg tables in game-files/Mercenaries2 (1).exe (53,482,288 B). 194/227 names exist in some table; 33 exist in NO table. Only 130/227 (57%) also had the correct namespace. Namespace truth taken from the engine's own {name, luaL_Reg*} registry at VA 0x00DFD478 (31 rows). 5 of 5 checked namespaces (Save, Localization, Boundary, NetClient, Lobby) do not exist. Function-VA claims: 24 of 30 exact matches, 4 off-by-one-row, 2 correct-but-duplicated. Call-site counts from the 370 decompiled scripts in docs/mercs2-luacd/."
+superseded_by: [docs/lua_engine_bindings_audit_deep_dive.md]
+---
+
 # Lua Engine Bindings Audit — Mercenaries 2: World in Flames (PC)
 
 > **Date:** 2026-05-19
 > **Status:** Complete. Comprehensive inventory from all available evidence sources.
+
+> # ⚠ CORRECTION (2026-07-21) — READ BEFORE USING THIS DOCUMENT
+>
+> This audit's **function names are mostly real**, but its **namespace attribution is
+> unreliable and its "Namespace Inventory" (§2) is wrong**. The labels `CERTAIN` and
+> `CONFIRMED` throughout §3 were assigned from string-offset proximity, not from
+> resolving the `luaL_Reg` row — so a name that exists *somewhere* in `.rdata` was
+> graded the same as one whose table row was actually read.
+>
+> **Measured pass rate: of 227 rows sampled across §3, 194 name a binding that really
+> exists, but only 130 (57%) also put it in the right namespace. 33 name nothing at all.**
+>
+> ## The five namespaces in §2 that do not exist
+>
+> `Save`, `Localization`, `Boundary`, `NetClient`, and `Lobby` are **not Lua
+> namespaces**. There is no `luaL_Reg` table for any of them, and across the 370
+> decompiled scripts in `docs/mercs2-luacd/` there are **zero** `Save.*`,
+> `Localization.*`, `Boundary.*`, `NetClient.*` or `Lobby.*` call sites. §2 built them
+> out of clusters of related **strings** in `.rdata`; the `0x007B8AC4 area` /
+> `0x007D1D00 area` / `0x007BA118 area` addresses in that column are string-literal
+> addresses, not table bases. Their functions are real but live elsewhere:
+>
+> | §2 claims | Reality |
+> |---|---|
+> | `Boundary` namespace, table `0x00799078` | No such namespace. `AddBoundary`…`IsInWarningZone` are in **`Player`** (`0x00B98FC0`); `GetBoundaryRadius`, `IsPointInBoundary`, `GetWarningRadius`, `GetTetherDiameter*` are in **`Pg`** (`0x00B99328`); `SetBoundaryEffect` is in **`Graphics`**. `0x00799078` is *inside* the Player array, ~entry 23 — not a base. |
+> | `Save` namespace, `0x007B8AC4 area` | No such namespace. `SetLuaSaveVersion`, `RequestAutosave`, `IsAutosaveEnabled`, `SetAutosaveEnabled`, `ForceNextAutosave` are in **`Sys`**; `SaveGame`/`LoadGame` are in **`Pg`**. `SaveData`, `LoadSingleton`, `SaveSingleton`, `ResetSingleton`, `InitialSaveData`, `ClientRestorePreSaveCash`, `ClientReimburseForSave` are **in no table at all**. |
+> | `Localization` namespace, `0x007BA118 area` | No such namespace. `AddStringDb`, `ClearStringDb`, `GetLanguage` are in **`Sys`**; `GetLocalizedName` is in **`Object`**; `GetLanguageName`/`GetLanguageNum` are in **`Gui`**. |
+> | `NetClient` namespace, `0x007D1D00 area` | No such namespace and **none of the 10 listed names is in any table**. The replication entry points are the 44 **`Net.SendEvent_*`** rows inside `Net` (`0x00B998D0`) — e.g. `Net.SendEvent_AddMarkerObjective`, 14 call sites. |
+> | `Lobby` namespace, `0x007BBCF8 area` | No such namespace; `LobbyServerAdded/Updated/Removed` are **in no table**. They are event-name strings. |
+> | `Music` namespace | Not a namespace — the dynamic-music functions are rows inside **`Sound`** (`0x00B98C98`). |
+> | `Atmosphere` namespace | Not top-level — it is a **sub-table of `Graphics`**. See the §3.7 correction. |
+> | `DLC/Online` namespace, `0x007D9588 area` | Not a namespace. `IsDLC`, `DlcMapId`, `addLeaderboardEntry`, `removeLeaderboardEntries` have **no `luaL_Reg` row** — strings only. |
+>
+> ## Namespaces §2 misses entirely
+>
+> §2 lists 24 namespaces. There are **31**, and the biggest omissions matter a lot:
+> **`Pg`** (80 bindings, **1,448 call sites** — the single most-used game namespace),
+> **`_GuiInternal`** (114 bindings, 266 sites), **`Net`** (92 — §2 says "12+"),
+> **`Object`** (87 — §2 says "15+"), **`Player`** (107 — §2 says "12+"),
+> **`Vehicle`** (40, 276 sites), **`Human`** (30), **`Junk`** (24),
+> **`math`** (17), **`Camera`** (14), **`Airstrike`** (12), **`ObjectState`** (9),
+> **`Animation`** (6), **`Report`** (5), **`Movie`** (4), **`Table`** (2),
+> **`String`** (1), **`Disguise`** (1), **`FactionZone`** (1), **`ObjectFilter`** (16).
+>
+> ## Where the truth lives
+>
+> The engine keeps a static registry of `{const char* name, luaL_Reg* table}` at VA
+> **`0x00DFD478`** — 31 rows, 12-byte stride, terminated by a zero row at
+> `0x00DFD5EC`. It is the authoritative namespace→table map; nothing becomes a Lua
+> namespace without a row there. Totals: **31 namespaces, 1,081 registered bindings,
+> 61 of them no-op stubs**. The corrected per-namespace table is in
+> [`lua_engine_bindings_audit_deep_dive.md`](lua_engine_bindings_audit_deep_dive.md),
+> which supersedes this document for inventory purposes.
+>
+> ## 61 registered bindings are no-ops
+>
+> A `CONFIRMED` row here means at most "the name is registered". It does **not** mean
+> the function does anything. **61 of the 1,081** rows point at the shared stub
+> `0x006D5640` = `xor eax,eax; ret` (see `docs/lua_capi_comprehensive_audit.md`).
+> All 6 of `Debug` is stubbed — including `Debug.Printf`, which this doc's §4.2 ranks
+> as a hook target and which the scripts call **1,612 times** into a no-op. Also
+> stubbed: 18 of 66 `Ai`, 15 of 24 `Junk`, 9 of 88 `Sound`, 3 of 75 `Graphics`.
+> Individually noted below where this doc marks them CONFIRMED.
 > **Evidence sources:**
 > - `MERCENAR.EXE` (cracked, 53,482,288 bytes) — `.rdata` string analysis
 > - `docs/exe_analysis_agent_a.md` — Full EXE reverse-engineering
@@ -44,6 +115,16 @@
 | Binding mechanism | `luaL_register` with `{name, func}` pairs in `.rdata` | CERTAIN |
 | Registration tables location | VA `0x00798770`–`0x00799200` | CERTAIN |
 | Estimated total bindings | 800–1300+ functions across ~30 namespaces | CERTAIN (range) |
+
+> **CORRECTION (2026-07-21)** — the "Registration tables location" row is wrong twice over.
+> **(a)** Those are **file offsets, not VAs**. `.rdata` maps at VA `0x00B05000` from raw
+> `0x00705000`, so `VA = file_offset + 0x400000`; the tables begin at VA **`0x00B98770`**.
+> **(b)** The range is **incomplete** — game tables run to file `0x0079A9A8` (VA
+> `0x00B9A9A8`). Stopping at `0x00799200` truncates the **`Player`** table mid-array and
+> misses `Pg`, `Object`, `Net`, `Gui`, `_GuiInternal`, `Graphics`, `Ai`, `Camera`,
+> `LTILibName`, `Human`, `Junk` and more — roughly two-thirds of the API.
+> The "800–1300+ / ~30 namespaces" estimate, by contrast, **holds**: the measured
+> figure is **1,081 bindings across 31 namespaces**.
 | Pool: ObjectScript | 2,048 slots | CERTAIN |
 | GC threshold | 256 (embedded config) | CERTAIN |
 
@@ -87,6 +168,17 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | **Precache/LTI** | 3+ | CONFIRMED | At `0x007B6A0C` area |
 | **DLC/Online** | 4+ | CERTAIN | At `0x007D9588` area |
 | **Lobby** | 6+ | CERTAIN | At `0x007BBCF8` area |
+
+> **CORRECTION (2026-07-21) — this whole table is RETRACTED.** Not one
+> "Registration Table VA" in the right-hand column is a table base except `Event` @
+> `0x007987F8` (file) = VA `0x00B987F8`. `Sys` is **not** near `0x007987F8` (that is
+> `Event`); it is at VA `0x00B98A78` with **64** entries. `Net` and `Boundary` are
+> **not** at `0x00799078` (that address is interior to the `Player` array); `Net` is
+> at VA `0x00B998D0` with **92** entries. The remaining "`0x007Bxxxx` area" /
+> "`0x007Dxxxx` area" values are addresses of **string literals**, not tables.
+> Replace this table with the registry-derived inventory in
+> [`lua_engine_bindings_audit_deep_dive.md`](lua_engine_bindings_audit_deep_dive.md) §1.4.
+> The one solidly correct claim here is **`Sound` = 88**, which matches exactly.
 
 ---
 
@@ -134,6 +226,33 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | `SetStreamBlockDumping` | `0x007B9C04` | CERTAIN | Debug: dump block loading |
 | `DlcMapId` | `0x007D9588` | CERTAIN | Which DLC map is active |
 
+> **CORRECTION (2026-07-21) — 12 of these 24 rows are NOT in `Sys`.**
+> Verified against the `Sys` table at VA `0x00B98A78` (64 entries). Scripts call
+> `Sys.*` 178 times and `Pg.*` **1,448** times; the asset/layer API this doc puts under
+> `Sys` is the single most-used part of the engine API and it is **`Pg`**:
+>
+> | Row | Claimed | **Actual namespace / table** | Fn VA |
+> |---|---|---|---|
+> | `LoadAsset` | Sys | **`Pg`** `0x00B99328` | `0x005D54C0` |
+> | `UnloadAsset` | Sys | **`Pg`** | `0x005D5500` |
+> | `ReloadAsset` | Sys | **`Pg`** | `0x005D5540` |
+> | `AssetExists` | Sys | **`Pg`** | `0x005D53E0` |
+> | `LoadLayer` | Sys | **`Pg`** | `0x005D4C80` (`Sys.LoadLayer` = 0 call sites) |
+> | `UnloadLayer` | Sys | **`Pg`** | `0x005D4E40` |
+> | `ReloadLayer` | Sys | **`Pg`** | `0x005D4F90` |
+> | `IsStaticLayer` | Sys | **`Pg`** | `0x005D4BF0` |
+> | `IsOnlineConnected` | Sys | **`Net`** `0x00B998D0` | `0x005CAD10` |
+> | `ChangeShellState` | Sys | **`LTILibName`** `0x00B99C78` | `0x005C3740` |
+> | `SetStreamBlockDumping` | Sys | **`Sound`** `0x00B98C98` | `0x005E3010` |
+> | `LoadScript` | Sys | **`Junk`** `0x00B99E28` | **`0x006D5640` = no-op stub**, 0 call sites |
+>
+> `IsDLC` and `DlcMapId` are **not bindings at all** — no `luaL_Reg` row anywhere
+> (strings only). Confirmed correct and in `Sys`: `IsDemoMode` (`0x005E5670`),
+> `GetPlatform`, `GetLanguage` (`0x005E6420`), `SetMasterScriptName` (`0x005E5120`),
+> `GetMasterScriptName` (`0x005E5050`), `SetTimeScale` (`0x005E4E70`),
+> `RequestGameState` (`0x005E4AF0`), `SetAssetRequestMax`, `GetCharacterTemplate`,
+> `IsLoadingOrStreaming` (`0x005E4D40`).
+
 ### 3.2 Network / Online (`Net.*`)
 
 | Function | String Offset | Evidence | Notes |
@@ -177,6 +296,21 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | `LobbyServerAdded` | `0x007BBCF8` | CERTAIN |
 | `LobbyServerUpdated` | `0x007BBD48` | CERTAIN |
 | `LobbyServerRemoved` | `0x007BBD5C` | CERTAIN |
+
+> **CORRECTION (2026-07-21)** — the `Net` rows above are essentially right (13/15 verified
+> in the `Net` table at VA `0x00B998D0`), with two exceptions: **`IsCoopMultiplayer` is in
+> `Player`**, not `Net` (`0x005DD830`), and **`IsMatchmakingLan` does not exist** in any
+> table. Confirmed `Net` fn VAs: `IsMultiplayer` `0x005C66C0`, `IsServer` `0x005C6810`
+> (210 call sites), `IsClient` `0x005C67D0`, `IsLobby` `0x005C6790`,
+> `IsMatchmakingInternet` `0x005CACC0`, `ConnectToServer` `0x005C6AA0`,
+> `StartServer` `0x005C6C40`, `EnterLobby` `0x005C69E0`, `QuitGame` `0x005C6D90`.
+>
+> **The `NetClient*` and `Lobby` sub-tables above are RETRACTED IN FULL.** All 13 names
+> are absent from every `luaL_Reg` table and have zero call sites; the `0x007D1D20` /
+> `0x007BBCF8` offsets are string literals. The real network-replication surface is the
+> **44 `Net.SendEvent_*` bindings inside the `Net` table** (Appendix A lists their names
+> correctly; it is only wrong that they are "NOT directly callable from Lua" — scripts
+> call e.g. `Net.SendEvent_AddMarkerObjective(...)` 14 times).
 
 ### 3.3 Entity / Object (`Object.*`)
 
@@ -246,6 +380,22 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | `_MarkerPulse` | CERTAIN | Start pulse animation |
 | `_MarkerHaltPulse` | CERTAIN | Stop pulse |
 
+> **CORRECTION (2026-07-21) — `Gui` is two namespaces, and the widget API is in the other one.**
+> The engine registers **`Gui`** (VA `0x00B9A398`, 38 entries) *and* **`_GuiInternal`**
+> (VA `0x00B99FF8`, 114 entries) as separate globals. All 9 widget/Flash rows above are
+> in **`_GuiInternal`**, not `Gui`: `CreateFlashWidget` `0x005BA680`, `PlayFlash`
+> `0x005BAAB0`, `CallFlashScriptFunction` `0x005BB170`, `CreateTextWidget` `0x005B7D40`,
+> `CreateImageWidget` `0x005B7070`, `SetWidgetVisible` `0x005B5850`, `MinimapCreate`
+> `0x005B8CB0`, `SetFlashSwfFile` `0x005BA720`, `SetFlashCallback` `0x005BAF90`.
+> Scripts call `_GuiInternal.*` **266** times vs `Gui.*` 59 times — a mod hooking
+> `Gui.CreateFlashWidget` would hook nothing.
+>
+> The 13 `_Marker*` rows **are** correctly in `Gui` (`_MarkerAdd` `0x005B3300`,
+> `_MarkerAdd3D` `0x005B3AE0`, `_MarkerRemove` `0x005B4110`, …), and the `Marker`
+> Lua-side alias is real: scripts call `Marker.*` 51 times (`Marker.AddBlip` ×11) while
+> `Gui._MarkerAdd` is never called directly. **`AddObjective` is a no-op stub**
+> (`0x006D5640`, 0 call sites) — HUD objectives go through `Net.SendEvent_AddObjective`.
+
 ### 3.6 AI / Behavior (`Ai.*`)
 
 | Function | Evidence | Notes |
@@ -271,6 +421,21 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | `SetAmbientColor` | CONFIRMED | Ambient color |
 | `SetRainDensity` | CONFIRMED | Weather |
 
+> **CORRECTION (2026-07-21) — `Atmosphere` is NOT a top-level namespace.**
+> It is a marker-delimited **sub-table of `Graphics`** (the rows `{"Atmosphere",
+> 0xFFFFFFFF}` … `{"Atmosphere", 0xFFFFFFFE}` inside the `Graphics` array at VA
+> `0x00B9A4D0`). The Lua-visible names are **`Graphics.Atmosphere.*`**. Across the 370
+> decompiled scripts there are **0** occurrences of a top-level `Atmosphere.` and 15+ of
+> `Graphics.Atmosphere.` — e.g. `Graphics.Atmosphere.SetValue("fAtmosphereForce", 0)`,
+> `Graphics.Atmosphere.SetColorValue("uiAmbientColor", 128,128,128,255)`.
+>
+> Of the 6 functions listed: `SetTime` `0x005B1750`, `SetTimeSpeed` `0x005B17C0`,
+> `SetLightIntensity` `0x005B1830`, `SetAmbientColor` `0x005B19E0`, `SetRainDensity`
+> `0x005B2660` all exist under `Graphics.Atmosphere`. **`SetSky` is a no-op stub**
+> (`0x006D5640`). The sub-table actually has **37** entries — the workhorses are the
+> string-keyed generic setters `SetValue` / `SetColorValue` / `SetIntValue` and their
+> getters, which this doc omits entirely.
+
 ### 3.8 Graphics (`Graphics.*`)
 
 | Function | Evidence | Notes |
@@ -282,6 +447,24 @@ NUL-terminated ASCII names in `.rdata`; the function pointers point into `.text`
 | `Bloom` | CONFIRMED | Post-process bloom |
 | `MotionBlur` | CONFIRMED | Motion blur toggle |
 | `Monochrome` | CONFIRMED | Grayscale effect |
+
+> **CORRECTION (2026-07-21) — `Bloom`, `MotionBlur` and `Monochrome` are not functions.**
+> They are **sub-table marker rows**: their `func` slot holds the sentinels
+> `0xFFFFFFFF` (open) / `0xFFFFFFFE` (close), not a `.text` address. Calling
+> `Graphics.Bloom()` is not a thing; they are tables. Real usage:
+> `Graphics.Bloom.SetMultiplier`, `Graphics.Bloom.SetThreshold`,
+> `Graphics.Bloom.SetBlurRadius`, `Graphics.MotionBlur.SetVelocityMultiplier`,
+> `Graphics.Monochrome.SetGradient`.
+>
+> True shape of `Graphics` (VA `0x00B9A4D0`): 95 physical rows = **75 functions +
+> 20 marker rows**, comprising 11 top-level functions (`ScreenShot` `0x005B0060`,
+> `ReloadShaders` `0x005B03A0`, `SetGamma` `0x005B03B0`, `SetBoundaryEffect`
+> `0x005B2B20`, `SetNumFrameSync`, `Set/GetScreenRatio`, `Set/GetShadowBaseDistance`,
+> `InitTinyGeometry`, `ShowTinyGeometryObject`) plus 10 sub-tables:
+> `Camera`(7), `Atmosphere`(37), `Bloom`(7), `MotionBlur`(1), `Contrast`(2),
+> `Monochrome`(1), `Grainy`(1), `AA`(1), `Effect`(4), `FuelTrail`(3).
+> Note `Graphics.Camera` is distinct from the separate top-level `Camera` namespace
+> (VA `0x00B9A7D8`, 14 fns, 26 call sites).
 
 ### 3.9 Audio (`Sound.*`)
 
@@ -328,6 +511,18 @@ The Sound module has **88 registered functions** per Agent B's analysis. Key fun
 | `SetSourceExitMusic` | CONFIRMED | Exit region cue |
 | `ActivateFactionRegionMusic` | CONFIRMED | Region-faction cue |
 | `SetHijackMusic` | CONFIRMED | Override music |
+
+> **CORRECTION (2026-07-21)** — `Sound` is one of the best sections in this document.
+> The namespace is real (VA `0x00B98C98`), the **88** count is exact, and 6 of 7 VA
+> claims verify: `LoadSoundBank` `0x005E2630` ✓, `CueSound` `0x005E0FF0` ✓ (91 call
+> sites), `StopSound` `0x005E10F0` ✓, `PauseSound` `0x005E11F0` ✓, `SetCategoryVolume`
+> `0x005E12F0` ✓, `SetDynamicMusic` `0x005E16E0` ✓, `TransitionMusic` `0x005E1600` ✓.
+> One miss: **`LoadWaveBank` is `0x005E26B0`, not `0x005E26D0`**. `OpenStreamFile`
+> `0x005E4020` and `CloseStreamFile` `0x005E40D0` are in `Sound` as claimed (the
+> `0x007B9A10`/`0x007B9A00` values are string addresses). **"Music" is not a separate
+> namespace** — the dynamic-music functions are rows inside `Sound`
+> (e.g. `Sound.AddMusicTransition` `0x005E2110`, 66 call sites). 9 of the 88 `Sound`
+> rows are no-op stubs.
 
 ### 3.10 Voice-Over (`VO.*`)
 
@@ -403,6 +598,31 @@ The Sound module has **88 registered functions** per Agent B's analysis. Key fun
 | `GetTetherDiameterEnd` | `0x007B8AF0` | (registered) | CERTAIN |
 | `SetBoundaryEffect` | `0x007B55DC` | (registered) | CERTAIN |
 
+> **CORRECTION (2026-07-21)** — there is **no `Boundary` namespace** (0 call sites). These
+> 19 functions are split across three real namespaces, and **4 of the 10 "C++ VA" claims
+> are off by one table row** — a classic symptom of anchoring on a string address and
+> stepping the wrong way:
+>
+> | Function | Real namespace | Claimed VA | **Actual `luaL_Reg` func VA** |
+> |---|---|---|---|
+> | `SetBoundaryCallback` | `Player` | `0x005DCE90` | **`0x005DCD60`** |
+> | `IsPositionOutBoundary` | `Player` | `0x005DD040` | **`0x005DCE90`** ← the VA wrongly given to `SetBoundaryCallback` |
+> | `IsBoundaryDeath` | `Player` | `0x005DD040` | `0x005DD040` ✓ |
+> | `GetAllBoundaryGuid` | `Player` | `0x005DCC60` | **`0x005DCC20`** |
+>
+> (The doc assigning `0x005DD040` to *both* `IsPositionOutBoundary` and
+> `IsBoundaryDeath` was the tell — they are distinct functions.)
+>
+> Verified correct, all in **`Player`** (VA `0x00B98FC0`): `AddBoundary` `0x005DC900`,
+> `RemoveBoundary` `0x005DCA30`, `RemoveAllBoundary` `0x005DCB30`, `SetOutBoundary`
+> `0x005DC160`, `GetOutBoundary` `0x005DC720`, `IsInWarningZone` `0x005DC810`.
+> In **`Pg`** (VA `0x00B99328`), not Player: `GetBoundaryRadius` `0x005D7920`,
+> `SetBoundaryRadius` `0x005D78B0`, `IsPointInBoundary` `0x005D6D60`,
+> `GetLineRegionPoints` `0x005D7160`, `GetWarningRadius` `0x005D79E0`,
+> `SetWarningRadius` `0x005D7970`, `GetTetherDiameterStart` `0x005D7A30`,
+> `GetTetherDiameterEnd` `0x005D7A80`. In **`Graphics`**: `SetBoundaryEffect`
+> `0x005B2B20`.
+
 ### 3.15 Save / Load
 
 | Function | Offset | Evidence | Notes |
@@ -427,6 +647,16 @@ The Sound module has **88 registered functions** per Agent B's analysis. Key fun
 | `clearSaveGames` | `0x007BC6C4` | CERTAIN | Clear all |
 | `saveProfile` | `0x007BC628` | CERTAIN | Save profile |
 
+> **CORRECTION (2026-07-21)** — no `Save` namespace. The 5 autosave/version functions are
+> in **`Sys`** and their VAs are all correct (`SetLuaSaveVersion` `0x005E6120`,
+> `RequestAutosave` `0x005E61F0`, `IsAutosaveEnabled` `0x005E65E0`, `SetAutosaveEnabled`
+> `0x005E6610`, `ForceNextAutosave` `0x005E6670`). `SaveGame` `0x005D7CB0` and `LoadGame`
+> `0x005D7D30` are in **`Pg`**. **Seven rows name nothing at all** — `SaveData`,
+> `LoadSingleton`, `SaveSingleton`, `ResetSingleton`, `InitialSaveData`,
+> `ClientRestorePreSaveCash`, `ClientReimburseForSave` are absent from every `luaL_Reg`
+> table; the four lowercase `saveGameSlot` / `addSaveGame` / `clearSaveGames` /
+> `saveProfile` are likewise string-only (Scaleform/shell identifiers, not bindings).
+
 ### 3.16 Localization
 
 | Function | Offset/VA | Evidence |
@@ -437,6 +667,12 @@ The Sound module has **88 registered functions** per Agent B's analysis. Key fun
 | `GetLanguage` | (registered) → VA `0x005E6420` | CERTAIN |
 | `GetLanguageName` | `0x007B5750` | CERTAIN |
 | `GetLanguageNum` | `0x007B5740` | CERTAIN |
+
+> **CORRECTION (2026-07-21)** — no `Localization` namespace (0 call sites). All six exist,
+> spread across three namespaces: **`Sys`** — `AddStringDb` `0x005E6180` ✓,
+> `ClearStringDb` `0x005E61E0` ✓, `GetLanguage` `0x005E6420` ✓ (the three VA claims here
+> are exactly right); **`Object`** — `GetLocalizedName` `0x005CC250`; **`Gui`** —
+> `GetLanguageName` `0x005B4BC0`, `GetLanguageNum` `0x005B4B80`.
 
 ### 3.17 Debug / Development
 
@@ -450,6 +686,15 @@ The Sound module has **88 registered functions** per Agent B's analysis. Key fun
 | `DebugStateMachine` | CONFIRMED | SM debug |
 | `PrintStateMachine` | CONFIRMED | SM dump |
 | `LTIGetPrecacheBypass` | `0x007BA384` | CERTAIN |
+
+> **CORRECTION (2026-07-21) — the entire `Debug` namespace is stubbed.**
+> `Debug` is real (VA `0x00B98828`) and has exactly the **6** entries listed, but
+> **all 6 point at `0x006D5640` = `xor eax,eax; ret`**. `Debug.Printf` is called
+> **1,612 times** by the shipped scripts and does nothing — this is why `pmc_bb`
+> MinHooks the stub itself to recover the log stream (see
+> `memory/pmc-bb-native-lua-logging.md`). `DebugStateMachine` and `PrintStateMachine`
+> are **not** in `Debug` — they are in **`ObjectState`** (VA `0x00B995B0`), and also
+> stubbed. `LTIGetPrecacheBypass` is in **`Sys`** (`0x005E4F70`) and is *not* a stub.
 
 ### 3.18 DLC / Online Subsystem
 
@@ -502,6 +747,30 @@ demonstrates this with three live hooks.
 | `Gui.CreateFlashWidget` | UI | On-demand | HIGH — custom HUD | Hard |
 | `Gui.CallFlashScriptFunction` | UI | Frequent | HIGH — UI interception | Hard |
 | `Net.ConnectToServer` | Network | On-demand | MEDIUM — server redirect | Medium |
+
+> **CORRECTION (2026-07-21) — 6 of these 13 hook targets are wrong or useless.**
+> This table is the most actionable part of the document, so the errors are the most
+> costly. Corrected targets:
+>
+> | Listed target | Problem | **Use instead** |
+> |---|---|---|
+> | `Atmosphere.SetTime` | No such global. | **`Graphics.Atmosphere.SetTime`** `0x005B1750`; for a daylight mod the real lever is `Graphics.Atmosphere.SetValue`/`SetColorValue` (string-keyed), `0x005B1200` / `0x005B1430`. |
+> | `Sys.LoadLayer` / `UnloadLayer` | Wrong namespace. | **`Pg.LoadLayer`** `0x005D4C80` / **`Pg.UnloadLayer`** `0x005D4E40`. |
+> | `Gui.CreateFlashWidget` | Wrong namespace. | **`_GuiInternal.CreateFlashWidget`** `0x005BA680`. |
+> | `Gui.CallFlashScriptFunction` | Wrong namespace. | **`_GuiInternal.CallFlashScriptFunction`** `0x005BB170`. |
+> | `Ai.Plan` / `Ai.PlanSetGoal` | Both are **no-op stubs** (`0x006D5640`), 0 call sites. | For AI behaviour hook **`Ai.Goal`** `0x005A70B0` (120 call sites) or `Ai.Squad` `0x005A7580`. |
+> | `Event.Post` | Real (`0x005F6A90`) but only 3 call sites. | **`Event.Create`** `0x005F69F0` (557 sites) / **`Event.Delete`** `0x005F6A10` (513 sites) carry the traffic. |
+>
+> Verified-good as listed: `Player.GetCash` `0x005DF440` / `SetCash` `0x005DF480`,
+> `Object.GetHealth` `0x005CBDB0` / `SetHealth` `0x005CBEE0`, `Sys.SetTimeScale`
+> `0x005E4E70`, `Sys.SetMasterScriptName` `0x005E5120`, `Net.ConnectToServer`
+> `0x005C6AA0`, `Sound.SetMasterVolume`.
+>
+> Also note §4.1's claim that the `.rdata` func-pointer swap "works for **every**
+> function listed above" is **false in practice on the retail PC build**: the EXE is
+> SecuROM-protected and writing a `luaL_Reg` `.func` slot trips anti-tamper and crashes
+> early init. `.text` MinHook detours are tolerated; `.rdata` pointer swaps are not.
+> See `memory/pmc-bb-native-lua-logging.md` (confirmed live, 2026-06-08).
 
 ### 4.3 Per-Namespace Hookability Summary
 
@@ -557,6 +826,28 @@ These are inferred from:
 
 **Functions with INFERRED evidence:** ~20
 
+> **CORRECTION (2026-07-21) — the CERTAIN/CONFIRMED grades do not mean what §5 says.**
+> §5 defines CERTAIN as including "verbatim string presence in the EXE `.rdata` section
+> with exact file offsets". **String presence is not evidence of a binding.** `IsDLC`,
+> `DlcMapId`, `LobbyServerAdded`, all 8 `NetClient*` names, and 7 `Save` names are
+> present as strings and are **not bound to anything** — the deep-dive companion makes
+> the same point at its §2.3. A row is only confirmed once the `{name_ptr, func_ptr}`
+> pair has been read and `func_ptr` resolved into `.text`.
+>
+> Measured over a 227-row sample of §3: **194 names exist in some `luaL_Reg` table
+> (85%), 33 exist in none (15%), and only 130 (57%) also carry the correct namespace.**
+> Of 30 rows that gave an explicit C++ function VA, 24 matched exactly, 4 were off by
+> one table row, and 2 duplicated one VA across two functions.
+>
+> **Sections that verified clean** (namespace and membership both correct):
+> §3.3 `Object` (16/16, VA `0x00B99608`, 87 entries), §3.4 `Player` (12/13 — only
+> `SpawnPlayer` is really `Pg`), §3.6 `Ai` (9/9, VA `0x00B9A938` — but `Plan` and
+> `PlanSetGoal` are stubs), §3.11 `Weapon` (6/6, VA `0x00B98860`), §3.12 `Event`
+> (4/4 with **all four VAs exact**: `0x005F69F0`/`0x005F6A00`/`0x005F6A10`/`0x005F6A90`;
+> the `push 0` / `push 1` → `call 0x005F6660` disassembly claim reproduces byte-for-byte
+> at `0x005F69F6`), §3.10 `VO` (11/11, VA `0x00B988B0`, all 5 VAs exact), and
+> Appendix C's `_SYS` bootstrap set (6/6, VA `0x00B9A854`).
+
 ### NOT FOUND — Expected but unconfirmed
 
 | Expected Function | Why Expected | Status |
@@ -565,6 +856,12 @@ These are inferred from:
 | `GetVelocity` / `SetVelocity` | Vehicles have physics | String not yet located |
 | Vehicle-specific namespace | Vehicles are major gameplay feature | May be in Object.* instead |
 | `Faction.SetValue` / `Faction.GetValue` | Faction reputation system | NetClient version exists |
+
+> **CORRECTION (2026-07-21)** — three of these four resolve:
+> - **`GetVelocity` EXISTS** — `Object.GetVelocity` `0x005CC700`, 5 call sites. (`SetVelocity` genuinely does not exist.)
+> - **"Vehicle-specific namespace"** — **`Vehicle` is a real namespace**, VA `0x00B98918`, **40 bindings**, 276 call sites (`Vehicle.GetDriver` `0x005E7030` ×112). It is not folded into `Object.*`. This doc omits it entirely.
+> - **`Faction.*`** — there is no `Faction` namespace, but **`FactionZone`** (VA `0x00B98FA4`, 1 entry) and **`Report`** (VA `0x00B98F64`, 5 entries, 8 call sites) exist; the reputation surface reached from Lua is `Net.SendEvent_*` plus `Report.*`.
+> - `SpawnObject` / `CreateObject` — correctly NOT FOUND; spawning is **`Pg.Spawn`** `0x005D5D20` (103 call sites).
 
 ---
 
@@ -843,6 +1140,17 @@ These scripts are `import()`-able modules available in the game's WAD:
 - **~100+ additional functions** have CONFIRMED evidence (named in multiple RE reports)
 - **All functions** use the same `luaL_Reg` registration mechanism and can be hooked identically
 
+> **CORRECTION (2026-07-21)** — the third bullet is false twice. **(a)** Not all
+> functions are `luaL_Reg` rows: 33 of 227 sampled names here are strings with no
+> registration row. **(b)** They cannot "be hooked identically" — 61 registered
+> bindings point at a shared no-op stub (hooking their slot changes nothing about game
+> behaviour), and on the retail SecuROM build `.rdata` func-pointer swaps trip
+> anti-tamper. See the §4.2 correction.
+>
+> Replace the first two bullets with the measured figure: **1,081 registered bindings
+> across 31 namespaces, 714 of which have at least one call site in the 370 decompiled
+> scripts under `docs/mercs2-luacd/`.**
+
 ### What We Don't Know
 
 - The exact boundaries between namespace tables (which functions belong to which table)
@@ -853,6 +1161,14 @@ These scripts are `import()`-able modules available in the game's WAD:
 
 ### Next Steps
 
-1. **Full table dump**: Write a script that walks the `.rdata` section from `0x00798770` to `0x00799200`, reading all `{string_ptr, func_ptr}` pairs until `{NULL, NULL}` terminators, and producing a complete function list with namespace attribution
+1. ~~**Full table dump**: Write a script that walks the `.rdata` section from `0x00798770` to `0x00799200`, reading all `{string_ptr, func_ptr}` pairs until `{NULL, NULL}` terminators, and producing a complete function list with namespace attribution~~
+   **DONE (2026-07-21).** Result: **1,081 bindings / 31 namespaces / 61 no-op stubs**.
+   Two notes for whoever re-runs it: scan to file `0x0079A9A8`, not `0x00799200`; and
+   do **not** derive namespace attribution by guessing from the function names —
+   read the engine's registry of `{const char* name, luaL_Reg* table}` at VA
+   **`0x00DFD478`** (31 rows, 12-byte stride, zero row at `0x00DFD5EC`). Skip rows whose
+   `func` is `0xFFFFFFFF`/`0xFFFFFFFE` (sub-table open/close markers) and flag rows
+   pointing at `0x006D5640` as stubs. Corrected inventory:
+   [`lua_engine_bindings_audit_deep_dive.md`](lua_engine_bindings_audit_deep_dive.md).
 2. **Lua bytecode decompilation**: Decompile the 114 scripts in `scripts_vz` to recover full call-site evidence for every binding
 3. **Runtime enumeration**: Use `lua_enum.asi` — see [`lua_runtime_enumeration.md`](lua_runtime_enumeration.md) — to iterate `_G` via `lua_next()` and dump `scripts/lua_bindings_runtime.{txt,json}`

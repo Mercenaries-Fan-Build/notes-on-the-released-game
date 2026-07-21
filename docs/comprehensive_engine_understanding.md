@@ -1,9 +1,43 @@
+---
+status: current
+evidence: inferred
+verified_on: 2026-07-21
+witness: |
+  This is a broad synthesis doc; only its measurable core (§2 Binary Formats, the §3.4/§3.5 counts)
+  was re-checked against retail game-files/vz.wad this pass, with the throwaway probe
+  tools/wad_simulator/crates/mercs2_probe/src/bin/docaudit.rs:
+    docaudit -- ffcs    -> INDX 11,370 / DATA / CSUM 7,018 / ASET 30,645 / PTHS 11,370 CONFIRMED;
+                           35 distinct ASET type_ids CONFIRMED.
+    docaudit -- census  -> 55,429 UCFX entries (doc says 55,425), 35 type_hashes; ALL 18 named
+                           type counts in §2.3 match EXACTLY (texture 36,724 ... foliage 1).
+    docaudit -- part4   -> CSUM CRC-32(init=0,poly=0xEDB88320,no-final-XOR): 55,428/55,428 chunks
+                           verify, 0 bad. Algorithm PROVEN; the doc's "53,765 chunks/10,099 files"
+                           undercounts the real 55,428 chunks/11,370 blocks.
+    docaudit -- hash    -> script/model/texture/layer/animation type-hashes + ANY=0xED057225 CONFIRMED.
+    docaudit -- part6   -> scripts_vz 645 rows across 107 blocks CONFIRMED.
+    cdbsizes.ini        -> SceneObject 161,280 / HibernationControl 14,080 / Road 4,608 /
+                           TerrainObject 1,024 / AiPatrol 768 all CONFIRMED (§3.5).
+  §2.4 (ASET row layout) is WRONG and corrected inline — it repeats the "sub-entry offset" /
+  "dependency hash" reading that docs/aset_format.md RETRACTED on 2026-07-21. §3.4 placement counts
+  are stale and corrected inline. §1 (Mercs1/Saboteur lineage), §4 (DLC port status), §5 (toolkit),
+  §6 (sandbox plan) and §7 (next steps) are NOT verifiable from vz.wad and are UNTOUCHED — treat them
+  as project narrative, not measured fact. Hence evidence: inferred overall (proven only in §2).
+---
+
 # Comprehensive Engine Understanding — Mercenaries 2 Reverse Engineering Synthesis
 
-> **Date:** 2026-05-22
+> **Date:** 2026-05-22 · **Audited:** 2026-07-21
 > **Purpose:** Single source of truth synthesizing ALL research across the project.
 > **Scope:** Engine architecture, binary formats, asset pipeline, DLC integration,
 > reverse engineering toolkit, debug sandbox, and next steps.
+>
+> **AUDIT (2026-07-21).** Only §2 and the §3.4/§3.5 counts were re-measured against retail `vz.wad`
+> (see front-matter `witness`). §2's format facts hold up well — the 18 type-hash counts in §2.3 and
+> the five `cdbsizes.ini` figures in §3.5 reproduce **exactly**, and the CSUM algorithm verifies with
+> 0 failures across all 55,428 chunks. Two things are wrong and fixed inline: **§2.4 (ASET row
+> layout)** repeats a reading that `docs/aset_format.md` retracted the same day, and **§3.4** carries
+> stale placement counts. §§1, 4–7 are synthesis/plans not checkable from WAD data and were left as
+> written.
 
 ---
 
@@ -144,7 +178,12 @@ vz.wad (2.57 GB) — FFCS archive
 
 ### 2.3 The Type Hash System
 
-The `type_hash` field in decompressed block entry headers categorizes all 55,425 UCFX entries across 35 unique types. The ASET chunk's `type_id` (integer 0–35) maps 1:1 to these hashes.
+The `type_hash` field in decompressed block entry headers categorizes all ~~55,425~~ **55,429** UCFX entries across 35 unique types. The ASET chunk's `type_id` (integer 0–35) maps 1:1 to these hashes.
+
+*RE-VERIFIED 2026-07-21 (`docaudit -- census`): 55,429 entries (not 55,425 — a 4-entry undercount),
+35 distinct type_hashes, and the ASET side likewise has 35 distinct type_ids. **All 18 named counts
+in the table below reproduce exactly.** Note ASET `type_id` runs **0–35 with 35 values present**, not
+a dense 0..35 — id 2 is absent in retail `vz.wad`.*
 
 **18 of 35 resolved by name:**
 
@@ -173,14 +212,32 @@ The `type_hash` field in decompressed block entry headers categorizes all 55,425
 
 ### 2.4 ASET Row Layout (16 bytes, verified)
 
-| Offset | Field | Description |
-|--------|-------|-------------|
-| +0 | `asset_hash` | `pandemic_hash_m2(name)` — FNV-1a with `\|0x20` + `^0x2A * prime` |
-| +4 | `secondary_ref` | `0xFFFFFFFF` = single-block; otherwise streaming dependency hash |
-| +8 | `packed_block_ref` | High 16 bits = block index into INDX; low 16 = sub-entry offset |
-| +12 | `type_id` | Integer discriminator (0–35), maps to type_hash |
+**CORRECTION (2026-07-21) — the `+4` and `+8` descriptions below are the reading that
+`docs/aset_format.md` RETRACTED on 2026-07-21** (it had been marked "Verified: Yes" for two months
+and was wrong). `secondary_ref` does **not** hold a "streaming dependency hash", and
+`packed_block_ref` low16 is **not** a "sub-entry offset". Both u32s hold **block indices**; together
+they encode the asset's whole LOD chain as four packed 16-bit block references
+`[_P000 | _P001][_P002 | _P003]`, with `0xFFFF` as the per-slot sentinel.
 
-30,645 rows total in retail `vz.wad`. Block index verified by decompressing blocks and matching sub-entry name_hash values.
+| Offset | Field | ~~Old (wrong) description~~ → Correct description |
+|--------|-------|-------------|
+| +0 | `asset_hash` | `pandemic_hash_m2(name)` — FNV-1a with `\|0x20` + `^0x2A * prime` *(unchanged, correct)* |
+| +4 | `secondary_ref` | ~~`0xFFFFFFFF` = single-block; otherwise streaming dependency hash~~ → `[hi16 = _P002 block][lo16 = _P003 block]`; `0xFFFF` per half = "no such LOD" |
+| +8 | `packed_block_ref` | ~~High 16 = block index; low 16 = sub-entry offset~~ → `[hi16 = _P000 primary block][lo16 = _P001 block]` — **low16 is a finer-LOD block index, not an offset** |
+| +12 | `type_id` | Integer discriminator, maps to type_hash *(unchanged, correct)* |
+
+An asset is single-block only when **both** words are fully sentinel — use
+`AsetEntry::is_single_block()` (both `lo16 == 0xFFFF` **and** `secondary_ref == 0xFFFFFFFF`), never
+`is_primary()` alone.
+
+Measured 2026-07-21 (`docaudit -- ffcs`), which is what disproves the old reading: of 30,645 rows,
+`secondary_ref == 0xFFFFFFFF` in 22,196 and `packed_block_ref` lo16 `== 0xFFFF` in 19,847. Of the
+**10,798** rows whose lo16 is non-sentinel, **all 10,798** are valid INDX block indices (`< 11,370`) —
+a "sub-entry offset" would not be bounded by the block count, a sibling LOD block index is. See
+`docs/aset_format.md` and `AsetEntry::lod_chain` in `mercs2_formats::ffcs`.
+
+30,645 rows total in retail `vz.wad` *(confirmed)*. Block index (hi16 of +8) verified by decompressing
+blocks and matching entry `name_hash` values *(confirmed)*.
 
 ### 2.5 CSUM Integrity Algorithm
 
@@ -192,7 +249,15 @@ Final XOR:  0x00000000
 Input:      From UCFX tag start to byte before CSUM tag (inclusive)
 ```
 
-Verified against **53,765 chunks across 10,099 block files**. This is neither standard CRC-32 (init=0xFFFFFFFF) nor JAMCRC — it is a custom variant unique to this engine.
+Verified against ~~**53,765 chunks across 10,099 block files**~~. This is neither standard CRC-32 (init=0xFFFFFFFF) nor JAMCRC — it is a custom variant unique to this engine.
+
+**RE-VERIFIED 2026-07-21 — the algorithm is exactly right; the coverage numbers were low.** Recomputed
+the CSUM trailer of **every** UCFX container in **every** block of retail `vz.wad`
+(`docaudit -- part4`): **55,428 of 55,429** containers carry an 8-byte `CSUM` trailer and **all
+55,428 verify** with init=0 / poly=0xEDB88320 / no final XOR — **0 mismatches**. The real coverage is
+55,428 chunks across 11,370 blocks, not "53,765 / 10,099". *(Note: this custom "init=0" form is
+identically `~standard_crc32` — i.e. `(zlib.crc32(data) ^ 0xFFFFFFFF)` — because the standard
+init=0xFFFFFFFF and final-XOR cancel; it is a naming difference, not a different polynomial.)*
 
 ### 2.6 What The Saboteur Confirms
 
@@ -288,18 +353,29 @@ This is the mechanism our DLC port exploits: inject DLC blocks into `vz-patch.wa
 
 ### 3.4 The ECS and Placement System
 
-**62,458 static placements** in `layers_static` (7.97 MB composite container with 173 UCFX sub-blocks):
+~~**62,458 static placements**~~ **62,624 static placements** in `layers_static` (7.97 MB composite container with 173 UCFX sub-blocks):
 
 | Component | Records | Purpose |
 |-----------|---------|---------|
 | Transform | 62,624 | 42-byte records: entity_key + XYZ position + unit quaternion |
-| Name | 60,136 | Entity name strings with hex IDs |
-| LightObject | varies | Point light definitions (ECS merge) |
+| Name | ~~60,136~~ **62,143** | Entity name strings with hex IDs |
+| LightObject | 1,197 | Point light definitions (ECS merge) |
 | LowResTerrainObject | 400 | Tile→mesh hash mapping for 20×20 terrain grid |
-| HibernationControl | varies | LOD/streaming parameters |
-| + 43 other COMP types | 10,030 | Various ECS data |
+| HibernationControl | 2,625 | LOD/streaming parameters |
+| + other COMP types (43 distinct names total) | ~~10,030~~ **14,335** | Various ECS data |
 
-**~3,620 conditional placements** across 746 `vz_state` overlay files:
+*Corrected 2026-07-21 (`docaudit -- layers`): the header count 62,458 contradicted this doc's own
+62,624 Transform row; 62,624 is right. Name matches rose to 62,143 and ECS records to 14,335 under the
+Rust loader (`mercs2_formats::placement`). See `docs/placement_data_format.md` §2.10 for the full
+before/after table and the parser fixes behind it. "43" is the number of distinct COMP type-names, not
+a per-sub-block count.*
+
+~~**~3,620 conditional placements**~~ **37,867 conditional placements** across 746 `vz_state` overlay files:
+
+*Corrected 2026-07-21 (`docaudit -- vzstate`): the "~3,620" was ~10× low — an artefact of the
+retracted "flgs record" heuristic in `docs/placement_data_format.md` §3.3. vz_state placements are the
+same 42-byte `Transform` COMP records as layers_static; 744 of 746 blocks carry one, totalling
+37,867 records.*
 - Encode game state variants (pristine/ruined/destroyed/staging)
 - Applied as delta overlays controlled by Lua scripts at runtime
 - Faction-specific: chi, pir, gur, oil, all, pmc, vza
@@ -327,6 +403,14 @@ vz.wad (11,370 blocks)
 ```
 
 From `cdbsizes.ini`: **~161,280 total SceneObjects** preallocated, 14,080 hibernation slots, 4,608 road segments, 1,024 terrain objects, 768 AI patrols.
+
+*CONFIRMED 2026-07-21 against `docs/game_config/cdbsizes.ini`, all five exactly: `SceneObject 161280`,
+`HibernationControl 14080`, `Road 4608`, `TerrainObject 1024`, `AiPatrol 768`. The block-taxonomy
+list above also mostly reproduces (`docaudit -- census/part3`): c3 9,467 ✓, vz_state 746 ✓,
+layers_static 1×173 ✓, scripts_vz 1 block / 114 entries ✓, resident block 7,018 entries (the "~6,500"
+is low), low_res_terrain 401 entries (not 400 — one is unreferenced, see placement §2.9),
+effects block 360 entries of which 314 are effect-typed. "animgroups ~191 blocks" measured as 129
+paths containing "animgroup" — treat ~191 as loose.*
 
 ---
 

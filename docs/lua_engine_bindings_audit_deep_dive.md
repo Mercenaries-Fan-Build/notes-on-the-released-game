@@ -1,8 +1,55 @@
+---
+status: current
+evidence: proven
+verified_on: 2026-07-21
+witness: "Re-walked .rdata of game-files/Mercenaries2 (1).exe (53,482,288 B, sha256 958EB227…) offline: every {name_va, func_va} pair, run-grouped, {NULL,NULL}-terminated. All 26 game-table offsets and entry counts in §1.4 reproduced EXACTLY. Namespace attribution then settled — not inferred — from a static {const char* name, luaL_Reg* table} registry found at VA 0x00DFD478 (31 rows, 12-byte stride, NULL-terminated at 0x00DFD5EC): 31 namespaces / 1081 bindings / 61 no-op stubs. Cross-checked against 5 qualified call sites per namespace in the 370 decompiled scripts under docs/mercs2-luacd/."
+---
+
 # Lua Engine Bindings — Deep Dive (Open Questions)
 
 > **Date:** 2026-05-19  
 > **Status:** Answers grounded in cracked `Mercenaries2.exe` (53,482,288 bytes, image base `0x00400000`), `tools/dump_lua_bindings.py`, and `docs/lua_call_sites_from_scripts.md`.  
 > **Companion:** [`lua_engine_bindings_audit.md`](lua_engine_bindings_audit.md)
+
+> **VERIFICATION PASS (2026-07-21) — this document is substantially CORRECT.**
+>
+> An independent offline re-walk of `.rdata` reproduced every table offset and entry
+> count in §1.4 exactly, and confirmed this doc's central corrections to the audit
+> (the `0x799200` window is incomplete; `0x00799078` is inside **Player**; the
+> Graphics compound blob uses `0xFFFFFFFF`/`0xFFFFFFFE` marker rows; `IsDLC` has no
+> `luaL_Reg` row; `Object.GetVelocity` exists; the 44 `SendEvent_*` live in **Net**).
+>
+> Two things changed. **(1)** Namespace attribution no longer needs inference: the
+> engine keeps a static registry of `{const char* name, luaL_Reg* table}` at VA
+> **`0x00DFD478`** (31 rows, 12-byte stride, terminated by a zero row at
+> `0x00DFD5EC`). It names every table. The labels this doc marked *INFERRED* or
+> *UNKNOWN* are corrected against it below. **(2)** The nesting model in §3.2 is
+> off by one level — see the `Graphics.Atmosphere` correction.
+>
+> **Authoritative inventory: 31 namespaces, 1,081 registered game bindings, of which
+> 61 point at the shared no-op stub `0x006D5640` (`xor eax,eax; ret`).**
+>
+> | Namespace | Table VA | n | stubs | | Namespace | Table VA | n | stubs |
+> |---|---|--:|--:|---|---|---|--:|--:|
+> | `_SYS` | `0x00B9A854` | 6 | 0 | | `Net` | `0x00B998D0` | 92 | 2 |
+> | `Sys` | `0x00B98A78` | 64 | 1 | | `math` | `0x00B99BE8` | 17 | 0 |
+> | `Pg` | `0x00B99328` | 80 | 2 | | `Camera` | `0x00B9A7D8` | 14 | 0 |
+> | `Object` | `0x00B99608` | 87 | 0 | | `Junk` | `0x00B99E28` | 24 | 15 |
+> | `Player` | `0x00B98FC0` | 107 | 0 | | `ObjectState` | `0x00B995B0` | 9 | 2 |
+> | `Event` | `0x00B987F8` | 4 | 0 | | `Movie` | `0x00B99BBC` | 4 | 0 |
+> | `Ai` | `0x00B9A938` | 66 | 18 | | `Animation` | `0x00B9A88C` | 6 | 0 |
+> | `Human` | `0x00B99EF0` | 30 | 0 | | `VO` | `0x00B988B0` | 11 | 0 |
+> | `Debug` | `0x00B98828` | 6 | **6** | | `Weapon` | `0x00B98860` | 9 | 0 |
+> | `Vehicle` | `0x00B98918` | 40 | 0 | | `String` | `0x00B98C88` | 1 | 0 |
+> | `Airstrike` | `0x00B9A8C8` | 12 | 0 | | `Table` | `0x00B98A60` | 2 | 0 |
+> | `Gui` | `0x00B9A398` | 38 | 1 | | `Report` | `0x00B98F64` | 5 | 0 |
+> | `_GuiInternal` | `0x00B99FF8` | 114 | 0 | | `Disguise` | `0x00B98F94` | 1 | 0 |
+> | `Graphics` | `0x00B9A4D0` | 75 | 3 | | `FactionZone` | `0x00B98FA4` | 1 | 0 |
+> | `Sound` | `0x00B98C98` | 88 | 9 | | `LTILibName` | `0x00B99C78` | 52 | 2 |
+> | `ObjectFilter` | `0x00B98770` | 16 | 0 | | | | | |
+>
+> 714 of the 1,081 have ≥1 qualified call site in the 370 decompiled scripts under
+> `docs/mercs2-luacd/`.
 
 This document answers the five open questions from the bindings audit. Evidence levels:
 
@@ -124,6 +171,31 @@ Bindings counted by walking valid `{name, func}` rows and `{NULL,NULL}` (compoun
 
 \*Player starts at `0x00798FC0`, after small `Init` tables; audit window `0x799200` ends before Player’s terminator.
 
+> **CORRECTION (2026-07-21) — the INFERRED/UNKNOWN labels above are now settled by measurement.**
+>
+> Every offset and count in this table is confirmed. The *namespace labels* marked
+> INFERRED or UNKNOWN were guesses, and most were wrong. The engine's own registry at
+> VA **`0x00DFD478`** (`{const char* name, luaL_Reg* table}`, 12-byte stride) names each
+> table directly — no inference required:
+>
+> | Row (file) | This doc said | **Actually (registry `0x00DFD478`)** |
+> |---|---|---|
+> | `0x00798770` | *Coop* (INFERRED) | **`ObjectFilter`** — name ptr at `0x00DFD52C`, table ptr `0x00DFD530` |
+> | `0x00798A60` | *UNKNOWN* (`Create`,`InsertI`) | **`Table`** — `0x00DFD5B0` |
+> | `0x00798F94` | *UNKNOWN* single-entry `Init` | **`Disguise`** — `0x00DFD5C8` |
+> | `0x00798FA4` | *UNKNOWN* single-entry `Init` | **`FactionZone`** — `0x00DFD5D4` |
+> | `0x007995B0` | *StateMachine* (INFERRED) | **`ObjectState`** — `0x00DFD568` (31 call sites in scripts) |
+> | `0x00799BBC` | *UNKNOWN (timer)* | **`Movie`** — `0x00DFD574` |
+> | `0x00799C78` | *LTI* | **`LTILibName`** — `0x00DFD5E0`; scripts really do call `LTILibName.*` (220 sites) |
+> | `0x00799E28` | *DevTools* (INFERRED) | **`Junk`** — `0x00DFD55C` (9 call sites; 15 of its 24 rows are stubs) |
+> | `0x00799FF8` | *Gui* | **`_GuiInternal`** — `0x00DFD508`; **266** `_GuiInternal.*` call sites. Distinct from `Gui`. |
+> | `0x0079A398` | *Gui (markers/objectives)* | **`Gui`** — `0x00DFD4FC` (correct) |
+> | `0x0079A88C` | *Face* (INFERRED) | **`Animation`** — `0x00DFD580` |
+> | `0x0079A8C8` | *Support* (INFERRED) | **`Airstrike`** — `0x00DFD4F0` (68 call sites) |
+>
+> **Two tables are missing from the map above:** `0x00799EF0` = **`Human`** (30 entries,
+> 99 call sites) and `0x00798C88` = **`String`** (1 entry, `GetHash`, 90 call sites).
+
 **Corrections vs earlier docs:**
 
 - **`0x00799078` is not a table base** (CERTAIN): it falls inside the **Player** array (~entry 23). Agent B’s “boundary table at `0x00799078`” is a **misaligned anchor**.
@@ -139,6 +211,17 @@ Bindings counted by walking valid `{name, func}` rows and `{NULL,NULL}` (compoun
 | `dump_lua_bindings.py` (cluster only) | ~49 | ~831 | Primary cluster; verified namespace labels only when in `VERIFIED_TABLE_LABELS` |
 
 The **800–1300** range is **accurate** if counting **all** registration rows + stdlib + Flash + SendEvent wrappers; the **narrow doc window under-counts by ~60%**.
+
+> **CORRECTION (2026-07-21) — “~41 game tables / ~1,015 bindings” is close but not the real number.**
+>
+> The registry at `0x00DFD478` is the definitive denominator, because a table only
+> becomes a Lua namespace if it is listed there. Walking all 31 registry rows to their
+> `{NULL,NULL}` terminators gives **31 namespaces / 1,081 bindings**, of which **61**
+> point at the shared no-op stub `0x006D5640`. The “~41 tables” figure came from
+> run-splitting artifacts (the Graphics compound blob alone fragments into ~11 runs);
+> the “~1,015” under-counted by omitting `Human` (30) and `String` (1) and by treating
+> the 20 marker rows inconsistently. Marker rows are **not** bindings: `Graphics` has
+> 95 physical rows = **75 functions + 20 markers**.
 
 ---
 
@@ -226,6 +309,29 @@ Registered as **global tables** via `luaL_register(L, "Name", reg)` (namespace s
 
 1. **Global namespace tables** — `Player.SetCash`, `Net.IsServer`.
 2. **Marker-delimited sub-tables** — registration stub inserts `{ "Atmosphere", 0xFFFFFFFF }` … functions … `{ "Atmosphere", 0xFFFFFFFE }`; runtime builds **`Atmosphere.SetTime`**, etc.
+
+   > **CORRECTION (2026-07-21) — the sub-tables nest UNDER `Graphics`, not at top level.**
+   >
+   > The marker rows live inside the array registered as **`Graphics`** (`0x00B9A4D0`,
+   > registry row `0x00DFD514`), so the runtime builds `Graphics.Atmosphere.SetTime`
+   > — **not** a global `Atmosphere.SetTime`. The decompiled scripts settle it: there
+   > are **0** occurrences of top-level `Atmosphere.`, `Bloom.`, `MotionBlur.`,
+   > `Contrast.` or `Monochrome.`, and the real call forms are
+   > `Graphics.Atmosphere.SetValue("fAtmosphereForce", 0)`,
+   > `Graphics.Atmosphere.SetColorValue("uiAmbientColor", …)`,
+   > `Graphics.Bloom.SetMultiplier`, `Graphics.Contrast.SetLimit`,
+   > `Graphics.Monochrome.SetGradient`.
+   >
+   > True shape of `Graphics` (11 top-level fns + 10 sub-tables):
+   > `ScreenShot, SetNumFrameSync, SetScreenRatio, GetScreenRatio, ReloadShaders,
+   > SetGamma, SetShadowBaseDistance, GetShadowBaseDistance, InitTinyGeometry,
+   > ShowTinyGeometryObject, SetBoundaryEffect` plus
+   > `Graphics.{Camera(7), Atmosphere(37), Bloom(7), MotionBlur(1), Contrast(2),
+   > Monochrome(1), Grainy(1), AA(1), Effect(4), FuelTrail(3)}`.
+   >
+   > Note `Graphics.Camera` (7 fns, `SetNearFar`…`SetLodParams`) is a *different* table
+   > from the top-level `Camera` namespace (`0x00B9A7D8`, 14 fns, `GetYaw`…`SetShot`,
+   > 26 call sites). Both exist.
 3. **Lua-side aliases (CERTAIN)** — bootstrap @ file `0x007B4EE2`:
 
 ```lua
@@ -279,7 +385,7 @@ Lua 5.1 **`lua_CFunction`**: `(lua_State *L) -> int`; return value = **number of
 | `Sound.CueSound` | **3** (7×) | UNKNOWN | **CONFIRMED** |
 | `Sys.GuidToString` | **1** (3×) | UNKNOWN (string) | **CONFIRMED** |
 | `Sys.IsLoadingOrStreaming` | **0** (1×) | UNKNOWN | **CONFIRMED** |
-| `Graphics.ChangeLineRegionSetting` | **2** (18×) | UNKNOWN | **CERTAIN** |
+| `Graphics.ChangeLineRegionSetting` | **2** (18×) | UNKNOWN | **CERTAIN** — ⚠ **CORRECTION (2026-07-21):** the qualified name is **`Graphics.Atmosphere.ChangeLineRegionSetting`** (fn `0x005B0D20`, inside the `Atmosphere` sub-table). `Graphics.ChangeLineRegionSetting` has **0** call sites; the nested form has **15**. |
 | `Marker.AddDisc` | **6** (3×) | UNKNOWN | **CONFIRMED** |
 | `VO.Cue` | **3** (1×) | UNKNOWN | **CONFIRMED** |
 
@@ -305,7 +411,14 @@ Lua 5.1 **`lua_CFunction`**: `(lua_State *L) -> int`; return value = **number of
 ### 4.5 Still UNKNOWN without more RE
 
 - Exact **GUID** representation (likely 4-byte or 8-byte userdata).
-- **`Atmosphere.SetTime`**: registered @ `0x0079A588`, **no** script hits in demo harvest (only `Sys.IsLoadingOrStreaming` in `wifvzatmosphere`).
+- ~~**`Atmosphere.SetTime`**: registered @ `0x0079A588`, **no** script hits in demo harvest (only `Sys.IsLoadingOrStreaming` in `wifvzatmosphere`).~~
+  **RESOLVED (2026-07-21):** there were no script hits because the searched name was
+  wrong. The binding is **`Graphics.Atmosphere.SetTime`** (fn `0x005B1750`). Retail
+  scripts drive the sky through the generic setters
+  `Graphics.Atmosphere.SetValue` / `SetColorValue` / `SetIntValue` (keyed by strings
+  such as `"fAtmosphereForce"`, `"uiAmbientColor"`) rather than by calling `SetTime`
+  directly. Also note `Graphics.Atmosphere.SetSky` is one of the 61 no-op stubs
+  (`0x006D5640`).
 - Return counts for essentially all **`Get*`** / **`Set*`** pairs.
 
 ---
