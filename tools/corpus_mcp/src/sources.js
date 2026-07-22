@@ -78,6 +78,33 @@ export function sourceFreshness(cutoffByName = {}) {
   return out;
 }
 
+/**
+ * Paths git tracks, as repo-relative forward-slash strings.
+ *
+ * This is a PROVENANCE signal, not a bug to fix. Drafts are gitignored on purpose — the repo
+ * should not carry findings that are unconfirmed or unfinished (`.gitignore` excludes
+ * `*investigation*.md` and `docs/**plan*.md`). But the corpus walks the FILESYSTEM, so it indexed
+ * those drafts alongside committed research and search could not tell them apart: an unreviewed
+ * working note ranked exactly like a verified spec.
+ *
+ * So use the author's own signal. Untracked-but-indexed == "the author has not committed to this",
+ * which is precisely the standing the ranker should reflect. One `git ls-files` beats 400
+ * `git check-ignore` calls.
+ */
+let trackedCache = null;
+function trackedPaths() {
+  if (trackedCache) return trackedCache;
+  trackedCache = new Set();
+  try {
+    const out = execFileSync('git', ['ls-files'], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    for (const line of out.split('\n')) if (line.trim()) trackedCache.add(line.trim());
+  } catch { /* not a git tree — treat everything as tracked rather than flag the whole corpus */ }
+  return trackedCache;
+}
+
+/** Reset between test runs / after a checkout. */
+export function clearTrackedCache() { trackedCache = null; }
+
 function chunksFor(file, text) {
   const ext = path.extname(file).toLowerCase();
   if (ext === '.md') return chunkMarkdown(text);
@@ -107,14 +134,20 @@ export function* fileDocs(sourceName) {
     // Front-matter standing (status/supersedes/evidence) rides in `meta`, so a corrected doc can
     // outrank the one it corrects. Only markdown declares it; everything else stores nothing.
     const km = path.extname(file).toLowerCase() === '.md' ? knowledgeMeta(text) : null;
+    // A file inside the repo that git does not track is a DRAFT by the author's own convention
+    // (see `trackedPaths`). Record it so ranking can treat it as unconfirmed; a doc that declares
+    // its own `status` still wins, because an explicit declaration beats an inference.
+    const p = rel(file);
+    const meta = { ...(km || {}) };
+    if (!trackedPaths().has(p)) meta.untracked = true;
     yield {
       source: sourceName,
-      path: rel(file),
-      title: rel(file),
+      path: p,
+      title: p,
       mtime: stat.mtimeMs,
       fileHash: sha256(text),
       chunks: chunksFor(file, text),
-      meta: km ? JSON.stringify(km) : undefined,
+      meta: Object.keys(meta).length ? JSON.stringify(meta) : undefined,
     };
   }
 }

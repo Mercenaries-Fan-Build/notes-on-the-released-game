@@ -137,9 +137,23 @@ export function readMeta(cell) {
   try { const o = JSON.parse(cell); return o && typeof o === 'object' ? o : {}; } catch { return {}; }
 }
 
+/**
+ * Weight for a doc the repo does not track.
+ *
+ * Gitignored drafts are deliberate: the author does not want unconfirmed or unfinished findings
+ * committed. But the corpus indexes the filesystem, so those drafts were ranking beside verified
+ * research with nothing to distinguish them. Untracked == "not committed to" in both senses, which
+ * is a real standing signal — so demote, but only moderately: a draft is often the NEWEST thinking
+ * and should still outrank an unreviewed transcript (0.25). It is a draft, not a wrong answer.
+ */
+export const UNTRACKED_WEIGHT = 0.55;
+
 /** Combined standing multiplier for a row's meta. */
 export function standingWeight(meta) {
   const status = String(meta.status ?? STATUS.CURRENT).toLowerCase();
   const evidence = String(meta.evidence ?? 'proven').toLowerCase();
-  return (STATUS_WEIGHT[status] ?? 1.0) * (EVIDENCE_WEIGHT[evidence] ?? 1.0);
+  // An explicit declaration beats an inference: a draft that states `status: current,
+  // evidence: proven` has said something the file's git state cannot say for it.
+  const untracked = meta.untracked && !meta.status && !meta.evidence ? UNTRACKED_WEIGHT : 1.0;
+  return (STATUS_WEIGHT[status] ?? 1.0) * (EVIDENCE_WEIGHT[evidence] ?? 1.0) * untracked;
 }

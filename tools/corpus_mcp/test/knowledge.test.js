@@ -110,3 +110,17 @@ test('parseYamlLite: a key after a block scalar is still parsed', () => {
   assert.equal(m.witness, 'some proof');
   assert.equal(m.status, 'retracted');
 });
+
+test('standingWeight: an untracked draft is demoted, but beats an unreviewed transcript', () => {
+  // Gitignored drafts are intentional (unconfirmed/unfinished), so they should not rank beside
+  // committed research -- but they are often the NEWEST thinking, so they must still outrank a
+  // transcript (source authority 0.25). A draft is not a wrong answer.
+  const draft = standingWeight({ untracked: true });
+  assert.ok(draft < 1.0, 'untracked must be demoted');
+  assert.ok(draft > 0.25, 'a draft must still outrank an unreviewed transcript');
+});
+
+test('standingWeight: an explicit declaration overrides the untracked inference', () => {
+  // A draft that states its own standing has said something git state cannot say for it.
+  assert.equal(standingWeight({ untracked: true, status: 'current', evidence: 'proven' }), 1.0);
+});

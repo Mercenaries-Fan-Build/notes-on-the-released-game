@@ -105,6 +105,8 @@ function pick(r) {
     // Say it in the payload, not just in the source name: a reader skimming hits should not have
     // to know that `conversation` means "nobody checked this".
     unreviewed: UNREVIEWED.has(r.source) || undefined,
+    // Gitignored by intent = the author has not committed to this finding yet.
+    draft: m.untracked || undefined,
     fn_addr: r.fn_addr || undefined, text: r.text,
   };
 }
