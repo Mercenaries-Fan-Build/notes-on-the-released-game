@@ -72,3 +72,41 @@ test('readMeta: ghidra rows keep their own shape and score neutrally', () => {
   assert.equal(standingWeight(readMeta(ghidra)), 1.0);
   assert.deepEqual(readMeta('not json'), {});
 });
+
+test('splitFrontMatter: CRLF does not silently eat the last key', () => {
+  // Regression. `end` points at the '\n' closing the final key line; on CRLF that line's own
+  // '\r' sits at end-1, so the last key kept a trailing '\r' and failed the key regex — dropping
+  // exactly one field, always the last, with no error. Most files in this repo are CRLF, so this
+  // quietly ate a field from nearly every doc graded during the cull.
+  const crlf = '---\r\nstatus: current\r\nevidence: proven\r\n---\r\nbody';
+  const lf = '---\nstatus: current\nevidence: proven\n---\nbody';
+  assert.deepEqual(knowledgeMeta(crlf), knowledgeMeta(lf));
+  assert.equal(knowledgeMeta(crlf).evidence, 'proven');
+});
+
+test('splitFrontMatter: CRLF list values survive too', () => {
+  assert.deepEqual(knowledgeMeta('---\r\nsupersedes: [docs/a.md, docs/b.md]\r\n---\r\nx').supersedes,
+    ['docs/a.md', 'docs/b.md']);
+});
+
+test('parseYamlLite: block scalars keep their body, not the bare pipe', () => {
+  // `witness: |` is the natural way to write a multi-line witness, and both verification agents
+  // used it. Storing the literal '|' is worse than storing nothing: witness is the field that
+  // says HOW we know, so a '|' there silently converts evidence into a shrug.
+  const m = knowledgeMeta('---\nevidence: proven\nwitness: |\n  ran probe X over vz.wad\n  62,624/62,624 unit-norm\n---\nbody');
+  assert.equal(m.evidence, 'proven');
+  assert.match(m.witness, /ran probe X over vz\.wad/);
+  assert.match(m.witness, /62,624/);
+  assert.notEqual(m.witness, '|');
+});
+
+test('parseYamlLite: folded scalars join with spaces, and CRLF works too', () => {
+  const m = knowledgeMeta('---\r\nwitness: >\r\n  first line\r\n  second line\r\n---\r\nbody');
+  assert.equal(m.witness, 'first line second line');
+});
+
+test('parseYamlLite: a key after a block scalar is still parsed', () => {
+  const m = knowledgeMeta('---\nwitness: |\n  some proof\nstatus: retracted\n---\nx');
+  assert.equal(m.witness, 'some proof');
+  assert.equal(m.status, 'retracted');
+});

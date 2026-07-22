@@ -49,7 +49,12 @@ export function splitFrontMatter(text) {
   if (!text.startsWith('---')) return { fm: {}, body: text };
   const end = text.indexOf('\n---', 3);
   if (end < 0) return { fm: {}, body: text };
-  const raw = text.slice(3, end);
+  // `end` points at the '\n' that TERMINATES the last key line. On a CRLF file that line's own
+  // '\r' sits at end-1, so slicing to `end` leaves a trailing '\r' on the final key and the
+  // key regex rejects it — silently dropping exactly one field, always the last one. Measured:
+  // `---\r\nstatus: current\r\nevidence: proven\r\n---` parsed as {status} with no evidence.
+  // Most files in this repo are CRLF, so this quietly ate a field from nearly every doc graded.
+  const raw = text.slice(3, end).replace(/\r$/, '');
   const body = text.slice(text.indexOf('\n', end + 1) + 1);
   return { fm: parseYamlLite(raw), body };
 }
@@ -57,7 +62,23 @@ export function splitFrontMatter(text) {
 function parseYamlLite(raw) {
   const out = {};
   let listKey = null;
+  let blockKey = null;   // `witness: |` — collect the indented body, don't store the '|'
+  let blockFold = false; // '>' folds newlines into spaces; '|' keeps them
+  let blockLines = [];
+
+  const flushBlock = () => {
+    if (blockKey) out[blockKey] = blockLines.join(blockFold ? ' ' : '\n').trim();
+    blockKey = null;
+    blockLines = [];
+  };
+
   for (const line of raw.split(/\r?\n/)) {
+    // A block scalar swallows every MORE-indented line, including blanks and '#' — those are
+    // content, not comments, so this has to run before the skip rules below.
+    if (blockKey !== null) {
+      if (!line.trim() || /^\s/.test(line)) { blockLines.push(line.trim()); continue; }
+      flushBlock();
+    }
     if (!line.trim() || line.trim().startsWith('#')) continue;
     const item = line.match(/^\s*-\s+(.*)$/);
     if (item && listKey) { (out[listKey] ??= []).push(strip(item[1])); continue; }
@@ -66,6 +87,16 @@ function parseYamlLite(raw) {
     const [, indent, key, rest] = kv;
     if (indent.length > 0) continue; // nested (e.g. metadata.type) — not part of the contract
     const val = rest.trim();
+    // Block scalar: `witness: |` / `>` (with optional chomp indicator). Storing the bare '|' as
+    // the value — which is what a naive parse does — is worse than storing nothing, because
+    // `witness` is the field that says HOW we know.
+    if (/^[|>][-+]?$/.test(val)) {
+      listKey = null;
+      blockKey = key;
+      blockFold = val.startsWith('>');
+      blockLines = [];
+      continue;
+    }
     if (val === '') { listKey = key; continue; }
     listKey = null;
     if (val.startsWith('[')) {
@@ -74,6 +105,7 @@ function parseYamlLite(raw) {
       out[key] = strip(val);
     }
   }
+  flushBlock();
   return out;
 }
 
