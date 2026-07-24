@@ -1,0 +1,15 @@
+[package]
+name = "jc2_rbm"
+version = "0.1.0"
+edition = "2021"
+description = "Just Cause 2 RBMDL (RenderBlockModel) -> glTF/GLB decoder. Format verified from JustCause2.exe decomp."
+
+[[bin]]
+name = "jc2_rbm"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = "1"
+
+[profile.release]
+opt-level = 3

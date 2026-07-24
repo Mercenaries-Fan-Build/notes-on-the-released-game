@@ -1,5 +1,16 @@
 # Store-item injection experiment — resident Lua script loading
 
+> **✅ RESOLVED 2026-07-20 — see `memory/mercs2-store-item-injection-solved.md` for the confirmed-working recipe.**
+> This experiment's unfilled question ("does an item actually appear in-game?") is now answered YES.
+> The blocker was **faction keying**, not the load mechanism: Eva's PMC custom-vehicle shop queries
+> faction **`"Pmc"`** (`MecPmcBoss` starter, `sFaction="Pmc"`, `bCustomVehicleShop=true`) — the
+> `"All"/"Chi"/"Gur"/"Pir"` factions are the *outpost* vendor shops, never Eva. V2's "loaded but no
+> item" was exactly this. **Working method = full-block replace of resident block 3185 with two
+> in-place BINN edits**: catalog entry in `mrxsupportdata.Init` (with a real `mrxcratedelivery`
+> `oSupport` + `tUnlockStatus={Pmc=1}`), and a `_tRewards` reward row `{"<id>","Pmc"}` in
+> `mrxrewarddata`. Appending a *new* script + wiring `mrxshop` DEPS (V3/V4) is a dead end — it
+> deadlocks world-load. Confirmed in-game via a free "JC2 Sportscar" appearing in Eva's shop.
+
 Goal: add a new purchasable PMC vehicle ("Russian Transport Heli") to the in-game store, and
 **empirically determine how the engine loads resident Lua scripts from a patch WAD** (the
 "overlaid but not accessed" question). These four variants isolate the *script-registration*

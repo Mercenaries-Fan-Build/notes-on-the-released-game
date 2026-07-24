@@ -1,0 +1,15 @@
+[package]
+name = "jc2_arc"
+version = "0.1.0"
+edition = "2021"
+description = "Just Cause 2 Avalanche ARC/TAB archive reader (session detour from mercs2 RE)"
+
+[[bin]]
+name = "jc2_arc"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = "1"
+
+[profile.release]
+opt-level = 3

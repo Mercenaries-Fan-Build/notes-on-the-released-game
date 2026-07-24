@@ -99,6 +99,13 @@ storage/corpus_lancedb/
 !.mcp.json
 !tools/corpus_mcp/package.json
 !tools/corpus_mcp/package-lock.json
+
+tools/mercs2-tools-gfxforge/
+tools/mercs2-tools-gfxtool/
+
+# corpus_mcp local config: keep the example, ignore the real .env
+tools/corpus_mcp/.env
+!tools/corpus_mcp/.env.example
 # Large binaries / regenerable artifacts — keep them out of history
 untitled.blend
 custom-tank.glb

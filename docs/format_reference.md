@@ -89,7 +89,7 @@ The **n-th** `sges` in `data.bin` corresponds to the **n-th** line in `paths.txt
 - **UCFX** root: magic + four u32 header fields (`u0`–`u3`); `data_base = ucfx_off + u0` for child chunks.
 - **Chunk table:** 20-byte rows: 4-byte tag + four u32s (`read_chunk_header`). Tags parsed in mesh path include **GEOM**, **MESH**, **PRMG**, **STRM**, **IBUF**, **INFO**, **MTRL**, **PRMT**, **HIER**, **SWIT**, **NAME**, **BODY** (texture). **SKIN** containers are markers (`u0 = 0xFFFFFFFF`); bone indices and weights live in the paired **STRM** vertex buffer (`BLENDINDICES` / `BLENDWEIGHT` at decl offsets +16/+20) — see [`docs/skeleton_status.md`](skeleton_status.md) and [`tools/export_skinned_mesh.py`](../tools/export_skinned_mesh.py). Others (**CHDR**, **STAT**, **CEXE**, **enum**, **flgt**, **flgs**, **INDX**, …) may appear in **`tag_occurrences`** without a dedicated decoder.
 - **CONTAINER_SENTINEL** `0xFFFFFFFF` on chunk row `u0` marks nested-container boundaries in some walks.
-- **Stringdb chunks** (**SYEK**, **SRTS**): localized string database. Body data is **natively big-endian** on all platforms (PC and Xbox). Descriptor fields (offset, size) follow normal UCFX LE convention. See §4.1.
+- **Stringdb chunks** (**SYEK**, **SRTS**): localized string database. On **PC** the bodies are **little-endian** (UTF-16LE text), ★corrected 2026-07-22 — the previous "natively big-endian on all platforms" claim was measured false. Descriptor fields (offset, size) follow normal UCFX LE convention. See §4.1.
 
 ### 4.0 CSUM trailer (per-chunk integrity)
 
@@ -150,14 +150,36 @@ def crc32_mercs2_explicit(data: bytes) -> int:
 
 Localized string database blocks (e.g., `english_P000_Q3.block`, `english_dlc01_P000_Q3.block`). Contains key→value lookup for bracket-key strings like `[DlcCon001.Title]`.
 
-**Critical:** Body data is **natively big-endian on all platforms**. The PC engine reads SYEK/SRTS body content directly as BE. Only the UCFX chunk descriptor fields (offset, size) are platform-endian. `ucfx_be_to_le.py` swaps descriptors but does NOT swap body data.
+> **★CORRECTED 2026-07-22 by measurement — this section previously claimed the bodies are
+> "natively big-endian on all platforms" and that the SRTS header is a byte count. BOTH are wrong
+> for the retail PC build.** Measured over all six language blocks in `shell.wad` and the
+> `english_P000_Q3` block in `vz.wad`:
+>
+> - SYEK entry table and the UTF-16 text heap are both **little-endian**.
+> - The SRTS header is a **u16 code-unit count, not a byte count**: `heap_bytes == 2 × header`,
+>   exact in every language (english `1229064 == 2 × 614532`, german `1326564 == 2 × 663282`,
+>   spanish `1326110 == 2 × 663055`, french `1313846 == 2 × 656923`, italian `1295504 == 2 × 647752`,
+>   russian `1229126 == 2 × 614563`).
+>
+> - The chunk tags are literally **`KEYS`** and **`STRS`** in the PC containers, *not* `SYEK`/`SRTS`.
+>   The reversed spellings in this document's headings are the big-endian (Xbox) byte order read as
+>   ASCII. Code that looks up `SYEK`/`SRTS` on a PC WAD finds **nothing and silently skips the
+>   table** — which is exactly how the first version of the round-trip checker reported "0
+>   containers" against a WAD that plainly has six.
+>
+> `tools/build_shell_string_patch.py`'s UTF-16**LE** assumption was the correct one all along.
+> Reproduce: `cargo run -p mercs2_probe --bin stringdb_dump -- --wad <wad>` — it detects the
+> endianness per chunk rather than trusting either reading, and prints what it found.
+>
+> The original BE claim is retained below only where it may still hold for **Xbox** blocks, which
+> were not re-measured. Do not assume it for PC.
 
 #### SYEK (keys)
 
 | Offset | Size | Endian | Field |
 |--------|------|--------|-------|
-| +0 | 4 | BE | `key_count` — number of entries |
-| +4 | 8 × N | BE | entries: `pandemic_hash(key_string)` (u32) + `byte_offset_into_SRTS` (u32) |
+| +0 | 4 | **LE** (PC) | `key_count` — number of entries |
+| +4 | 8 × N | **LE** (PC) | entries: `pandemic_hash(key_string)` (u32) + `byte_offset_into_SRTS` (u32) |
 
 Key strings use the standard `pandemic_hash_m2()` algorithm (FNV-1a + `|0x20` + `^0x2A * prime`). Offsets point into the SRTS string data area (after the SRTS 4-byte size header).
 
@@ -165,10 +187,12 @@ Key strings use the standard `pandemic_hash_m2()` algorithm (FNV-1a + `|0x20` + 
 
 | Offset | Size | Endian | Field |
 |--------|------|--------|-------|
-| +0 | 4 | BE | `total_string_bytes` (total byte length of string data following) |
-| +4 | variable | BE | Concatenated NUL-terminated UTF-16BE strings |
+| +0 | 4 | **LE** (PC) | `total_code_units` — **u16 count, not bytes**. Heap byte length = `2 ×` this |
+| +4 | variable | **LE** (PC) | Concatenated NUL-terminated UTF-16**LE** strings |
 
-Each string is NUL-terminated (u16 `0x0000`). SYEK entry offsets are byte offsets from the start of the string data area (i.e., from SRTS body + 4).
+Each string is NUL-terminated (u16 `0x0000`). SYEK entry offsets are **byte** offsets (not code-unit
+offsets) from the start of the string data area — i.e. from SRTS body + 4. Verified: decoding at those
+offsets as UTF-16LE yields well-formed text for all 18,299 English keys.
 
 #### Loading via Lua
 

@@ -147,8 +147,16 @@ Reproduce: `cargo run -p mercs2_formats --example segm_probe -- <vz.wad> 0xA3C1F
 
 ## 4. Reconciliation with `skinning_animation_spec.md` §1.4
 
-That section is correct that **skinned** vertices use global BLENDINDICES with no palette
-remap — keep that. Its side-claim "SEGM is `00 00 seg_id lod`, carries no bone" is a
+⚠️ **CORRECTION (superseded):** the earlier claim that *"skinned vertices use global
+BLENDINDICES with no palette remap"* is **DISPROVEN**. Skinned vertices are **per-group
+PALETTE-RELATIVE**: they index the concatenation of the group's `INFO(56)` range table
+(`+20 u32 range_count`, then `{u16 hier_base, u16 count}×rc` from `+24`), which the engine
+expands to global HIER at upload (oracle `FUN_00479d90`). Proven + screenshot-verified — see
+`blendindices-per-group-palette`, the reader `mercs2_formats::model_cubeize`, and the faithful
+WRITER `mercs2_formats::char_skin` (+ `inject_character_into_donor_block`). Do NOT author
+skinned characters with global indices. The SEGM finding below is independent and stands.
+
+Its side-claim "SEGM is `00 00 seg_id lod`, carries no bone" is a
 **partial reading**: it only sampled the body segments, whose bone field is genuinely 0.
 The bone field is non-zero for rigid segments (proven above). Update the two specs to
 agree: `SEGM.record = {u16 bone, u8 seg_id, u8 state_mask}`; bone 0 ⇔ self-skinning,
