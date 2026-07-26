@@ -404,9 +404,18 @@ Standard Flash MovieClip/TextField properties handled by GFx:
 
 ---
 
-## 5. LTI (Lua To Interface) Callback Functions
+## 5. LTI Callback Functions
 
 The LTI system provides C++ callbacks registered in the Lua global namespace. These are called directly by the shell Lua scripts to perform engine operations.
+
+> **Expansion removed 2026-07-26.** This heading previously read **"LTI (Lua To Interface)"**. That
+> expansion has no support in any primary source: 172 `LTI*` strings in the image and not one
+> spelling it out, and it is absent from all 67+ shipped `.gfx`, the Xbox PDB corpus
+> (`docs/mercs2-pdb-analysis/`) and `Saboteur.exe`. What the binary *does* show is 16 source paths
+> under `D:\Projects\Mercs2_PC\mercs2\LTI\Src\` and the namespace `LtiRender::RenderSystem::` — LTI
+> is the PC render/platform layer, and the Lua table is literally named `LTILibName`. The acronym is
+> **not determinable** from anything we hold; it is left unexpanded rather than guessed.
+> See `docs/reverse_engineer/lti_movie_pda_code_map.md`.
 
 ### Registration Table
 

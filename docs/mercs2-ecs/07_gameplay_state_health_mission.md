@@ -68,7 +68,7 @@ Two deserialization styles are used:
 | RuntimeAssetRef | 0xd2435030 | 0x017beed8 | 0x00bc57c0 | 4 | FUN_? | raw-copy (4 B) | Runtime asset handle |
 | RuntimeClaim | 0x5d5cb7bd | 0x017bf5b8 | 0x00bc59fc | 0xc | FUN_? | FUN_00538b50 (producer) | Runtime area claim: {claimVal float, claimant} |
 | RuntimeFlightNoise | 0xebf6d595 | 0x017bede8 | 0x00bc5784 | 0x20 | FUN_? | producer @0x53xxxx | Runtime noise vec3 + state (32 B) |
-| **RuntimeHealth** | 0xf9b9b2a5 | 0x017bef78 | 0x00bc57e4 | 0xc | FUN_00644c10 | FUN_004cfed0 (producer) | **Live HP: {cur, max} floats** (see below) |
+| **RuntimeHealth** | 0xf9b9b2a5 | 0x017bef78 | 0x00bc57e4 | 0xc | FUN_00644c10 | FUN_004cfed0 (producer) | **Live HP: {max, cur} floats** — order corrected 2026-07-26 (see below) |
 | RuntimeHijackState | 0xd5f2b17a | 0x017c0468 | 0x00bc5e84 | 0x14 | FUN_? | raw-copy (0x14 B) | Runtime vehicle-hijack state (20 B) |
 | RuntimeLastDamageApplied | 0x9cbd437b | 0x017bf608 | 0x00bc5a20 | 0x1c | FUN_? | raw-copy (0x1c B) | Last damage event record (28 B) |
 | **RuntimeNodeHealth** | 0x76927bf5 | 0x017befc8 | 0x00bc57f4 | 4 | FUN_00644cd0 | FUN_004cfed0 (producer) | **Per-node HP: 1 float** (see below) |
@@ -123,9 +123,13 @@ Neither has a `FUN_00656xxx` disk schema — both are **runtime-produced**. The 
 **`FUN_004cfed0`** (ll.103755-103882, called from `FUN_006696a0`):
 
 - It reads the live actor's health via `FUN_005857e0()` (returns `{value, …}`), then computes
-  **`{cur, max}`** (two clamped floats) and writes them via `FUN_0064a600(param_1, &piStack_284)` for
+  **`{max, cur}`** (two clamped floats) and writes them via `FUN_0064a600(param_1, &piStack_284)` for
   **RuntimeHealth** (gate `DAT_017bef94`, ll.103825-103829). `piStack_284`/`piStack_280` are clamped
-  current/max (negatives → 0; `fStack_27c` = a fraction). 0xc stride = `{cur f32, max f32, +1 word}`.
+  current/max (negatives → 0; `fStack_27c` = a fraction). 0xc stride = `{max f32, cur f32, +1 dword}`.
+  **⚠ Field order corrected 2026-07-26** (was `{cur, max}` here and in four sibling docs): the
+  accessors settle it — `Object.GetMaxHealth` (`0x005CC030`) loads `[rec+0x00]` and
+  `Object.GetHealth` (`0x005CBDB0`) loads `[rec+0x04]`, and `Object.SetHealth` (`0x005CBEE0`)
+  clamps against `[esi]` then stores `[esi+4]`. The third dword remains unidentified.
 - A second write (ll.103878-103881, gate `DAT_017befe4`) fills **RuntimeNodeHealth** (stride 4 = one
   per-node float), via `FUN_004d5a10` / spatial-hash walk over body nodes (ll.103843-103867) — i.e.
   per-destructible-node health derived from the parent body.

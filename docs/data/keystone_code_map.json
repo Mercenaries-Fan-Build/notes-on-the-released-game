@@ -42,7 +42,7 @@
    "addr": "0x004c1170",
    "ghidra_name": "FUN_004c1170",
    "system": "scheduler",
-   "role": "layer_stack_init — sets PTR_PTR_017bbccc=0xd6c22c, DAT_017bbcf4=5, DAT_017bbcfc=4, cur=0 (boots from layer0, climbs to layer4=game)",
+   "role": "layer_stack_init — writes the 5 layer objects into the array at 0x017bbccc (slot0=0xd6c22c @0x004c11f9 ... slot4=0xd6c244 @0x004c1259), DAT_017bbcf4=5, DAT_017bbcfc=4, cur=0 (boots from layer0, climbs to layer4=game)",
    "confidence": "high",
    "evidence": "body; establishes the 5-layer order and array base"
   },
@@ -58,9 +58,9 @@
    "addr": "0x004c15e0",
    "ghidra_name": "FUN_004c15e0",
    "system": "scheduler",
-   "role": "layer_stack_tick — walks the 5-slot app layer stack (array @0xd6c22c, count DAT_017bbcf4=5, cur DAT_017bbcf8, target DAT_017bbcfc=4); slides cur→target; each layer vtable +8(enter-down)/+4(enter-up)/+0xc(Update(dt)); top layer(idx4) Update ticks the game/ECS systems",
+   "role": "layer_stack_tick — walks the 5-slot app layer stack (array @0x017bbccc, count DAT_017bbcf4=5, cur DAT_017bbcf8, target DAT_017bbcfc=4); slides cur→target; each layer vtable +8(enter-down)/+4(enter-up)/+0xc(Update(dt)); top layer(idx4)=0x00D6C244 vtable 0x00BB0460 +0xc=FUN_004c09c0, the game-state pump",
    "confidence": "high",
-   "evidence": "body; state-transition stepper over ordered layer array; layer idx = fixed order 0..4"
+   "evidence": "body; indexing insn 0x004c15fa 'mov esi,[eax*4+0x17bbccc]' gives base+stride; five slots read from the live dump = 0x00D6C22C/0x014538B8/0x0149FDA0/0x00D6C238/0x00D6C244. CORRECTED 2026-07-26: previously said 'array @0xd6c22c', which is element 0's value, not the base."
   },
   {
    "addr": "0x004c16e0",

@@ -239,12 +239,31 @@ master `FUN_004AFDB0`; all drawing funnels into the LTI layer (PgLtiBufferPc / P
 six `.sho` shaders.
 
 **7.2 FlashWidget / GUI bridge** — the Lua-facing widget wraps a `GFxMovieView*` at obj+0x1E0
-(WAD asset handle +0x1E8, name hash +0x1D8). The `_GuiInternal.CreateFlashWidget/SetFlashSwfFile/
-SendFlashInput/SetFlashCallback/CallFlashScriptFunction` Lua binders are **absent from the Ghidra
-export** (registered by hash via binding tables; bodies in export gaps 0x60A281–0x60ADF0 and
-0x61B540–0x61B8C0 — the same gap class as the 6 missing profile binders, a candidate for another
-`DecompileProfileAccessors.java` pass). Observed `GFxMovieView` vtable: +0x20 SetPlayState, +0x28
-IsAvailable, +0x48 Invoke, +0x50 SetViewport, +0x6C Restart, +0x84 HandleEvent, +0x9C shutdown.
+(WAD asset handle +0x1E8, name hash +0x1D8). The five `_GuiInternal` Flash binders are **present in
+the Ghidra export with full bodies**, in one contiguous run, registered by ordinary `luaL_Reg` rows:
+
+| binder | name string | `luaL_Reg` row | body |
+|---|---|---|---|
+| `CreateFlashWidget` | `0x00BB5F2C` | `0x00B9A280` | `FUN_005BA680` (146 B) |
+| `SetFlashSwfFile` | `0x00BB5F1C` | `0x00B9A288` | `FUN_005BA720` (295 B) |
+| `SendFlashInput` | `0x00BB5EBC` | `0x00B9A2B8` | `FUN_005BAC20` (303 B) |
+| `SetFlashCallback` | `0x00BB5E70` | `0x00B9A2D0` | `FUN_005BAF90` (262 B) |
+| `CallFlashScriptFunction` | `0x00BB5E58` | `0x00B9A2D8` | `FUN_005BB170` (662 B) |
+
+Corroborated by a static edge: `FUN_005BA680` calls the movie-view setup `FUN_0061B0A0` at
+`0x005BA69C`. Observed `GFxMovieView` vtable: +0x20 SetPlayState, +0x28 IsAvailable, +0x48 Invoke,
++0x50 SetViewport, +0x6C Restart, +0x84 HandleEvent, +0x9C shutdown.
+
+> **Corrected 2026-07-26.** This paragraph previously said the five binders were *"absent from the
+> Ghidra export (registered by hash via binding tables; bodies in export gaps 0x60A281–0x60ADF0 and
+> 0x61B540–0x61B8C0 … a candidate for another `DecompileProfileAccessors.java` pass)"*. Every part
+> of that is wrong. They are not registered by hash — they are plain `{const char*, lua_CFunction}`
+> rows, recoverable by searching the image for the name string's VA. They are not missing from the
+> export — all five `FUN_*` entries are in `mercs2_unpacked.exe_decomp.txt`. And they are not in
+> those gaps: both gaps are real holes in the export and both are in `.text`, but neither contains a
+> Flash binder (what they *do* contain is not identified here). The proposed forcing-script pass was
+> chasing nothing. Reproduce: search the image for `struct.pack('<I', 0x00BB5E58)` and read the
+> dword that follows the match in `.rdata`.
 
 **7.3 Movie lifecycle** — `.gfx` assets (type hash 0xFE0E8320) load via a FileOpener backend
 `FUN_0060D930` (pins the WAD asset, wraps ptr+size in a 0x9C GFile) → streaming FSM `FUN_0060E4A0`

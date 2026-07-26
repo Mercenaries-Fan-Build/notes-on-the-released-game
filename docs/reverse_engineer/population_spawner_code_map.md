@@ -232,9 +232,15 @@ out = **0x40 (64)** rows; the PC `SetSpawnList`/`GetSpawnListChangeInfo` pair ca
 `Set/GetSpawnList` family is engine-exposed but has **no shipped call sites** (mission scripts drive
 lists through `TweakAttachedSpawners` instead). DLC Lua uses **zero** population API.
 
-**Cfunc bodies to recover via a Ghidra script** (binding-table-only refs, same as the
-`DecompileProfileAccessors.java` precedent): `0x5A4EA0`, `0x5A5010`, `0x5A5180`, `0x5A5860`,
-`0x5DA4D0`, `0x5DA790`, `0x5D9CC0`, `0x5DA010`, `0x5DA130`.
+**Cfunc bodies to recover by disassembling the VA** (binding-table-only refs — Ghidra had no static
+caller to walk from, so it never formed a function; the bytes are ordinary `.text`):
+`0x5A4EA0`, `0x5A5010`, `0x5A5180`, `0x5A5860`, `0x5DA4D0`, `0x5DA790`, `0x5D9CC0`, `0x5DA010`,
+`0x5DA130`.
+
+> **Corrected 2026-07-26.** This previously read *"recover via a Ghidra script … same as the
+> `DecompileProfileAccessors.java` precedent"*. No forcing script is needed: **all nine** of these
+> VAs disassemble cleanly (e.g. `0x5A4EA0` = `83 ec 0c 53 8b 5c …`, 27 instructions to a tail-`jmp`;
+> `0x5D9CC0` runs 86 to a `ret`). See `ghidra_knowledge_inventory.md` Part F.4.
 
 ---
 

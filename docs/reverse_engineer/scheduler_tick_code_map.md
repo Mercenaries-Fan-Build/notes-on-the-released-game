@@ -38,10 +38,30 @@ The per-frame master tick is a **5-layer application stack**, ticked in **fixed 
 - `FUN_004c14f0(dt)`: runs a decoupled **fixed-timestep sim accumulator** (`_DAT_0198dc48 += dt*timescale`,
   integer steps → `DAT_011765cc`, keep remainder), then `FUN_0084ae70` (streaming LOD-budget notify),
   then `FUN_004c15e0(dt)`.
-- `FUN_004c15e0`: walks the layer stack — array `@0xd6c22c`, `count DAT_017bbcf4 = 5`,
+- `FUN_004c15e0`: walks the layer stack — array **`@0x017bbccc`**, `count DAT_017bbcf4 = 5`,
   `cur DAT_017bbcf8`, `target DAT_017bbcfc = 4` (init `FUN_004c1170`). It boots at layer 0 and climbs
   to layer 4; each layer object is ticked via vtable **`+0xc = Update(dt)`** (with `+8`/`+4` =
   enter-descending / ascending transitions).
+
+  > **Corrected 2026-07-26.** This line previously called the array `@0xd6c22c`. That is not the
+  > array — it is the *value* of element 0. The indexing instruction settles it:
+  > `0x004c15fa: 8b 34 85 cc bc 7b 01  mov esi, dword ptr [eax*4 + 0x17bbccc]`, i.e. base
+  > `0x017bbccc`, stride 4. `FUN_004c1170` writes `0xd6c22c` into slot 0
+  > (`0x004c11f9: mov dword [eax*4 + 0x17bbccc], 0xd6c22c`). Reading the five slots out of the live
+  > dump `output/_ghidra/securom_dump/mercs2_unpacked.exe` gives the whole stack:
+
+  | idx | object | vtable | `+0xc` tick | |
+  |---|---|---|---|---|
+  | 0 | `0x00D6C22C` | `0x00BB0420` | `0x004BEEA0` | |
+  | 1 | `0x014538B8` | `0x00BB0430` | `0x004BEED0` | heap-allocated |
+  | 2 | `0x0149FDA0` | `0x00BB0440` | `0x004BFAF0` | heap-allocated |
+  | 3 | `0x00D6C238` | `0x00BB0450` | `0x004C00E0` | singleton install table |
+  | **4** | **`0x00D6C244`** | **`0x00BB0460`** | **`0x004C09C0`** | **the game-state pump** |
+
+  Layers 0/3/4 are three 12-byte sub-objects of one static structure (`{vtable, _, phase}` — the
+  walk's `piVar1[2]` compares against 3 and 4); 1 and 2 are allocated. **H.** Note this resolves
+  *which* function layer 4 dispatches to (`0x004C09C0`) statically — the "confirm-live (x32dbg)"
+  note below is narrower than it reads and survives only for the system order *inside* that pump.
 
 **Iteration order = the hardcoded 5-slot layer sequence 0→4**, not registration order and not a
 sorted priority. The **top layer (idx 4 = the game/ECS mode)** ticks the gameplay systems

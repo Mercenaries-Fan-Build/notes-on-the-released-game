@@ -43,8 +43,24 @@ object. That is the root of every rendering surprise this session.
 - A **system** finds entities with component C via C's own instance pool (each reflection class owns a
   `0x9e3779b9`-hashed pool; insert `FUN_0064a600 = memcpy(dst, rec, stride)`).
 - Health is native components: `Health` (`0x06be1abf`, float + 3 flags), `RuntimeHealth`
-  (`0xf9b9b2a5`, `{cur,max}`), `RuntimeNodeHealth` (`0x76927bf5`, **one float per destructible node**).
-  Produced by `FUN_004cfed0`. That per-node health is how doors/barrels fall off independently.
+  (`0xf9b9b2a5`, **`{max, cur}`** — see below), `RuntimeNodeHealth` (`0x76927bf5`, **one `u16` per
+  destructible node** — see below). Produced by `FUN_004cfed0`. That per-node health is how
+  doors/barrels fall off independently.
+
+  > **⚠ Corrected 2026-07-26 — this line previously read `{cur,max}` and "one float per node".**
+  > Both were backwards/wrong, and both were disproved independently by two blind validation passes
+  > and re-read here:
+  > - **`RuntimeHealth` is `{ +0x00: f32 max, +0x04: f32 cur }`.** `Object.GetMaxHealth`
+  >   (`0x005CC030`) loads `[rec + 0x00]`; `Object.GetHealth` (`0x005CBDB0`) loads `[rec + 0x04]`;
+  >   `Object.SetHealth` (`0x005CBEE0`) clamps against `[esi]` and stores to `[esi+4]`. The container
+  >   is `0x017BEF78`, which names itself `RuntimeHealth` via `[vtable+0x34]`, and its registered
+  >   stride is **12 bytes** — so the record is 3 dwords and the third field is still unidentified by
+  >   any document.
+  > - **`GetNodeHealth` reads a `u16`, not a float** (`movzx` → `cvtsi2ss`, an integer widening).
+  >
+  > Anyone parsing a `RuntimeHealth` blob out of a WAD must use the engine order. Note that
+  > `mercs2_core::Health` declares `{cur, max}` — that is *our* struct's field order and is
+  > deliberately not a mirror of the engine layout; nothing memcpys between them.
 
 ## 3. Instantiation
 

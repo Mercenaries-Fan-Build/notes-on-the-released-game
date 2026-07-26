@@ -90,7 +90,7 @@ unlocated (name string only) and the marriage is **PC-anchored**. "Married by" =
 | **BuildingDestruction** descriptor | `BuildingDestruction` `@0x829f1538` (rdata `0x0031550`) | `FUN_00642590` (schema `FUN_00661090`, stride 0x18) | string `s_BuildingDestruction_00bc52b4`; 5 floats + 1 int | H |
 | **DangerousBuilding** descriptor | `DangerousBuilding` (rdata) | `FUN_00660a90` (stride 4) | ECS-doc 07; 1 int32 flag/id | H |
 | **DamageKey** descriptor (damage classification enum) | `DamageKey` `@0x829f1a10` | `FUN_006616c0` (stride 4) | ECS-doc 07; enum `s_DamageKeyEnum_00bc7264` | H |
-| **RuntimeHealth** producer/descriptor | `RuntimeHealth` `@0x829f3fe0` | desc `FUN_00644c10` · **producer = `FUN_004cfed0`** | ECS-doc 07; `{cur,max}` floats @ stride 0xc; producer read first-hand | H |
+| **RuntimeHealth** producer/descriptor | `RuntimeHealth` `@0x829f3fe0` | desc `FUN_00644c10` · **producer = `FUN_004cfed0`** | ECS-doc 07; **`{max,cur}`** floats @ stride 0xc (order corrected 2026-07-26 — `GetMaxHealth` reads `+0x00`, `GetHealth` `+0x04`); producer read first-hand | H |
 | **RuntimeNodeHealth** producer/descriptor | `RuntimeNodeHealth` `@0x829f4070` | desc `FUN_00644cd0` · **producer = `FUN_004cfed0`** | ECS-doc 07; 1 float/node; per-node walk in `FUN_004cfed0` chunk#1 | H |
 | **Health** descriptor (authored HP + flags) | `Health` | `FUN_0063e090` (schema `FUN_00656db0`, stride 8) | ECS-doc 07; 1 float + 3 bool | H |
 | `DestructionLink` / `…TypeEnum` | `DestructionLink` (rdata `0x0032298`) | descriptor region-adjacent (`FUN_006422d0` cluster) | string-anchored (world-streaming.md); runtime = ObjectState.GetLinkGuid / oilrig `_DestroyLinkedGuid` | M |
@@ -117,7 +117,7 @@ ACTIVATE (object streamed in, has StateMachine/BuildingDestruction comp):
 
 PER-FRAME (destructible update, from the layer-4 game-system list):
   FUN_006696a0  destructible object update   [gate *(obj+0xc4)!=0]
-       FUN_004cfed0  produce RuntimeHealth {cur,max} + RuntimeNodeHealth/node
+       FUN_004cfed0  produce RuntimeHealth {max,cur} + RuntimeNodeHealth/node (u16)
             if (machine instance absent)                       ← lazy init
                  FUN_004d3e10(inst, guid, InitState | InitDestroyedState)
                  FUN_004cfc80(guid, …)                          state replication
@@ -199,7 +199,7 @@ if (piStack_270 == (int *)0x0) {                 // no runtime machine instance 
   `InitDestroyedState`, a healthy one in `InitState`. This is the runtime realization of the
   orchestrator_format note "`0x0ACE072A` init: immediately SetState→…".
 
-Health production (same body): reads the live actor health via `FUN_005857e0`, clamps `{cur, max}`
+Health production (same body): reads the live actor health via `FUN_005857e0`, clamps `{max, cur}`
 (negatives→0) and writes **RuntimeHealth** (0xc stride) via `FUN_0064a600` gated on `DAT_017bef94`,
 then walks the body's destructible nodes (`FUN_004d5a10`/`FUN_004d5880`) writing **RuntimeNodeHealth**
 (4-byte float/node) gated on `DAT_017befe4` — matching ECS-doc 07's "producer `FUN_004cfed0`" exactly.
@@ -310,7 +310,7 @@ per-object message ring, not confirmed to be the global subscriber bus; confirm-
 | `DangerousBuilding` | rdata | `FUN_00660a90` | stride 4 | 1 int32 flag/id |
 | `DamageKey` | `@0x829f1a10` | `FUN_006616c0` | stride 4 | enum `DamageKeyEnum` |
 | `Health` | — | `FUN_0063e090` | schema `FUN_00656db0`, stride 8 | 1 float + 3 bool |
-| `RuntimeHealth` | `@0x829f3fe0` | `FUN_00644c10` | producer `FUN_004cfed0` | `{cur, max}` floats (0xc) |
+| `RuntimeHealth` | `@0x829f3fe0` | `FUN_00644c10` | producer `FUN_004cfed0` | `{max, cur}` floats (0xc, order corrected 2026-07-26) |
 | `RuntimeNodeHealth` | `@0x829f4070` | `FUN_00644cd0` | producer `FUN_004cfed0` | 1 float / node (4) |
 | `StateMachine` | — | `FUN_00641aa0` | schema `FUN_0065fcb0`, stride 0x10 | 4 name-hash int32 {def, initial, sub, param} |
 | `ObjectScript` | — | `FUN_006424e0` | schema `FUN_00660ff0`, stride 8 | `{script_hash_0, arg/hash_1}` |

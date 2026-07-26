@@ -420,8 +420,12 @@ pointing at it, read `+4` = cfunc VA. **The walk reproduces the population doc's
 10. The **>400 warning** compare (`… may fall through terrain`) is string-stripped on PC → its site is
     statically unlocated; a live break on the SetHibernationDistance worker finds the `> 400.0` test.
 11. Recover the binding-only cfunc bodies (`0x5CF240`/`0x5CF600`/`0x5D7160`/`0x5E1CC0`/`0x5E1C40` +
-    orchestration `Pg.LoadAsset`/`LoadLayer`/`RequestGameState`) with a `DecompileProfileAccessors.java`
-    -style forcing script.
+    orchestration `Pg.LoadAsset`/`LoadLayer`/`RequestGameState`) by **disassembling the VA** —
+    ~~with a `DecompileProfileAccessors.java`-style forcing script~~.
+    **Not an open item (2026-07-26).** All five nominated VAs are plain `.text` and disassemble to a
+    `ret` in 10–40 instructions (`0x5CF240` = `51 53 8b 5c 24 0c …`, 33 insns). "Binding-only" means
+    Ghidra had no static caller to walk from, not that the body is missing — see
+    `ghidra_knowledge_inventory.md` Part F.4.
 12. PC death-distance constants — confirm the Xbox 50²…400² table against `FUN_00500ac0`/`FUN_005007d0`.
 
 ---

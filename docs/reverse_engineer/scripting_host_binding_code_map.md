@@ -58,8 +58,17 @@ chunk uses, e.g. the GUI guard `FUN_0060994e`); the VM is stock **Lua 5.1.2 / fl
 entry points are VA-pinned. The **binding surface is fully enumerated**: 60 `.rdata` `luaL_Reg`
 tables (53 of them game namespaces, ~1216 cfuncs) with table VAs, counts, and namespace identities
 from the live trace — the master row-17 index below. ~120 cfunc **bodies** are VA-recovered across
-the sibling maps; the rest are binding-table-only (recover with the `DecompileProfileAccessors.java`
-forcing-script), and ~60+ dev/debug bindings collapse to the shared `return-0` stub `0x006D5640`.
+the sibling maps; the rest are binding-table-only — **recoverable by disassembling the VA from the
+`luaL_Reg` row**, not blocked — and ~60+ dev/debug bindings collapse to the shared `return-0` stub
+`0x006D5640`.
+
+> **Corrected 2026-07-26.** This sentence used to direct readers to "the
+> `DecompileProfileAccessors.java` forcing-script". That is unnecessary, and stating it as the
+> route made a whole class of cfuncs look unreachable when they are not: a cfunc referenced only
+> from `.rdata` has no static caller, so Ghidra never forms a function there, but the bytes are
+> plain `.text`. Since this map is the hub the sibling maps cite for that advice, the correction
+> matters most here. Measured 16/16 recovery on the VAs the siblings nominate; see
+> `ghidra_knowledge_inventory.md` Part F.4 for the method and the reproduction.
 
 ---
 
@@ -192,10 +201,29 @@ the dev surface, PC collapses it to one stub. Confirming a binding is stubbed = 
 Every game `luaL_Reg` table from the live `.rdata` dump ([[lua-trace-asi-surface-b-oracle]]), with
 table VA (unpacked image), fn count, the namespace it installs as, and where cfunc **bodies** have
 been VA-recovered (with the sibling map that found them). "Binding-only" = the name→cfunc slot is
-known but no static caller ⇒ the body is undecompiled in the Ghidra export (recover via the
-forcing-script). Tables are sorted by VA. The 4 stdlib + ~20 Scaleform AS2 tables in the
-`0x00B92xxx`–`0x00B93xxx` block are summarized at the end, not enumerated (they are not the game
-surface).
+known but no static caller ⇒ the body is undecompiled in the Ghidra export — **recover it by
+disassembling the VA**, see `ghidra_knowledge_inventory.md` Part F.4. Tables are sorted by VA. The
+4 stdlib + ~20 Scaleform AS2 tables in the `0x00B92xxx`–`0x00B93xxx` block are summarized at the
+end, not enumerated (they are not the game surface).
+
+> **⚠ Namespace names in this table must come from the registry at `0x00DFD478`, not from a
+> nickname.** Corrected 2026-07-26 after the `0x00B99328` row was found mislabelled *"World"* and
+> carrying three cfuncs that belong to other namespaces. The registry is 31 rows × 12 bytes
+> `{const char* name, luaL_Reg* table, post_register_chunk*}`, terminator `0x00DFD5EC`; walk it and
+> the name is read, never inferred. Row 2 is `Pg` → `0x00B99328`. There is no `World` namespace.
+>
+> The three mis-filed entries, each re-homed by walking the owning table:
+>
+> | cfunc | was filed under | actually in | table |
+> |---|---|---|---|
+> | `CreateRegion 0x005BFB00` | "World" `0x00B99328` | **`Junk`** (row 19) | `0x00B99E28` |
+> | `GetLineRegion 0x005B0EC0` | "World" `0x00B99328` | **`Graphics`** (row 13) | `0x00B9A4D0` |
+> | `ChangeLineRegionSetting 0x005B0D20` | "World" `0x00B99328` | **`Graphics`** (row 13) | `0x00B9A4D0` |
+>
+> `GetLineRegionPoints 0x005D7160` really is in `Pg` — the four were not a block. A name containing
+> "Region" is **not** evidence of which namespace owns it; three different globals carry one.
+> This is the same nickname trap recorded in [[lua-trace-asi-surface-b-oracle]]: `binding_map.json`'s
+> nickname column is not authoritative and disagrees with the registry in several places.
 
 | Table VA | Namespace | # | Representative fns | Recovered cfunc bodies (source) |
 |---|---|---|---|---|
@@ -209,7 +237,7 @@ surface).
 | `0x00B98C98` | **Sound** | 88 | `CueSound StopSound PauseSound LoadBank TransitionMusic SetDynamicMusic` | `CueSound 0x5E0FF0`, `StopSound 0x5E10F0`, `LoadSoundBank 0x5E2630`, `TransitionMusic 0x5E1600`, `SetDynamicMusic 0x5E16E0` +more — audio map |
 | `0x00B98F64` | **Infraction** | 5 | `Init GetInfractions Completed Failed SetDelay` | faction map (mood bridge `FUN_005e0720`) |
 | `0x00B98FC0` | **Player** | 107 | `GetCharacter GetControlledObject GetSeat GetCameraXZHeading TeleportCamera SetPDAMapMode` | boundary subset `AddBoundary 0x5DC900`/`RemoveBoundary 0x5DCA30`/… (bindings audit); rest binding-only |
-| `0x00B99328` | **World** (Pg layers/regions) | 80 | `LoadingStaticLayers IsStaticLayer CreateRegion GetLineRegion ResetSingletonDone` | `CreateRegion 0x5BFB00`, `GetLineRegion 0x5B0EC0`, `ChangeLineRegionSetting 0x5B0D20`, `GetLineRegionPoints 0x5D7160` — world_streaming map |
+| `0x00B99328` | **`Pg`** (layers/regions) — registry row 2 | 80 | `LoadingStaticLayers IsStaticLayer ResetSingletonDone GetLineRegionPoints` | `IsStaticLayer 0x5D4BF0`, `ResetSingletonDone 0x5D4BE0`, `GetLineRegionPoints 0x5D7160`; `LoadingStaticLayers` → stub `0x6D5640` — world_streaming map |
 | `0x00B995B0` | **ObjectState** (script/SM) | 9 | `SendMessage SendDamage SetState GetLinkGuid StartEmitter StopEmitter` | `SetState 0x4D3E10` (indirect jump-table) — state_machine_destruction map |
 | `0x00B99608` | **Object** | 87 | `GetParent GetPosition SetPosition SetTransformToObject IsHibernated Kill` | `IsHibernated 0x5CF240`, `GetHibernationDistance 0x5CF420`, `SetHibernationDistance 0x5CF4F0`, `RevertHibernationDistance 0x5CF600` — world_streaming map |
 | `0x00B998D0` | **Net** | 92 | `IsMultiplayer IsConnectedToInternet IsLobby IsServer IsClient ConnectToServer` | mercs2 online-restore mod (bindings audit §3.2); cfuncs binding-only |

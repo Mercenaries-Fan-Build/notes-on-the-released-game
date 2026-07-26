@@ -398,14 +398,34 @@ is the Lua↔engine bridge.
 ## 8. Confirm-live inventory (x32dbg, read-only while PAUSED — [[x32dbg-mcp-no-resume]])
 
 **The two RE-meat items (highest priority):**
-1. **`ProfileHash` algorithm + covered range** — break `saveProfile 0x7BC628` (via a
-   `DecompileProfileAccessors.java`-style forcing script, since the body is not in the dump) or HW-write
-   bp on `.profile@0x00` during a save; watch the `@0x00` word get computed and single-step the hash
-   loop to recover the algo and confirm it covers `[4:]` (13,400 B). Cross-check against
-   `Hash_String 0x824270` (FNV) with the correct seed/range.
-2. **`saveProfile` disk-write body** — break `0x7BC628`; confirm the header+zlib+hash fixup follows the
+1. **`ProfileHash` algorithm + covered range** — HW-write bp on `.profile@0x00` during a save; watch
+   the `@0x00` word get computed and single-step the hash loop to recover the algo and confirm it
+   covers `[4:]` (13,400 B). Cross-check against `Hash_String 0x824270` (FNV) with the correct
+   seed/range. **Still open.**
+2. **The profile disk-write body** — confirm the header+zlib+hash fixup follows the
    `PrecacheManager::Save` idiom (§2.3): write LE header, deflate the `return{}` blob to `0x468`,
-   seek-back and stamp `data_size@0x08` + `ProfileHash@0x00`.
+   seek-back and stamp `data_size@0x08` + `ProfileHash@0x00`. **Still open — but not via the recipe
+   below.**
+
+> **⚠ Recipe retracted 2026-07-26 — `0x7BC628` is not a function.** Both items above used to say
+> *"break `saveProfile 0x7BC628`"*, item 1 adding *"via a `DecompileProfileAccessors.java`-style
+> forcing script, since the body is not in the dump"*. Three compounding errors:
+>
+> 1. **Transcription slip.** There is no `saveProfile` at `0x7BC628`. The **string** `"saveProfile"`
+>    lives at **`0x00BBC628`** — a dropped `B`. Disassembling `0x007BC628` lands mid-instruction
+>    (`0c 8b` → `or al,0x8b`) in unrelated float code, so a breakpoint there is meaningless.
+> 2. **Wrong kind of thing.** `saveProfile` is not a native function at all — it is an
+>    **ActionScript callback name invoked into a Flash movie**. Its single `.text` reference is
+>    `0x0061686B: bf 28 c6 bb 00  mov edi, 0xbbc628`, immediately followed by
+>    `0x0061687F: call 0x0061C550` — the LTI Invoke funnel, which takes the AS name in **EDI**.
+>    Enclosing function `FUN_00616760`. There is no `saveProfile` body to force out of Ghidra.
+> 3. **The premise was wrong anyway.** "The body is not in the dump" would not have justified a
+>    forcing script even if the address were real — see `ghidra_knowledge_inventory.md` Part F.4.
+>
+> Related, from the LTI audit: `"loadProfile"` (string `0x00BBC36C`) has **zero** `.text`
+> references and is defined in **no shipped `.gfx`** — a dead callback at both ends. So the Flash
+> route is not the way in to the hash. The two questions above stay open; find the writer from the
+> **`.profile` write side** (HW-write bp, or the `PrecacheManager::Save` idiom in §2.3) instead.
 
 **Serialize driver:**
 3. Break `FUN_005a4520` entry with a `Pg.SaveGame("autosave")`; read `[0x1176054]+0x470` (the BE blob

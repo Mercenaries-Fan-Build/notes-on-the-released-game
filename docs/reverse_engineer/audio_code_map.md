@@ -294,11 +294,18 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
 
 ## 10. Open questions & confirm-live targets
 
-1. **Ghidra-gap bodies** (exist only in `image.bin`, worth a targeted re-export /
-   `DecompileProfileAccessors.java`-style pass): `0x00838860` (MixWavesToOutput), `~0x00837e30`
-   (GetWavePriority), `FUN_008309b0`/`FUN_00836400`/`FUN_00830840`/`FUN_00830920`/`FUN_008305b0`/
-   `FUN_00830430`/`FUN_00830450` (engine vtable slots), and the Lua shims for the 45 bindings missing
-   from the export (Sound `0x5e1430`… + VO `0x5ea1c0`…).
+1. **Ghidra-gap bodies** — `0x00838860` (MixWavesToOutput), `~0x00837e30` (GetWavePriority),
+   `FUN_008309b0`/`FUN_00836400`/`FUN_00830840`/`FUN_00830920`/`FUN_008305b0`/`FUN_00830430`/
+   `FUN_00830450` (engine vtable slots), and the Lua shims for the 45 bindings missing from the
+   export (Sound `0x5e1430`… + VO `0x5ea1c0`…). **Recover by disassembling the VA.**
+
+   > **Corrected 2026-07-26.** Previously filed as *"exist only in `image.bin`, worth a targeted
+   > re-export / `DecompileProfileAccessors.java`-style pass"*. The two Lua-shim heads named here
+   > were checked directly: `0x5E1430` (`51 53 8b 5c 24 0c …`, 27 insns to `ret`) and `0x5EA1C0`
+   > (`53 56 8b 35 bc 5d …`, 14 insns to `ret`) are ordinary `.text`. Absence from the export means
+   > Ghidra had no static caller to walk from — not that the body is missing. This is an
+   > afternoon's disassembly, not a blocked item. See `ghidra_knowledge_inventory.md` Part F.4.
+   > (The eight `0x0083xxxx` engine-vtable entries were not individually re-checked.)
 2. **Message-bus & singleton constructors** (`DAT_015386xx`, 14-slot factory fill) are in
    SecuROM-relocated code — break on first write to `DAT_015386b0` to catch construction live.
 3. **SecuROM-thunked hot paths** — confirm-live: cue dispatch `thunk_FUN_024b65e0`, `LoadBank`

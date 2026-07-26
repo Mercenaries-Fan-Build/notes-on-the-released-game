@@ -425,7 +425,7 @@ FUN_0066f220  per-model destruction poll (callers=[] → vtable/registry-driven 
                   s_OnStateChange_00bb12a4 via thunk_FUN_024f28c0
   → FUN_004d2e20  per-node event pump (706 B): drains a 5-word-record stack-ring (param_1+4=top),
                   keys on msg hashes 0x15c02da4 / 0xBA71C11C, dispatches FUN_006746d0
-  → FUN_006746d0 → … → FUN_006696a0  RuntimeHealth {cur,max} writer
+  → FUN_006746d0 → … → FUN_006696a0  RuntimeHealth {max,cur} writer
 ```
 
 Live record observed carried a **unit hit-direction vector** (`0.82,-0.28,0.49`, |v|≈1) + runtime-computed
@@ -438,7 +438,8 @@ ratio; it is the destruction bridge, **not** the ballistic amount computation.
 falloff(distance) × mitigation → subtract RuntimeHealth.cur` runs in the **weapon-hit code** *before*
 (A) polls the ratio. It has **no PC code literal by name** (`ApplyDamage*`, `ProcessExplosionCast`,
 `ApplyExplosionToBodies`, `ExpToObj` are string-only). **Capture method (definitive):** HW **write**-BP
-on a target's `RuntimeHealth.cur` float (`{cur,max}` stride `0xc`, producer `FUN_004cfed0`) — prefer the
+on a target's `RuntimeHealth.cur` float (**`{max,cur}`** stride `0xc` — order corrected 2026-07-26,
+`cur` is at `+0x04`; producer `FUN_004cfed0`) — prefer the
 **player's** `cur` (only player-taken damage writes it, no destructible-FSM noise); the write's call
 stack + XMM registers are the ballistic applier and its distance/falloff math. The `RuntimeExplosion`
 producer `FUN_0066ae30` is a **startup registrar** (confirmed live: never runs in gameplay), so it is
@@ -530,7 +531,8 @@ Each block deserializes into the `WeaponProjectileBase`/`WeaponScatter`/`Project
 via the schema functions in §6.
 
 **Lua surface** (registration table `0x00798770–0x00799200`, `luaL_Reg` walk; VAs are
-binding-table-only, recover with a `DecompileProfileAccessors.java`-style forcing script):
+binding-table-only — **recover by disassembling the VA**, no forcing script needed; see
+`ghidra_knowledge_inventory.md` Part F.4, corrected 2026-07-26):
 
 - `Weapon.*` — `GetClipAmmo`, `SetClipAmmo`, `GetReserveAmmo`, `SetReserveAmmo`, `IsDesignator`,
   `IsPrimary` (the native backing is the RuntimeWeapon pool read/write, §2.2/§2.3).

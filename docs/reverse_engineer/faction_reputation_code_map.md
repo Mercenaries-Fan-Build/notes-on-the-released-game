@@ -45,8 +45,9 @@ body read first-hand and pinned by a can't-coincide fingerprint** is the mood br
 (§2) — its literal seven infraction-key strings are the **exact** set + order + role the Lua
 `Report.GetInfractions`/`FinishedReporting` consumes. The `Ai.*`/`Pg.*Pursuit*` cfunc *bodies* are
 **binding-table-only** (the same pattern as the 6 missing Lua binders the streaming/weapons maps
-hit) → their VAs are recoverable by the `luaL_Reg` walk + a `DecompileProfileAccessors.java`-style
-forcing script, stated honestly per row. Confidence: **H** can't-coincide fingerprint (read body +
+hit) → their VAs come from the `luaL_Reg` walk and **their bodies are recovered by disassembling
+that VA** (~~a `DecompileProfileAccessors.java`-style forcing script~~ — obsolete 2026-07-26, see
+`ghidra_knowledge_inventory.md` Part F.4), stated honestly per row. Confidence: **H** can't-coincide fingerprint (read body +
 matching constants/role) · **M** one strong structural signal · **L/open** positional / binding-only
 / confirm-live.
 
@@ -231,12 +232,33 @@ end
   `Allied`/`China`/`OC`/`Guerilla`/`Pirate`/`VZ`/`PMC`/`Civ`). The Xbox `GetFactionGuid` (rdata
   `0x0024e60`) + its assert `Warning: GetFactionGuid(0x%0x) = 0` is the native name→GUID path behind
   this; the matrix is indexed by the resolved GUID pair.
-- **`Ai.GetRelation`/`Ai.SetRelation`/`Ai.AddInfraction` cfunc bodies are binding-table-only** —
-  their VAs live in the Lua registration table (bindings-audit places the Faction/Pursuit cluster
-  near `0x007B98EC`, where `Report.Completed`=`0x7B98EC` / `Report.Failed`=`0x7B98E4` are already
-  pinned). Recover with the `luaL_Reg` walk + a `DecompileProfileAccessors.java`-style forcing script
-  (the method that validated `Ai.TweakAttachedSpawners = 0x5A4C40` in the streaming map). **Do not
-  guess a VA** — none is asserted here.
+- **`Ai.GetRelation`/`Ai.SetRelation`/`Ai.AddInfraction` cfunc VAs — RESOLVED 2026-07-26.** These
+  were listed as binding-table-only with the VAs deliberately unasserted. The `luaL_Reg` walk pins
+  all of them; no forcing script was needed. **H** — each row is a literal
+  `{const char* name, lua_CFunction fn}` pair and each body opens with the standard cfunc prologue
+  (`mov ebx, [esp+X]` = `lua_State*`):
+
+  | cfunc | name string | `luaL_Reg` row | body | in Ghidra export? |
+  |---|---|---|---|---|
+  | `Ai.GetRelation` | `0x00BB471C` | `0x00B9AB00` | **`0x005AACE0`** | yes (`FUN_005aace0`, 226 B) |
+  | `Ai.SetRelation` | `0x00BB4710` | `0x00B9AB08` | **`0x005AADD0`** | yes (`FUN_005aadd0`, 275 B) |
+  | `Ai.GetFactionGuid` | `0x00BB46F0` | `0x00B9AB18` | **`0x005AB010`** | **no** — disassembles fine |
+  | `Ai.AddInfraction` | `0x00BB46E0` | `0x00B9AB20` | **`0x005AB0F0`** | **no** — disassembles fine |
+  | `ApplyCachedFactionRelations` | `0x00BB7C60` | `0x00B99AA0` | **`0x005C9210`** | **no** — disassembles fine |
+
+  Three of the five are absent from the Ghidra export and are nonetheless ordinary `.text`
+  (`0x005AB0F0` = `83 ec 0c f3 0f 10 05 64 b6 b9 00 …`). That is the whole "binding-only" phenomenon:
+  no static caller for Ghidra to walk from. See `ghidra_knowledge_inventory.md` Part F.4.
+
+  Two disambiguations worth recording:
+  - **`SetRelation` is registered twice** under different tables — `0x00B987C8 → 0x005F74E0` is
+    `ObjectFilter.SetRelation`, `0x00B9AB08 → 0x005AADD0` is `Ai.SetRelation`. A name-only search
+    conflates them.
+  - The bindings-audit guess that the cluster sits "near `0x007B98EC`" was **wrong** — that region
+    holds `Report.*`. The Faction/Pursuit rows are at `0x00B9AB00…0x00B9AB20`.
+
+  Reproduce: find the name string's VA in the image, search for `struct.pack('<I', that_va)` in
+  `.rdata`, and read the dword after each match.
 - **`ApplyCachedFactionRelations`** (Xbox rdata `0x0029204`) is the "re-apply a saved/replicated
   relation set" entry — the native counterpart of Lua `LoadSingleton`/`NetInitializeClientFactionRelations`
   (which re-drive `SetRelation` for every faction pair on load / client-join). PC body unlocated.
@@ -404,10 +426,11 @@ confirm-live (§9).
    it writes the accumulator slot matching the act type (e.g. Hijack → `puVar2[8/9]`).
 
 **Relation matrix + cfuncs**
-3. Recover the binding-only bodies (`Ai.GetRelation`/`Ai.SetRelation`/`Ai.AddInfraction`,
-   `GetFactionGuid`, `ApplyCachedFactionRelations`) with the `DecompileProfileAccessors.java`-style
-   forcing script over the Faction/Pursuit cluster near `0x007B98EC`; then bp `Ai.SetRelation` and read
-   the matrix base + index formula (GUID pair → slot).
+3. ~~Recover the binding-only bodies … with a forcing script over the cluster near `0x007B98EC`~~
+   — **done statically 2026-07-26, see §2**: `GetRelation 0x005AACE0`, `SetRelation 0x005AADD0`,
+   `GetFactionGuid 0x005AB010`, `AddInfraction 0x005AB0F0`,
+   `ApplyCachedFactionRelations 0x005C9210`. What remains live-only is the second half: bp
+   `Ai.SetRelation 0x005AADD0` and read the **matrix base + index formula** (GUID pair → slot).
 
 **Pursuit**
 4. Break the `Modify Attitude` / `StartPursuit GUR` debug menu items; recover `Pg.SetPursuit`/

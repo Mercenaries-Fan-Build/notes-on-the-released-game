@@ -368,7 +368,7 @@ resource types + phase strings, *not* gameplay ECS). Invariants shared by **all*
 | 04 player / vehicle / human | 23 | `HumanInventory` = 3 ints; `RuntimeVehicleInventory` = 2-byte bitmask |
 | 05 presentation / audio / fx | 34 | `SoundEffect`/`LightObject`/`BlobShadow` (FX = ordinary reflection classes) |
 | 06 world / terrain / roads / streaming | 30 | Road graph, `RtGenericLOD`, `Model`=`0x5b724250`; schema-vs-computed split |
-| 07 gameplay / state / health / mission | 35 | `Health`=1f+3b, `RuntimeHealth`={cur,max}, `ObjectScript`=2 int32 hashes |
+| 07 gameplay / state / health / mission | 35 | `Health`=1f+3b, `RuntimeHealth`={max,cur} (corrected 2026-07-26), `ObjectScript`=2 int32 hashes |
 | 08 misc | 7 | raw-blob (`Disable*Decals`, `TickDamage`, `TriggerOnTimer`) |
 | 09 render / asset pipeline | 12 | **not gameplay ECS** — 8 D3D9 precache types + phase strings |
 | **Total** | **231** (+1 phase-string dup = 232 raw) | |

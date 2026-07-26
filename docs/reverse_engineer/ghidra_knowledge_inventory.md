@@ -343,6 +343,38 @@ The reverse-engineering is deep but narrow. Honest accounting of the gaps:
    Crash fault sites `0x4CC064`, `0x51812F`, `0x63DA1F`, `0x790F02` likewise have no
    enclosing Ghidra function (inlined / generated).
 
+   > ### ⚠ "Binding-only" is a Ghidra artefact, not a wall — added 2026-07-26
+   >
+   > Eight sibling maps carry some form of *"the cfunc bodies are binding-table-only; recover
+   > them with a `DecompileProfileAccessors.java`-style forcing script"*. **That recommendation
+   > is obsolete and the premise behind it is wrong.** A cfunc reached only through a `.rdata`
+   > `luaL_Reg` row has **no static caller**, so Ghidra's function-discovery never walks to it —
+   > but the bytes are ordinary, unobfuscated `.text`. Point a disassembler at the VA from the
+   > binding table and the body is simply there.
+   >
+   > Measured on the 16 VAs those maps nominate as needing a forcing pass
+   > (`0x5CF240`, `0x5CF600`, `0x5D7160`, `0x5E1CC0`, `0x5E1C40`, `0x5A4EA0`, `0x5A5010`,
+   > `0x5A5180`, `0x5A5860`, `0x5DA4D0`, `0x5DA790`, `0x5D9CC0`, `0x5DA010`, `0x5DA130`,
+   > `0x5E1430`, `0x5EA1C0`): **16 of 16** open with a normal prologue and run 10–86
+   > instructions to a `ret` or tail-`jmp`. None is stolen, encrypted, or generated.
+   >
+   > Reproduce (capstone, `CS_MODE_32`, PE section table for VA→file offset, any clean image
+   > such as `output/_ghidra/securom_dump/mercs2_nodrm_v3.exe`):
+   >
+   > ```
+   > 0x005CF240  first bytes 51 53 8b 5c 24 0c   33 insns to ret   (IsHibernated)
+   > 0x005A4EA0  first bytes 83 ec 0c 53 8b 5c   27 insns to tail-jmp
+   > ```
+   >
+   > Scale already achieved this way: 45/49 bodies across four namespaces, then 87/87 for
+   > `Object`, 151 for the GUI surface, 57 for `Player`. **Before writing "recover with a
+   > forcing script" into a map, disassemble the VA — it costs one command.**
+   >
+   > Two genuine limits remain, and only these: (a) SecuROM **VM stubs**, recognisable as
+   > `push imm32; call 0x01AAFF10` after following the IAT-style slot; (b) bodies whose plaintext
+   > lives relocated in `.securom` with blocks joined by `push <ret>; push <target>; ret` — still
+   > readable, just not linearly. See [[binding-only-is-not-a-wall-disassemble]].
+
 5. **Streaming texture-header parse** (`FUN_00875b00`/`FUN_008273f0`) and the
    **node status→4 transition** (`0x873140`/`0x8731f0`) are referenced but not fully
    decompiled in the corpus — the buffer-sizing math is from the memory engine-chain note.

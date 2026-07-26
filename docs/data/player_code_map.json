@@ -1,0 +1,1253 @@
+{
+ "title": "Player \u2014 PC code map companion data",
+ "binary": {
+  "image": "output/_ghidra/securom_dump/mercs2_unpacked.exe",
+  "base": "0x00400000"
+ },
+ "generated": "2026-07-25",
+ "lua_namespace": {
+  "name": "Player",
+  "luaL_Reg_table_va": "0x00B98FC0",
+  "count": 107,
+  "stubs": 0,
+  "cfunc_va_range": [
+   "0x005DA7A0",
+   "0x005E0470"
+  ],
+  "decompiled_bodies": 107,
+  "entries": [
+   {
+    "index": 0,
+    "name": "GetCharacter",
+    "va": "0x005DA870",
+    "subsystem": "identity_possession",
+    "decompiled": true,
+    "script_call_sites": 93,
+    "body": "disasm"
+   },
+   {
+    "index": 1,
+    "name": "GetControlledObject",
+    "va": "0x005DAA20",
+    "subsystem": "identity_possession",
+    "decompiled": true,
+    "script_call_sites": 13,
+    "body": "disasm"
+   },
+   {
+    "index": 2,
+    "name": "GetSeat",
+    "va": "0x005DA940",
+    "subsystem": "identity_possession",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 3,
+    "name": "GetName",
+    "va": "0x005DA7A0",
+    "subsystem": "identity_possession",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 4,
+    "name": "GetCameraXZHeading",
+    "va": "0x005DAB50",
+    "subsystem": "camera",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "ghidra"
+   },
+   {
+    "index": 5,
+    "name": "GetViewport",
+    "va": "0x005DACC0",
+    "subsystem": "camera",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 6,
+    "name": "GetViewportId",
+    "va": "0x005DAF10",
+    "subsystem": "camera",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "disasm"
+   },
+   {
+    "index": 7,
+    "name": "GetCamera",
+    "va": "0x005DAFF0",
+    "subsystem": "camera",
+    "decompiled": true,
+    "script_call_sites": 25,
+    "body": "disasm"
+   },
+   {
+    "index": 8,
+    "name": "TeleportCamera",
+    "va": "0x005DB0D0",
+    "subsystem": "camera",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "ghidra"
+   },
+   {
+    "index": 9,
+    "name": "CheckSpawnPos",
+    "va": "0x005DB6A0",
+    "subsystem": "spawn",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 10,
+    "name": "SetPDAMapMode",
+    "va": "0x005DB780",
+    "subsystem": "pda_map_mode",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "ghidra"
+   },
+   {
+    "index": 11,
+    "name": "SetPDAMapModeCallback",
+    "va": "0x005DB1E0",
+    "subsystem": "pda_map_mode",
+    "decompiled": true,
+    "script_call_sites": 7,
+    "body": "ghidra"
+   },
+   {
+    "index": 12,
+    "name": "SetPDAMapModeCancelCallback",
+    "va": "0x005DB340",
+    "subsystem": "pda_map_mode",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 13,
+    "name": "RequestPDAMapModeExit",
+    "va": "0x005DB470",
+    "subsystem": "pda_map_mode",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 14,
+    "name": "RequestPDAMapModeCancel",
+    "va": "0x005DB5A0",
+    "subsystem": "pda_map_mode",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "disasm"
+   },
+   {
+    "index": 15,
+    "name": "GetTargetUnderReticle",
+    "va": "0x005DD6B0",
+    "subsystem": "reticle",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 16,
+    "name": "SetSatelliteScanMode",
+    "va": "0x005DB980",
+    "subsystem": "satellite_scan",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 17,
+    "name": "SetupSatelliteScan",
+    "va": "0x005DBA80",
+    "subsystem": "satellite_scan",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 18,
+    "name": "SetSatelliteScanCallbacks",
+    "va": "0x005DBBE0",
+    "subsystem": "satellite_scan",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 19,
+    "name": "AddSatelliteScanTarget",
+    "va": "0x005DBCF0",
+    "subsystem": "satellite_scan",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 20,
+    "name": "SetSatelliteScanPaused",
+    "va": "0x005DBDE0",
+    "subsystem": "satellite_scan",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 21,
+    "name": "SetCinematicMode",
+    "va": "0x005DBEE0",
+    "subsystem": "cinematic",
+    "decompiled": true,
+    "script_call_sites": 9,
+    "body": "ghidra"
+   },
+   {
+    "index": 22,
+    "name": "InCinematicMode",
+    "va": "0x005DC090",
+    "subsystem": "cinematic",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 23,
+    "name": "SetOutBoundary",
+    "va": "0x005DC160",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "ghidra"
+   },
+   {
+    "index": 24,
+    "name": "GetOutBoundary",
+    "va": "0x005DC720",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 25,
+    "name": "IsInWarningZone",
+    "va": "0x005DC810",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 26,
+    "name": "AddBoundary",
+    "va": "0x005DC900",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 27,
+    "name": "RemoveBoundary",
+    "va": "0x005DCA30",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 28,
+    "name": "RemoveAllBoundary",
+    "va": "0x005DCB30",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "disasm"
+   },
+   {
+    "index": 29,
+    "name": "GetAllBoundaryGuid",
+    "va": "0x005DCC20",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 30,
+    "name": "SetBoundaryCallback",
+    "va": "0x005DCD60",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 31,
+    "name": "IsPositionOutBoundary",
+    "va": "0x005DCE90",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 32,
+    "name": "IsBoundaryDeath",
+    "va": "0x005DD040",
+    "subsystem": "boundary",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "disasm"
+   },
+   {
+    "index": 33,
+    "name": "SetInputEnabled",
+    "va": "0x005DC270",
+    "subsystem": "input_survival_health",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "disasm"
+   },
+   {
+    "index": 34,
+    "name": "SetSurvivalMode",
+    "va": "0x005DC3B0",
+    "subsystem": "input_survival_health",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 35,
+    "name": "SetHealthClamp",
+    "va": "0x005DC4F0",
+    "subsystem": "input_survival_health",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 36,
+    "name": "SetSurvivalModeCallback",
+    "va": "0x005DC600",
+    "subsystem": "input_survival_health",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 37,
+    "name": "IsCoopMultiplayer",
+    "va": "0x005DD830",
+    "subsystem": "coop",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "disasm"
+   },
+   {
+    "index": 38,
+    "name": "GetPrimaryPlayer",
+    "va": "0x005DD8A0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 64,
+    "body": "disasm"
+   },
+   {
+    "index": 39,
+    "name": "GetSecondaryPlayer",
+    "va": "0x005DD900",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 27,
+    "body": "disasm"
+   },
+   {
+    "index": 40,
+    "name": "GetPrimaryCharacter",
+    "va": "0x005DD960",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 96,
+    "body": "disasm"
+   },
+   {
+    "index": 41,
+    "name": "GetSecondaryCharacter",
+    "va": "0x005DD9E0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 143,
+    "body": "disasm"
+   },
+   {
+    "index": 42,
+    "name": "GetMaximumPlayers",
+    "va": "0x005DDA60",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 43,
+    "name": "GetCurrentPlayers",
+    "va": "0x005DDAA0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 18,
+    "body": "disasm"
+   },
+   {
+    "index": 44,
+    "name": "GetPlayer",
+    "va": "0x005DDAE0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 13,
+    "body": "disasm"
+   },
+   {
+    "index": 45,
+    "name": "GetAllPlayers",
+    "va": "0x005DDB90",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 83,
+    "body": "disasm"
+   },
+   {
+    "index": 46,
+    "name": "GetPlayerId",
+    "va": "0x005DDC30",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "disasm"
+   },
+   {
+    "index": 47,
+    "name": "IsJoined",
+    "va": "0x005DDD40",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 48,
+    "name": "IsLocal",
+    "va": "0x005DDDE0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 53,
+    "body": "disasm"
+   },
+   {
+    "index": 49,
+    "name": "IsRemote",
+    "va": "0x005DDEE0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 6,
+    "body": "disasm"
+   },
+   {
+    "index": 50,
+    "name": "GetLocalId",
+    "va": "0x005DE010",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 51,
+    "name": "GetMaximumLocalPlayers",
+    "va": "0x005DDF90",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 52,
+    "name": "GetCurrentLocalPlayers",
+    "va": "0x005DDFD0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 53,
+    "name": "GetLocalPlayer",
+    "va": "0x005DE0B0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 107,
+    "body": "disasm"
+   },
+   {
+    "index": 54,
+    "name": "GetLocalPlayerId",
+    "va": "0x005DE150",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "disasm"
+   },
+   {
+    "index": 55,
+    "name": "GetLocalCharacter",
+    "va": "0x005DE1D0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 165,
+    "body": "disasm"
+   },
+   {
+    "index": 56,
+    "name": "GetAnyCharacter",
+    "va": "0x005DE260",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 223,
+    "body": "ghidra"
+   },
+   {
+    "index": 57,
+    "name": "GetAllCharacters",
+    "va": "0x005DE2A0",
+    "subsystem": "player_db_roster",
+    "decompiled": true,
+    "script_call_sites": 26,
+    "body": "ghidra"
+   },
+   {
+    "index": 58,
+    "name": "CreatePlayer",
+    "va": "0x005DE2E0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 59,
+    "name": "DestroyPlayer",
+    "va": "0x005DE440",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 60,
+    "name": "ClearPlayerDB",
+    "va": "0x005DE3C0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 61,
+    "name": "AttachToCharacter",
+    "va": "0x005DE4E0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 62,
+    "name": "DetachFromCharacter",
+    "va": "0x005DE5D0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "disasm"
+   },
+   {
+    "index": 63,
+    "name": "BindToLocal",
+    "va": "0x005DE690",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 64,
+    "name": "BindToRemote",
+    "va": "0x005DE740",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 65,
+    "name": "Unbind",
+    "va": "0x005DE7D0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 66,
+    "name": "SetPlayerJoinedCallback",
+    "va": "0x005DE860",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 67,
+    "name": "SetPlayerLeftCallback",
+    "va": "0x005DEA10",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 68,
+    "name": "RemovePlayerJoinedCallback",
+    "va": "0x005DEBC0",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 69,
+    "name": "RemovePlayerLeftCallback",
+    "va": "0x005DEC10",
+    "subsystem": "lifecycle_bind_callbacks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 70,
+    "name": "GetPlayerStart",
+    "va": "0x005DEC60",
+    "subsystem": "player_start",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 71,
+    "name": "SetPlayerStart",
+    "va": "0x005DEC90",
+    "subsystem": "player_start",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 72,
+    "name": "ClaimSeat",
+    "va": "0x005DED20",
+    "subsystem": "seats",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 73,
+    "name": "UnClaimSeat",
+    "va": "0x005DEF80",
+    "subsystem": "seats",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 74,
+    "name": "GetRetryPosition",
+    "va": "0x005DF200",
+    "subsystem": "retry_markers",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "disasm"
+   },
+   {
+    "index": 75,
+    "name": "SetWaitForInGame",
+    "va": "0x005DF150",
+    "subsystem": "retry_markers",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "disasm"
+   },
+   {
+    "index": 76,
+    "name": "GetAllTargetMarkerPos",
+    "va": "0x005DF2D0",
+    "subsystem": "retry_markers",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 77,
+    "name": "SetSeatMovementLocks",
+    "va": "0x005DD140",
+    "subsystem": "control_locks",
+    "decompiled": true,
+    "script_call_sites": 7,
+    "body": "ghidra"
+   },
+   {
+    "index": 78,
+    "name": "SetVehicleControlsLock",
+    "va": "0x005DD2E0",
+    "subsystem": "control_locks",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 79,
+    "name": "GetControlBindingType",
+    "va": "0x005DD430",
+    "subsystem": "control_locks",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 80,
+    "name": "ClearGPS",
+    "va": "0x005DFEE0",
+    "subsystem": "gps_scope",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "disasm"
+   },
+   {
+    "index": 81,
+    "name": "SetScopeEnabled",
+    "va": "0x005DFFA0",
+    "subsystem": "gps_scope",
+    "decompiled": true,
+    "script_call_sites": 6,
+    "body": "disasm"
+   },
+   {
+    "index": 82,
+    "name": "GetCash",
+    "va": "0x005DF440",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 8,
+    "body": "disasm"
+   },
+   {
+    "index": 83,
+    "name": "SetCash",
+    "va": "0x005DF480",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 8,
+    "body": "ghidra"
+   },
+   {
+    "index": 84,
+    "name": "AddCash",
+    "va": "0x005DF510",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "disasm"
+   },
+   {
+    "index": 85,
+    "name": "GetFuel",
+    "va": "0x005DF590",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 7,
+    "body": "disasm"
+   },
+   {
+    "index": 86,
+    "name": "SetFuel",
+    "va": "0x005DF5D0",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 12,
+    "body": "ghidra"
+   },
+   {
+    "index": 87,
+    "name": "AddFuel",
+    "va": "0x005DF670",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "disasm"
+   },
+   {
+    "index": 88,
+    "name": "GetFuelCapacity",
+    "va": "0x005DF6E0",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 7,
+    "body": "disasm"
+   },
+   {
+    "index": 89,
+    "name": "SetFuelCapacity",
+    "va": "0x005DF720",
+    "subsystem": "economy_cash_fuel",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "disasm"
+   },
+   {
+    "index": 90,
+    "name": "GetProfileCharacter",
+    "va": "0x005DF790",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 91,
+    "name": "SetProfileCharacter",
+    "va": "0x005DF7D0",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 92,
+    "name": "GetProfileUpgrade",
+    "va": "0x005DF830",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 93,
+    "name": "SetProfileUpgrade",
+    "va": "0x005DF870",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   },
+   {
+    "index": 94,
+    "name": "GetProfileCostume",
+    "va": "0x005DF8E0",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 5,
+    "body": "ghidra"
+   },
+   {
+    "index": 95,
+    "name": "SetProfileCostume",
+    "va": "0x005DF920",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 4,
+    "body": "ghidra"
+   },
+   {
+    "index": 96,
+    "name": "GetAvailableCostumes",
+    "va": "0x005DFB00",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "disasm"
+   },
+   {
+    "index": 97,
+    "name": "SetAvailableCostumes",
+    "va": "0x005DFB40",
+    "subsystem": "profile_persistence",
+    "decompiled": true,
+    "script_call_sites": 3,
+    "body": "disasm"
+   },
+   {
+    "index": 98,
+    "name": "SetOutfit",
+    "va": "0x005DF980",
+    "subsystem": "outfit",
+    "decompiled": true,
+    "script_call_sites": 8,
+    "body": "ghidra"
+   },
+   {
+    "index": 99,
+    "name": "SetGrappleEnabled",
+    "va": "0x005DFBB0",
+    "subsystem": "grapple_pmc_aim",
+    "decompiled": true,
+    "script_call_sites": 1,
+    "body": "ghidra"
+   },
+   {
+    "index": 100,
+    "name": "SetInPmc",
+    "va": "0x005DFCC0",
+    "subsystem": "grapple_pmc_aim",
+    "decompiled": true,
+    "script_call_sites": 6,
+    "body": "disasm"
+   },
+   {
+    "index": 101,
+    "name": "SetAimMode",
+    "va": "0x005DFDD0",
+    "subsystem": "grapple_pmc_aim",
+    "decompiled": true,
+    "script_call_sites": 17,
+    "body": "disasm"
+   },
+   {
+    "index": 102,
+    "name": "SetVehicleDisguise",
+    "va": "0x005E00B0",
+    "subsystem": "vehicle_disguise_swim",
+    "decompiled": true,
+    "script_call_sites": 6,
+    "body": "disasm"
+   },
+   {
+    "index": 103,
+    "name": "GetVehicleDisguise",
+    "va": "0x005E0130",
+    "subsystem": "vehicle_disguise_swim",
+    "decompiled": true,
+    "script_call_sites": 6,
+    "body": "disasm"
+   },
+   {
+    "index": 104,
+    "name": "VehicleDisguise",
+    "va": "0x005E02A0",
+    "subsystem": "vehicle_disguise_swim",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 105,
+    "name": "GetVehicleDisguiseState",
+    "va": "0x005E0470",
+    "subsystem": "vehicle_disguise_swim",
+    "decompiled": true,
+    "script_call_sites": 2,
+    "body": "ghidra"
+   },
+   {
+    "index": 106,
+    "name": "SetSwimmingSearchRadius",
+    "va": "0x005E0170",
+    "subsystem": "vehicle_disguise_swim",
+    "decompiled": true,
+    "script_call_sites": 0,
+    "body": "ghidra"
+   }
+  ],
+  "bodies_from_ghidra": 50,
+  "bodies_from_disassembly": 57,
+  "binding_only": 0
+ },
+ "globals": {
+  "player_component_container": {
+   "va": "0x00DF9B90",
+   "live_count_field": "DAT_00DF9BA8",
+   "key_array": "DAT_00DF9BD8",
+   "page_table": "DAT_00DF9C00",
+   "mask": "DAT_00DF9BB0",
+   "elem_stride": "DAT_00DF9BB4",
+   "page_shift": "DAT_00DF9BB6",
+   "zero_record": "DAT_00DF9C0C",
+   "note": "record[0] = pointer to the Player object"
+  },
+  "player_control_marker_container": {
+   "va": "0x00DF9B10",
+   "note": "component added to the character on attach; identity open"
+  },
+  "outfit_component_container": {
+   "va": "0x00DF6C08",
+   "note": "target of SetOutfit's FUN_00649180 add"
+  },
+  "profile_economy_singleton": {
+   "va": "0x01176054",
+   "owner_doc": "save_serialize_code_map.md"
+  },
+  "max_players_setting": {
+   "va": "0x017C0DD0",
+   "note": "value returned by Player.GetMaximumPlayers"
+  },
+  "cached_player_object_for_pda": {
+   "va": "0x01176120",
+   "note": "set to the resolved player object by FUN_005BA500 before writing +0x390"
+  }
+ },
+ "functions": {
+  "player_system_tick": {
+   "va": "0x0041FE20",
+   "caller": "0x004C9740",
+   "note": "layer-4 per-system call list"
+  },
+  "container_get_by_guid": {
+   "va": "0x00423DC0",
+   "note": "Container::Get(guid); returns this+0x7c zero-record on miss"
+  },
+  "guid_to_slot": {
+   "va": "0x006496B0"
+  },
+  "component_add": {
+   "va": "0x00649180"
+  },
+  "get_player_by_index": {
+   "va": "0x006CDAF0",
+   "note": "linear scan on player+0x2c; hard cap 2"
+  },
+  "get_current_players": {
+   "va": "0x006CDAC0",
+   "note": "counts players with +0x30 != -1"
+  },
+  "attach_detach_character": {
+   "va": "0x006A4060",
+   "note": "(playerObj, charGuid); reads/writes player+0x20"
+  },
+  "local_slot_to_player_index": {
+   "va": "0x006CD960",
+   "note": "cmp arg,2 / jl \u2014 a THIRD independent hardcoded 2-player cap; scans DAT_00DF9BA8"
+  }
+ },
+ "player_object_layout": [
+  {
+   "off": "+0x04",
+   "field": "list head",
+   "evidence": "FUN_006A4060",
+   "conf": "L"
+  },
+  {
+   "off": "+0x1C",
+   "field": "the player's OWN guid (the handle scripts pass around)",
+   "evidence": "GetPrimaryPlayer 0x005DD8A0 / GetSecondaryPlayer 0x005DD900 / GetLocalPlayer 0x005DE0B0 all return it",
+   "conf": "H"
+  },
+  {
+   "off": "+0x20",
+   "field": "attached character GUID",
+   "evidence": "FUN_006A4060 line 77; re-confirmed by GetCharacter 0x005DA870, GetPrimaryCharacter 0x005DD960, GetSecondaryCharacter 0x005DD9E0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x24",
+   "field": "currently-controlled object (ridden vehicle); GetControlledObject falls back to +0x20 when zero",
+   "evidence": "FUN_006A4060 line 90 clears it; GetControlledObject 0x005DAA20 reads it, probes via container 0x00DF8188 family, else returns +0x20",
+   "conf": "H"
+  },
+  {
+   "off": "+0x2C",
+   "field": "player index (0..1)",
+   "evidence": "FUN_006CDAF0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x30",
+   "field": "local viewport/slot id; -1 = not local",
+   "evidence": "FUN_006CDAC0, FUN_00714230, FUN_005DACC0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x58",
+   "field": "byte flag gating viewport-id resolve",
+   "evidence": "FUN_005DACC0, FUN_0041FE20",
+   "conf": "M"
+  },
+  {
+   "off": "+0x11C",
+   "field": "target-under-reticle GUID",
+   "evidence": "FUN_005DD6B0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x124",
+   "field": "reticle hit payload (8 bytes)",
+   "evidence": "FUN_005DD6B0",
+   "conf": "M"
+  },
+  {
+   "off": "+0x1BC",
+   "field": "child/attachment count",
+   "evidence": "FUN_006A4060",
+   "conf": "L"
+  },
+  {
+   "off": "+0x380",
+   "field": "boundary callback ref",
+   "evidence": "FUN_005DCD60",
+   "conf": "H"
+  },
+  {
+   "off": "+0x384",
+   "field": "boundary callback context",
+   "evidence": "FUN_005DCD60",
+   "conf": "H"
+  },
+  {
+   "off": "+0x390",
+   "field": "this player's PDA widget id",
+   "evidence": "FUN_005BA500 (_GuiInternal.SetPlayerPDAWidget)",
+   "conf": "H"
+  },
+  {
+   "off": "+0x430",
+   "field": "vehicle-disguise field A",
+   "evidence": "FUN_005E02A0",
+   "conf": "M"
+  },
+  {
+   "off": "+0x434",
+   "field": "vehicle-disguise field B",
+   "evidence": "FUN_005E02A0",
+   "conf": "M"
+  },
+  {
+   "off": "+0x438",
+   "field": "vehicle-disguise flag (bit 3)",
+   "evidence": "FUN_005E02A0",
+   "conf": "M"
+  },
+  {
+   "off": "+0x450",
+   "field": "compared against constant 0xFA62754E (hash-shaped); role unknown",
+   "evidence": "FUN_005BA500",
+   "conf": "L/open"
+  },
+  {
+   "off": "+0x45D",
+   "field": "seat movement lock 1",
+   "evidence": "FUN_005DD140",
+   "conf": "H"
+  },
+  {
+   "off": "+0x45E",
+   "field": "seat movement lock 2",
+   "evidence": "FUN_005DD140",
+   "conf": "H"
+  },
+  {
+   "off": "+0x45F",
+   "field": "seat movement lock 3",
+   "evidence": "FUN_005DD140",
+   "conf": "H"
+  },
+  {
+   "off": "+0x460",
+   "field": "vehicle controls lock",
+   "evidence": "FUN_005DD2E0",
+   "conf": "H"
+  }
+ ],
+ "profile_singleton_layout": [
+  {
+   "off": "+0x11",
+   "field": "dirty flag (OR'd on profile change)",
+   "evidence": "FUN_005DF5D0/870",
+   "conf": "H",
+   "new_here": true
+  },
+  {
+   "off": "+0x2C",
+   "field": "cash (signed int32)",
+   "evidence": "FUN_005DF480",
+   "conf": "H"
+  },
+  {
+   "off": "+0x30",
+   "field": "fuel (signed int32)",
+   "evidence": "FUN_005DF5D0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x61",
+   "field": "profile character",
+   "evidence": "FUN_005DF790/7D0",
+   "conf": "H"
+  },
+  {
+   "off": "+0x62",
+   "field": "profile upgrade",
+   "evidence": "FUN_005DF830/870",
+   "conf": "H"
+  },
+  {
+   "off": "+0x63",
+   "field": "profile costume",
+   "evidence": "FUN_005DF8E0/920",
+   "conf": "H"
+  },
+  {
+   "off": "+0x30C",
+   "field": "fuel capacity",
+   "evidence": "GetFuelCapacity 0x005DF6E0 reads it; SetFuelCapacity 0x005DF720 writes it",
+   "conf": "H",
+   "new_here": true
+  },
+  {
+   "off": "+0x470",
+   "field": "save-serialize source",
+   "evidence": "save_serialize_code_map.md",
+   "conf": "H"
+  }
+ ],
+ "ecs_components": [
+  {
+   "name": "ControllerPlayer",
+   "registrar": "0x00640410",
+   "container": "0x017BCEF8",
+   "elem_size": "0x0C"
+  },
+  {
+   "name": "VehicleDisguiseScale",
+   "registrar": "0x006413F0",
+   "container": "0x017BD5D8",
+   "elem_size": "0x0C"
+  },
+  {
+   "name": "GrappleParameters",
+   "registrar": "0x00643D50",
+   "container": "0x017BE848",
+   "elem_size": "0x1C"
+  }
+ ]
+}

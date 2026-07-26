@@ -114,9 +114,30 @@ if ((DAT_017bbd08 & 1) != 0)        DAT_017bbd08 &= ~1u;            // 0x004C169
 | `0x004C1693` | `FUN_004C15E0` | `AND [0x017bbd08],~1` | clear |
 | `0x004C11F3` | `FUN_004C1170` | `MOV [0x017bbd08],ECX` (after `AND ECX,0xFFFFFFE4`) | render-mgr **constructor/reset** clears bits 0,1,3,4 |
 
-`FUN_004C1170` is the render-manager constructor: zeroes `[0x017BBCC8]`, sets the stage
-array `[0x017BBCCC..]` to 5 fixed render-stage objects (`count [0x017BBCF4]=5`, pivot
-`[0x017BBCFC]=4`).
+`FUN_004C1170` zeroes `[0x017BBCC8]` and fills `[0x017BBCCC..]` with 5 fixed objects
+(`count [0x017BBCF4]=5`, pivot `[0x017BBCFC]=4`).
+
+> **Identity corrected 2026-07-26.** This section called `FUN_004C1170` "the render-manager
+> constructor" and `[0x017BBCCC + i*4]` "the render-stage array". The addresses and the flag
+> analysis are right; the naming is not. This is the **5-layer application stack**, and layer 4 is
+> the *game-state pump*, not a render stage — read out of the live dump
+> `output/_ghidra/securom_dump/mercs2_unpacked.exe`:
+>
+> | idx | object | vtable | `+0xc` tick |
+> |---|---|---|---|
+> | 0 | `0x00D6C22C` | `0x00BB0420` | `0x004BEEA0` |
+> | 1 | `0x014538B8` | `0x00BB0430` | `0x004BEED0` |
+> | 2 | `0x0149FDA0` | `0x00BB0440` | `0x004BFAF0` |
+> | 3 | `0x00D6C238` | `0x00BB0450` | `0x004C00E0` |
+> | **4** | **`0x00D6C244`** | **`0x00BB0460`** | **`0x004C09C0`** (game-state pump) |
+>
+> Mechanically, then, `[0x017BBD08]` bit 0 is set when the app stack **reaches its target layer**
+> (`cur == pivot`) and cleared while it is still climbing. Whether that is also the render
+> "needs-resolve" signal this section treats it as is **no longer established** — the equivalence
+> rested on the render-stage reading. The flag's writers and its `[0x017BBCC8]+0x40` aliasing are
+> unaffected and still hold; the *semantics* attributed to it above need re-deriving from the
+> consumers. Left open rather than silently re-glossed.
+> Cross-ref `docs/reverse_engineer/scheduler_tick_code_map.md` §3.
 
 ---
 
