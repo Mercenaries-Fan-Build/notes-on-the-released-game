@@ -41,17 +41,28 @@ contributions:
 value meaning "both" — a Shipment that claims to target both has almost certainly been tested
 against neither, and the layers available differ (ASI plugins exist only on retail).
 
-## Names, not hashes
+## Names and hashes
 
-The engine resolves assets through a one-way hash, so a hash **cannot** be turned back into a name.
-A manifest full of hashes is unreadable, unreviewable, and impossible to diff meaningfully.
+Anywhere an existing asset is referenced you may write **either** a name or a bare `0xHHHHHHHH`
+hash. A `0x…` reference *is* that hash; anything else is treated as a name and hashed for you.
 
-Write the name. `qm` hashes it for you, and warns (M0130) when you write a bare hash for something
-it can name. A bare hash is legal only where no name is known.
+```yaml
+target: pmc_hum_mattias_v3_ub    # preferred
+target: "0x6F84F6A3"             # equally valid
+```
 
-This is not pedantry. An earlier draft of this very document paired `ch_veh_boat_destroyer` with
-`0xE54047D5` — a hash that actually belongs to `al_veh_boat_destroyer`. Nothing about the pairing
-looked wrong.
+**A name is preferred, not required.** The engine's hash is one-way, so a hash cannot be turned back
+into a name, which makes a manifest full of them hard to read, review or diff. `qm` warns (M0130) and
+offers the name when it can reverse one — but the hash works, and the warning never blocks a build.
+
+Requiring names would be a rule the game itself does not follow: the base data ships hashes, and our
+name table does not cover every asset. If you are modding something unnamed, the hash is the only
+thing you *can* write.
+
+What the linter is actually guarding against is a **wrong** pairing. An earlier draft of this
+document paired `ch_veh_boat_destroyer` with `0xE54047D5` — a hash that belongs to
+`al_veh_boat_destroyer`. Nothing about it looked wrong. Writing the name, where you have one, is what
+makes that class of drift impossible.
 
 ## Folder layout
 
