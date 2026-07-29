@@ -452,6 +452,128 @@ FESL frames are `{4-byte type}{u32 BE id}{u32 BE length}{key=value\n payload}`. 
 - **Patch delivery is NOT network** — `vz-patch.wad` is a local on-disk overlay (loader `FUN_004bfaf0`);
   the EA-Plasma content-download schema is compiled-in but dormant.
 
+### 6.4 The endpoint-string surface — what it takes to repoint the EA hosts (H, static; 2026-07-27)
+
+The restore stack (§6.3) redirects at **DNS** (`gethostbyname` → `127.0.0.1`). This section maps the
+alternative: **repointing the endpoints in the binary itself**, and what blocks extracting them to a
+config file. Every address below was read statically from the de-SecuROM'd image and byte-verified.
+
+**Build applicability.** Verified on the **53,482,288-byte** de-SecuROM'd family — `make crack-game`
+output (`output/patched/Mercenaries2.exe`, md5 `535e2ea8fe6e3dae2d273e7b3ade2b1d`) and
+`Mercenaries2.community-member-modded.exe`, which match byte-for-byte at all five patch sites. The
+**53,944,080-byte** family (`Mercenaries2(2).exe`/`(3).exe`) shares the `.rdata` *string* VAs but has a
+**different `.text` layout** — all four code sites mismatch and the Massive pointer slot resolves to
+`0xBD22DC`. **Re-scan before patching that family.** `mercs2_nodrm_v3.exe` (§7.7) was not present
+locally to verify. Convenient property of these images: **file offset == RVA** in every section, so
+`VA = 0x400000 + file_offset`, and SecuROM leaves the `.rdata` strings in **cleartext** — no unpacking
+needed for this surface.
+
+| # | Endpoint atom | VA | Referenced by | In-place ceiling |
+|---|---|---|---|---|
+| 1 | `fesl.ea.com` | `0xB5FBAC` | `push 0xB5FBAC` @ **`0x009773A8`** | 11 chars (1 B NUL slack) |
+| 2 | `.fesl` | `0xB60A88` | **fixed 6-byte copy** @ `0x0097F42C` | 5 chars — *width baked in code* |
+| 3 | `.ea.com` | `0xB60A80` | **fixed 8-byte copy** @ `0x0097F4AA` | 7 chars — *width baked in code* |
+| 4 | `.` separator | `0xBAA528` | fixed 2-byte copy @ `0x0097F45A` | 1 char |
+| 5 | `messaging.ea.com` | `0xB66AE8` | 4 pushes (`0x9C217C`, `…221D`, `…265C`, `…292C`) | 19 chars |
+| 6 | `locate.madserver.net` | `0xB6882C` | **pointer slot** `.data:0xCDEE48` | unlimited (repoint slot) |
+| 7 | FESL port `18710` | — | `push 0x4916` @ **`0x008446C2`** | immediate (patch `+1`) |
+
+**Hostnames are assembled, not stored whole.** The assembler tail at `0x0097F3E0`–`0x0097F4E3` builds
+`<service>.fesl[.<env>].ea.com` on the stack. This is why the live capture shows
+`mercs2-pc.fesl.ea.com:18710` (`coop_capture_server.md` §"Real endpoint observed") while the standalone
+literal `fesl.ea.com` (#1) sits on a *different* call path — **both exist; the assembled one is the one
+observed live.** The env prefix comes from the resolver `FUN_0096e610` (reads enum at `[ecx+0x114]`,
+jump table @ `0x0096E64C`):
+
+| env | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| prefix | `stest` | **`""` (production)** | `fesl-alpha` | `fesl-dev` | `alpha` | `beta` | `scert` |
+
+**★ The constraint on a data-only patch:** atoms #2/#3/#4 are **not `strcpy`** — the assembler does
+`mov edx,[0xB60A80]` / `mov ecx,[0xB60A84]` then stores 8 bytes. **The length lives in the instruction
+stream, not the data.** This is a *ceiling*, not an exact-fit requirement: a **shorter** replacement is
+fine (the NUL lands inside the fixed window and every later `strlen` stops there), a **longer** one
+needs the code patched. Atoms #1/#5/#6 are ordinary pointer/push references, bounded only by their
+NUL-padding.
+
+**★★ An equal-length domain dissolves the constraint entirely.** Because `.ea.com` is 7 characters,
+**any 7-character replacement suffix patches every atom in place with zero code edits** — and since
+each full hostname is `<prefix> + ".ea.com"`, the derived forms keep their lengths too. Verified with
+`.kbc.li`:
+
+| atom | old | new | fit |
+|---|---|---|---|
+| `fesl.ea.com` | 11 | `fesl.kbc.li` 11 | exact |
+| `.ea.com` | 7 | `.kbc.li` 7 | exact (8-byte window) |
+| `messaging.ea.com` | 16 | `messaging.kbc.li` 16 | 16/19 |
+| `@messaging.ea.com` | 17 | `@messaging.kbc.li` 17 | 17/19 |
+| `locate.madserver.net` | 20 | `locate.kbc.li` 13 | 13/23 |
+
+Applied and byte-verified 2026-07-27: **37 bytes changed across 5 regions, all inside `.rdata`; no
+`.text` byte touched** (the four code sites and the `0xCDEE48` pointer slot re-verified identical
+post-patch), PE structure intact, and the fixed windows read `.kbc.li\0` (8 B) and `.fesl\0` (6 B). The
+assembled live host becomes **`mercs2-pc.fesl.kbc.li`**.
+
+Two atoms are deliberately left alone: `nomail@ea.com` (`0xCE8E08`) and `noparent@ea.com` (`0xCE8E48`)
+are placeholder **e-mail addresses** in `.data`, not network endpoints.
+
+The clean chokepoint is the FESL service-init `FUN_008446c0`, which passes SKU, version, service name
+and port as literals:
+
+```asm
+0x008446C0  push 1
+0x008446C2  push 0x4916          ; 18710 — FESL port (patchable immediate at 0x008446C3)
+0x008446C7  push 0xB927F4        ; "mercs2-pc"  (service name)
+0x008446CC  push 0xB927F0        ; "1.0"
+0x008446D1  push 0xB927E8        ; "15727"
+0x008446D6  call 0x00983460
+```
+
+**Theater needs no patch** — `theaterIp` (`0xB5F370`) / `theaterPort` (`0xB5F38C`) arrive in the FESL
+login response, so once FESL points at your server you return your own Theater host (this is what
+`coopserver`'s `COOP_ADVERTISE_HOST` already does).
+
+**Two dead ends — do not spend time on them:**
+- **There is no dormant override switch.** The EA-Plasma config-dump strings `FeslHostOverride: "%s"`
+  (`0xB5E321`), `TheaterHostOverride: "%s"` (`0xB5E2A9`), `MessengerHostOverride: "%s"` (`0xB5E301`),
+  `TheaterPortOverride`/`MessengerPortOverride`, `feslPort: %d` (`0xB5E371`), `environment: "%s"`
+  (`0xB5E35D`) have **zero xrefs anywhere in the file** (whole-image 4-byte VA scan). That logging path
+  was compiled out of retail. The SDK *struct fields* may still exist, but **nothing in shipped code
+  populates them from a file, env var, or command line.**
+- **`multiplayer.ini` is not a config surface.** The string (`0xBB004C`) has 2 live xrefs
+  (`0x004C21EB`, `0x004C222D`), but they feed `FindFirstFileA`/`FindClose` (IAT `0xB051D4`/`0xB051CC`)
+  — an existence probe, not a parser.
+
+**Consequence for "extract the URLs to a config file."** There is no in-binary config path to enable,
+so the config lives **outside** the game. Two options, and the choice now turns on domain length:
+
+1. **Static patcher driven by a JSON config — `tools/patch_endpoints.py` + `tools/endpoints_kbc_li.json`
+   (implemented).** Verifies every `old` string at its VA before writing, enforces the per-site ceiling
+   (fixed-window vs NUL-slack), and hard-errors on a build mismatch rather than patching blind. With an
+   **equal-or-shorter suffix this needs no new PE section and no code edits at all.** A longer suffix
+   would still require relocating #1/#5/#6 into a new section *and* replacing the #2/#3 fixed-width
+   copies with `strcpy` stubs — which is the case this tool deliberately refuses rather than half-does.
+   Trade-off: the config is applied at patch time, so changing a host means re-running the patcher.
+2. **ASI + runtime config** — hook `gethostbyname`/`getaddrinfo`/`connect` and read the host map from an
+   ini, as `multiplayer_restore.asi` already does for the DNS redirect. True runtime config, **no length
+   ceiling**, composes with the §7.7 SSL-method detour.
+
+**These are complementary, not exclusive.** Option 1 changes *which name the game asks for*; option 2
+changes *what that name resolves to*. Baking in a domain you control (option 1) means the stock resolver
+does the work — no injection needed, and hosts are switched by DNS rather than by re-patching, which
+recovers most of what option 2's runtime config was for. Use option 2 when you need per-machine
+overrides without redistributing a binary, or a suffix longer than 7 characters.
+
+**Caveat — TLS.** Repointing the host does not by itself fix the FESL handshake: the game still
+validates the server chain against the CA key baked at `.rdata 0x768378` (§7.2), so a `.kbc.li` host
+needs either the CA-key patch or the §7.7 SSL-method detour. Note the in-exe OpenSSL 0.9.8d performs
+**no hostname verification** (that arrived in 1.0.2), so a CN/SAN mismatch against the new domain is
+*not* an additional blocker — the CA trust decision is the only gate.
+
+**Confirm-live (not yet done):** breakpoint `FUN_008446c0` and the assembler tail `0x0097F3E0` at login
+to confirm which of #1 vs the assembled host each FESL connection actually uses, and read the env enum
+at `[ecx+0x114]` to confirm production (`1`) is selected on retail.
+
 ---
 
 ## 7. TLS / secure transport — can we move off SSLv3? (evidence-first feasibility)
@@ -666,6 +788,12 @@ behaviour to reimplement** on the recovered Keystone-B bus.
 7. bp the OpenSSL `ssl3_*` client entry (`FUN_01e1d9bb` region) to read the negotiated version/cipher
    live and confirm the `03 00` / `0x0005` ceiling; inspect `.rdata 0x768378` for the active CA key.
 
+**Endpoint repointing (§6.4):**
+8. bp `FUN_008446c0` (FESL service init) and the hostname assembler tail `0x0097F3E0` at login: confirm
+   whether a given connection uses the assembled `mercs2-pc.fesl.ea.com` or the standalone `fesl.ea.com`
+   literal (`0xB5FBAC`, pushed at `0x009773A8`), and read the env enum at `[ecx+0x114]` to confirm
+   production (`1` → empty prefix) is selected on retail.
+
 ---
 
 ## 10. Reconciliation with `mercs2_engine` (row 28 = ❌ in-engine)
@@ -705,6 +833,12 @@ port the dead EA services. Two separate things stand in for row 28:
   `FUN_009dff40` (CNetworkManager), `FUN_009ba4b0` (matchmaking parser), `FUN_009cf970`/`FUN_009cfa10`/
   `FUN_0089c710` (peer-mesh sockets), `FUN_00846f40` (GameSpy Voice), `FUN_01e67e2e` (WSOCK32 loader),
   `FUN_01e1c78f`/`FUN_01e1d9bb`/`FUN_01e1cc3c` (OpenSSL ssl3), `FUN_008445d0` (FESL B-version).
+- §6.4 endpoint surface: static PE scan of the de-SecuROM'd 53,482,288-B image (`output/patched/
+  Mercenaries2.exe`, md5 `535e2ea8…`) — whole-image 4-byte VA xref sweep + capstone disassembly of
+  `FUN_008446c0` (service init), `FUN_0096e610` (env→prefix resolver, jump table `0x0096E64C`), the
+  hostname assembler tail `0x0097F3E0`–`0x0097F4E3`, and `0x009773A8` (`fesl.ea.com` push). Cross-build
+  byte-verified against `Mercenaries2.community-member-modded.exe` (match) and the 53,944,080-B family
+  (**code sites do not match** — same string VAs, different `.text`).
 - Xbox ground truth: `docs/mercs2-pdb-analysis/networking.md` — `NetEventCallback @825d3ce8`,
   `SynchNetImportModule @825ce918`, `NetSafeAreBriefingAssetsLoaded @825ce830` (read first-hand in
   `xenon_decomp_named.c`, base `0x82000000`), + §A–§G `.rdata` symbol inventory.

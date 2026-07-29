@@ -12,7 +12,7 @@
 #
 # FORCE_UNZIP=1 — delete existing OUTPUT and unzip again before processing (passes --force-unzip).
 
-.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-havok-extract build-destruction-extract wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game dlc-asi-native winsock-redirect-asi dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings roster-names fold-aset-rainbow extract-strings build-wad-crates
+.PHONY: default help clean venv extract-all batch-all build-texture-index review-all review-textures-only stage2-post-validate all extract-saves extract-audio extract-video extract-iso variants export-ue5 ue5-bundle filter-maracaibo regen-maracaibo-glbs regen-all-glbs regen-c3-cells category-samples sample-bundle full-pipeline viewer preview-placements preview-placement-bbox animations animations-validation extract-placements condense-placements build-vz-act-manifest road-graph destruction-graph watermap-decode ue-bind-manifest filter-maracaibo-placements build-pmc-base-set build-c3-cell-manifest extract-demo-ffcs filter-pmc-base regen-pmc-glbs filter-pool-200m regen-pool-200m-glbs extract-terrain extract-zone-props build-luac build-ucfx-byteswap build-havok-extract build-destruction-extract wad-simulator rosetta-oracle dlc-port dlc-port-assets-only trim-patch-wad scan-patch-placements bisect-patch-wad fix-dlc01-aset verify-patch-dlc01 verify-dlc-import-chain dlc-phase0 inventory-dlc-patch verify-patch-dlc verify-patch-dlc-hook verify-patch-vz verify-patch-wad-structure audio-verify-dlc verify-dlc-endian crack-game patch-endpoints dlc-asi-native winsock-redirect-asi dlc-asi-native-nobootstrap dlc-asi-native-minimal dlc-asi-native-nohooks dlc-asi-native-no-crash-patch dlc-asi-native-debug lua-enum-asi lua-enum-asi-debug mercs2-probe mercs2-probe-debug asset-miss-probe asset-miss-probe-debug validate-probe-results pmc-blackbox pmc-blackbox-nopatch cruise-dll test-windows test-windows-down test-windows-logs ghidra-ps3-eboot r2-ps3-vz-xrefs ghidra-annotate-preanalysis verify-audio-field-map verify-audio-converter verify-audio-converter-goldens verify-audio-endian patch-anim-table harvest-dlc-strings export-console-strings roster-names fold-aset-rainbow extract-strings build-wad-crates
 
 # Radius zone around PMC pool building (populate_radius_zone.py in UE).
 RADIUS_ZONE_ID ?= pool_200m
@@ -596,6 +596,22 @@ patch-anim-table:
 	@echo ""
 	@echo "Patched EXE: $(OUTPUT)/patched/Mercenaries2.exe"
 	@echo "  Animation hash table expanded from 1024 to 4096 entries"
+
+# ---- Online Endpoint Repointing (EA hosts -> your own) ----
+# Rewrites the hardcoded EA hostnames in .rdata from a JSON config. With an
+# equal-or-shorter domain suffix this is a pure data patch (no code edits).
+# See docs/reverse_engineer/networking_code_map.md section 6.4.
+ENDPOINT_CONFIG ?= $(REPO_ROOT)/tools/endpoints_kbc_li.json
+
+patch-endpoints:
+	@test -n "$(CRACKED_EXE)" || (echo "error: set CRACKED_EXE=path/to/cracked/Mercenaries2.exe" >&2; exit 1)
+	@test -f "$(CRACKED_EXE)" || (echo "error: cracked exe not found at $(CRACKED_EXE)" >&2; exit 1)
+	@test -f "$(ENDPOINT_CONFIG)" || (echo "error: endpoint config not found at $(ENDPOINT_CONFIG)" >&2; exit 1)
+	@mkdir -p "$(OUTPUT)/patched"
+	@"$(PYTHON)" "$(REPO_ROOT)/tools/patch_endpoints.py" \
+	  "$(CRACKED_EXE)" \
+	  --config "$(ENDPOINT_CONFIG)" \
+	  --output "$(OUTPUT)/patched/Mercenaries2.net.exe"
 
 # ---- Native Lua 5.1 Compiler (Mercs2-compatible) ----
 # Builds a platform-native luac by copying clean upstream Lua 5.1.5 source,

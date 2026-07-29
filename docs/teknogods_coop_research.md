@@ -111,6 +111,14 @@ command-line arguments + DLL injection), `mloader.exe` likely:
   EA domain resolution to the local IP
 - Resumes the game process
 
+> **Note (2026-07-27):** the first option is **insufficient on its own** — the FESL
+> host the game actually reaches is *assembled* at runtime
+> (`<service>.fesl[.<env>].ea.com` → `mercs2-pc.fesl.ea.com`), and the `.fesl` /
+> `.ea.com` fragments are copied at **hard-coded widths**, so they cannot be
+> overwritten with anything longer. Overwriting the standalone `fesl.ea.com`
+> literal only covers a different call path. The hook option is the sound one.
+> See [`reverse_engineer/networking_code_map.md`](reverse_engineer/networking_code_map.md) §6.4.
+
 **Step 2: mercs2server.exe** — Listens on the same ports EA's servers used and
 responds to the game's network protocol. Based on the FESL protocol format
 (TLS-wrapped, key-value pairs with `TXN` transaction types), it likely handles:

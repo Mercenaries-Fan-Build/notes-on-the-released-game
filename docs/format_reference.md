@@ -202,6 +202,87 @@ Sys.AddStringDb("patch01", "dlc01")
 
 Resolves asset name `<current_language>_<prefix>` → `english_dlc01`, hashes to `pandemic_hash_m2("english_dlc01") = 0x9FE1E7D8`, loads via ASET lookup. The first argument `"patch01"` is an internal DB namespace identifier.
 
+#### Lookup semantics (runtime) — ★NEW 2026-07-25, read from the decomp
+
+Everything above describes the bytes on disk. This describes what the engine does with them, which is
+what actually decides whether a modded string appears.
+
+**Source:** `output/_ghidra/mercs2_unpacked.exe_decomp.txt` throughout.
+⚠ Do **not** mix addresses with `genuine_patched_unpacked.exe_decomp.txt` — its data segment is
+rebased ~`+0x1000` (that dump's clear-all is `FUN_00464640` over `DAT_011749b8` / `DAT_00e89e58`;
+the same logic here is `FUN_004645f0` over `DAT_011759b8` / `DAT_00e8ae58`). Function VAs match;
+`DAT_` addresses do not.
+
+##### The registry
+
+| global | meaning |
+|---|---|
+| `DAT_011759b8` | count of registered DBs — **hard maximum 8** |
+| `DAT_00e8ae18[i]` | `pandemic_hash_m2(prefix)` — the dedup key |
+| `DAT_00e8ae38[i]` | the prefix string itself (heap copy) |
+| `DAT_00e8ae58[i]` | `pandemic_hash_m2("<language>_<prefix>")` — the loaded asset |
+
+- **`AddStringDb` = `FUN_00464540`** (tail of the Lua binding at `0x005E61D0`). Rejects a NULL prefix
+  or a full table (`DAT_011759b8 < 8`), **dedups by prefix hash** (re-adding the same prefix is a
+  silent no-op, not a reload), copies the prefix, then calls `FUN_004644b0`, which `_snprintf`s
+  `"%s_%s"` from the current language (`PTR_s_english_00cf281c[*DAT_01176018]`) and requests the load.
+- **`ClearStringDb` = `FUN_004645f0`** (`0x005E61E0`) — releases every slot and resets the count to 0.
+- **Parser = `FUN_00463f10`**, walking `INFO` / `STRS` / `KEYS`. `INFO` carries a version that **must
+  equal 5**; anything else stores the error string `Wrong SDB version` and abandons the load. Keys are
+  inserted into an open-addressed hash table with linear probing (`(slot + 1) % size`).
+
+##### Resolution order — a THIRD rule, distinct from the other two
+
+`docs/modding/field_guide.md` documents two resolution rules running in opposite directions (WAD stack
+= last-mounted wins; runtime chunk registry = first-writer wins). String lookup is a **third**:
+
+**`FUN_0046423e`** (reached via `FUN_00464230` → `FUN_004dd6f1`) takes a **key hash** and:
+
+1. Walks the registered DBs by **descending slot index** — i.e. **last-registered wins**. The first
+   slot with a hit returns immediately.
+2. Falls back to the **base language DB** (`pandemic_hash_m2(<language>)`, no prefix).
+3. **Returns 0 (NULL) on a total miss.** There is no literal-passthrough at this layer.
+
+So a later `AddStringDb` shadows an earlier one for any key they share — the opposite direction from
+the chunk registry, and worth stating out loud because the two are easy to transpose.
+
+##### Keys are hashed WITHOUT brackets
+
+This is the non-obvious one. Retail content refers to strings as `[SHELL.Misc.41]`, so it is natural
+to assume the brackets are part of the key. They are not.
+
+**Evidence** — the loading-tip picker `FUN_00609600` counts how many tips exist by generating keys and
+probing until one misses:
+
+```c
+sprintf(&local_220, s_<Loading_Set1__03d_00bbb9d3 + 1, *(undefined4 *)(in_EAX + 0x3c));
+uVar6 = FUN_00824270();          /* pandemic_hash_m2 of that string */
+iVar7 = FUN_00464230(uVar6);
+if (iVar7 == 0) break;           /* miss == end of the set */
+```
+
+The `+ 1` skips the leading `<` of the Ghidra-named literal, leaving the format `Loading_Set1_%03d` —
+**no brackets** — and it resolves. `FUN_00824270` is the `pandemic_hash_m2` helper.
+
+⇒ The brackets are stripped (or merely tested) by a **caller**, above the lookup. A bracket-free
+string such as `Sean Devlin` is therefore a perfectly well-formed key that simply *misses*.
+
+> **This corrects [`exe_analysis_agent_a.md`](exe_analysis_agent_a.md) §"String resolution likely uses
+> the `[contract` prefix pattern".** That guess is not wrong about the engine, but it is about a
+> different function: no bracket ever reaches `FUN_0046423e`.
+
+##### Open — what a caller does with NULL
+
+**Unresolved:** whether a UI text setter handed a NULL (i.e. an unlocalized literal like a modded
+`PlayerVisibleName`) draws the original string or draws nothing. That decision lives in the
+Scaleform/menu path *above* `FUN_0046423e` and has not been read. `FUN_005cb9b0` and `FUN_00701b20`
+both test for `'['` but are unrelated parsers — checked, dead ends.
+
+**Consequences for modding.** Until that is settled, treat a raw (non-token) display string as
+unproven. And note the **8-DB cap** is a shared, exhaustible resource: if several mods each register
+their own string DB, the ninth silently gets nothing — with no error, because `AddStringDb` simply
+returns.
+
 ### 4.2 INDX chunk (sub-object → **seg_id**) — ★CORRECTED 2026-07-12
 
 > **⚠ This section previously said "MESH group → HIER node index". That is wrong on BOTH counts.**

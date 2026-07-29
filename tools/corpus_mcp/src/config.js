@@ -74,8 +74,6 @@ export const SOURCES = {
   },
   // Persistent Claude memory (one fact per file).
   memory: { special: 'memory' },
-  // Claude Code session transcripts (user + assistant text only).
-  conversation: { special: 'conversations' },
   // Native mods (ASI sources).
   mod: {
     dirs: ['mods'],

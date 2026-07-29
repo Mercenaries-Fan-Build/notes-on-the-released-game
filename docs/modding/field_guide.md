@@ -43,17 +43,19 @@ Sources: `docs/reverse_engineer/scripting_host_binding_code_map.md` §4 ·
 `memory/rainbow-table-pipeline-and-sibling-tooling.md` · `memory/aset-name-export.md` ·
 `memory/model-hier-bone-naming.md` · `docs/type_hash_registry.md`
 
-### The two resolution rules, running at once, in opposite directions
+### The resolution rules, running at once, in different directions
 
-This trips people constantly. Both are true simultaneously:
+This trips people constantly. All three are true simultaneously:
 
 | Layer | Rule | What it means for you |
 |---|---|---|
 | **WAD file stack** (`vz.wad`, then `vz-patch.wad`) | **last-opened wins** | Your patch WAD shadows the base by hash. You never edit `vz.wad`. |
 | **Chunk registry** (once a block is resident) | **first-wins** | Within the resident set, the first registration of a hash keeps the slot. |
+| **String databases** (`AddStringDb`) | **last-registered wins** | A later DB shadows an earlier one per key, then the base language DB, then NULL. Capped at **8 DBs total** — the ninth silently gets nothing. |
 
 Sources: `docs/comprehensive_engine_understanding.md` §3.2 · `docs/patch_wad_format.md` ·
-`tools/wad_simulator/crates/mercs2_engine/src/asset.rs`
+`tools/wad_simulator/crates/mercs2_engine/src/asset.rs` ·
+[`format_reference.md` §4.1 "Lookup semantics"](../format_reference.md) (`FUN_0046423e`)
 
 ---
 

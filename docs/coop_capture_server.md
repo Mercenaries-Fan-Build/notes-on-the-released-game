@@ -203,12 +203,22 @@ Confirmed by string + Ghidra analysis of `Mercenaries2.exe`:
 | `messaging.ea.com` (`@messaging.ea.com`) | EA messaging / IM (XMPP-style JID domain) |
 | `locate.madserver.net` | Massive Inc. ad-serving (`/adsrv/4/openSession`) |
 
-The FESL server-info struct also carries **override fields** that the game logs at
-startup — `FeslHostOverride`, `MessengerHostOverride`, `TheaterHostOverride`
-(+ port overrides). If we can find where these are populated (config/ini/cmdline),
-setting `FeslHostOverride` to the Modkit IP is a cleaner redirect than Winsock
-hooking. (Open investigation — see `output/_ghidra/all_functions_decomp.txt`
-FUN_0096e690 / FUN_00977370.)
+Note the real FESL endpoint is **assembled**, not stored whole: the game builds
+`<service>.fesl[.<env>].ea.com` → `mercs2-pc.fesl.ea.com:18710` (matching the live
+capture above). The standalone `fesl.ea.com` literal sits on a different call path.
+
+> **RESOLVED 2026-07-27 — there is no override config to find.** The
+> `FeslHostOverride` / `MessengerHostOverride` / `TheaterHostOverride` (+ port)
+> strings are **EA-Plasma config-dump format strings with zero xrefs anywhere in
+> the image** — that logging path was compiled out of retail, so the game never
+> logs them at startup and **nothing populates them from a config, ini, env var,
+> or command line.** `multiplayer.ini` is likewise a dead end: its two xrefs feed
+> `FindFirstFileA`/`FindClose` (an existence probe, not a parser). So there is no
+> cleaner in-binary redirect than hooking — DNS/Winsock hooking remains correct.
+>
+> Full endpoint address map, in-place length limits, and the fixed-width-copy
+> constraint that blocks a data-only patch:
+> [`reverse_engineer/networking_code_map.md`](reverse_engineer/networking_code_map.md) §6.4.
 
 ## Winsock is imported BY ORDINAL (important for the ASI)
 
