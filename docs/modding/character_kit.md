@@ -55,6 +55,24 @@ is invisible in game. That has shipped once already, as an invisible torso and a
 **The bone palette cap is 48 per draw group, and it counts BONES, not triangles.** A part may span
 several groups; a group must never span parts, because a draw group carries exactly one material.
 
+> **★MEASURED 2026-07-31** — this line was a bare assertion and is now backed by a census of the
+> whole shipped game: `skin_census --wad --per-group` over **3,007 model assets / 2,052 skinned
+> drawing groups** ([`../data/palette_census.csv`](../data/palette_census.csv)). Distinct weighted
+> bones per group stop dead at 48 — the tail is 44:41 groups, 45:47, 46:32, 47:13, 48:8, then
+> nothing. No shipped group weights a 49th bone.
+>
+> **But BONES and palette SLOTS are different numbers, and conflating them was a live bug.** The
+> `INFO(56)` table stores runs, and the packer bridges gaps between them to stay inside the 8-range
+> field, so a group ships more slots than it has bones. Retail's own `pmc_hum_mattias` group 3 is
+> `range_count=4, slots=49, bones=48`; the corpus maximum is **62 slots** (`gr_hum_elite` group 3 —
+> one run of 62 covering just 13 weighted bones, i.e. retail declares a wide contiguous window and
+> leaves most of it unweighted). Slot ceilings: `range_count <= 8` (field width) and `total <= 256`
+> (the engine reader's own gate, `skinning_animation_spec.md` §150-155).
+>
+> `mercs2_formats` gated SLOTS against this 48 until 2026-07-31 — so our own writer would have
+> refused the donor it was conforming to. Now `MAX_GROUP_BONES = 48` (measured), `MAX_PALETTE_SLOTS
+> = 256` (engine gate), `RETAIL_MAX_SLOTS = 62` (warn above; legal but unattested).
+
 **Textures are fully resident, and the slot order is `0 = diffuse, 1 = SPECULAR, 2 = NORMAL`** — not
 the intuitive d/n/s. Characters ship the whole mip chain; a short BODY makes the engine over-read and
 the world-load livelocks. Normal maps are **BC3 / DXT5nm with GREEN FLIPPED** (glTF is +Y up, this
