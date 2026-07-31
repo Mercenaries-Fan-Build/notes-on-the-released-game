@@ -37,12 +37,33 @@ struct SegmRecord {          // 4 bytes, little-endian on PC (vz.wad)
   records are already LE, so read them directly.
 
 ### 1.2 `PRMT` — the group's segment reference
+
+> ### ⛔ SUPERSEDED (2026-07-30) — field 0 is `material_index`, NOT `seg_id`
+>
+> The record layout below is **disproved**. `docs/modernization/texture_extraction_notes.md`
+> §2 tested exactly this guess against the bytes and states: *"The prompt's guessed field
+> roles (`{seg_id, index_start, index_count, packed}`) did **not** match the bytes; the
+> verified layout is `u32 material_index @0`"* — CONFIRMED double-blind, and corroborated by
+> `docs/reverse_engineer/valid_model_structure_map.md`'s PRMT section
+> (`[material_index:u32][start_index:u32][index_count:u16][base_vertex:u16][max_vertex:u16][vertex_count:u16]`,
+> with `material_index` MUST be `< MTRL material count`).
+>
+> **The group→segment join is therefore NOT via PRMT field 0.** Everything in §2 onward that
+> reads `PRMT[0]` as a `seg_id` needs re-deriving; the SEGM record layout in §1.1 and the
+> anatomical placement evidence are unaffected, because those were measured from SEGM itself.
+>
+> **Why this marker exists:** the layout below was left stated as plain fact with no caveat,
+> and a later investigation read this doc, took it at face value, and budgeted an x32dbg
+> session to resolve a question the project had already answered. If you are reading a bare
+> assertion in this corpus, `corpus_search` the field name before you act on it — a
+> `CONFIRMED (double-blind)` hit outranks an unmarked one.
+
 Each drawing group is one `PRMG` container marker; inside it a `PRMT` leaf holds one or
 more **16-byte primitive records**:
 
 ```
-struct PrmtRecord {          // 16 bytes, LE
-  u32 seg_id;                // @0  -> SEGM record whose seg_id == this value  ==> attach bone
+struct PrmtRecord {          // 16 bytes, LE   ⛔ SUPERSEDED — see the note above
+  u32 seg_id;                // @0  DISPROVED: this field is `material_index`
   u32 index_start;           // @4  first index into this group's IBUF
   u32 index_count;           // @8  index count (matches IBUF/AREA info count)
   u32 packed;                // @12 packed prim/material info
@@ -51,6 +72,8 @@ struct PrmtRecord {          // 16 bytes, LE
 
 `PRMT.seg_id` (field 0) is the join key into `SEGM`. A group may have several PRMT
 records (multi-material / LOD split); each names its own segment.
+⛔ **Both sentences above are superseded** — field 0 is the material index, so how a group
+names its segment is an OPEN question. See §5 open question 4.
 
 ---
 

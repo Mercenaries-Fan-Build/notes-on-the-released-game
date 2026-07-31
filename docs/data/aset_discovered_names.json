@@ -14843,6 +14843,105 @@
     ],
     "0xFFE7463A": [
       "global_roof07_nm"
+    ],
+    "0x09084F86": [
+      "wpn_antiair_fire"
+    ],
+    "0x0B36C3E2": [
+      "wpn_huntingpistol_fire"
+    ],
+    "0x0CF9C8AA": [
+      "wpn_shotgun_reload_close"
+    ],
+    "0x2323E88C": [
+      "wpn_emplacedheavymg_fire"
+    ],
+    "0x33A071CC": [
+      "wpn_combatrifle_fire"
+    ],
+    "0x38BBF29A": [
+      "wpn_heavyatmissile_fire"
+    ],
+    "0x3C41B866": [
+      "wpn_machinepistol_fire_01"
+    ],
+    "0x3C870F28": [
+      "wpn_rocketlauncher_fire"
+    ],
+    "0x400B9E0A": [
+      "wpn_antiair_fire_03"
+    ],
+    "0x498808CF": [
+      "wpn_assaultrifle_fire"
+    ],
+    "0x51C0C003": [
+      "wpn_antimaterialrifle_fire"
+    ],
+    "0x620E1227": [
+      "wpn_antiair_fire_02"
+    ],
+    "0x663F8245": [
+      "wpn_coilgun_fire"
+    ],
+    "0x6D3FFBFC": [
+      "wpn_smg_reload"
+    ],
+    "0x709EC787": [
+      "wpn_automaticrifle_fire"
+    ],
+    "0x7529EFCC": [
+      "wpn_machinepistol_fire"
+    ],
+    "0x78B128AF": [
+      "wpn_shotgun_dryfire"
+    ],
+    "0x8B482FBD": [
+      "wpn_rpg_fire"
+    ],
+    "0x8BC8ABF3": [
+      "wpn_pistol_fire"
+    ],
+    "0x96E8816B": [
+      "wpn_smg_fire"
+    ],
+    "0x9F32CB3C": [
+      "wpn_shotgun_fire"
+    ],
+    "0xA51B442A": [
+      "wpn_minigun_fire_loop"
+    ],
+    "0xB199AB79": [
+      "wpn_designator_flare_fire"
+    ],
+    "0xB244AAE7": [
+      "wpn_covertsmg_reload"
+    ],
+    "0xB810D820": [
+      "wpn_antiair_fire_01"
+    ],
+    "0xBE4940D1": [
+      "wpn_machinepistol_fire_02"
+    ],
+    "0xC4470BAC": [
+      "wpn_machinepistol_fire_03"
+    ],
+    "0xCD37F4D8": [
+      "wpn_grenadelauncher_fire"
+    ],
+    "0xCE23B981": [
+      "wpn_shotgun_fire_02"
+    ],
+    "0xD501C165": [
+      "wpn_sniperrifle_fire"
+    ],
+    "0xD6BC82F8": [
+      "wpn_tankgun_fire"
+    ],
+    "0xD88DA744": [
+      "wpn_covertsmg_fire"
+    ],
+    "0xF88B552A": [
+      "wpn_covertpistol_fire"
     ]
   }
 }

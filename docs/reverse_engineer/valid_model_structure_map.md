@@ -124,10 +124,24 @@ off   size            field
 bound by the material expects** — this is a primary from-scratch failure point
 (the engine rejects a decl the shader doesn't understand).
 
-### PRMT — draw record (16B)
+### PRMT — draw record (16B) — ★RESOLVED 2026-07-30
 `[material_index:u32][start_index:u32][index_count:u16][base_vertex:u16][max_vertex:u16][vertex_count:u16]`.
 `material_index` MUST be `< MTRL material count`. A single-material container whose
 geometry references index ≥1 makes the engine read past the material array.
+
+**Field 0 is `material_index`. This is settled** — `docs/modernization/texture_extraction_notes.md`
+§2 tested the competing `{seg_id, index_start, index_count, packed}` reading against the bytes,
+found it did NOT match, and records `u32 material_index @0` as CONFIRMED double-blind. The §6a
+table's "field semantics UNRESOLVED" entry below, and `segm_group_bone_binding.md` §1.2's
+`seg_id @0`, are both superseded by that measurement and now carry markers.
+
+⚠ **Live consequence:** `model_inject.rs` writes the constant `6` into field 0 with the comment
+`// prim type 6 (strip)`. Under the resolved reading that is a **material index**, so every
+injected group is forced onto the donor's MTRL record 6. Measured on `pmc_hum_jen_chickensuit`,
+record 6's diffuse is `0xE27C6F51` (a head texture) — i.e. a whole imported body bound to a head
+material. Whether a later `MtrlRepoint` pass masks this is NOT yet checked. The mitigation the
+§6a table already recommends — preserve the template group's original field 0 rather than writing
+`6` — is the correct fix, and it is now a correctness fix rather than a crash-avoidance hedge.
 
 ### INFO (model header, 72B), HIER (root 88B), PRMG INFO (60B), GEOM/INDX
 See `tools/wad_simulator/crates/mercs2_formats/src/model_build.rs` for the
@@ -227,7 +241,7 @@ is why the DLC skins ship as wardrobe overrides rather than brand-new hashes.
 | `GEOM`→`MESH`→`PRMG`→{`STRM`{info,decl,data}, `AREA`, `IBUF`{info,data}, `PRMT`} | geometry (see §1) | **rebuild geometry; keep decl** |
 | `INDX` | **★CORRECTED 2026-07-12:** sub-object → **seg_id** map (u16). One entry per `MESH`/`SKIN` sub-object (NOT per PRMG group); the value indexes **`SEGM`**, not `HIER`. Node = `SEGM[seg_id].bone`. See `../modernization/vehicle_model_spec.md` §2 | keep; **must have exactly `sub_object_count` rows** |
 | `SEGM` | **★RE-CORRECTED 2026-07-12:** the segment table — 4B `{u16 bone (LE), u8 seg_id, u8 state_mask}`. `state_mask` is the **LOD-tier bitmask** (not a "group"); byte order is **LE, not BE**; `SEGM[i].seg_id == i`. The RESIDENT block's SEGM serves the whole LOD chain | **keep verbatim**; if authoring, size it for ALL rungs |
-| `PRMT` | ⚠ **field semantics UNRESOLVED (registry §3 / gap #4).** 16B/record; `[0]` is either prim-type (our `inject_static` writes 6) OR `matidx` (registry). Safe on ≥7-material templates; on a small template writing 6 as matidx could overrun → `0x004CC064`. **If the conform test crashes here, preserve the template group's original PRMT `[0]` instead of writing 6.** | rewrite geometry range; keep `[0]` verbatim (TODO) |
+| `PRMT` | ★**RESOLVED 2026-07-30 — `[0]` is `matidx`**, not prim-type. `texture_extraction_notes.md` §2 disproved the prim-type/`seg_id` reading against the bytes (CONFIRMED double-blind); see the PRMT section in §1 above. Our `inject_static`/`model_inject` writes `6`, which is therefore a **material index**, not a primitive type — wrong on every template, and an overrun risk (`0x004CC064`) on any template with ≤6 materials. **Preserve the template group's original PRMT `[0]`; never write 6.** | rewrite geometry range; keep `[0]` verbatim |
 | `SWIT` | **★CORRECTED:** a FLAT list of node **hashes** that participate in destruction swaps — not per-state "node-index sets". The states themselves live in the `NODE`/`STAT`/`CHDR`/`CEXE` machine (`PristineState` `SHOW`s `0x255EAB53`, `DestroyedState` `SHOW`s `0x75F1F74D`; `SHOW`/`HIDE` act on the whole SUBTREE). See `../modernization/vehicle_model_spec.md` §5 | keep verbatim |
 | `STAT` | destruction state records (state machine states) | keep verbatim |
 | `STAM` | state-machine table (destruction/anim states) | keep verbatim |

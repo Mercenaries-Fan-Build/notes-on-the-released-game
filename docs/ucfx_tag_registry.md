@@ -342,7 +342,7 @@ group (STRM/PRMT/IBUF/BSHI/BSHP/AREA/INFO) → leaf readers `FUN_004a4770` (STRM
 |-----|---------|---------------------|--------------------|
 | `GEOM` | geometry root container (attested verbatim in Pandemic `.msh`) | marker row enclosing INFO/PRMG/BNDS/… subtree, walked by FUN_00478120. **Caveat:** registry VA 0x48ccbd is a *different* GEOM arm inside FUN_0048cc30 (effect-side leaf reading 2×u16 table indices) | `model_cubeize.rs` GEOM walk; engine `mesh.rs::build_indexed_state` |
 | `PRMG` | primitive/render group = one drawable batch (ucfb `segm` analog) | each PRMG fills one 0x1C4 drawing-group record | one `DrawGroup` per PRMG |
-| `PRMT` | primitive records, 16-byte stride | **unresolved conflict** — see caveat below | `convert.rs::PRMT_WALKER` |
+| `PRMT` | primitive records, 16-byte stride | ★**field 0 = `matidx`, RESOLVED 2026-07-30** — see caveat below | `convert.rs::PRMT_WALKER` |
 | `STRM` | vertex stream container | children `data`/`decl`/`info`; the group INFO(60B) drives strides: `[0x6d]`,`[0x6f]` counts → two 16B-stride streams, `[0x6a]` = blendshape count | `strm_info/decl/data` in model_cubeize; `apply_strm_vertex_fix` |
 | `decl` | literal `D3DVERTEXELEMENT9[]` (8B elements, 0xFF-stream terminator) | created via FUN_00752b30 | authoritative for vertex layout — never infer from stride. Xbox uses 12B elements → `apply_decl_translate`. DEC3N = 10-10-10-2 (see dec3n tangent RCA) |
 | `data` | raw buffer bytes (context: vertex bytes under STRM, index bytes under IBUF, Havok anim blob under anim type) | bound via FUN_00752890 | meaning = (parent, INFO) context |
@@ -362,11 +362,23 @@ group (STRM/PRMT/IBUF/BSHI/BSHP/AREA/INFO) → leaf readers `FUN_004a4770` (STRM
 | `SCRB` | "scrub" shader-resource binary | ASET type 12 = SCRB+MTRL+STRM+INFO; owns the 0x1d0 record size | — |
 | `BSHP`/`BSHI` | blendshapes (sparse morph = indices + deltas) | BSHP = container-walker resolving a child `data` chunk (NOT count×0x18); BSHI = count×2 u16 sparse vertex indices, count from mesh INFO `[0x6a]` | apply deltas in bind-pose space before skinning; validate max(BSHI) < vertex count |
 
-**PRMT caveat (unresolved):** `convert.rs` models PRMT as 16B *draw-call* records
-`[u32 matidx][u32 start_index][u16 count][u16 base_vertex][u16 max_vtx][u16 span]`; the mesh
-decomp (FUN_00478270) shows PRMT filling two INFO-sized 16B-stride streams; the collision-mesh
-PRMT arm (FUN_004a8690) reads `u32 matidx + 2×u32 + 4×u16`. All are 16-byte stride so current
-byteswaps are safe, but resolve the field semantics before writing any PRMT-authoring feature.
+**PRMT — ★RESOLVED 2026-07-30. Field 0 is `matidx`.** `convert.rs` models PRMT as 16B
+*draw-call* records `[u32 matidx][u32 start_index][u16 count][u16 base_vertex][u16 max_vtx][u16 span]`,
+and the collision-mesh PRMT arm (FUN_004a8690) independently reads `u32 matidx + 2×u32 + 4×u16` —
+**two sources already agreeing on field 0.** `docs/modernization/texture_extraction_notes.md` §2
+then tested the competing `{seg_id, index_start, index_count, packed}` reading against the bytes,
+found it did NOT match, and records `u32 material_index @0` as CONFIRMED double-blind. That closes it.
+
+The mesh decomp's "PRMT fills two INFO-sized 16B-stride streams" (FUN_00478270) was never in
+conflict — it constrains the record **count** (`PRMT body == (INFO[0]+INFO[4])*16`, see
+`tools/prmg_invariant_scan.py`), not the field semantics. Labelling the whole tag unresolved on
+that basis over-stated the doubt for ~3 weeks and cost a later investigation an x32dbg session it
+did not need.
+
+⚠ **PRMT-authoring is now unblocked, and one existing writer is wrong:** `model_inject.rs` writes
+the constant `6` into field 0 commented `// prim type 6 (strip)`. That is a material index.
+Preserve the template group's original field 0; never write `6`. See
+`docs/reverse_engineer/valid_model_structure_map.md` §PRMT.
 
 ## 4. Texture path (`FUN_00750a30`)
 
@@ -560,7 +572,9 @@ ASCII-looking immediates rather than FourCCs — still unclassified.
    per-tag decoded notes for all three non-WAD groups.
 3. **`INVD`** Misc→UcfxAsset (script sentinel); **`trns`** (lowercase) still needs its handler
    (FUN_0067e470) read.
-4. **PRMT field-semantics conflict** (§3 caveat) — resolve before any PRMT-authoring feature.
+4. ~~**PRMT field-semantics conflict**~~ — **CLOSED 2026-07-30**: field 0 is `matidx`
+   (`texture_extraction_notes.md` §2, CONFIRMED double-blind against the bytes). Remaining
+   follow-up is a code fix, not RE: `model_inject.rs` writes the constant `6` there.
 5. **GEOM registry VA** points at the effect-arm leaf, not the geometry walker — consider
    recording both sites (0x478120 walker; 0x48cc30 effect arm) in the registry note.
 6. `AINF`/`TRNS` retail handlers live in an un-extracted decomp gap — re-run Ghidra export over
