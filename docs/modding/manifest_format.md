@@ -90,9 +90,15 @@ mean the same thing on someone else's machine as on yours.
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
 
-`donor` is **required** wherever it is accepted. This said it was optional and that the
-Quartermaster would pick a valid host; auto-pick was never written, and the build refuses rather
-than guessing — *"a wrong host silently produces a prop with the wrong rig and materials."*
+`donor` is **optional by design** wherever it is accepted — omit it and the Quartermaster picks a
+valid host (Plan 04, resolved Q2). **Auto-pick is not implemented yet**, so today the build refuses
+and asks rather than guessing: *"a wrong host silently produces a prop with the wrong rig and
+materials."* Tracked as a format gap in Plan 05 §H. Supply `donor:` until it lands.
+
+**Write a bare hash QUOTED in YAML.** A name is preferred and a bare `0xHHHHHHHH` is legal
+anywhere an asset is referenced — but unquoted, YAML reads `0xEB6F1B2D` as the integer
+`3949927213` and the manifest fails to load with *"invalid type: integer, expected a string"*.
+So `target: "0x6F84F6A3"`, `touches: ["0xE54047D5"]`.
 
 `edit_state_machine`, `native_hook` and `raw` are **not lowered yet**. They fail with the reason
 rather than being skipped, because a dropped contribution produces a WAD that looks fine and does
