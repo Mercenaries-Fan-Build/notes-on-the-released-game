@@ -90,11 +90,58 @@ mean the same thing on someone else's machine as on yours.
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
 
-`donor` is optional wherever it is accepted — omit it and the Quartermaster picks a valid host.
+`donor` is **required** wherever it is accepted. This said it was optional and that the
+Quartermaster would pick a valid host; auto-pick was never written, and the build refuses rather
+than guessing — *"a wrong host silently produces a prop with the wrong rig and materials."*
 
 `edit_state_machine`, `native_hook` and `raw` are **not lowered yet**. They fail with the reason
 rather than being skipped, because a dropped contribution produces a WAD that looks fine and does
 nothing.
+
+### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
+
+Without `retarget:` a model is lowered RIGIDLY: hosted on the donor with empty joints. Correct for
+a prop, wrong for anything that animates. `retarget:` selects the skinned lowering, which re-poses
+the source rig onto the donor's and writes palette-relative `BLENDINDICES` plus the matching
+`INFO(56)` range table — the shipped skinning format.
+
+```yaml
+    retarget:
+      from: valve          # cod | valve | mixamo | unreal | pandemic | generic
+      bones:               # optional; the RESOLVED map
+        ValveBiped.Bip01_Spine2: Bone_Chest
+        ValveBiped.Bip01_L_Calf: Bone_LShin
+        SomeHelperBone: ~   # `~` drops the bone
+```
+
+`from:` is documentation and a sanity check, not the instruction — detection runs from the bone
+names in the file, and a mismatch is reported.
+
+`bones:` is the reproducibility record. Omit it and the build derives the map itself from the
+convention tables, which is the same map the Workshop previews; supply it and a rebuild by someone
+else reproduces exactly what the author approved, including any hand adjustment. A stale entry is
+an error, not something to skip.
+
+**Do not hand-write it.** `mercs2_workshop --export-shipment <model.glb> --rebind-target <donor>`
+writes the whole Shipment — manifest plus `src/` — with the map it actually used.
+
+### `textures:` (`add_outfit`)
+
+```yaml
+    textures:
+      diffuse: src/skin_dm.png
+      specular: src/skin_sm.png
+      normal: src/skin_nm.png
+```
+
+Each map becomes its own resident texture block, and every donor hash at that MTRL slot is
+repointed onto it. **Needs `retarget:`** — the rigid path performs no repoint, so an outfit without
+it wears the donor's skin whatever is listed here, and the build refuses rather than substituting.
+PNG only, 8-bit, dimensions a multiple of 4.
+
+Slot order is `0 = diffuse, 1 = SPECULAR, 2 = NORMAL` — not the intuitive d/n/s. Normals are
+BC3/DXT5nm; diffuse and specular are BC1 unless the source carries real alpha. A repoint that
+matches nothing fails the build: the texture would ship with nothing referencing it.
 
 ### `replace_texture`
 
