@@ -123,16 +123,28 @@ qm extract-states al_veh_boat_destroyer --game <dir> > src/states.yaml
 ```
 
 The dump reads in names where a hash reverses (states, HIER nodes, commands) and keeps the script
-opcodes as plain integers; edit it and point `states:` at it. Edits are **same-shape** — rename
-states, rewrite Enter/Exit command lists, change switch slots — but the node and state *counts* must
-match the model's; starting from the extracted baseline guarantees they do. Adding or removing a node
-or state is refused with the reason (it re-bases the descriptor table, a larger surgery).
+opcodes as plain integers; edit it and point `states:` at it. The whole family is **regenerated** from
+your file every build, so you can **add or remove** nodes and states, not only rewrite them — the
+writer rebuilds the descriptor table, re-bases the container, and recomputes the CSUM. A no-op (edit
+nothing) still ships the container byte-for-byte, proven across all 1,311 retail destructibles.
+
+⚠ **State names are the engine's global vocabulary, not labels you own.** `SetState` /
+`SetStateOnMsg` key on a shared set of hashes — `PristineState`, `DamagedState`, `DestroyedState`,
+`GoneState`, `InitState`, … — so a state you rename to a novel name (or add with one) is **never
+reached by the damage system**: it ships but is dead. **M0193** warns when an edited state is outside
+that vocabulary and was not already in the model. The edits that matter are a state's **Enter/Exit
+command scripts** (which HIER subtrees to `SHOW`/`HIDE`, which emitters to start) and its switch
+slots — change what a state *does*, using state identities the model and the vocabulary already
+carry.
 
 The overlay carries **only** the edited model as a single-entry block — no block-mate is shadowed.
 Its ASET row is copied from the base and the builder re-points `_P000` at the new block while
 sentinelling the finer LOD rungs (which degrade to coarse tier at distance, they do not dangle), so
-the write is a proven byte-identical splice (`serialize_state_machine`, checked against all 1,311
-retail destructibles) with the LOD chain recomputed rather than the whole base block re-emitted.
+the LOD chain is recomputed rather than the whole base block re-emitted.
+
+The **permanent, world-scale** counterpart — making a building ruined for the rest of a mission — is
+the `vz_state` overlay, a separate mechanism scoped in
+[`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
 
 ### `add_movie`
 
