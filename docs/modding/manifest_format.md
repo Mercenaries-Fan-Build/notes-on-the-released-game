@@ -113,6 +113,27 @@ family exists (the round-trip survey proved one is tractable but it has not been
 with the reason rather than being skipped, because a dropped contribution produces a WAD that looks
 fine and does nothing; ship a hand-built block as `raw`/`data` meanwhile.
 
+### `add_movie`
+
+Adds a Scaleform GFx movie as a `cfx_pack` asset. The `.gfx`/`.cfx` bytes ship verbatim (retail
+carries both, so neither is normalised to the other); `name` is the identity a Lua caller passes to
+`SetSwfFile` / `GetShellGfxFilename`, so it is a bare name like `topbar` or `MINIMAP`, no extension.
+
+The engine references movies by **fixed name**, so how a movie reaches the screen decides what
+`add_movie` can do:
+
+- **Replace** a shipped movie by using its exact name (`SHELL`, `pause_menu`, `MINIMAP`, a
+  `*_briefing`, …). Same name → same hash → last-wins, and every UI site that already names it now
+  serves yours. This is the proven UI-mod path.
+- **Add a new** movie under a novel name and it will sit in the WAD referenced by nothing. To make
+  it appear you must also ship a `patch_lua` that points a specific UI site at it — which site, and
+  how, is case-by-case (a shell screen, a HUD element and the PDA are wired differently). There is
+  no generic "add a UI movie" recipe, so there is deliberately no `add_ui` kind: compose
+  `add_movie` + `patch_lua` (+ `edit_stringdb` for its labels) by hand for the one site you mean.
+
+**M0192** (advisory, needs the game stack) fires when `name` matches no shipped movie, to catch the
+novel-name case above before it ships something the game never shows.
+
 ### `edit_stringdb`
 
 Corrects or localises UI text. Same-hash and last-wins, like `replace_texture`: the overlay carries
