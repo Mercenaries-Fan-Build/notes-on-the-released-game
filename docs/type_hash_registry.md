@@ -2,6 +2,23 @@
 
 Complete enumeration of `type_hash` values from every block in the retail `vz.wad`.
 
+> **★ `type_id` provenance (corrected 2026-08-01).** The `ASET type_id` column is now taken from
+> the **WAD's own type table**, not derived: a flat array of `type_hash` u32s indexed by `type_id`
+> at file offset `0x48`, immediately after the 0x48-byte FFCS header, length = header dword 8 (36
+> in retail), identical across all four shipped WADs.
+>
+> Nine rows here were wrong — `fxdict`/`watermap` transposed, `level` 20 for 26, `musicstatemap`
+> 26 for 8, `worldentity` 8 for 17, `musiccue` 4 for 10, `decaltable` 1 for 4, `guidmap` 10 for 1,
+> `sequencetable` 33 for 24, `animstatemachine` 31 for 33. `docs/fixpack/wad_duplicate_inventory.md`
+> Appendix C reported this in July (139 hit / 0 miss) and it was never applied here.
+>
+> `type_id` is the byte the engine indexes its loader table with, so a wrong one dispatches an asset
+> to the wrong loader. **Read the in-WAD table; do not re-derive this.**
+> `mercs2_formats/tests/type_ids_match_the_wad.rs` pins the code against it at test time.
+>
+> Still inherited elsewhere: `docs/data/aset_export.csv`'s `type_name`/`type_hash` columns (its
+> `type_id` and `asset_hash` columns are sound).
+
 Type hashes are computed via `pandemic_hash_m2()` (FNV-1a with `|0x20` case suppression + `^0x2A * FNV_PRIME` finalization). Resolved names confirmed by hash collision.
 
 ## Summary
@@ -48,15 +65,15 @@ Sorted by frequency (most common first). ASET `type_id` is the integer discrimin
 | 24 | `0x59B9DF6A` | — | 1 | 1 | **materialtable** | Singleton in `resident` block |
 | 25 | `0x4D7D30C4` | — | 1 | 1 | **watermap** | Singleton in `resident` block |
 | 26 | `0x34612F86` | — | 1 | 1 | **foliage** | Singleton in `resident` block |
-| 27 | `0xACCE47F2` | 33 | 1 | 1 | **sequencetable** | Sequence/cinematic timeline table. Singleton in `c33364` with `sequ`/SINF/ITEM chunks |
-| 28 | `0xC122545A` | 26 | 1 | 1 | **musicstatemap** | Music state map. Hash→float parameters (volume, crossfade). 48KB. ASET name_hash `0xB4420059`="VZ". In `musicdata` block |
-| 29 | `0xE8DF4D87` | 4 | 1 | 1 | **musiccue** | Music cue table. Hash→index→float timing entries. 23KB. In `musicdata` block |
-| 30 | `0xECE70371` | 31 | 1 | 1 | **animstatemachine** | Animation state machine (SINF/AINF/TRNS/stns/actn). Saboteur equivalent: SEQC/TRAN/EDGE/BANK. 561KB |
-| 31 | `0xEA4829D5` | 20 | 1 | 1 | **level** | Singleton in `resident` block |
-| 32 | `0x3B0AABF8` | 1 | 1 | 1 | **decaltable** | Decal definition table. Singleton in `resident` block |
-| 33 | `0x5647C35D` | 8 | 1 | 1 | **worldentity** | World entity data — master ECS/placement container (CHDR/UNIQ/COMP/info/schm/data). Same format as `layers_static`. 1.8MB |
-| 34 | `0x140E8728` | 10 | 1 | 1 | **guidmap** | GUID mapping table. Singleton in `resident` block |
-| 35 | `0xFA46D8A8` | 25 | 1 | 1 | **fxdict** | Effect dictionary — FX parameter definitions (INFO+DICT). Particle sizes, rates, etc. 12KB. name="fx" |
+| 27 | `0xACCE47F2` | 24 | 1 | 1 | **sequencetable** | Sequence/cinematic timeline table. Singleton in `c33364` with `sequ`/SINF/ITEM chunks |
+| 28 | `0xC122545A` | 8 | 1 | 1 | **musicstatemap** | Music state map. Hash→float parameters (volume, crossfade). 48KB. ASET name_hash `0xB4420059`="VZ". In `musicdata` block |
+| 29 | `0xE8DF4D87` | 10 | 1 | 1 | **musiccue** | Music cue table. Hash→index→float timing entries. 23KB. In `musicdata` block |
+| 30 | `0xECE70371` | 33 | 1 | 1 | **animstatemachine** | Animation state machine (SINF/AINF/TRNS/stns/actn). Saboteur equivalent: SEQC/TRAN/EDGE/BANK. 561KB |
+| 31 | `0xEA4829D5` | 26 | 1 | 1 | **level** | Singleton in `resident` block |
+| 32 | `0x3B0AABF8` | 4 | 1 | 1 | **decaltable** | Decal definition table. Singleton in `resident` block |
+| 33 | `0x5647C35D` | 17 | 1 | 1 | **worldentity** | World entity data — master ECS/placement container (CHDR/UNIQ/COMP/info/schm/data). Same format as `layers_static`. 1.8MB |
+| 34 | `0x140E8728` | 1 | 1 | 1 | **guidmap** | GUID mapping table. Singleton in `resident` block |
+| 35 | `0xFA46D8A8` | 0 | 1 | 1 | **fxdict** | Effect dictionary — FX parameter definitions (INFO+DICT). Particle sizes, rates, etc. 12KB. name="fx" |
 
 ---
 
