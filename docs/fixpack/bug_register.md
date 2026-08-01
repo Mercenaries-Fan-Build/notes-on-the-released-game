@@ -436,6 +436,19 @@ to it**, or the fix pack will ship fixes to strings nobody ever sees.
 Also present and worth a look: `vz.wad::allcaps_P000_Q3` — the exe's language config lists
 `#allcaps 1` as a commented-out **debug mode**. A shipped debug string table.
 
+### ~~⚠ Do not trust `type_id` tables when building fix-pack assets~~ ★ FIXED IN CODE 2026-08-01
+
+> **★ The code is now correct and self-checking.** `mercs2_formats::{types, aset_type_ids}` were
+> regenerated from the WAD's own table at `0x48`, and
+> `mercs2_formats/tests/type_ids_match_the_wad.rs` reads that table at test time and asserts both
+> mappings against it — so this cannot drift again without a red test. Re-measured on the way in:
+> 12 of 35 `aset_type_ids` rows and 7 of 23 paired `types` constants were still wrong, exactly as
+> recorded below; `type_name` was keyed on the same wrong ids and was corrected too.
+>
+> The warning below stands as history, and its advice — take the ids from the in-WAD table — is now
+> what the code does. It had cost something in the meantime: the Workshop Library's VFX category was
+> built on `TYPE_ID_FX_DICTIONARY` and therefore browsed `watermap`.
+
 ### ⚠ Do not trust `type_id` tables when building fix-pack assets
 
 The duplicate survey found `docs/type_hash_registry.md` and `mercs2_formats::aset_type_ids` are

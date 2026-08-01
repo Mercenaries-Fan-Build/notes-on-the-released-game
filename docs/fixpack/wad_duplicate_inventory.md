@@ -603,7 +603,10 @@ real names are recovered from the containers' `NAME` chunks and listed in §A.4.
 ## Appendix C — corrections this work produced
 
 1. **`docs/type_hash_registry.md` / `mercs2_formats::aset_type_ids::type_id_for_type_hash` are
-   wrong for 12 of 36 type ids.** The authoritative table is in the WAD at file offset `0x48`
+   wrong for 12 of 36 type ids.** ★ **The CODE half is fixed as of 2026-08-01** — `types.rs`,
+   `type_name` and `aset_type_ids` are regenerated from the in-WAD table and pinned by
+   `mercs2_formats/tests/type_ids_match_the_wad.rs`, which reads offset `0x48` at test time rather
+   than encoding a fourth copy. `docs/type_hash_registry.md` itself is still uncorrected. The authoritative table is in the WAD at file offset `0x48`
    (count = header dword 8). Correct table in §A.1; validated 139 hit / 0 miss. Most visibly:
    `0xC122545A` is id **8** (not 26), `0x5647C35D` is id **17** (not 8), `0xEA4829D5` is id **26**
    (not 20), `0xE8DF4D87` is id **10** (not 4). `docs/data/aset_export.csv`'s `type_name` /
