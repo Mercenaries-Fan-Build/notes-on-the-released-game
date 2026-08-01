@@ -88,6 +88,7 @@ mean the same thing on someone else's machine as on yours.
 | `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` |
 | `add_sound` | Data | `name`, `bank`, `sound` (`wavebank`/`soundbank`/`sounddb`) |
 | `add_movie` | Data | `name`, `movie` |
+| `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `edit_state_machine` | Data | `target`, `states` |
@@ -125,14 +126,46 @@ The engine references movies by **fixed name**, so how a movie reaches the scree
 - **Replace** a shipped movie by using its exact name (`SHELL`, `pause_menu`, `MINIMAP`, a
   `*_briefing`, …). Same name → same hash → last-wins, and every UI site that already names it now
   serves yours. This is the proven UI-mod path.
-- **Add a new** movie under a novel name and it will sit in the WAD referenced by nothing. To make
-  it appear you must also ship a `patch_lua` that points a specific UI site at it — which site, and
-  how, is case-by-case (a shell screen, a HUD element and the PDA are wired differently). There is
-  no generic "add a UI movie" recipe, so there is deliberately no `add_ui` kind: compose
-  `add_movie` + `patch_lua` (+ `edit_stringdb` for its labels) by hand for the one site you mean.
+- **Add a new** movie under a novel name and load it from Lua. The engine binds a movie to a
+  `FlashWidget` by NAME — the shipped `loadingscreen_standalone` movie is loaded exactly this way
+  (`mrxgui.lua`): `w = FlashWidget:new(); w:SetSwfFile("<name>"); w:Play(); w:SetVisible(true)`.
+  A `patch_lua` carrying that boilerplate, plus the movie, is a complete working addition — this is
+  a PROVEN capability, not a hypothesis. What stays author-specific is only *where* the widget
+  attaches and *when* it shows (a boot overlay, a hotkey toggle, a HUD element parent). Use
+  **`add_ui`** below to have the Quartermaster bake that boilerplate for you; reach for a bare
+  `add_movie` + `patch_lua` only when you need full control of the trigger.
 
 **M0192** (advisory, needs the game stack) fires when `name` matches no shipped movie, to catch the
-novel-name case above before it ships something the game never shows.
+novel-name case above before it ships something the game never shows. It does **not** fire on
+`add_ui`, which references its own movie by construction.
+
+### `add_ui`
+
+The turnkey face over `add_movie` for a movie that should simply **appear on screen**. Same two
+fields — `name`, `movie` — and the Data half is byte-for-byte an `add_movie` (the same `cfx_pack`,
+the same primary ASET row). The difference is the Script half: `add_ui` also enrols a `FlashWidget`
+that plays the movie, so it shows without any hand-written Lua.
+
+How that Script half works is the part worth understanding, because it is how **every** future
+composed addition reaches the game without mods fighting over one script:
+
+- The Quartermaster mints a script it owns, **`qm_modloader`**, as a genuinely new `scripts_vz`
+  asset (a new block entry *and* its primary type-35 ASET row — the two halves the DLC's own loader
+  ships for a new importable module). Every UI mod's `FlashWidget` registration is baked into this
+  one script. It is the *expandable load space*: it grows as mods are added.
+- The game's resident script (`wifpmcinterior`) gets only a **one-line trampoline** — it `import`s
+  `qm_modloader` when the PMC interior loads and runs it once. This line never changes no matter how
+  many UI mods are installed, so the resident script is not edited and re-edited per mod.
+- Installing several UI mods together merges cleanly: their registrations concatenate into one
+  `qm_modloader`, ordered by Shipment name so the bytes are identical regardless of install order,
+  and the single trampoline is shared. Each registration runs under `pcall`, so one bad movie cannot
+  wedge the loader.
+
+`add_ui` makes the movie *appear* (created, played, visible, and parked in `_QM.ui[name]` so you can
+reach it from Lua). Its on-screen **rect and hide trigger** are still yours — add a `patch_lua` that
+manipulates `_QM.ui["<name>"]` if you need to place or toggle it. For a movie that *replaces* a
+shipped one, use `add_movie` with the exact shipped name instead; a replacement needs no widget of
+its own.
 
 ### `edit_stringdb`
 
