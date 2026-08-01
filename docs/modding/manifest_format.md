@@ -109,10 +109,30 @@ anywhere an asset is referenced — but unquoted, YAML reads `0xEB6F1B2D` as the
 `3949927213` and the manifest fails to load with *"invalid type: integer, expected a string"*.
 So `target: "0x6F84F6A3"`, `touches: ["0xE54047D5"]`.
 
-`edit_state_machine` is the one kind **not lowered yet** — no serializer for the SWIT/NODE/STAT
-family exists (the round-trip survey proved one is tractable but it has not been written). It fails
-with the reason rather than being skipped, because a dropped contribution produces a WAD that looks
-fine and does nothing; ship a hand-built block as `raw`/`data` meanwhile.
+### `edit_state_machine`
+
+Rewrites a destructible's destruction **state machine** — the `SWIT`/`NODE`/`STAT`/`CHDR`/`CEXE`
+family that decides which body shows in which damage state, and the Enter/Exit command scripts
+(`SHOW`/`HIDE`/`SetState`) each state runs. `target` is the model; `states` is a YAML file.
+
+**Extract, then edit.** Authoring the machine by hand is punishing, so pull the baseline the model
+already carries and change that:
+
+```sh
+qm extract-states al_veh_boat_destroyer --game <dir> > src/states.yaml
+```
+
+The dump reads in names where a hash reverses (states, HIER nodes, commands) and keeps the script
+opcodes as plain integers; edit it and point `states:` at it. Edits are **same-shape** — rename
+states, rewrite Enter/Exit command lists, change switch slots — but the node and state *counts* must
+match the model's; starting from the extracted baseline guarantees they do. Adding or removing a node
+or state is refused with the reason (it re-bases the descriptor table, a larger surgery).
+
+The overlay carries **only** the edited model as a single-entry block — no block-mate is shadowed.
+Its ASET row is copied from the base and the builder re-points `_P000` at the new block while
+sentinelling the finer LOD rungs (which degrade to coarse tier at distance, they do not dangle), so
+the write is a proven byte-identical splice (`serialize_state_machine`, checked against all 1,311
+retail destructibles) with the LOD chain recomputed rather than the whole base block re-emitted.
 
 ### `add_movie`
 
