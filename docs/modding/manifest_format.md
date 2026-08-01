@@ -95,10 +95,13 @@ mean the same thing on someone else's machine as on yours.
 | `place_file` | Code | `file`, `dest` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
 
-`donor` is **optional by design** wherever it is accepted — omit it and the Quartermaster picks a
-valid host (Plan 04, resolved Q2). **Auto-pick is not implemented yet**, so today the build refuses
-and asks rather than guessing: *"a wrong host silently produces a prop with the wrong rig and
-materials."* Tracked as a format gap in Plan 05 §H. Supply `donor:` until it lands.
+`donor` is **optional on `add_outfit`**: omit it and the build hosts the outfit on the wearer's own
+hero model (`pmc_hum_mattias` / `pmc_hum_chris` / `pmc_hum_jen`), validated against the game stack
+(Plan 04, resolved Q2). Set `donor:` only for a variant host such as `pmc_hum_mattias_v3`.
+
+On `add_model` `donor:` is still **required** — a prop has no wearer to name its host, and its rig
+must match the geometry class, which is not safe to guess (the weight-transfer history shows a wrong
+host produces a model rigged to nothing). Supply it explicitly.
 
 **Write a bare hash QUOTED in YAML.** A name is preferred and a bare `0xHHHHHHHH` is legal
 anywhere an asset is referenced — but unquoted, YAML reads `0xEB6F1B2D` as the integer
