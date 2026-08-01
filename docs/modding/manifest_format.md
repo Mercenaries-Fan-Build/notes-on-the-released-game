@@ -83,11 +83,16 @@ mean the same thing on someone else's machine as on yours.
 | kind | layer | required fields |
 |---|---|---|
 | `replace_texture` | Data | `target`, `image` |
-| `add_model` | Data | `name`, `model` |
+| `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
+| `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
 | `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` |
+| `add_sound` | Data | `name`, `bank`, `sound` (`wavebank`/`soundbank`/`sounddb`) |
+| `add_movie` | Data | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
+| `edit_stringdb` | Data | `target`, `strings` |
 | `edit_state_machine` | Data | `target`, `states` |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
+| `place_file` | Code | `file`, `dest` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
 
 `donor` is **optional by design** wherever it is accepted — omit it and the Quartermaster picks a
@@ -100,9 +105,34 @@ anywhere an asset is referenced — but unquoted, YAML reads `0xEB6F1B2D` as the
 `3949927213` and the manifest fails to load with *"invalid type: integer, expected a string"*.
 So `target: "0x6F84F6A3"`, `touches: ["0xE54047D5"]`.
 
-`edit_state_machine`, `native_hook` and `raw` are **not lowered yet**. They fail with the reason
-rather than being skipped, because a dropped contribution produces a WAD that looks fine and does
-nothing.
+`edit_state_machine` is the one kind **not lowered yet** — no serializer for the SWIT/NODE/STAT
+family exists (the round-trip survey proved one is tractable but it has not been written). It fails
+with the reason rather than being skipped, because a dropped contribution produces a WAD that looks
+fine and does nothing; ship a hand-built block as `raw`/`data` meanwhile.
+
+### `edit_stringdb`
+
+Corrects or localises UI text. Same-hash and last-wins, like `replace_texture`: the overlay carries
+an edited copy of the target string table and the mount order decides which wins. Arbitrary-length
+edits are supported — the codec (`mercs2_formats::stringdb`, proven byte-identical against all six
+retail language tables) rebuilds the heap and re-points the offsets.
+
+`strings:` is a `src/`-relative text file, **one edit per line**:
+
+```
+[Menu.Play] = New text
+0x0000B29D = an edit by hash, for a key whose bracket name you do not have
+# a comment
+```
+
+Line-oriented rather than YAML on purpose: UI text carries `:`, `%s`, quotes and colons that a YAML
+value would demand escaping. A key not present in the table is a hard error, named — a
+silently-dropped correction is worse than a failed build.
+
+⚠ **Shared tables are a half-fix (M0191).** The language tables (`english`, `french`, …) are served
+from BOTH `shell.wad` (front end) and `vz.wad` (gameplay). One overlay reaches one mount point, so a
+shared UI string edited in a single Shipment may show in only one. Deploy it to mount last in every
+session, or ship a shell copy too (`docs/fixpack/wad_duplicate_inventory.md` §C).
 
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
