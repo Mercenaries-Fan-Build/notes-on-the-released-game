@@ -108,9 +108,15 @@ the moved entity reads back at its new position and every other entity is byte-u
 in `manifest_format.md`. Same "extract, don't author" rule as `states:` — the author edits a dumped
 baseline rather than hand-writing keys.
 
-**Remaining:** `activate_layer` via the `qm_modloader` registration (reuse `add_ui`) — turn a
-normally-hidden overlay on from Lua. The hard format + lowering work (steps 0–2) and the `edit_world`
-kind are done and proven; `activate_layer` is a Script-side wrapper over the existing loader.
+**`activate_layer` — ✅ DONE (2026-08-01):** turn a normally-hidden overlay on from Lua. It reuses
+`add_ui`'s loader exactly — a `LayerRegistration` baked into `qm_modloader` as
+`MrxLayerManager.MarkForAddition("<layer>")` / `MarkForRemoval` (the vanilla-contract calls, confirmed
+in the decompiled corpus), reached by the one shared `wifpmcinterior` trampoline. No Data half, no
+`src/` file. Wired through the whole kind surface with M0194 (a mistyped case-sensitive layer name is
+a silent no-op; firing + quiet fixtures) and proven end to end against retail (the build mints
+`qm_modloader` carrying the marks and layer names in its bytecode). The vz_state overlay mechanism is
+now complete: **edit placements in place (`edit_world`)** and **switch whole overlays on
+(`activate_layer`)**.
 
 ## Notes carried from the standing constraints
 

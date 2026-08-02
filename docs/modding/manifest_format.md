@@ -93,6 +93,7 @@ mean the same thing on someone else's machine as on yours.
 | `edit_stringdb` | Data | `target`, `strings` |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
+| `activate_layer` | Script | `layer` (`replaces:` optional) |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `place_file` | Code | `file`, `dest` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
@@ -184,6 +185,49 @@ Merge is last-wins per entity across Shipments, ordered by Shipment name.
 
 Scope and the step-0/1/2 proof are in
 [`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
+
+### `activate_layer`
+
+Turns a normally-hidden world-state layer **on** — the permanent, whole-mission counterpart to
+`edit_world`. Where `edit_world` moves things inside a layer, `activate_layer` decides which layers
+the world streams in at all.
+
+A `vz_state` overlay is switched at runtime by the game's own layer manager:
+
+```lua
+MrxLayerManager.MarkForAddition("vz_state_pmccon004_destroyed")
+MrxLayerManager.MarkForRemoval("vz_state_pmccon004_pristine")
+```
+
+These are the exact calls a vanilla contract makes (`OilCon001.Activated` adds `_act1` and removes
+`_pristine`; an outpost capture removes its defense layer and adds its captured one). `layer` is the
+name to add; `replaces:` is an optional list to remove first (the pristine or prior overlay this one
+supersedes).
+
+```yaml
+  - kind: activate_layer
+    layer: vz_state_pmccon004_destroyed
+    replaces:
+      - vz_state_pmccon004_pristine
+```
+
+**No `src/` file and no Data half.** `layer` / `replaces` are layer **names**, not assets you ship —
+the layer must already exist in the WAD (retail carries 900-odd of them, or a companion `edit_world` /
+`raw` ships one). The whole contribution is a Lua registration, baked into the Quartermaster-owned
+**`qm_modloader`** — the same expandable load space and one-line `wifpmcinterior` trampoline `add_ui`
+uses (see [`add_ui`](#add_ui) for how that works). So N `activate_layer` and `add_ui` mods share one
+loader and one trampoline, merge cleanly, and each mark runs under `pcall`. The resident script never
+grows with mod count.
+
+⚠ **Layer names are CASE-SENSITIVE**, and a wrong one is silent — `MarkForAddition` on a name no
+layer carries reaches nothing at runtime. **M0194** (advisory, needs the game stack) warns when the
+`layer` or any `replaces` name has no layer-typed ASET row, unless a companion contribution in the
+same install ships it.
+
+The trigger is the moment the mod loader runs — PMC-interior entry, every session — which is the one
+resident hook the linker is proven to merge. For a mission-timed switch (a layer that should flip at a
+specific objective) you still want a bespoke `patch_lua` in the contract; `activate_layer` is the
+turnkey "turn this overlay on" face.
 
 ### `add_movie`
 
