@@ -85,7 +85,7 @@ mean the same thing on someone else's machine as on yours.
 | `replace_texture` | Data | `target`, `image` |
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
-| `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` |
+| `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` (`donor`, `textures`, `retarget`, `single_group` optional) |
 | `add_sound` | Data | `name`, `bank`, `sound` (`wavebank`/`soundbank`/`sounddb`) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
@@ -350,6 +350,30 @@ PNG only, 8-bit, dimensions a multiple of 4.
 Slot order is `0 = diffuse, 1 = SPECULAR, 2 = NORMAL` — not the intuitive d/n/s. Normals are
 BC3/DXT5nm; diffuse and specular are BC1 unless the source carries real alpha. A repoint that
 matches nothing fails the build: the texture would ship with nothing referencing it.
+
+### `single_group:` (`add_outfit`)
+
+```yaml
+    single_group: true
+```
+
+Forces the whole mesh into ONE donor draw group, wearing the source's OWN retargeted weights.
+Use it for a **dense foreign-rig** import — one whose weights reference more than ~48 distinct
+bones (a `donor_transfer` resample of the retail rig easily does). Above that ceiling an outfit is
+otherwise split across several host draw groups (the multi-group balanced split), where the injector
+fills a few and neuters the donor's others — a donor-structure-dependent layout a foreign-rig
+character has been observed to render unstably on (it culls / teleports as the camera rotates).
+`single_group` takes the proven single-host path instead: it skips donor-weight resampling (the
+thing that inflates the bone count), so the conform's own weights — limbs mapped 1:1 by the
+convention table, fingers folded to the hand — fit one group.
+
+What it does with textures (no manual `textures:` needed): the build reads the GLB's OWN embedded
+per-material diffuse maps, bakes them into a single atlas, remaps each part's UVs into its atlas
+cell, and repoints the donor's diffuse slot onto it — plus a flat matte specular and a flat normal
+so the donor's maps don't mis-light the atlased UVs. One draw group carries one material, so this is
+the price of `single_group`: no per-material maps and no donor-resampled limb polish. The trade buys
+placement stability, which is what a foreign-rig outfit needs first. A manual `textures:` block, if
+present, overrides the auto-atlas.
 
 ### `replace_texture`
 
