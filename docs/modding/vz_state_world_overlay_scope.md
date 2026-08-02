@@ -99,13 +99,18 @@ Two tractable now, one harder — mirroring `edit_state_machine`'s "edit is easy
    reproduces the decoded bytes. So a placement edit is `layer_block_for_edit → patch_* → emit`.
 3. `activate_layer` via the `qm_modloader` registration (reuse `add_ui`).
 
-**Remaining (the manifest-kind surface):** the `edit_world` kind — an extract-then-edit `world:`
-schema (entity by key/name → pos/quat/model), the `lower` arm calling the engine above, and the
-routine `blast`/`discover`/`lint`/workshop/conformance surface every kind carries — plus
-`activate_layer`. The hard format + lowering work (steps 0–2) is done and proven; this is the wrapper.
-4. The `states:`-style schema for the edits, extracted from `load_placements` so the author edits a
-   dumped baseline rather than hand-writing keys — same "extract, don't author" rule as `states:`.
-5. `wad_simulator` gate + a firing/quiet lint fixture per rule.
+**The manifest-kind surface — ✅ DONE (2026-08-01):** the `edit_world` kind landed — an
+extract-then-edit `world:` schema (`crates/mercs2_quartermaster/src/world.rs`: entity by key/name →
+`pos`/`quat`/`model`), the `lower` arm calling the engine above, `qm extract-world` to dump the
+baseline, and the routine `blast`/`discover`/workshop/conformance surface every kind carries. Proven
+end to end against retail `vz.wad` (`tests/build.rs::edit_world_builds_an_overlay_that_moves_an_entity`):
+the moved entity reads back at its new position and every other entity is byte-unchanged. Documented
+in `manifest_format.md`. Same "extract, don't author" rule as `states:` — the author edits a dumped
+baseline rather than hand-writing keys.
+
+**Remaining:** `activate_layer` via the `qm_modloader` registration (reuse `add_ui`) — turn a
+normally-hidden overlay on from Lua. The hard format + lowering work (steps 0–2) and the `edit_world`
+kind are done and proven; `activate_layer` is a Script-side wrapper over the existing loader.
 
 ## Notes carried from the standing constraints
 
