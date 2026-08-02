@@ -70,8 +70,24 @@ Two tractable now, one harder — mirroring `edit_state_machine`'s "edit is easy
 
 0. **Round-trip survey** (the `scripts_block`/`state_machine` pattern): across all 746 `vz_state`
    blocks + `layers_static`, does an in-place Transform/ModelName patch re-emit the block
-   byte-identically (pad + tail preserved, offsets intact, CSUM valid)? Pass ⇒ the in-place writer is
-   bounded; fail ⇒ the survey names the dropped field. This runs **before** any lowering.
+   byte-identically (pad + tail preserved, offsets intact)? Pass ⇒ the in-place writer is bounded;
+   fail ⇒ the survey names the dropped field. This runs **before** any lowering.
+
+   > ### ✅ DONE (2026-08-01) — the in-place writer is bounded
+   > `mercs2_formats/tests/placement_roundtrip_survey.rs`, over retail (747 blocks: `layers_static` +
+   > 746 `vz_state`):
+   > * **100,491 `Transform` records tile at a fixed 42 bytes**, zero non-tiling. So an edit is
+   >   arithmetic: `data_off + i*42 + field`.
+   > * **Layout confirmed**: all 100,491 records' pos/quat read at `+4/+8/+12` and `+20..+32` MATCH
+   >   `load_placements` — **0 mismatches**.
+   > * **`+16` pad is always 0**; the **`+36` 6-byte tail varies** (2,198 distinct) — so the writer
+   >   MUST patch in place (rewrite only pos/quat/model, preserve pad+tail), never parse-then-regen.
+   > * **A no-op in-place re-emit reproduces every one of the 747 blocks byte-for-byte.**
+   > * ⚠ One trap the survey caught: the `schm` payload-stride word reads **52**, not the operative
+   >   42 — trust the tiling + parser agreement, not the schema word.
+   >
+   > So `move_entity` / `reskin_entity` (in-place Transform / ModelName patch) is a **bounded job**.
+   > `add_entity` (the COMP-tree splice) still wants its own survey.
 1. `placement::patch_transform` / `patch_model` (in-place, byte-preserving) + a round-trip test.
 2. The block emission (reuse `edit_state_machine`'s single-block overlay + ASET-row copy path).
 3. `activate_layer` via the `qm_modloader` registration (reuse `add_ui`).
