@@ -92,6 +92,7 @@ mean the same thing on someone else's machine as on yours.
 | `patch_lua` | Script | `target`, `append` |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `edit_state_machine` | Data | `target`, `states` |
+| `edit_world` | Data | `layer`, `edits` |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `place_file` | Code | `file`, `dest` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
@@ -144,6 +145,44 @@ the LOD chain is recomputed rather than the whole base block re-emitted.
 
 The **permanent, world-scale** counterpart — making a building ruined for the rest of a mission — is
 the `vz_state` overlay, a separate mechanism scoped in
+[`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
+
+### `edit_world`
+
+Moves, rotates or re-models the **placed entities** of a world layer — the permanent, world-scale
+counterpart to `edit_state_machine`'s per-model destruction edits. Where `edit_state_machine` changes
+what a destructible *becomes*, `edit_world` changes where a thing *is*: the `vz_state` /
+`layers_static` placement layers are the `UCFX`→`CHDR`→`COMP` tree of 42-byte `Transform` + `Name` +
+`ModelName` records that the world load reads to spawn the level.
+
+`layer` is a **needle** matched against the layer blocks in the game stack (`vz_state_pmccon004`,
+`vz_state_pmc`, or just `vz_state` for the first match). `edits` is a `src/`-relative YAML file.
+
+**Extract, then edit.** Author against the baseline the layer already carries:
+
+```sh
+qm extract-world vz_state_pmccon004 --game <dir> --names production_names.json > src/world.yaml
+```
+
+Each edit names one entity by its **key** (the placement hash, quoted `"0xHHHHHHHH"`) or by its
+`Name` where one reverses, and supplies any of `pos: [x,y,z]`, `quat: [x,y,z,w]`, `model: <name>`:
+
+```yaml
+edits:
+  - entity: "0x8B7DE1F5"   # my_custom_helipad
+    pos: [1240.5, 12.0, -880.25]
+    quat: [0, 0, 0, 1]
+  - entity: crate_stack_03
+    model: al_prop_barrel_red
+```
+
+The overlay is an **in-place patch**, not a regeneration: the layer block is shadowed with the base
+bytes and only the named records' transform/model words are overwritten, because the `Placement`
+parse drops the record's `+16` pad and `+36` tail and cannot round-trip a full rebuild. An edit that
+resolves to no change is a hard error — a no-op overlay would ship an identical block for nothing.
+Merge is last-wins per entity across Shipments, ordered by Shipment name.
+
+Scope and the step-0/1/2 proof are in
 [`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
 
 ### `add_movie`
