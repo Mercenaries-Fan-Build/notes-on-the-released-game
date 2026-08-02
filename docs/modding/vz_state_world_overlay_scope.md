@@ -88,9 +88,21 @@ Two tractable now, one harder — mirroring `edit_state_machine`'s "edit is easy
    >
    > So `move_entity` / `reskin_entity` (in-place Transform / ModelName patch) is a **bounded job**.
    > `add_entity` (the COMP-tree splice) still wants its own survey.
-1. `placement::patch_transform` / `patch_model` (in-place, byte-preserving) + a round-trip test.
-2. The block emission (reuse `edit_state_machine`'s single-block overlay + ASET-row copy path).
+1. ✅ **DONE (2026-08-01)** — `placement::patch_transform` / `patch_model` (in-place, byte-preserving)
+   + `TRANSFORM_STRIDE`/`MODELNAME_STRIDE`. `tests/placement_writer.rs`: moving an entity reads back
+   moved with its quat untouched, no sibling moves, revert is byte-identical; reskin repoints one
+   `ModelName` and reverts; an unknown key patches nothing.
+2. ✅ **DONE (2026-08-01)** — the block emission. `GameStack::layer_block_for_edit` hands back the
+   whole layer (block, PTHS path, index, ASET rows); `build::emit_edited_layer` re-emits it as an
+   overlay shadowing the base path with its rows restated. Proven end to end: an edited vz_state layer
+   emits an overlay that decodes to exactly the edit and reads the entity back moved; a no-op
+   reproduces the decoded bytes. So a placement edit is `layer_block_for_edit → patch_* → emit`.
 3. `activate_layer` via the `qm_modloader` registration (reuse `add_ui`).
+
+**Remaining (the manifest-kind surface):** the `edit_world` kind — an extract-then-edit `world:`
+schema (entity by key/name → pos/quat/model), the `lower` arm calling the engine above, and the
+routine `blast`/`discover`/`lint`/workshop/conformance surface every kind carries — plus
+`activate_layer`. The hard format + lowering work (steps 0–2) is done and proven; this is the wrapper.
 4. The `states:`-style schema for the edits, extracted from `load_placements` so the author edits a
    dumped baseline rather than hand-writing keys — same "extract, don't author" rule as `states:`.
 5. `wad_simulator` gate + a firing/quiet lint fixture per rule.
