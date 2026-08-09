@@ -473,6 +473,36 @@ exist.
 Hook claims are `Exclusive` keyed on the hooked address, and a collision is a hard error — because,
 as above, there is no load order that fixes it.
 
+### Dependencies
+
+`load.requires` declares what must be present for a Shipment to work, in one of two forms.
+
+An **external pin** — `{ url, sha256 }` — names a third-party artifact by URL and locks it to a
+digest. It is the form for an ASI you neither built nor manage: the pin is integrity, not
+authenticity (as above), and it freezes that one build. M0170 and M0171 guard its digest and
+transport.
+
+A **managed requirement** — `{ name, version }` — names a component the toolchain manages (for
+example `m2-sdk`, the shared SDK runtime every SDK-based plugin links against) and a semver
+*range*, not a fixed build:
+
+```yaml
+load:
+  requires:
+    - name: m2-sdk
+      version: "^0.1"
+```
+
+This resolves the way a package manager resolves a dependency: at deploy time the highest released
+version satisfying the range is installed, one copy shared across every Shipment that needs it, and
+it updates on its own cadence — a patch to the component reaches every mod without any of them
+being re-released. A byte-exact pin can do none of that, which is exactly why a managed component
+takes a range and never a digest. M0172 rejects a range that is not valid semver.
+
+A managed dependency is **developer infrastructure** — a shared library the plugin links against,
+not content a player chooses. Resolution is silent: deploying the Shipment installs the dependency
+with no prompt and no UI, logged for a developer and invisible to a player.
+
 ## Limits
 
 - `shipment.name` — at most 64 characters, `^[a-z0-9]+(-[a-z0-9]+)*$`. It becomes a filename.
