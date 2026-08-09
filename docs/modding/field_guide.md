@@ -761,11 +761,24 @@ Three standing rules:
   correct one regardless.
 - **The exact CSUM byte span** (before the `CSUM` tag vs. through it inclusive) is recorded both
   ways in verified notes. Use the tools; don't hand-roll it.
-- **Skinned custom-model import** (weight transfer) is **not solved**. A foreign skinned model loads
-  and stays up, but renders **rigid, bound to bone 0 (A-pose)** until weights are transferred.
-  BLENDINDICES are **per-group palette-relative** — they index the group's `INFO(56)` range-table
-  concat, *not* the global HIER. Sources: `docs/asset_injection_playbook.md` §Stage A′,
-  `memory/blendindices-per-group-palette.md`, `memory/cj-foreign-model-import.md`.
+- **Skinned custom-model import** (weight transfer) — **now solved for characters** (2026-08-02); the
+  old "renders rigid, bound to bone 0 (A-pose)" limitation is lifted. A foreign skinned character
+  retargets onto a hero donor (`retarget:` on `add_outfit`) and renders **deformed + animated**. The
+  last holdout was **dense foreign rigs (>48 distinct bones)**: they are forced onto the multi-group
+  balanced-split injector, which neuters donor host groups and renders **unstably** (culls/teleports on
+  camera rotation). Fix — `add_outfit single_group: true` — skips donor transfer and forces the whole
+  mesh into **one** host group on its own retargeted weights (RuMerc1: 53 bones/5 groups → 40 bones/45
+  slots/1 group, shipped + persisted + rendered in-game; commit `b02a605`). Custom skins on the
+  injected character bind once shipped **fully-resident** (Trap 7 / `build_resident_texture`, commit
+  `4691fbf`) — a block missing its NAME chunk/`0xFFFF` sentinel loads but never binds → samples black.
+  Still true structurally: **BLENDINDICES are per-group palette-relative** — they index the group's
+  `INFO(56)` range-table concat, *not* the global HIER. Residual costs of `single_group`: per-material
+  textures collapse to one **baked diffuse atlas**, and donor-resampled limb polish is skipped. **Not
+  proven beyond characters** — `retarget` is character-only (humanoid Role → hero); arbitrary skinned
+  props/vehicles still take the template-conform geometry path. Sources:
+  `docs/asset_injection_playbook.md` §Stage A′, `memory/dense-foreign-rig-needs-single-group.md`,
+  `memory/injected-texture-missing-name-chunk.md`, `memory/blendindices-per-group-palette.md`,
+  `memory/cj-foreign-model-import.md`.
 - **Texture upscaling is unsupported** — dimensions are baked into the container INFO.
 - **Injecting a new placement into retail `layers_static`** is **untested**, and there is **no
   COMP-block writer** (`placement.rs` is read-only). Prefer Lua `Pg.Spawn` for new objects.

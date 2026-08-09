@@ -75,22 +75,33 @@ D3D9 console-era engine** (props ≈ 5–30 k tris). So every heavy model goes t
 > are byte-identical. `wad_simulator` does NOT catch this (ASET/consumption only) → test in-game.
 > Applies directly to the tank & heli donors.
 
-### Stage A′ — Skinning (only for the character; the one unfinished link)
-Foreign skinned models are **proven loadable** (CesiumMan renders and stays up in-game after the
-`page_count` decompression-buffer fix), but they render **rigid-to-bone-0 (A-pose, no per-bone
-deform)** until weights are transferred. The remaining work
-([cj-foreign-model-import](memory/cj-foreign-model-import.md), M2 milestone):
-- Extend the importer's `ExternalMesh` to carry joints+weights through `encode_strm` and the
-  multi-group split.
-- **Spatial weight transfer**: for each imported vertex, copy `BLENDINDICES`+`WEIGHT` from the
-  nearest **mattias donor** base vertex (donor stride-40 STRM +16/+20).
-- Per-group SKIN-palette remap (high-risk): joints are **per-group palette-relative**, indexing the
-  group `INFO(56)` range-table, NOT the global HIER
+### Stage A′ — Skinning (character rigs — SOLVED 2026-08-02)
+Foreign skinned **characters** are **proven loadable AND deforming** in-game (RuMerc1, user-confirmed
+his real skin renders + animates). The old "loads but renders **rigid-to-bone-0 (A-pose, no per-bone
+deform)** until weights are transferred" limitation is **lifted for characters**. How it was solved:
+- **Retarget onto a hero donor** — `retarget:` on `add_outfit` rigs the foreign mesh to the donor's
+  skeleton (character-only: humanoid Role → hero like `pmc_hum_mattias` / `_jen`), producing the
+  per-vertex `BLENDINDICES`+`WEIGHT`. This **supersedes** the earlier plan of a manual
+  nearest-donor-vertex spatial copy through a hand-rolled multi-group split.
+- **Dense rigs (>48 distinct bones) need `single_group: true`** — otherwise the rig is forced onto the
+  multi-group balanced-split injector, which neuters donor host groups → renders **unstably**
+  (culls/teleports on camera rotation). `single_group` skips donor transfer and packs the whole mesh
+  into **one** host group on its own retargeted weights (RuMerc1: 53 bones/5 groups → 40 bones/45
+  slots/1 group; commit `b02a605`). Residual costs: per-material textures collapse to one **baked
+  diffuse atlas**, and the donor-resampled limb polish is skipped.
+  ([dense-foreign-rig-needs-single-group](memory/dense-foreign-rig-needs-single-group.md)).
+- Still-true structural fact: joints are **per-group palette-relative**, indexing the group `INFO(56)`
+  range-table, NOT the global HIER
   ([blendindices-per-group-palette](memory/blendindices-per-group-palette.md)).
 - Known skinned-render traps already solved: **DEC3N tangent** is 10-10-10-2
   ([dec3n-tangent-layout-bug](memory/dec3n-tangent-layout-bug.md)); atlas sub-textures with
   `sub_idx=0xFFFF` hang instantiation
-  ([v5-skin-hang](memory/v5-skin-hang-is-engine-instantiation-not-deadlock.md)).
+  ([v5-skin-hang](memory/v5-skin-hang-is-engine-instantiation-not-deadlock.md)); a custom skin block
+  missing its NAME chunk/`0xFFFF` sentinel loads but never binds → **samples black** (ship via
+  `build_resident_texture`, commit `4691fbf` —
+  [injected-texture-missing-name-chunk](memory/injected-texture-missing-name-chunk.md)).
+- **Not proven beyond characters** — `retarget` is character-only; arbitrary skinned props/vehicles
+  still take the template-conform geometry path (Stage A / `valid_model_structure_map.md`).
 
 ### Stage B — Textures  (PNG/JPG → fully-resident UCFX texture)
 - **Engine is D3D9-era**: it consumes **base color (diffuse) + normal**, plus optional specular.
@@ -168,13 +179,13 @@ The clean, low-risk case: no rig, no new gameplay behaviour.
    `Pg.GetGuidByName`, or place relative to exterior `(2560, -13, -926)` after locating the gate
    (see §3). Buildings are large — set the transform so it faces the road, `y` snapped to terrain.
 
-### 2.2 Survival character — PMC wardrobe  🔴 (highest risk)
-The only task gated on unfinished tech (skinned deform). Sequence de-risks it:
-1. **Assess the FBX**: confirm it's humanoid, closed mesh, A/T-pose (best weight-transfer). If it
-   has its own rig, we still retarget onto the Mercs2 human skeleton.
-2. **Import + skin** (Stage A′): weight-transfer from the **mattias donor** (spatial nearest-vertex
-   BLENDINDICES/WEIGHT copy; per-group palette remap). This is the M2 work-in-progress — the part
-   to actually finish.
+### 2.2 Survival character — PMC wardrobe
+Skinned deform is **no longer the blocker** — solved 2026-08-02 (see Stage A′). Sequence:
+1. **Assess the FBX**: confirm it's humanoid, closed mesh, A/T-pose (best retarget). If it
+   has its own rig, `retarget:` maps it onto the Mercs2 human skeleton.
+2. **Import + skin** (Stage A′): `retarget:` onto a hero donor rigs it (deformed + animated,
+   not the old bone-0 A-pose); dense rigs (>48 distinct bones) add `single_group: true`. The earlier
+   plan of a manual spatial nearest-vertex BLENDINDICES/WEIGHT copy is superseded.
 3. **Textures** (Stage B): map to head/upper-body/lower-body slots; fully-resident; mind the DLC
    MTRL layout trap (DLC-human MTRLs parsed as 0 records — the `convert_mtrl` flag-word case). For a
    *fresh* import we control the MTRL, so we sidestep the DLC-only bug.
@@ -249,7 +260,8 @@ for the dog. Alternative interim (declined by user): override a spawnable statue
 ## 3. Open gaps / decisions
 
 **Resolved (2026-07-08, user):** tank **and** heli = **new store items** (both full block-3185); the
-survival character ships **rigid A-pose first**, animated deform as a follow-up; textures downscale to
+survival character ships **rigid A-pose first**, animated deform as a follow-up *(superseded 2026-08-02:
+animated deform now shipped — see Stage A′)*; textures downscale to
 **1024²**; **build all five into ONE combined `vz-patch.wad` and run a single in-game test only once
 all five are in it** (no per-asset in-game testing — offline `wad_simulator` validation between assets).
 
@@ -274,7 +286,8 @@ Still to look up while building:
 2. **Dog** (static *new-asset*) — adds the new-hash + ASET-entry discipline on a model (small, static).
 3. **Heli** (store item) — finish the already-scoped round-3; proves the Eva store-item pipeline.
 4. **Tank** (store item + vehicle donor) — reuses #3's store pipeline + a vehicle HIER/PHY2 donor.
-5. **Survival character** (wardrobe, skinned) — last, because it's gated on finishing weight-transfer.
+5. **Survival character** (wardrobe, skinned) — last by complexity (most moving parts: rig + textures +
+   wardrobe wiring), though skinned deform is **no longer a blocker** (solved — see Stage A′).
 
 ## 5. Combined-WAD assembly (the build workflow)
 

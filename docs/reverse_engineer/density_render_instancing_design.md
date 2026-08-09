@@ -84,34 +84,61 @@ opcode at 0x751c71). Hardware instancing requires the bound VS to read the trans
 compiled `vs_3_0` bytecode ships — no HLSL. So the transform read has to be redirected *inside the
 compiled shader*.
 
-### 2.1 Recommended: mechanical `vs_3_0` bytecode splice (lead case = pure register swap)
+### 2.1 Mechanical `vs_3_0` bytecode splice — RESOLVED: it's Case B, and it's a pure operand redirect
 
-`vs_3_0` DXBC is fully documented and locally editable. The transform in a Pangea VS is one of two
-forms; both are a small, mechanical edit:
+**★ Corrected 2026-08-03 by offline disassembly of `game-files/shader3.bin`** (container + CTAB fully
+cracked — see §2.1a). The earlier draft led with "Case A — a pre-combined `WorldViewProj` constant."
+**The shipped Pangea static-mesh shaders are NOT Case A.** Every static VS decoded (plain, textured,
+normal-mapped, offset, spline) computes clip position as two separate matmuls:
 
-- **Case A — the constant is a pre-combined `WorldViewProj`** (World baked with view-proj CPU-side
-  per object; the common 2008 pattern). The shader body is essentially
-  `dp4 oPos.{x,y,z,w}, v0, c[N..N+3]` (or `m4x4 oPos, v0, c[N]`). **The edit is a pure
-  register-index swap:** declare four instance inputs `dcl_texcoord4..7 v5..v8`, change the four
-  `c[N..N+3]` operands in the transform to `v5..v8`, and bump the input-usage count in the version
-  token. **No new math, no new constants.** The per-instance WVP is computed by our instance-buffer
-  builder (cheap, parallel, CPU) and streamed. This is the **lowest-risk shader edit** and we lead
-  with it.
+```asm
+dp4 r0.{xyzw}, v0, c[O..O+3]   ; worldPos = position × objectData   ← per-object World (LocalToWorld)
+dp4 o0.{xyzw}, r0, c0..c3      ; clipPos  = worldPos × viewContextData ← shared ViewProj (camera)
+```
 
-- **Case B — the constant is a separate `World` (+ shared `ViewProj` constant).** Stream the
-  per-instance `World` (4 inputs), keep `ViewProj` as a shared constant, and add `mul World*ViewProj`
-  in-shader (≈4 extra instructions; `vs_3_0` caps at 512 — vast headroom). Preferred when the shader
-  also transforms **normals/tangents by World** for lighting (normal-mapped props): stream `World`
-  once, reuse for position and normal. Watch the `vs_3_0` **16-input limit** (v0–v15): a
-  normal-mapped static prop is pos+uv+normal+tangent (4) + WVP-or-World (4) + World-for-normals (4)
-  = up to 12 — fits. Skinned adds blendweights+blendindices (+2) and does **not** fit cleanly →
-  another reason to defer crowds (§4).
+- **`objectData`** = the per-object **World** matrix — **exactly 4 constant registers** (a float4x4).
+  On lit props it *also* transforms the normal/tangent basis via `dp3 …, v1/v3, c[O..O+2]`.
+- **`viewContextData`** = the shared **ViewProj** (first 4 regs; +2 for eye-pos on lit variants) — the
+  same value for every object, so it stays a constant.
 
-**Which register holds the transform** is recoverable offline, not by guessing: the `.sho` blobs
-carry a `vs_3_0` constant table (the 344 `*.updb` debug DBs name the registers, e.g.
-`WorldViewProj`), and for the veg path `FUN_004a24a0` already documents c0–c10. Estimate: the set of
-VS that dominate props+veg is **< ~20 shaders** (the `PgMeshVP` perms + the 4 `PgBillboardTree` +
-`PgMeshTiny*`), not hundreds. Patching ~20 shaders is tractable.
+Because the shader **already** composes World × ViewProj in-shader per-vertex, HW instancing needs
+**zero new instructions** — even less than the old "Case B" (which assumed we'd have to *add* a `mul`).
+The entire edit is a **pure operand redirect**: change the 4 `objectData` reads `c[O..O+3]` → 4 fresh
+per-instance inputs (`v4..v7`), and insert their `dcl`s. The existing `dp4` (position) and `dp3`
+(normal/tangent) consume the streamed matrix unchanged; `viewContextData` is untouched. Two mechanics
+corrections vs the old draft: **(1)** the `objectData` base register **`O` is per-shader, not a fixed
+`N`** — c4 (simple) / c10 (blend-weight) / c86 (spline) / c196–224 (skinned) — so the splice is
+**CTAB-driven**; **(2)** there is **no input-count field to bump in the vs_3_0 version token** (SM3
+inputs are defined by `dcl` tokens, not the version token). Input-limit check still holds: normal-mapped
+prop = pos+normal+uv+tangent (4 inputs) + World rows (4) = 8, well under the v0–v15 cap. Skinned adds
+blendweights+indices and BoneMatrixArray palette → still deferred (§4).
+
+#### 2.1a Store format (proven, offline)
+`[u32 count=556][556 × {id:u32, blob_off:u32, blob_size:u32, type:u32}][blobs]`; type 1=`vs_3_0` (151),
+0=`ps_3_0` (405). Loaded by `FUN_0085b3f0`; each blob's D3D handle filed by `id` into a `%0x1200` table
+via `FUN_0085b810`. **All 556 blobs retain an intact CTAB** (creator `Microsoft (R) HLSL Shader Compiler
+9.19.949.2111`) → constant **names + register indices readable offline**, which is how `objectData` /
+`viewContextData` and their exact registers were recovered above — **no name→blob hash needed to
+identify or decode.** There are **60 non-skinned `objectData` VS** = the static-prop set to splice.
+⚠ The record `id` is **not** `FNV(name)` (verified by hash inversion + content-hash tests) — needed only
+for Route-1 additive registration; **Route 2 (§2.2) sidesteps it.** Tooling: Rust `shader3` module +
+`shaderforge` bin in `tools/wad_simulator/crates/mercs2_formats`.
+
+#### 2.1b Two runtime-validation rules — ✅ splice LIVE-VERIFIED (R0 PASS, 2026-08-04)
+The splice was proven against the REAL dxwrapper D3D9 runtime in-game: `tools/shader_accept_probe/`
+(an ASI that calls the engine's own `CreateVertexShader` — device via `PTR_PTR_00dfc2fc+0x2d28`, vtbl
++0x16c — on all 60 orig+spliced blobs) reports **spliced 60/60 `S_OK`** (control: original 60/60). Two
+rules surfaced ONLY at this gate — the offline re-parse accepted bytecode the driver rejected — and both
+are now enforced by `shader3::verify_splice`:
+1. **A `dcl` semantic token MUST set bit 31** (`0x80000000`); real ones do (`dcl_texcoord1 = 0x80010005`).
+   Omitting it ⇒ `D3DERR_INVALIDCALL` (was 0/60 before the fix).
+2. **vs_3_0 permits at most ONE input register (`v#`) read per instruction.** Redirecting `objectData`
+   → an input makes the position `dp4 r0,v0,objData` read two inputs (position + World row) → invalid.
+   Fix: copy the pre-existing input to a fresh temp at the top (`mov rT, v0`) and read the temp there
+   (17/60 → 60/60). The pre-fix passers were the wind/wave/spline shaders that already stage position in
+   a temp. **Implication for the instance-buffer/decl (piece 2/4):** the World rows arrive as TEXCOORD
+   inputs whose semantic index the splicer stamps (`SpliceReport.texcoord_base`) — the stream-1
+   `D3DVERTEXELEMENT9` must match those exactly.
 
 **Watch the decl types when adding stream elements.** Reuse the engine's own declaration builder
 (`FUN_0074d6d0` build / `FUN_00856360` create device+0x158 / `FUN_00752b30` bind). The instance
@@ -305,10 +332,11 @@ under dgVoodoo).
 - **M1 — Fallback proof (constant-indexed, zero shader risk).** One prop model, N copies, via the
   engine's own `PgMeshTiny` `LocalToWorld[]` path (§2.3). *Gate: PIX shows ~N/50 DIPs; props render
   correct.* This validates state-replay against a *working* engine shader before touching bytecode.
-- **M2 — First stream-freq instanced DIP (the shader crux, Case A).** Bytecode-patch ONE dominant
-  prop VS to read WVP from stream-1 (§2.1 Case A), deliver via the d3d9 shim (Route 2), and issue one
-  instanced DIP for one prop run. *Gate: PIX shows a single `SetStreamSourceFreq`+instanced DIP;
-  transforms correct; identical pixels to the native run.*
+- **M2 — First stream-freq instanced DIP (the shader crux, Case B — §2.1).** Bytecode-splice ONE
+  dominant prop VS by redirecting its 4 `objectData` (World) const reads → stream-1 inputs (CTAB-driven
+  register `O`), deliver via the d3d9 shim (Route 2), and issue one instanced DIP for one prop run.
+  *Gate: PIX shows a single `SetStreamSourceFreq`+instanced DIP; transforms correct; identical pixels to
+  the native run.*
 - **M3 — Tier B prop coalescer live.** Rust-replaced `FUN_00854b38` + extended sort key; all
   qualifying prop runs collapse. *Gate: in-game parity, DIP count down by the M0-predicted factor,
   frame time flat/better, no visual regression.*

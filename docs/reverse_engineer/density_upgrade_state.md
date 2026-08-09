@@ -109,18 +109,49 @@ Density stops mattering, and Wall 2 disappears. Design reference:
 consumer `FUN_00854b38` → command interpreter `FUN_00856760`. Do **not** hook the hot DIP choke
 `FUN_007512f0` (it has wedged the game). The `0x58`-byte packet layout is read.
 
-**Shader crux (solved on paper):** every static-prop transform is delivered as a `vs_3_0` constant via
-`SetVertexShaderConstantF` (`FUN_00748e00`). Hardware instancing needs the VS to read the transform
-from a per-instance stream. For the common pre-combined-`WorldViewProj` case this is a **mechanical
-register swap**: declare four instance inputs (`v5..v8`), redirect the transform's `c[N..N+3]` reads to
-them, bump the input-usage token. Delivered additively (a new shader variant, never overwriting a
-shipped shader). Shader store located: `data/shader3.bin` (302 `vs_3_0` + 810 `ps_3_0` blobs, nameless
-in-file); static-mesh VS is `PgMeshVP` / `PgMeshVPAmbientWind` (registered in `FUN_0084f130`).
+**Shader crux — RESOLVED by offline disassembly (2026-08-03), premise corrected.** Every static-prop
+transform is delivered as a `vs_3_0` constant via `SetVertexShaderConstantF` (`FUN_00748e00`), and HW
+instancing needs the VS to read it from a per-instance stream. The earlier plan LED with a
+pre-combined-`WorldViewProj` "Case A" (a pure register swap). **The shipped shaders are NOT Case A —
+they are Case B, and the splice is actually simpler than either.** Proven by disassembling the store
+(container + CTAB fully cracked, see below): the static-mesh position path is two separate matmuls,
+identical across every static VS decoded —
+`dp4 r0,v0,objectData(c[O..O+3])` then `dp4 o0,r0,viewContextData(c[0..3])` — where **`objectData` = the
+per-object World/LocalToWorld matrix (exactly 4 consts; also feeds normal/tangent via `dp3`)** and
+**`viewContextData` = the shared ViewProj**. The shader ALREADY composes World×ViewProj in-shader, so
+instancing needs **zero new math**: redirect the 4 `objectData` const reads to 4 per-instance stream
+inputs (e.g. `v4..v7`); the existing `dp4`/`dp3` consume them unchanged. Two corrections to the old
+mechanics: the `objectData` base register **`O` varies per shader** (c4 simple / c10 blend / c86 spline
+/ c196–224 skinned) so the splice must be **CTAB-driven, not a fixed `N`**; and there is **no
+input-count field to bump in the vs_3_0 version token** (SM3 inputs come from `dcl` tokens).
+
+**Shader store — container SOLVED.** [`game-files/shader3.bin`](../../game-files/shader3.bin):
+`[u32 count=556][556 × {id:u32, blob_off:u32, blob_size:u32, type:u32}][blobs]`, type 1=`vs_3_0` (151),
+0=`ps_3_0` (405) — **556 total, not the "302+810" earlier stated (that was 2× / double-counted)**.
+Loaded by `FUN_0085b3f0` (streams the file, per record calls `CreateVertex/PixelShader`); each blob's
+D3D handle is filed into a `%0x1200` open-addressed table by `id` via `FUN_0085b810`. **Every blob
+retains an intact CTAB** (creator `Microsoft (R) HLSL Shader Compiler 9.19.949.2111`, no preshader
+strip) → constant **names + register indices are recoverable offline** — the identification key, no
+name→blob hash needed to decode. Static-mesh VS is `PgMeshVP` / `PgMeshVPAmbientWind` (registered in
+`FUN_0084f130`). ⚠ **Open (delivery only):** the record `id` is NOT `FNV(name)` (verified by hash
+inversion vs 344 known names + content-hash tests); it is needed only for Route-1 additive
+registration — **Route-2 (d3d9 bytecode-hash shim) sidesteps it** and is the preferred iteration
+vehicle. Closing it = find the `%0x1200` *reader* and see what hash feeds it.
 
 **The five build pieces that remain (in order):**
-1. **Shader splice (self-contained, offline-verifiable):** identify `PgMeshVP` among the 302 blobs,
-   decode its DXBC, confirm the pre-combined-WVP case, swap `c[N..N+3] → v5..v8`, validate the edited
-   `vs_3_0`.
+1. **Shader splice — ✅ DONE and LIVE-VERIFIED (R0 PASS, 2026-08-04).** The CTAB-driven operand-redirect
+   splicer (`shader3` module + `shaderforge` bin, `tools/wad_simulator/crates/mercs2_formats`) rewrites
+   each static VS's `objectData` (World) const reads → per-instance `v` inputs. Proven against the REAL
+   dxwrapper D3D9 runtime in-game by `tools/shader_accept_probe/` (an ASI that calls the engine's own
+   `CreateVertexShader` on all 60 orig+spliced blobs): **original 60/60 S_OK, spliced 60/60 S_OK.**
+   Two runtime-validation rules were discovered ONLY at this live gate (offline re-parse missed both;
+   both now enforced by `verify_splice`):
+   - **dcl semantic token must set bit 31** (`0x80000000`) — e.g. `dcl_texcoord1 = 0x80010005`. Missing
+     it ⇒ `D3DERR_INVALIDCALL` (was 0/60).
+   - **vs_3_0 allows at most ONE input register (`v#`) read per instruction.** The redirect made the
+     position `dp4` read two inputs (position + World row); fix = copy the pre-existing input to a fresh
+     temp at the top (`mov rT, v0`) and read the temp there (17/60 → 60/60). The 17 that passed pre-fix
+     were the wind/wave/spline shaders that already route position through a temp.
 2. **Instance-buffer builder:** gather the palm world matrices into a per-instance D3D vertex buffer
    (stream 1).
 3. **Packet coalescer (the high-risk core):** a Rust MinHook graft that, in the consumer/command path,
