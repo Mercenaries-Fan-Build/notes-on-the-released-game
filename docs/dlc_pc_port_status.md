@@ -78,10 +78,43 @@ python3 tools/dlc_port.py --x360-rar DLC.rar \
 
 ## PS3 status
 
+**Update (2026-08-01): the PS3 "Blow It Up Again" DLC is fully decrypted.** The
+earlier "no PKG obtained" note below is superseded. Source PKG
+(`game-files/1ntHdj11…V8bh78m4U6…pkg`, content id
+`UP0006-BLUS30056_00-MERCS2WIFDLC01NA`) was cracked end-to-end: PSN PKG
+(AES-128-CTR, key `2e7b71d7c9c9a14ea3221f188828b8f8`) → inner `DLC01.EDAT`
+(NPDRM EDAT, license type 3) → inner WAD (271,089,664 B, `SCFF` BE, parses with
+`x360_dlc_io`). The recovered **title klicensee = `1896170d86be49b983b7135c96d6fb79`**
+(a title-specific klic, not NP_KLIC_FREE), lifted as a 16-byte constant at
+offset `0x103f498` of the v1.03 *patched* EBOOT via a sliding-window AES-CMAC
+scan. See memory `ps3-dlc-crack-and-klicensee` for the full chain.
+
+**Key finding — PS3 content == Xbox content.** 5287 ASET name-hashes are
+identical (0 platform-only), and all **36/36 DLC Lua scripts are byte-identical
+to Xbox** (`docs/mercs2-dlc-luacd/src/dlc01`). Byte differences are pure
+platform re-encoding (GPU texture format, vertex packing). So the PS3 route adds
+no new assets or gameplay over the Xbox route — its payoff was confirmation +
+key recovery. The DLC added no gameplay C code; it is Lua over the base-game
+binding surface, so a failing DLC Lua call is a reimpl fidelity bug (base-game
+work), not DLC-specific. The two irreducibly-DLC artifacts are the Caicara /
+Speed City level data and the arena game-mode Lua (already held).
+
+**Tooling (2026-08-12): the crack chain is now a Rust tool.** The four reference
+Python scripts were ported into the `wad_simulator` workspace and verified against
+the retail package + the Python oracle outputs. Core logic lives in
+`mercs2_formats::ps3_{keys,crypto,pkg,edat,self,klic}` (AES-128/256 CTR/CBC/ECB +
+AES-CMAC, with FIPS-197 / NIST SP 800-38A / RFC 4493 known-answer tests); the CLI
+is `crates/ps3_dlc_crypt` (`pkg-unpack` / `edat-decrypt` / `unself` / `klic-scan`).
+End-to-end proof: `pkg-unpack` on the retail 400 MB PKG gives the correct
+`content_id` + 16-entry table; `edat-decrypt` yields the 271,089,664-byte `SCFF`
+inner WAD; `unself` (APP and NPDRM) is sha256-identical to the Python oracle ELFs;
+`klic-scan` reproduces `off=0x103f498 klic=1896170d…fb79`. The Python scripts are
+retained only as oracles. The decrypted inner WAD is big-endian `SCFF`, so it
+feeds the same `dlc_input` + `ucfx_byteswap` + `patch_wad` pipeline as `dlc_port`.
+
+### Original note (superseded)
+
 The PS3 `VZ.WAD` has an unknown encrypted/obfuscated header (first 0x80800
 bytes). Big-endian `segs` blocks are visible starting at offset 0x80800. Once
 the header is decoded, the same `ucfx_be_to_le.py` pipeline applies. See
 `docs/ps3_wad_wrapper.md` for details.
-
-No PS3 DLC package (PKG) has been obtained. The `ps3-update/` directory
-contains only the v1.03 game patch and system firmware.
