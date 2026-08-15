@@ -109,6 +109,14 @@ step) is **not** a named/decoded body on either build — consistent Xbox↔PC.
 > table**, not the "Havok sampled-heightfield" query. The actual terrain-collision shape is
 > `hkpSampledHeightFieldShape` `FUN_00a0e3d0` + its tri-sampled BV-tree wrapper `FUN_00a0d4a0`; the
 > narrowphase is `hkpHeightFieldAgent` `FUN_008aefc0`.
+>
+> **⚠ SUPERSEDED 2026-08-14 (double-blind WAD census):** the "terrain = heightfield" claim above is
+> **WRONG**. Static terrain collision on disk is `WpMeshShape16` + `hkpMoppBvTreeShape` + baked
+> `hkpMoppCode` — **362/362** terrain cells carry a MOPP, and **zero** `hkpSampledHeightFieldShape`
+> instances are serialized anywhere in `vz.wad`. `FUN_00a0e3d0` exists but has no static callers and no
+> disk bytes feed it. See [`terrain_collision_regeneration.md`](terrain_collision_regeneration.md) and
+> memory `terrain-collision-is-mopp-baked-mesh`. (A runtime-only heightfield for a non-collision ground
+> query is not excluded — needs `bp FUN_00a0e3d0` — but it is NOT the streamed collider.)
 
 **Disk → shape:** the streamed world geometry becomes Havok shapes via the **PHY2 chunk = a Havok 5.5
 packfile** ([`asset_formats_code_map`](asset_formats_code_map.md) §7, [[phy2-havok-chunk-not-u32]]):
