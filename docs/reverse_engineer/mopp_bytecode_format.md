@@ -31,14 +31,18 @@ CodeInfo m_info = one hkVector4 m_offset = [offset.x, offset.y, offset.z, 1/scal
   large to be a world-per-unit step; its reciprocal (`~4.4e-7`) is the sane per-integer-unit scale for a
   ~24-bit frame, and matches the VM's `realCoord = intCoord * this[0x10]` multiply (`this[0x10]` = the
   cached `1/lane3`). *(Earlier note said lane 3 = scale directly — corrected: it is `1/scale`.)*
-- Integer coords are hierarchical: `int = (operand << shift) + origin[axis]`. The **root operand shift is
-  `0x10 - m_info.p3root`** (VM `FUN_100a59d0` uses `0x10 - param_1[3]`; OBB `FUN_10081890` stores it
-  directly in `param_1[5]`). `param_1[3]` is a **signed** int, so the root shift can exceed 16 for
-  meshes needing >16 integer bits (a ~30 m cell at `scale ~4.4e-7` needs ~26-bit coords → root shift
-  ~18). Each REANCHOR (`0x01–0x04`) does `origin[k] += code[+1+k] << shift; shift -= opcode` — refining a
-  child cell to finer resolution. **Coordinate math is NOT needed to recover triangle indices** (the
-  decoder ignores it) — but it IS needed for a spatial `query_aabb` and for a spatially-conservative
-  encoder; see "Split geometry" below.
+- Integer coords are hierarchical: `int = (operand << shift) + origin[axis]`. The formula is
+  `shift = 0x10 - m_info.p3root` (VM `FUN_100a59d0` uses `0x10 - param_1[3]`; OBB `FUN_10081890` stores it
+  directly in `param_1[5]`). **★ MEASURED 2026-08-16 — the ROOT shift is a FIXED `16` (`p3root = 0`).**
+  Retail-oracle sweep (`mopp.rs::diag_retail_floor_root_shift_oracle`): each of floor `0x39AF17DC`'s 4 baked
+  MOPPs, with FOUR DIFFERENT `m_info` scales (5.0e-7 … 2.1e-6), is no-miss over its OWN real triangles at
+  shift 16 and ONLY 16; every other shift misses ~all triangles. So the shift is constant, and the *scale*
+  is what varies: Havok bakes each mesh's `scale = ext_max / 0xFF0000` (a 24-bit frame — byte operand `0xFF`
+  → int `0xFF0000`), so the far face maps to operand `0xFF` at shift 16. *(Corrects the earlier speculation
+  that `p3root` varies with mesh size / that a ~30 m cell needs shift ~18 — it does not; it is 16 with a
+  finer scale.)* Each REANCHOR (`0x01–0x04`) then does `origin[k] += code[+1+k] << shift; shift -= opcode` —
+  refining a child cell BELOW the root's byte resolution. **Coordinate math is NOT needed to recover triangle
+  indices** (the decoder ignores it) — but it IS needed for a spatial `query_aabb`/encoder; see below.
 - ⚠ `output/_scratch/old_mopp.bin` is only the 901-byte `m_data` buffer (no struct), AND it is the **stale
   u32-scrambled** dump (predates fix `b93e00` by ~4 min). Decode it with `--unreverse` (un-reverse each
   aligned 4-byte word). A MOPP extracted by the *current* `havok.rs` (stores raw u8) decodes with NO unreverse.
@@ -105,9 +109,12 @@ branch when the query is disjoint from the tightened box.) Implemented as `mopp.
 
 **Conservative encoding (`mopp.rs::encode`).** For each split the inline child's `code[+1]` = its true
 max-on-axis rounded UP, and the offset child's `code[+2]` = its true min-on-axis rounded DOWN — so a query
-can never miss a boundary triangle. Root operand shift is `8` and the frame divides the widest extent by
-`0xFF00` (not `0xFFFF`) so the AABB-max face maps to `int = 0xFF00 = 255<<8`, representable as an upper
-bound. REANCHOR is not emitted (encoder stays at root precision; finer bounds would need `0x01–0x04`).
+can never miss a boundary triangle. **Root operand shift is `16`** (the measured engine value — see above)
+and the frame divides the widest extent by `0xFF0000` (a 24-bit frame) so the AABB-max face maps to
+`int = 0xFF0000 = 0xFF<<16`, representable as an upper bound. REANCHOR is not emitted (encoder stays at root
+byte precision; finer bounds would need `0x01–0x04`). *(Historically shift `8` / `÷0xFF00`, which was
+internally self-consistent but off by 256× vs the engine — the root cause of the authored-floor spatial-MOPP
+fall-through, fixed 2026-08-16.)*
 
 **Gates (all green, `cargo test -p mercs2_formats mopp`):**
 - NO-MISS: `query_aabb(encode(mesh))` ⊇ brute-force AABB-overlap set over thousands of random queries, on a
@@ -118,11 +125,11 @@ bound. REANCHOR is not emitted (encoder stays at root precision; finer bounds wo
 - Leaf-box reachability: on **2 703 real leaf boxes** across 43 MOPPs, a query at each fully-bounded leaf's
   reconstructed box centre returns that leaf — proves the pruning is nesting-correct (no over-prune).
 
-**Still open:** an *absolute* `query_aabb(realMOPP) ⊇ brute-force-over-source-tris` cross-check is BLOCKED
-by frame alignment — a co-located `WpMeshShape16`'s decoded vertices do not sit in the same integer frame
-the paired `hkpMoppCode` was baked in (the root CUT extents are geometrically inconsistent with the mesh
-AABB under any single uniform scale/shift; likely a `decode_mesh_shape16` vertex-pool fidelity issue, NOT a
-`query_aabb` bug — the FindAll + leaf-box gates confirm the walk is correct). The 26-DOP diagonal split
+**Resolved 2026-08-16 (was "still open"):** the *absolute* `query_aabb(realMOPP) ⊇ brute-force-over-source-tris`
+cross-check that was "BLOCKED by frame alignment" is now green — the blocker was the wrong root shift, not a
+mesh-decode issue. At the MEASURED shift `16` (not the old `8`), each of retail floor `0x39AF17DC`'s 4 MOPPs
+is no-miss over its own decoded triangles (`mopp.rs::diag_retail_floor_root_shift_oracle` +
+`phy2_build.rs::spatial_mopp_no_miss_and_prunes_in_common_frame_if_present`). The 26-DOP diagonal split
 plane geometry (`0x13–0x1c`) is still INFERRED; `query_aabb` visits both children unpruned for those
 (conservative), and `encode` never emits them.
 
