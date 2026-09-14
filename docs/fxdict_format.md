@@ -145,7 +145,38 @@ See [`audio_ue5_path.md`](audio_ue5_path.md) §2.
 
 ---
 
-## 7. Related docs
+## 7. Encoder (Rust, native)
+
+The inverse of every `parse_X` in [`mercs2_formats::fxdict`](../tools/wad_simulator/crates/mercs2_formats/src/fxdict.rs) now exists on the same module:
+
+| Chunk | Encoder | Notes |
+|-------|---------|-------|
+| DICT record | `write_fxparam` / `write_fxdict_dict` | 20 B stride, matches retail 630-record shape |
+| INFO | `write_fxdict_info` | `u32 count` |
+| EFCT | `write_efct` | 16 B, magic @ +2, sub_count @ +14, rest zero |
+| EMTR | `write_emtr` | `u16` count + `count × u32` module refs |
+| EMIT | `write_emit` | `n × f32` timing values |
+| POFF | `write_poff` | 12 B vec3 offset |
+| TRFM | `write_trfm` | 64 B row-major 4×4 |
+| PTYP | `write_ptyp` | 1 B flags |
+| COLR | `write_colr` | 200 B (50 RGBA8 stops — same hypothesis as parse) |
+| FRCE | `write_frce` | `u32 hash` + `param_count × f32` (clamped to 4) |
+| TEXT | `write_text` | `u32 count` + `count × u32` refs |
+
+Container assemblers:
+- `write_effect_container(&EffectTemplate) -> Vec<u8>` — full UCFX with CSUM, walkable by `mercs2_formats::ucfx::extract_chunk_body`
+- `write_fxdict_container(&[FxParam]) -> Vec<u8>` — the resident singleton (INFO + DICT chunk pair)
+- `write_ucfx_container(&[(tag, u2, u3, body)])` — generic assembler used by both
+
+Roundtripped by 15 tests in that module (`cargo test -p mercs2_formats fxdict`): each `write_X → parse_X` preserves the struct value, and both container assemblers verify their own CSUM and reparse cleanly through `ucfx::verify_ucfx_container` + `extract_chunk_body`.
+
+The `EffectTemplate::to_chunks` order is the same one `from_chunks` sees on retail: EFCT → EMTR → EMIT → POFF → TRFM → PTYP → COLR → FRCE… → TEXT. Multiple `FRCE` chunks are emitted, one per `Force`.
+
+Fields the parse side calls **hypothesis** (COLR interior layout, FRCE force-kind classification, PTYP bit meanings) are inherited by the encoder — a roundtrip proves we're internally consistent, not that the retail parser accepts them. Byte-identical vs a retail effect container is not yet asserted (no captured fixture); the parse side's tests establish that our field model matches at least the observable behaviour.
+
+---
+
+## 8. Related docs
 
 - [`type_hash_registry.md`](type_hash_registry.md) — type hashes
 - [`format_reference.md`](format_reference.md) — UCFX chunk header layout
