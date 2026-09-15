@@ -52,9 +52,27 @@ static int   g_traceStdlib = 0;
 #define MAX_BINDINGS 2048
 #define MAX_ARGS     4
 #define STRCAP       24          /* captured string bytes per arg (NUL-terminated) */
+#define SRCCAP       80          /* captured caller-source path (`@wifpmcinterior:214` style) */
 #define RING_CAP     262144      /* MUST be a power of two — circular ring indexes with & RING_MASK */
 #define RING_MASK    (RING_CAP - 1)
 #define LINE_CAP     1024        /* max NDJSON line; caller must give FormatRec >= LINE_CAP bytes */
+
+/* ---- Lua 5.1 shipped-image offsets (mirrored from tools/pmc_blackbox/lua_log_hook.c) ---
+ * The layout is the retail unpacked build's — verified live against `Debug.Printf` traces.
+ * We walk L->ci back to the first Lua frame (skipping the immediate C-binding frame plus any
+ * intermediate helper frames), then read its Proto's source name + the line for the active pc.
+ * Every deref is guarded via CommittedRange; a malformed frame produces "" — never a fault. */
+#define LUA_STATE_OFF_CI          0x14
+#define CALLINFO_OFF_FUNC         0x04
+#define CALLINFO_OFF_SAVEDPC      0x0C
+#define CALLINFO_SIZE             0x18
+#define LCLOSURE_OFF_ISC          0x06
+#define LCLOSURE_OFF_PROTO        0x10
+#define PROTO_OFF_CODE            0x0C
+#define PROTO_OFF_LINEINFO        0x14
+#define PROTO_OFF_SOURCE          0x20
+#define PROTO_OFF_SIZELINEINFO    0x30
+#define LUA_TFUNCTION             6
 
 /* ------------------------------------------------------------------ per-binding registry */
 static const char *g_names[MAX_BINDINGS];   /* name ptr into exe .rdata (stable for process life) */
@@ -71,6 +89,10 @@ typedef struct {
     BYTE  tag[MAX_ARGS];
     DWORD val[MAX_ARGS];          /* number: float bits ; bool: 0/1 ; else: raw */
     char  str[MAX_ARGS][STRCAP];  /* string args only */
+    char  caller_src[SRCCAP];     /* "@<script>:<line>" — the Lua site that invoked the binding.
+                                   * Blank when the walk cannot resolve (no Lua frame in reach,
+                                   * unmapped Proto pointer, malformed source TString). This is
+                                   * what enables Rust-side `lua_trace_filter --caller-src`. */
 } Rec;
 static Rec           g_ring[RING_CAP];
 static volatile LONG g_head = 0;       /* total records claimed (producers, atomic) */
@@ -116,6 +138,89 @@ static int CommittedRange(DWORD p, DWORD n)
     return 1;
 }
 
+/* ------------------------------------------------------------------ Caller-source resolution
+ *
+ * From the current CallInfo, walk BACK at most 4 frames looking for the first Lua closure — the
+ * script site that invoked our binding. Read its Proto's source name + line for the active pc,
+ * emit "@<name>:<line>". Bounded loop, every deref guarded via CommittedRange, malformed frame
+ * yields "" rather than faulting.
+ *
+ * Mirrors pmc_blackbox/lua_log_hook.c:ResolveCallerLoc for the same Lua 5.1 offsets — the two
+ * ASIs walk the same live image, so they must agree. Any change here likely wants the same
+ * change there. */
+static void ResolveCallerSrc(DWORD L, char *out)
+{
+    DWORD ci_ptr;
+    DWORD ci, caller;
+    int depth;
+
+    out[0] = '\0';
+    if (!CommittedRange(L + LUA_STATE_OFF_CI, 4)) return;
+    ci_ptr = *(DWORD *)(L + LUA_STATE_OFF_CI);
+    if (!ci_ptr) return;
+    ci = ci_ptr;
+
+    caller = ci;
+    for (depth = 0; depth < 4; depth++) {
+        DWORD func_tv, cl, p, code, lineinfo, source, savedpc;
+        DWORD source_str;
+        int sizeli, pcidx, line;
+        int slen;
+
+        if (caller < CALLINFO_SIZE) return;
+        caller -= CALLINFO_SIZE;
+        if (!CommittedRange(caller, CALLINFO_SIZE)) return;
+        func_tv = *(DWORD *)(caller + CALLINFO_OFF_FUNC);
+        if (!CommittedRange(func_tv, 8)) return;
+        if (*(DWORD *)(func_tv + 4) != LUA_TFUNCTION) return;  /* not a function frame */
+
+        cl = *(DWORD *)(func_tv + 0);                          /* Closure* */
+        if (!CommittedRange(cl, LCLOSURE_OFF_PROTO + 4)) return;
+        if (*(BYTE *)(cl + LCLOSURE_OFF_ISC)) continue;        /* C function — walk further back */
+
+        p = *(DWORD *)(cl + LCLOSURE_OFF_PROTO);
+        if (!CommittedRange(p, PROTO_OFF_SIZELINEINFO + 4)) return;
+        code      = *(DWORD *)(p + PROTO_OFF_CODE);
+        lineinfo  = *(DWORD *)(p + PROTO_OFF_LINEINFO);
+        source    = *(DWORD *)(p + PROTO_OFF_SOURCE);
+        sizeli    = *(int *)  (p + PROTO_OFF_SIZELINEINFO);
+        savedpc   = *(DWORD *)(caller + CALLINFO_OFF_SAVEDPC);
+
+        /* Source is a TString*; its char payload lives at +g_tstrOff. */
+        source_str = source + g_tstrOff;
+        if (!CommittedRange(source_str, 2)) return;
+        {
+            const char *s = (const char *)source_str;
+            char c = s[0];
+            /* '@' or '=' is the chunk-name marker — strip it. */
+            int i0 = (c == '@' || c == '=') ? 1 : 0;
+            int j = 0;
+            /* SRCCAP-1 for the null; leave room for `:<line>` (worst case 12 chars). */
+            const int name_cap = SRCCAP - 14;
+            for (; j < name_cap; j++) {
+                char ch = s[i0 + j];
+                if (ch == 0) break;
+                out[j] = (ch >= 32 && ch < 127) ? ch : '?';
+            }
+            slen = j;
+            out[slen] = '\0';
+        }
+
+        line = -1;
+        if (code && lineinfo && savedpc >= code) {
+            pcidx = (int)((savedpc - code) / 4) - 1;           /* Instruction = 4 bytes */
+            if (pcidx >= 0 && pcidx < sizeli &&
+                CommittedRange(lineinfo + (DWORD)pcidx * 4, 4))
+                line = *(int *)(lineinfo + (DWORD)pcidx * 4);
+        }
+        if (line >= 0) {
+            /* Append ":<line>" — wsprintfA is safer than snprintf inside naked-adjacent hot paths. */
+            wsprintfA(out + slen, ":%d", line);
+        }
+        return;
+    }
+}
+
 /* ------------------------------------------------------------------ Record: hot path, ZERO I/O */
 void __cdecl Record(int bind, void *Lv)
 {
@@ -129,6 +234,7 @@ void __cdecl Record(int bind, void *Lv)
     r->bind = (WORD)bind;
     r->argc = -1;
     r->tag[0]=r->tag[1]=r->tag[2]=r->tag[3]=0xFF;
+    r->caller_src[0] = '\0';    /* blank by default; resolver fills it when a Lua frame is in reach */
 
     /* Single commit point at the end: EVERY path must reach `r->seq = idx`, else a claimed-but-
      * uncommitted slot would stall the consumer forever. So the arg parse is nested, not early-return. */
@@ -140,6 +246,10 @@ void __cdecl Record(int bind, void *Lv)
      * ordinary co-hook noise, an unmapped L is stamped argc=-2 (vs the plain argc=-1 of
      * a committed-but-unclean L) — grep `"argc":-2` in the ndjson to name the culprit. */
     if (CommittedRange(L + g_topOff, 4) && CommittedRange(L + g_baseOff, 4)) {
+        /* Walk the CallInfo chain to attribute this binding call to a Lua script site. Runs
+         * BEFORE the arg-parse below: an arg parse that faults (very rare, but has happened on
+         * co-hooked bindings) still leaves the source resolved. */
+        ResolveCallerSrc(L, r->caller_src);
         DWORD top  = *(DWORD *)(L + g_topOff);
         DWORD base = *(DWORD *)(L + g_baseOff);
         if (Readable(top) && Readable(base) && top >= base) {
@@ -237,9 +347,19 @@ static int JEsc(char *dst, const char *src)
 static int FormatRec(Rec *r, char *line)
 {
     const char *nm = (r->bind < g_nBind) ? g_names[r->bind] : "?";
-    int o = wsprintfA(line, "{\"seq\":%ld,\"ms\":%lu,\"fn\":\"%s\",\"rva\":\"0x%lx\",\"argc\":%d,\"args\":[",
+    /* caller_src is optional — the walker leaves it '\0' when no Lua frame is reachable (a C-side
+     * boot call, an unmapped Proto pointer, or a co-hooked call that landed here without a stack).
+     * Only emit the field when we have something; keeps the shape backwards-compatible with
+     * consumers that predate this addition. */
+    char src_esc[SRCCAP * 2];
+    int have_src = r->caller_src[0] != '\0';
+    if (have_src) JEsc(src_esc, r->caller_src);
+    int o = wsprintfA(line, "{\"seq\":%ld,\"ms\":%lu,\"fn\":\"%s\",\"rva\":\"0x%lx\",\"argc\":%d,",
                       (long)r->seq, (unsigned long)r->ms, nm,
                       (unsigned long)(r->bind < g_nBind ? g_rva[r->bind] : 0), (int)r->argc);
+    if (have_src)
+        o += wsprintfA(line + o, "\"caller_src\":\"%s\",", src_esc);
+    o += wsprintfA(line + o, "\"args\":[");
     int kn = r->argc < 0 ? 0 : (r->argc < MAX_ARGS ? r->argc : MAX_ARGS);
     int k;
     for (k = 0; k < kn; k++) {
