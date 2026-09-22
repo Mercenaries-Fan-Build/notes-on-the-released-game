@@ -110,6 +110,12 @@ static DWORD g_rdLo   = 0, g_rdHi   = 0;   /* .rdata: committed, readable, holds
                                               NOT the whole image — SizeOfImage spans SecuROM sections whose
                                               pages can be NO_ACCESS and fault on deref. */
 
+/* Diagnostic: our OWN module's runtime base + .text extent, so a fault EIP inside our code can be
+ * mapped to an RVA at post-mortem. Populated in DllMain (base) + LogInit (text range).            */
+static HMODULE g_selfHmodule    = NULL;
+static DWORD   g_selfTextStart  = 0;
+static DWORD   g_selfTextEnd    = 0;
+
 static int InText(DWORD va){ return va >= g_textLo && va < g_textHi; }
 static int Readable(DWORD p){ return p >= 0x10000 && p < 0x7FFF0000; }
 
@@ -125,6 +131,13 @@ static int CommittedRange(DWORD p, DWORD n)
     MEMORY_BASIC_INFORMATION mbi;
     DWORD lo, hi;
     int i;
+    /* Reject the reserved null page + any range whose end wraps around 32-bit. Without this, a
+     * garbage p = 0xFFFFFFFF passes the cache check trivially: p + n overflows to a tiny value,
+     * so p + n <= g_okHi is always true once any legitimate region has populated the cache. The
+     * caller then dereferences 0xFFFFFFFF and faults at [-1 + off] = wraparound-land. Proven live:
+     * ResolveCallerSrc reads func_tv=0xFFFFFFFF from a stale/garbage CallInfo field, this gate
+     * passes, and cmp [edi+4], 6 faults with target=3 (0xFFFFFFFF+4 wrapped). */
+    if (p < 0x10000 || p + n < p) return 0;
     for (i = 0; i < 2; i++)
         if (g_okHi[i] && p >= g_okLo[i] && p + n <= g_okHi[i]) return 1;
     if (VirtualQuery((LPCVOID)p, &mbi, sizeof mbi) != sizeof mbi) return 0;
@@ -324,6 +337,47 @@ static void LogInit(void)
                         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     HMODULE bb = GetModuleHandleA("pmc_bb.dll");
     if (bb) g_pmc_log = (pfn_pmc_log)GetProcAddress(bb, "pmc_log");
+
+    /* Compute our OWN .text extent from PE headers. Read via g_selfHmodule which DllMain saved
+     * before this ran. Then broadcast via pmc_log so a subsequent [crash] EIP inside this range
+     * is trivially attributable at post-mortem: RVA = EIP - g_selfHmodule. */
+    if (g_selfHmodule) {
+        IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)g_selfHmodule;
+        IMAGE_NT_HEADERS *nt  = (IMAGE_NT_HEADERS *)((BYTE *)g_selfHmodule + dos->e_lfanew);
+        IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+        int i;
+        for (i = 0; i < nt->FileHeader.NumberOfSections; i++) {
+            if (memcmp(sec[i].Name, ".text", 5) == 0) {
+                g_selfTextStart = (DWORD)g_selfHmodule + sec[i].VirtualAddress;
+                g_selfTextEnd   = g_selfTextStart + sec[i].Misc.VirtualSize;
+                break;
+            }
+        }
+        if (g_pmc_log)
+            g_pmc_log("trace-base", "lua_trace.asi base=0x%08lx text=0x%08lx-0x%08lx (size=0x%lx)",
+                      (unsigned long)(DWORD)g_selfHmodule,
+                      (unsigned long)g_selfTextStart, (unsigned long)g_selfTextEnd,
+                      (unsigned long)(g_selfTextEnd - g_selfTextStart));
+    }
+}
+
+/* Vectored exception handler (priority FIRST). Chains to pmc_bb's VEH via CONTINUE_SEARCH so the
+ * normal crash log still fires; adds a one-line breadcrumb if the fault is inside our own .text so
+ * we can correlate to a specific instruction of ours in post-mortem. Read-only, allocates nothing. */
+static LONG WINAPI TraceFaultVeh(EXCEPTION_POINTERS *ep)
+{
+    DWORD eip = (DWORD)ep->ExceptionRecord->ExceptionAddress;
+    if (ep->ExceptionRecord->ExceptionCode == 0xC0000005 /* EXCEPTION_ACCESS_VIOLATION */ &&
+        eip >= g_selfTextStart && eip < g_selfTextEnd && g_pmc_log)
+    {
+        unsigned long rva    = (unsigned long)(eip - (DWORD)g_selfHmodule);
+        unsigned long target = (unsigned long)ep->ExceptionRecord->ExceptionInformation[1];
+        int is_write         = (int)ep->ExceptionRecord->ExceptionInformation[0];
+        g_pmc_log("trace-fault",
+                  "lua_trace.asi FAULT: EIP=0x%08lx RVA=0x%lx (%s target=0x%08lx) — our .text is the culprit",
+                  (unsigned long)eip, rva, is_write ? "WRITE" : "READ", target);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;  /* let pmc_bb's VEH still log full context + die naturally */
 }
 
 static void WriteLine(const char *buf, int len)
@@ -574,9 +628,11 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID r)
     (void)r;
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(h);
+        g_selfHmodule = h;              /* preserved for LogInit's .text-range extraction + VEH */
         g_t0 = GetTickCount();
         EnvCfg();
         LogInit();
+        AddVectoredExceptionHandler(1 /* FIRST */, TraceFaultVeh);
         /* seq sentinel: -1 so an untouched slot never equals its expected tail index (esp. slot 0
          * vs committed record 0). Must run before the watcher/producers start. */
         { LONG i; for (i = 0; i < RING_CAP; i++) g_ring[i].seq = -1; }
