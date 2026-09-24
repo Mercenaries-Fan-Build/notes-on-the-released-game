@@ -1,80 +1,85 @@
-# Mercenaries 2 asset tooling
+# Mercenaries 2 — reverse engineering & recreation
 
-This repo is for **people who already have the PC game** and are fine with shells, Python, and long jobs. The docs describe **what the tools expect and what they emit** ([`tools/README.md`](tools/README.md), [`docs/format_reference.md`](docs/format_reference.md)); they are not a guarantee of “works on every machine” or line-by-line fixes for every error.
+Tooling, research notes, and a from-scratch engine for **Mercenaries 2: World in Flames** (Pandemic
+Studios, 2008, PC). This repo is for **people who already own the PC game** and are comfortable with
+Rust, shells, and long jobs. The docs describe **what the tools expect and what they emit** — they are
+not a promise of "works on every machine."
 
-## Expected retail zip layout
+> This repo ships **no** Mercenaries 2 game data. Bring your own legal copy of the game.
 
-[`scripts/extract_from_zip.sh`](scripts/extract_from_zip.sh) assumes a **normal Mercenaries 2: World in Flames (PC)** archive. It unzips to a temp dir, then normalizes into `<zip-dir>/output/` (or `--out-dir` / `OUTPUT_DIR`).
+## What's here
 
-**Typical retail zip** (illustrative — folder names and extra dirs vary; the important part is **`data/*.wad`**):
+The project is several efforts sharing one knowledge corpus and one asset-format layer:
 
-```text
-Mercenaries 2 World in Flames.zip
-└── Mercenaries 2 World in Flames/     # single top-level folder (common case)
-    ├── Mercenaries2.exe
-    ├── data/
-    │   ├── shell.wad
-    │   ├── vz.wad
-    │   ├── English.wad
-    │   └── ... (other .wad packs)
-    ├── Precache/
-    ├── SaveGames/
-    └── ... (other install files / dirs)
+- **Reverse engineering** — a ~27k-function named Ghidra decompilation of the unpacked PC exe, a live
+  x32dbg oracle bridge, and per-subsystem code maps. The shipped 32-bit exe is the specification and
+  oracle. (SecuROM is fully solved — decrypted, decompiled, and removable.)
+- **A 64-bit Rust/`wgpu` engine reimplementation** — the north star: a ~40-crate workspace
+  (`tools/wad_simulator/`) that loads the **original game's assets** and reimplements the engine one
+  gated system at a time. ~26 of 32 subsystems now have real implementations.
+- **The unofficial fix-pack** — fixes for the rushed PC port, shipped as layered `-patch.wad` overlays
+  on the retail engine.
+- **Asset injection / modding / DLC port** — novel models, skins, and Xbox/PS3 DLC brought to the PC
+  game **additively**, via a `vz-patch.wad` overlay.
+- **Online restore** — a FESL/Theater emulator + TLS shim that revives the dead EA online services.
+- **The legacy extraction pipeline** — Python tools + a three.js viewer that decode WAD assets to
+  standard formats (glTF/PNG). Still used for bulk extraction; the Rust workspace is the active path.
+
+**Working on this repo (human or AI agent)? Read [AGENTS.md](AGENTS.md) first** — it carries the
+standing mandates, the repo topology, and the corpus-first workflow.
+
+## Repository layout
+
+| Path | What |
+|------|------|
+| `tools/wad_simulator/` | **The Rust engine workspace** (a nested git repo). ~40 crates: the engine, format parsers, RE probes, and mod tooling. See its `Cargo.toml`. |
+| `tools/corpus_mcp/` | The corpus MCP server — a LanceDB index over docs, memory, decomp, commits, and past sessions. |
+| `tools/ghidra_12.1_PUBLIC/` + `tools/jdk21/` | Bundled Ghidra + JDK for reverse engineering (portable, no install). |
+| `tools/*.py`, `scripts/*.sh`, `Makefile` | The legacy extraction/conversion pipeline (`make help`). |
+| `docs/` | Format specs, RE code maps, the modernization charter + scoreboard, the fix-pack and modding guides. |
+| `game-scripts/` | UE5 Editor Python from the original recreation effort (reference). |
+| `viewer/` | Three.js asset viewer (Vite + npm). |
+| `coopserver/`, `tlsterm/`, `webapp/` | Online-restore services + a corpus web app. |
+| `mods/` | Runtime tracing ASI modules (behavioral oracles). |
+
+## Quick start — the Rust workspace
+
+```bash
+cd tools/wad_simulator
+cargo build --release          # binaries land in target/release/
 ```
 
-The script **lifts the contents** of that one folder into `output/`, so you do **not** keep a second nested `Mercenaries 2…/` inside `output/`.
+- **`qm`** — the mod packager. `qm lint ./my-shipment` is hermetic (no game, no network — CI-safe);
+  `qm build` / `qm link` need the retail WADs. Start from the
+  [Shipment template](https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template).
+- **`wad_simulator`** — engine-accurate WAD consumption simulator (validates conversions, catches
+  corruption before runtime).
+- **`loadprobe`** — scores `pmc_blackbox.log` to quantify world-load progress and classify the
+  end-state (crashed / hung / loaded).
+- **`ucfx_byteswap`** — Xbox 360 (big-endian) → PC (little-endian) UCFX converter.
+- **`mercs2_game`** — the reimplemented engine. Default boot = full-world load; `--stream` = streaming
+  dev boot.
 
-**After unzip + normalize** (what must exist before FFCS runs — same tree if you use `--skip-unzip` on an already-prepared folder):
+Many tests need a real `vz.wad`; without one they **skip silently and pass**. Point the workspace at
+your install first — `bash scripts/find-vz-wad.sh --write` (writes the gitignored `.mercs2-local.toml`)
+or set `MERCS2_GAME_DIR` / `VZ_WAD`.
 
-```text
-<zip-dir>/output/
-├── Mercenaries2.exe
-├── data/
-│   ├── shell.wad
-│   ├── vz.wad
-│   └── ...
-├── Precache/
-└── ...
-```
+## Quick start — legacy extraction pipeline
 
-**Less common zip:** several items at the **root** of the archive (no single wrapper). Those entries are moved into `output/` as-is; you still need **`output/data/*.wad`** when the script finishes that step.
-
-**Hard requirement:** `output/data/*.wad` must exist. The script aborts with a clear error if `output/data` is missing or contains no `.wad` files.
-
-If your distributor’s zip layout differs (e.g. only loose files, or `data` not where the script ends up), unpack or rearrange so **`data/`** sits at **`output/data/`**, or point `--skip-unzip` at a folder you prepared by hand.
-
-Later pipeline steps add **`output/extracted/`** (`ffcs_*`, `batch_*`, `review/`, …); see [`tools/README.md`](tools/README.md).
-
-## Common issues
-
-These are recurring pitfalls from driving the pipeline, not an exhaustive FAQ.
-
-- **“expected …/output/data after unzip” / no `.wad` files** — Wrong archive, incomplete download, or a non-retail repack. Confirm the zip is the full PC game and that `data/*.wad` exists after a manual unzip the way *you* expect the tree to look.
-- **Stale `output/`** — If `output/data` already exists, the script **reuses** it unless you pass **`--force-unzip`**. Old or partial trees cause confusing downstream errors; delete `output` or use `--force-unzip` when in doubt.
-- **`--skip-unzip` without a valid tree** — Same requirement: `output/data/*.wad` must already be present.
-- **Full default run** — Processes **every** `data/*.wad` including **vz** (very large). Use **`--quick`**, **`--vz-max`**, or **`--no-decompress`** / **`--no-stage2`** when you only need a slice (see script header comments).
-- **`unzip` / Python** — The zip path must be readable; the script expects **`unzip`** on `PATH` and uses **`python3`** or **`.venv/bin/python`** when present (see `extract_from_zip.sh`).
-
-## Quick start
-
-From **only** `Mercenaries 2 World in Flames.zip` (creates `<directory-of-zip>/output/` with full extraction by default: **all** `data/*.wad` packs batch-decompressed, then stage 2 → **`extracted/review/`**). For **full-resolution textures** (cross-block mip streaming), prefer **`make extract-all ZIP=… OUTPUT=…`**, which builds **`extracted/texture_index.json`** before stage 2; calling **`./scripts/extract_from_zip.sh`** directly still runs stage 2 but **without** that index unless you build it yourself (`make build-texture-index`) and set **`TEXTURE_INDEX`**.
+From a retail PC install (bring your own). The pipeline slices FFCS `.wad` archives, decompresses
+`sges` blocks, and converts meshes/textures/placements to standard formats.
 
 ```bash
 make extract-all ZIP="/path/to/Mercenaries 2 World in Flames.zip" OUTPUT=./output
-# or (same tree, but stage 2 alone will not have a texture index unless you set it up):
-./scripts/extract_from_zip.sh "/path/to/Mercenaries 2 World in Flames.zip"
 ```
 
-Faster partial run (shell + loading only; omit vz unless you add `--decompress-vz`): `./scripts/extract_from_zip.sh --quick "/path/to/Mercenaries 2 World in Flames.zip"`
+The script assumes a normal PC archive whose important part is **`data/*.wad`** (`shell.wad`, `vz.wad`,
+`English.wad`, …). It aborts with a clear error if `output/data/*.wad` is missing after unzip. Full run
+processes **every** pack including the very large `vz`; use `--quick` / `--vz-max` / `--no-decompress`
+for a slice. See `make help` and [`tools/README.md`](tools/README.md) for the target list.
 
-Manual steps (existing install folder):
-
-```bash
-/usr/bin/python3 tools/mercs2_ffcs_extract.py "Mercenaries 2 World in Flames/data/vz.wad" --out output/ffcs_vz
-/usr/bin/python3 tools/sges_decompress.py --data-bin output/ffcs_vz/data.bin --ffcs-out output/ffcs_vz --index 0 --out output/block0.bin
-# Or decompress everything listed in paths.txt (see tools/README.md → Batch extraction):
-# ./scripts/extract_all_from_paths.sh output/ffcs_vz --max 10
-```
+Probing a **single** WAD block? Use `tools/extract_single_block.py` (extract → decompress → optional
+decode → clean up), not a bulk decompress.
 
 ## Three.js viewer
 
@@ -82,31 +87,22 @@ Manual steps (existing install folder):
 cd viewer && npm install && npm run dev
 ```
 
-With **`npm run dev`**, the sidebar loads **`mesh.obj`** / **`mesh.gltf`** from discovered review folders under the repo (see below). **`MERCS2_REVIEW_ROOT`** is optional: paths from **`viewer/.env`** (`MERCS2_*`) merge with automatic scanning.
-
-Auto-scan adds **`output/review`**, **`output/extracted/review`**, **`extracted/review`**, and **`output/<subdir>/extracted/review`** for each subdirectory of **`output/`**. Set **`MERCS2_REVIEW_ROOT`** only for installs outside the repo (comma-separated).
-
-The asset list uses round-robin across packs when **All packs** is selected so **`batch_vz`** entries are not buried after **`batch_shell`**. Pick **batch_vz** in **Pack** for the full vz-only list.
-
-Static **`vite build`** output does not include that API — use **`npm run dev`** or **`vite preview`** from **`viewer/`**.
-
-Manual load / samples still work via **Manual URLs** and files under **`viewer/public/`**.
+The sidebar loads `mesh.obj` / `mesh.gltf` from discovered `review/` folders under the repo. Static
+`vite build` output omits the discovery API — use `npm run dev` or `vite preview`.
 
 ## Docs
 
-- [tools/README.md](tools/README.md) — all Python CLIs
-- [docs/format_reference.md](docs/format_reference.md) — binary layouts, unknown fields, pipeline JSON artifacts
-- [docs/quickbms_notes.md](docs/quickbms_notes.md)
-- [docs/game_extractor_notes.md](docs/game_extractor_notes.md)
-
-## Python deps (optional)
-
-```bash
-pip install -r requirements.txt
-```
+- [AGENTS.md](AGENTS.md) — the operational guide: mandates, topology, programs, workflow.
+- [docs/format_reference.md](docs/format_reference.md) — FFCS / sges / UCFX / textures / Havok layouts.
+- [docs/aset_format.md](docs/aset_format.md) — ASET decode.
+- [docs/modernization/00_charter.md](docs/modernization/00_charter.md) — the engine-reimpl charter, and
+  [engine_support_inventory.md](docs/modernization/engine_support_inventory.md) — the 32-row scoreboard.
+- [docs/modding/field_guide.md](docs/modding/field_guide.md) + [docs/asset_injection_playbook.md](docs/asset_injection_playbook.md) — modding.
+- [docs/fixpack/bug_register.md](docs/fixpack/bug_register.md) — the fix-pack backlog.
+- [tools/README.md](tools/README.md) — the Python CLIs.
 
 ## License
 
-Original **source code and documentation** in this repository are under the **MIT License** — see [LICENSE](LICENSE).
-
-Third-party libraries (Python and npm) and Unreal-related terms are summarized in [NOTICE](NOTICE). This repo does **not** ship Mercenaries 2 game data; bring your own legal copy of the game.
+Original **source code and documentation** in this repository are under the **MIT License** — see
+[LICENSE](LICENSE). Third-party libraries and Unreal-related terms are summarized in [NOTICE](NOTICE).
+This repo does **not** ship Mercenaries 2 game data; bring your own legal copy of the game.
