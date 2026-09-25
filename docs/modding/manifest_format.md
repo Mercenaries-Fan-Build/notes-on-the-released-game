@@ -113,6 +113,7 @@ mean the same thing on someone else's machine as on yours.
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
 | `edit_stringdb` | Data | `target`, `strings` |
+| `add_language` | Data (new base WAD) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `activate_layer` | Script | `layer` (`replaces:` optional) |
@@ -333,6 +334,39 @@ silently-dropped correction is worse than a failed build.
 from BOTH `shell.wad` (front end) and `vz.wad` (gameplay). One overlay reaches one mount point, so a
 shared UI string edited in a single Shipment may show in only one. Deploy it to mount last in every
 session, or ship a shell copy too (`docs/fixpack/wad_duplicate_inventory.md` §C).
+
+### `add_language`
+
+Adds a **new language** the game never shipped. It is the one kind that places a new **base WAD**,
+`data/<name>.wad`, rather than an overlay: the engine builds both the mounted file name
+(`.\Data\<name>.wad`) and the language's string-table key from the same name, and it exits if that
+base WAD is missing.
+
+```yaml
+  - kind: add_language
+    name: klingon          # the WAD file name and the string table's name
+    display: Klingon       # the label a selector (Modkit) shows; not written into any WAD
+    strings: src/klingon.txt
+    base: english          # the shipped table to start from; omit for english
+```
+
+- `strings:` has the same format as [`edit_stringdb`](#edit_stringdb)'s. The build copies the `base`
+  table, applies these edits (keys you leave out keep the base text; a key the base does not have is
+  a hard error), and re-keys the copy under the new language's name. A file with no strings at all is
+  refused.
+- The string table goes into the Shipment's own overlay, which is always mounted; `data/<name>.wad`
+  is emitted too, because the engine requires it to exist.
+- **M0200** refuses a `name` that is not a lowercase `[a-z0-9_]` token (it becomes a file name) or
+  that is a WAD the game already ships (`vz`, `shell`, `loading`, `english`, `french`, `german`,
+  `italian`, `spanish`, `japanese`, `russian`). So `add_language` can only add a WAD, never shadow
+  one.
+- **M0201** (a warning) fires when the Shipment has no `native_hook`. PC has no in-game language
+  selector — the language is picked at boot from the OS locale — so a selector plugin is what makes
+  the new language reachable. It may be installed separately, which one manifest cannot see. The
+  plugin contract is in
+  [`language_asi_hook_contract.md`](../reverse_engineer/language_asi_hook_contract.md).
+- Two Shipments adding the same language name conflict (M0207). The build needs the game stack, to
+  read the `base` table.
 
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
