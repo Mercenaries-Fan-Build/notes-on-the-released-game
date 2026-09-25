@@ -311,9 +311,10 @@ its own.
 
 ### `edit_stringdb`
 
-Corrects or localises UI text. The Shipment's own overlay carries an edited copy of the target string
-table; installed beside other Shipments editing the same table, `qm link` merges all their edits into
-one table, by key in load order (see [String tables are merged](#string-tables-are-merged)).
+Corrects or localises UI text. The Shipment's own overlay carries one edited copy of the target
+string table, with all of the Shipment's string contributions to that table applied in order;
+installed beside other Shipments editing the same table, `qm link` merges all their edits into one
+table, in load order (see [String tables are merged](#string-tables-are-merged)).
 Arbitrary-length
 edits are supported — the codec (`mercs2_formats::stringdb`, proven byte-identical against all six
 retail language tables) rebuilds the heap and re-points the offsets.
@@ -514,16 +515,22 @@ a version range (`- { shipment: other-mod, version: "<2" }`). An installed match
 
 ### String tables are merged
 
-Each `edit_stringdb` / `add_stringdb_keys` / `replace_stringdb_text` Shipment's own overlay carries
-a whole edited copy of its table, so installed together the last mounted would silently drop the
-others' edits. `qm link` therefore merges every installed Shipment's writes to one table into a single
-link-owned table, applied in load order with the later write winning:
+A Shipment's own build applies all of its `edit_stringdb` / `add_stringdb_keys` /
+`replace_stringdb_text` contributions to one table **in contribution order**, each against the table
+as edited so far, and ships the result as one copy of the table: an edit of a key the table (so far)
+does not have, or an addition of one it has, is an error. So a Shipment can replace, by text, what its
+own earlier `edit_stringdb` wrote.
+
+Each Shipment's overlay carries a whole edited copy of its table, so installed together the last
+mounted would silently drop the others' edits. `qm link` therefore merges every installed Shipment's
+writes to one table into a single link-owned table — with the same code — applied in load order with
+the later write winning:
 
 - `edit_stringdb` / `add_stringdb_keys` go by key hash — a key that exists is overwritten, one that
   does not is added;
 - `replace_stringdb_text` matches text in the table **as merged so far**, so it sees every earlier
   write. A pair that matches nothing there is an error naming the Shipment, the table and the text —
-  in `qm link`, and in the Shipment's own build against the shipped table.
+  in `qm link`, and in the Shipment's own build.
 
 `replace_stringdb_text`'s `pairs:` file has one `old<TAB>new` pair per line; a line starting with `#`
 is a comment and blank lines are skipped. The text is taken exactly as written (nothing is trimmed or
