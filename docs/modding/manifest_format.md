@@ -522,7 +522,13 @@ link-owned table, applied in load order with the later write winning:
 - `edit_stringdb` / `add_stringdb_keys` go by key hash — a key that exists is overwritten, one that
   does not is added;
 - `replace_stringdb_text` matches text in the table **as merged so far**, so it sees every earlier
-  write. A pair that matches nothing is noted in the log.
+  write. A pair that matches nothing there is an error naming the Shipment, the table and the text —
+  in `qm link`, and in the Shipment's own build against the shipped table.
+
+`replace_stringdb_text`'s `pairs:` file has one `old<TAB>new` pair per line; a line starting with `#`
+is a comment and blank lines are skipped. The text is taken exactly as written (nothing is trimmed or
+unescaped), so it can contain spaces, `:` and `=`. A line with no tab, more than one tab, or an empty
+old text is an error naming the file and line.
 
 One Shipment may fix a table by key and by text. The link WAD carries the merged table, and the load
 plan's `link_block_paths` names it so a deploy step drops the per-Shipment copies.
