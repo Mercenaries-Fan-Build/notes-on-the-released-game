@@ -466,8 +466,7 @@ they claim one target in a class that cannot be shared:
 | `replace_shader`, `replace_fx`, `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
 | `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
-| `edit_stringdb`, `add_stringdb_keys` | compose — `qm link` merges every Shipment's edits to one table (below) |
-| `replace_stringdb_text` | `Exclusive` on the table — it matches by text, so it conflicts with every other writer to that table |
+| `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
 | `add_*` minting a name (`add_model`, `add_movie`, `add_script`, …) | `KeyedSet` — the same new name twice is a conflict |
 | `native_hook`, `place_file`, `add_runtime_dll` file names | `Exclusive` per game-folder path, **compared lowercased** (Windows file names are case-insensitive) |
 | `native_hook` `touches` | `Exclusive` per hooked address or symbol, exactly as spelled (see the Code layer) |
@@ -481,12 +480,18 @@ a version range (`- { shipment: other-mod, version: "<2" }`). An installed match
 
 ### String tables are merged
 
-Each `edit_stringdb` / `add_stringdb_keys` Shipment's own overlay carries a whole edited copy of
-its table, so installed together the last mounted would silently drop the others' edits. `qm link`
-therefore merges every installed Shipment's edits to one table into a single link-owned table:
-applied by key hash in load order, the later Shipment's text wins for a key both touch. The link WAD
-carries the merged table, and the load plan's `link_block_paths` names it so a deploy step drops the
-per-Shipment copies.
+Each `edit_stringdb` / `add_stringdb_keys` / `replace_stringdb_text` Shipment's own overlay carries
+a whole edited copy of its table, so installed together the last mounted would silently drop the
+others' edits. `qm link` therefore merges every installed Shipment's writes to one table into a single
+link-owned table, applied in load order with the later write winning:
+
+- `edit_stringdb` / `add_stringdb_keys` go by key hash — a key that exists is overwritten, one that
+  does not is added;
+- `replace_stringdb_text` matches text in the table **as merged so far**, so it sees every earlier
+  write. A pair that matches nothing is noted in the log.
+
+One Shipment may fix a table by key and by text. The link WAD carries the merged table, and the load
+plan's `link_block_paths` names it so a deploy step drops the per-Shipment copies.
 
 ### Write-sets and read-sets
 
