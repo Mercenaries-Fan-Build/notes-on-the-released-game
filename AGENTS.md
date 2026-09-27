@@ -365,6 +365,7 @@ All binary format specs live in `docs/`:
 |----------|---------|
 | `format_reference.md` | Master reference: FFCS, sges, UCFX chunks, texture INFO, Havok, CERP, PWS, stage 2 JSON sidecars |
 | `placement_data_format.md` | 42-byte placement records, layers_static vs vz_state, coordinate system, rotation encoding |
+| `shader_store_format.md` | PC shader stores (`shader3*.bin`, `shaderVT*`, `shaderR2VB*`): layout, record ids, loader limits, CTAB layout, material → pixel-shader binding, the `0x00858DB8` crash |
 | `vz_state_analysis.md` | 746 state overlay files, COMP components, flgs section, entity cross-references |
 | `game_data_analysis.md` | Game directory structure, block taxonomy, world data architecture |
 | `skeleton_status.md` | Havok skeletal animation pipeline status |
