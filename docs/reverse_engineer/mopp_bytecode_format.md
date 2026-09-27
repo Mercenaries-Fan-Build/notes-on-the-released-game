@@ -116,6 +116,20 @@ byte precision; finer bounds would need `0x01–0x04`). *(Historically shift `8`
 internally self-consistent but off by 256× vs the engine — the root cause of the authored-floor spatial-MOPP
 fall-through, fixed 2026-08-16.)*
 
+**Child offsets past 64 KiB (PROVEN from the retail engine, 2026-09-27).** The widest offset a split
+carries is 16 bits. All 14 MOPP virtual machines in the unpacked retail `Mercenaries2.exe` (Ghidra decomp,
+e.g. the OBB walker `FUN_00a48e10`) read `0x10–0x12` with a one-byte RIGHT offset (`pc + 4 + code[+3]`),
+`0x23–0x25` with two BE16 offsets (`LEFT = pc + 7 + BE16(+3)`, `RIGHT = pc + 7 + BE16(+5)`), and `0x07`
+(JUMP24) as `pc + 4 + BE24(+1)` — the only 24-bit offset in the instruction set. The encoder used to write
+`(off >> 8) as u8` into the BE16 field with no bound, silently dropping the high bits once an inline
+subtree passed 65,535 bytes: a 96,800-triangle grid baked a 974,137-byte tree whose walk reached only
+121,782 bytes. A whole terrain cell's collider (up to 81,619 triangles in retail) passes that point. `encode` and
+`encode_return_all` now emit, for an inline child over 0xFFFF bytes,
+`[0x23+axis, Lmax, Rmin, 00 04, 00 00] [07 BE24(len(left))] [left…] [right…]` — LEFT at `pc + 11`, RIGHT at
+`pc + 7`, which is a JUMP24 over the left subtree to the right one — and panic past the 24-bit range.
+Gated by `mopp.rs::a_tree_past_64k_offsets_still_walks_every_key` (every byte reached, every key once,
+no-miss queries) and by rebuilding all 400 terrain cells' colliders as one shape each.
+
 **Gates (all green, `cargo test -p mercs2_formats mopp`):**
 - NO-MISS: `query_aabb(encode(mesh))` ⊇ brute-force AABB-overlap set over thousands of random queries, on a
   quad, a box, a 2 k random-tri soup, and 5 real `WpMeshShape16` meshes from `vz.wad` — **zero misses**;
@@ -136,8 +150,9 @@ plane geometry (`0x13–0x1c`) is still INFERRED; `query_aabb` visits both child
 ## Phase-3 encoder plan (we emit our OWN valid tree, not Havok's exact one)
 1. Build any BVH over the triangles (median/SAH, axis-aligned).
 2. Per node: quantize the split plane into the current integer frame; emit `0x10–0x12` (axis split, 1-byte
-   right offset), or `0x23–0x25` (16-bit) when the left subtree exceeds 255 bytes. Recurse LEFT inline, place
-   RIGHT at the recorded offset.
+   right offset), or `0x23–0x25` (16-bit) when the left subtree exceeds 255 bytes, with a JUMP24 trampoline
+   once it exceeds 65,535 (see "Child offsets past 64 KiB"). Recurse LEFT inline, place RIGHT at the
+   recorded offset.
 3. Leaves as terminals. **MVP-safe:** `0x0b <BE32 tri_index>` then `0x30` (delta 0) per leaf — trivially
    correct absolute keys; optimize to small deltas + `0x09/0x0a` base bumps later.
 4. Optional: tighten node AABBs with CUT ops (`0x26–0x28`) for prune performance — not required for correctness.
@@ -146,8 +161,9 @@ plane geometry (`0x13–0x1c`) is still INFERRED; `query_aabb` visits both child
 - Every byte reached at an instruction boundary must be a valid opcode (avoid all INVALID ranges) — else the
   "corrupted" assert fires and the load-time walk can read OOB.
 - Child offsets must land exactly on a subtree's first instruction.
-- 1-byte right offsets (`0x10–0x22`) cap the left subtree at 255 bytes; use `0x23–0x25` beyond that; jumps
-  `0x05–0x07` similarly bounded.
+- 1-byte right offsets (`0x10–0x22`) cap the left subtree at 255 bytes; use `0x23–0x25` beyond that; its
+  BE16 offsets cap it at 65,535, beyond which the RIGHT offset must go through a JUMP24 (`0x07`, 24-bit).
+  Jumps `0x05`/`0x06`/`0x07` carry 8/16/24-bit offsets.
 - Node AABBs must **conservatively enclose** all descendant triangles so runtime overlap queries never miss.
 - Emit raw little-endian-on-disk u8 (**no u32 swap** — that scramble is what corrupted `old_mopp.bin`).
 
