@@ -214,13 +214,20 @@ Consequences an implementation must respect:
 With winding taken this way, ground triangles face up and the retail normals follow
 `(b − a) × (c − a)` (§5.3).
 
-### 5.3 Normals
+### 5.3 Normals and tangents
 
 A NORMAL's xyz halves are a unit direction; its w half is carried. On cell `0xA241BC0C`'s ground,
 the per-draw-group area-weighted sum of incident face normals `(b − a) × (c − a)` reproduces the
 stored normals to a median of 0.96° (90th percentile 6.1°). They are not an exact function of the
 stored triangles (INFERRED: baked from finer source geometry). Vertices are duplicated at creases, so
 welding by position across a draw group smooths away edges that retail keeps hard.
+
+A TANGENT (28- and 32-byte decls) is `xyz` = the per-draw-group sum of the incident triangles'
+texture-u gradients `∂P/∂u`, made orthogonal to the normal (Gram–Schmidt) and normalized, and `w` =
++1 when `(n × t) · ∂P/∂v < 0`, −1 when `> 0`. On `0xA241BC0C` this reproduces the stored tangents to
+a median of 0.33° (90th percentile 0.92°) and `w` on 14,484 of the 14,520 vertices where
+`(n × t) · ∂P/∂v ≠ 0` (2 vertices have it exactly 0, where the handedness is not defined by the
+geometry).
 
 ### 5.4 Cell edges
 
@@ -239,22 +246,27 @@ An encoder that changes a cell must keep:
 2. **Packed bodies** and a recomputed `CSUM`.
 3. **Bounds:** patch box ⊇ its vertices; sphere = box centre + half-diagonal; root box = union of
    `patch box + POFF`.
-4. **Normals** consistent with moved geometry (§5.3).
+4. **Normals and tangents** consistent with moved geometry (§5.3).
 5. **Cell edges** fixed, or edited together with the neighbour.
 6. **Collision** rebuilt when the ground moves (§8) — the MOPP partitions on triangle bounds, so even
    a pure height edit needs a re-bake.
 
-A vertical edit (move POSITION.y only) changes no topology: `PRMT`, `IBUF`, `decl` and every
-non-position, non-normal vertex byte stay as they are. Moving every draw group, not only the ground,
+A vertical edit (move POSITION.y only) changes no topology: `PRMT`, `IBUF`, `decl` and every vertex
+byte other than POSITION.y, NORMAL.xyz and TANGENT stay as they are. Moving every draw group, not only the ground,
 keeps overlays (roads, decals) on the ground.
 
 ## 7. What moves with the ground and what does not
 
-The cell block also carries `scrub` (`0x600B904E`) ground-cover packages (`SCRB`/`MTRL`/`STRM`/`IBUF`
-groups plus `INST`/`PTCH`/`PTMS` instance data) whose `PTCH` floats are cell-local. Their instance
-encoding is *not decoded*, so how ground cover behaves over an edited cell is **unknown**. World
-entities placed by `layers_static` / `vz_state_*` `Transform` records are independent of the cell and
-do not follow a terrain edit.
+**Ground cover** (`scrub`, `0x600B904E`) is instanced in the cell's cell-local frame and must be moved
+with the ground: see [`scrub_ground_cover_format.md`](scrub_ground_cover_format.md). A container is
+paired with its cell by its `ScrubObject` placement (which sits exactly on the cell's `TerrainObject`
+position), not by the block it is stored in.
+
+**World entities** placed by `layers_static` / `vz_state_*` `Transform` records are independent of the
+cell and do not follow a terrain edit: an entity standing on ground that is raised ends up buried, and
+one on ground that is lowered floats. The PMC HQ pyramid example (§9) has 36 placements in its
+footprint (rocks, a `Road` entity, outpost walls and lampposts, mission vehicles and path nodes); they
+stay where they are.
 
 ## 8. `PHY2` — the collider
 
@@ -274,11 +286,15 @@ is **not** the render mesh: on `0xA241BC0C` it has 8,669 vertices and 16,995 tri
 source geometry). Across the 400 cells the largest collider has 30,106 triangles and the most vertices
 are 14,955.
 
-A collider rebuilt from the render triangles (the reference implementation bakes one `WpMeshShape16`
-+ MOPP per patch through `phy2_build::build_phy2_multi_hashed`, keyed by the cell hash) re-parses, and
-its MOPPs return every triangle for a query at that triangle's box (no-miss, 32,618 queries on the
-edited HQ cell). Whether the game accepts a 16-shape terrain collider is **not verified in game**; the
-multi-shape layout itself is the one byte-measured on the PMC-HQ floor container `0x39AF17DC`.
+A collider rebuilt from the render triangles keeps the retail shape count: the reference
+implementation welds every draw group of the cell into one soup and bakes one `WpMeshShape16` + MOPP
+through `phy2_build::build_phy2_multi_hashed`, keyed by the cell hash. A whole cell's MOPP is well past
+64 KiB (the largest retail rebuild is 81,619 triangles, a 1.76 MB `PHY2`), so its split offsets need
+the JUMP24 trampoline described in
+[`reverse_engineer/mopp_bytecode_format.md`](reverse_engineer/mopp_bytecode_format.md). The rebuilt
+collider re-parses, its MOPP walk reaches every byte and yields every triangle key once, and a query at
+each triangle's box returns that triangle (no-miss, 32,618 queries on the edited HQ cell). Whether the
+game accepts a rebuilt terrain collider is **not verified in game**.
 
 ## 9. Verification
 
@@ -296,5 +312,7 @@ cargo test -p mercs2_formats --test terrainmesh_retail -- --nocapture
 | every draw strip → triangles → strip → triangles | 130,224 draws, 27,310,164 triangles, winding preserved |
 | normal convention (§5.3) | median 0.96°, p90 6.1° on `0xA241BC0C` ground |
 | edges vs neighbours (§5.4) | HQ cell: within one f16 step on all 4 edges |
-| 40 m pyramid on `0xA241BC0C` (base half-width 60 m, apex at cell-local (−120, −120)) | 1,706 vertices moved, apex −13.125 → 26.875 m, edge untouched, container re-parses |
-| rebuilt collider | re-parses; MOPP no-miss over all 32,618 edited triangles |
+| 40 m pyramid on `0xA241BC0C` (base half-width 60 m, apex at cell-local (−120, −120)) | 1,706 vertices moved (1,975 re-normalized, 480 re-tangented), apex −13.125 → 26.875 m, edge untouched, container re-parses |
+| tangent convention (§5.3) | median 0.33°, p90 0.92°; `w` 14,484/14,520 on `0xA241BC0C` |
+| rebuilt collider, HQ cell edited | one shape; re-parses; MOPP no-miss over all 32,618 edited triangles |
+| rebuilt collider, every cell | 400/400 one-shape colliders rebuild and re-parse (largest soup 81,619 triangles / 35,790 vertices) |
