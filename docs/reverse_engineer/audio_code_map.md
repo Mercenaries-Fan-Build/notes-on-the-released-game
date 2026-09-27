@@ -232,7 +232,7 @@ Selected high-value bindings (full 88+11 table in `docs/data/audio_code_map.json
 | Lua name | shim | impl | notes |
 |---|---|---|---|
 | `CueSound` | `FUN_005e0ff0` | posts `{0, object, 4, 0, f32 DAT_00DFDB5C, cue hash, 0}` → `0x00446340` (game message queue) | handler reaches the cue start through the object's emitter record (§11.9, *Cues on objects*) |
-| `TestCueSound` | `FUN_005e0db0` | same message as `CueSound` | one argument (the cue name); the object is one the shim looks up (`FUN_006cd960(0)` → `FUN_006cdaf0`, its `+0x20`; which object is not established) |
+| `TestCueSound` | `FUN_005e0db0` | same message as `CueSound` | one argument (the cue name); the object is the local player's attached character (`FUN_006cd960(0)` → `FUN_006cdaf0` → `+0x20`), nothing posted without one (§11.9, *Cues on objects*) |
 | `StopSound`/`PauseSound` | `FUN_005e10f0`/`11f0` | `thunk_FUN_024b65e0` | same event, opcode differs |
 | `SetCategoryVolume`/`Pitch` | `FUN_005e12f0`/`1390` | `FUN_00607960` | double-buffered pending list (max 10/frame) |
 | `TransitionMusic` | `FUN_005e1600` | musicSM+0x115C write | SM = soundsys+0x48 + regionIdx·0x119C; optional net bcast |
@@ -359,15 +359,12 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    from `0x0083741D`.)
 7. **Sound generator seed (§11.8).** Pal init stores the low 32 bits of the tick callback
    `0x0040B360`, which is `QueryPerformanceCounter` (item 6), as the generator seed.
-8. **Object emitters (§11.9, *Cues on objects*).** Two things the emitter update does are not
-   pinned down. (a) Which objects the sound object table `DAT_01175FAC` (`+0x10` entries of `0x94`
-   bytes, `+0x14` count, entry `+0x88` position) holds: `FUN_006036c0` moves a record's emitter only
-   while its object is in it, and no writer of the table was found statically. The reference
-   implementation moves every emitter whose object is live in the world. (b) When the object is not
-   in the table and the record has cues, `FUN_006036c0` calls `FUN_00603d20(0, 0, 1)`, which stops
-   (`FUN_00835720(0)`, for a cue in state 0 or 1) the record's cues that loop for ever
-   (`FUN_00835910`: cue `+0x15D`, or — when `+0x15E` bit 2 is set — a track's `+0xD5` or one of its
-   instances' `+0x80`, is `0xFF`). Traced, not modelled in the reference implementation.
+8. **Object emitters (§11.9, *Cues on objects*).** Which objects the sound object table
+   `DAT_01175FAC` (`+0x10` entries of `0x94` bytes, `+0x14` count, entry `+0x88` position) holds is
+   not pinned down: `FUN_006036c0` moves a record's emitter only while its object is in it, and no
+   writer of the table was found statically. The reference implementation moves every emitter whose
+   object is live in the world, and treats an object that is not as one gone from the table. What
+   happens to a gone object's cues is traced and modelled (§11.9, *A vanished object*).
 
 ## 11. Sound bank tables — format specification
 
@@ -991,6 +988,15 @@ zeroed (`0x00607530`..`0x0060756F`) and, for a non-zero object not already marke
    (`FUN_00835a70`) and start it (`FUN_0082e960`) with the emitter `record[0] ? record[+0x14] : 0`
    — object 0 plays 2D — then link the cue into the record's cue list (record `+0x04`, count `+0x10`).
 
+`Sound.TestCueSound(cue)` (shim `FUN_005e0db0`) takes one argument, the cue name (`FUN_0059fa40`,
+hashed by `FUN_00824270` at `0x005E0DFB`), and finds the object itself: `FUN_006cd960(0)`
+(`0x005E0E04`) gives the player index `+0x2C` of the first joined (`+0x30` ≠ −1), local (`+0x58` = 0)
+player record, `FUN_006cdaf0` (`0x005E0E0A`) that player, and its `+0x20` (`0x005E0E16`) is the
+attached character guid (`player_code_map.md`) — the lookup `Player.GetLocalCharacter()` makes with
+no argument (`0x005DE1F2`..`0x005DE21F`). With no player or no character (`0x005E0E14` /
+`0x005E0E1B`) nothing is posted; otherwise the same message as `CueSound` goes out for the
+character (`0x005E0E29`..`0x005E0E54`). It returns no value (`xor eax, eax`, `0x005E0E5A`).
+
 **Emitter motion.** Each frame, after the cue commands and before the Pal update
 (`FUN_0082ee60`), `FUN_006034b0` calls `FUN_006036c0` for every record in list order, with the frame
 time `dt` (`PgSoundPlayer +0x1A8`). It drops the record's cues whose instance is gone or finished
@@ -1015,6 +1021,36 @@ the record holds. The engine never reads a physics or object velocity: the holde
 difference is the velocity the Doppler factor sees. After the update, `FUN_006034b0` frees a record
 whose cue count is 0: the holder goes back to the Pal engine (`DAT_019C6170` vtable `+0x10`) and the
 record to the free list.
+
+**A vanished object.** When the record has an object that is not in the table, and its cue list was
+not empty before the drop, `FUN_006036c0` ends with `FUN_00603d20(0, 0, 1)` (`0x00603B18`); the
+holder is not moved and no draws are taken. `FUN_00603d20(hash, all, forever)` (`ret 0xC`, record in
+`eax`) returns at once when the record's count `+0x10` or its first link is 0. A SecuROM splice
+follows (`0x00603D3B` via `0x0244FDD4`); emulating it returns to `0x00582736`, which computes
+`[0x0245AF28] + [0x01E6CA2C]` = `0x011763FC` and loads `ebp = [0x011763FC]`, the Pal engine, then
+jumps to `0x00603D41`. From there it walks the record's cue links in order — a link's `+0x00` is the
+cue hash it was started with (`0x00593C39`: `mov [esi], edi`, `edi` the hash `FUN_00835a70` looked
+up), `+0x08` the cue instance — and for each:
+
+1. if `forever`, it finds the instance in the Pal cue list (`[ebp+0x50]`, instance `+0x14C` = link
+   `+0x08`) and asks `FUN_00835910` (`0x00603DC3`) whether it loops for ever; otherwise, or when not
+   found, the answer is no;
+2. the link matches when its hash equals `hash` (`0x00603D88`);
+3. if `all` is set, the answer is yes or the link matches, it finds the instance again and, when its state
+   (`+0x164`) is 0 or 1 (`0x00603DD0`), clears link `+0x05` and stops it with `FUN_00835720(0)`
+   (`0x00603E06`, *Stopping* above; `ebp` is reloaded from `[0x011763FC]` after); a matching link then
+   ends the walk (`0x00603E11`). A cue not found, or in state 2 or 3, is passed over.
+
+`FUN_00835910` (`ecx` = the cue instance): for a multi-track cue (`+0x15E` bit 2, which
+`FUN_00834ad0` sets from the soundbank cue's form byte `+0x05`) it is true when the cue's loop count
+`+0x15D` is `0xFF`, or when any of its `+0x15C` tracks (`+0x11C`) has loop count `+0xD5` = `0xFF` or an
+instance in its sound list (track `+0x88`, instance list at list `+0x20`, i.e. track `+0xA8`) whose
+group loop count `+0x80` is `0xFF`. For a single-track cue it is true only when its instance (`+0x10`)
+exists and has `+0x80` = `0xFF` (`0x00835982`; the `+0x15D` result is overwritten). So with
+`(0, 0, 1)` a gone object's for-ever-looping cues are stopped — they release, fade and finish — and a
+link whose hash is 0 is stopped and ends the walk; every other cue plays on to its end. The links stay
+in the record: a stopped cue is dropped by the update that finds it in state 2, and the record is
+freed once its last cue has gone.
 
 **The cue filter** (kind 9). A wave whose cue has a kind-9 event carries a biquad low-pass filter
 (`FUN_00839db0` → `FUN_0083f2d0`, vtable `0x00BE2678`; cutoff `+0x08` starts at 22,050, resonance
@@ -1052,8 +1088,11 @@ modelled — and refuses 3–5 channels. Emitter sources mix as above (speaker g
 Doppler). `Sound.CueSound(object, cue)` plays through the object's emitter record as above, and once
 a frame, before its tick, the host moves every record's emitter with its object's world position —
 the jitter drawn from one game-wide `DAT_00DFCBAC` state seeded `0x94153A94`, the velocity the finite
-difference — so a moving object's cues are Doppler-shifted; it does not stop a gone object's
-for-ever-looping cues (§10 item 8). Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
+difference — so a moving object's cues are Doppler-shifted; an object that is no longer live is
+taken as gone from the table (§10 item 8), and its record's cues run through `FUN_00603d20(0, 0, 1)`
+as above (the link's `+0x05` byte is not carried). `Sound.TestCueSound(cue)` takes the cue name
+alone and plays it on the local player's attached character (*Cues on objects*), starting nothing
+when there is none, and returns no value. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
 1,012 resolve and **all 1,012 play** (66 loop a track or the cue, 278 reach a looping wave, 4 start a
 child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with their waves' filters
 attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
