@@ -140,8 +140,10 @@ stack) → `FUN_004c0ec0` → **`FUN_004c9740`** (the ~40-subsystem master frame
   `DSERR_BUFFERLOST 0x88780096`), zero into 0x30000-byte int32 accumulator @+0x68.
 - `FUN_0083cbf0` MixWave/Commit: int32 accumulator → `packssdw` saturate → int16 → Unlock/Play.
 - Per-wave: `FUN_00839ae0` PalSoundWaveDX8 mix (dispatches format kernel table `DAT_0198db60`
-  [channels + 2·format]); kernels `FUN_00839f20/fd0`, `FUN_0083a200/510/790`; `FUN_0083ade0`
-  volume/3D calc (Doppler pitch, per-listener channel-gain `DAT_00fc34b0`).
+  [channels + 2·format]); kernels `FUN_00839f20/fd0`, `FUN_0083a200/510/790`. `FUN_0083ade0` is the
+  source mix object's prepare (vtable `0x00BE23CC` slot `+0x08`): it zeroes the source scratch
+  `DAT_00FC34B0` (frames × 0x18 bytes, six int32 per frame) and sets the source's six channel gains —
+  1.0 for a 2D source, `FUN_0083d090` for an emitter source (§11.9, *The mix path*).
 
 ### 3.5 Sources, instances, pools, cues
 
@@ -884,9 +886,36 @@ cannot be created stays alive to try again when its group's count is `0xFF`, and
 its category's volume — is clamped to `[0, 1]` (`0x008373AA`..`0x008373D5`) before the wave's
 `SetVolume` (vtable `+0x104`, `0x008373E4`).
 
+**The mix path** (`MixSources`, `FUN_00836610`). `PrepareMix` zeroes the int32 accumulator; the
+emitter sources (engine `+0x1B0` list) mix, then the 2D source for waves of up to two channels
+(`+0x1AC`), then the 2D source for wider ones (`+0x1A8`); `FUN_0083cbf0` saturates the accumulator
+to int16. The stream buffer is always six-channel 16-bit PCM, channel mask `0x3F` (`FUN_0083f760`);
+a source is created with channel byte `+0x39` = 6 and its rate at `+0x3C` (`0x0083AD40`). Per
+source (mix object vtable `0x00BE23CC`): `FUN_0083ade0` prepares (above); `MixWavesToOutput`
+(`FUN_00838850`) calls slot `+0x14`, `FUN_0083b120`, for each wave in the order the source holds them,
+which calls the wave's mix (`FUN_00839ae0`, wave vtable `+0x58`) with the frame count, the scratch,
+the channel byte and the rate; slot `+0x10`, `FUN_0083afc0`, then commits:
+`acc = trunc((f32) scratch × gain[c] + (f32) acc)`. In the wave mix, `FUN_0083e1d0` sets
+`master = clamp(d × (w[+0xAC] × w[+0xA4] × w[+0xA0]), 0, 2)` (doubled first when byte `+0xF5` is
+set) and `gain[c] = clamp(ch[c] × d, 0, 2)`, `d` the volume the instance set and `ch` its
+output-channel multipliers. For every 2D retail wave the three factors are 1.0 and `+0xF5` is 0: the
+setters at wave slots `+0xCC` / `+0xD4` are not called from the audio code, and `+0xAC` is set from
+the group's `+0x14` byte only for a 3D play — INFERRED from the call sites, not observed live. The kernels take `trunc(g × 32768)`. A
+wave whose integer master is 19 or less only advances (`FUN_0083a440`: position += step × frames,
+then the loop wrap). Otherwise the kernel steps a 32.32 read position by
+`step = (freq << 32) / rate` (integer division; `freq` = the wave's frequency × its Doppler factor
+`+0xA8`, 1.0 in 2D), mixes chunks of `min(((len << 32) − pos) / step, frames left)` (at least 1)
+frames of the sample at the integer position — no interpolation — and at `pos ≥ len` calls
+`FUN_00839e90` (looping waves, above). A mono wave adds `(s × g[c]) >> 15` to all six channels
+(`FUN_0083e970`); a stereo wave (`FUN_0083eb00`) adds left to channels 0/2/4 and right to 1/3/5,
+with two shortcuts: both of the first two gains ≥ `0xFFEC` add `s × 2` to channels 0 and 1 only, both
+≥ `0x14` add `(s × g) >> 15` to channels 0 and 1 only.
+
 **The cue filter** (kind 9). A wave whose cue has a kind-9 event carries a biquad low-pass filter
 (`FUN_00839db0` → `FUN_0083f2d0`, vtable `0x00BE2678`; cutoff `+0x08` starts at 22,050, resonance
-term `+0x0C` at 1.4142, rate `+0x10` at 44,100). On every instance update the wave copies the cue
+term `+0x0C` at 1.4142, rate `+0x10` at 44,100). `FUN_00839db0` looks for the kind-9 record among
+the cue's first *C* events, *C* being the cue's curve count — a cue with more curves than events would
+read past its event table. The cue parameter object's two outputs start at 1.0 (`0x008334C0`). On every instance update the wave copies the cue
 parameter object at `+0x7C` (vtable `0x00BE1E60`: slot `+0x04` returns `+0x08` / `+0x0C`, i.e. cue
 `+0x84` / `+0x88`, the kind-9 outputs) into the filter (`FUN_0083e5c0` → `SetParam`, `0x0083F670`):
 cutoff = `nyquist + (100 − nyquist) × −1 × (v − 1)`, resonance term =
@@ -903,15 +932,24 @@ scratch into the accumulator with the source's six channel gains. 2D instances s
 channel class (`FUN_0082f110` / `FUN_0082f140`), so the filter runs over every 2D wave mixed before
 it in the pass.
 
-**What the reference implementation refuses.** It plays kinds 0–7 as above, track and cue loops,
-and looping waves. It refuses, when the cue is started: kind 9 — its filter needs the per-source
-mix path above, and the reference mixer mixes each voice straight into one stereo accumulator; kind
-4 on a mixer with more than two outputs (it applies output channels 0 and 1 only); a curve
-parameter with no value or past a curve's last point; and a kind-7 child that would itself be
-refused. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident, 1,012 resolve and **1,010
-play** (66 loop a track or the cue, 277 reach a looping wave, 4 start a child cue); **2**
-(`0xD8CE1427`, `0xF23B9836`) are refused for kind 9 — asserted in `tests/retail_banks.rs` — and the
-other 186 do not resolve (§11.2). With `English.wad`'s wavebanks also resident, 1,017 of 1,019 play.
+**Global parameters.** Every parameter the global catalog declares gets an entry at 0.0 when the
+catalog loads (`FUN_00835b80`, entry constructor `0x008335A0`); an undeclared one reads −1.0
+(`FUN_0082f170`).
+
+**What the reference implementation plays and refuses.** It plays kinds 0–9 as above through the
+mix path above (per-source scratch, the wave kernel, each wave's filter over its source's scratch,
+the commit), track and cue loops, and looping waves. It refuses, when the cue is started: a curve
+parameter with no value or past a curve's last point, a kind-9 curve index past the curve table, a
+cue with more curves than events (the filter scan), and a kind-7 child that would itself be refused.
+Its mixer hands the six-channel mix to a device with six or more channels, channels 0 and 1 to a
+stereo device and channel 0 to a mono one — a stand-in for DirectSound's fold-down, which is not
+modelled — and refuses 3–5 channels. An emitter source's gains are not traced (`FUN_0083d090`, with
+the distance volume of `FUN_0083d3a0`): it takes the left/right gains of its own spatial model on
+channels 0 and 1 and 0 elsewhere. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
+1,012 resolve and **all 1,012 play** (66 loop a track or the cue, 278 reach a looping wave, 4 start a
+child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with their waves' filters
+attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
+(§11.2). With `English.wad`'s wavebanks also resident, all 1,019 play.
 
 ## Provenance
 
