@@ -566,7 +566,8 @@ ASCII-looking immediates rather than FourCCs — still unclassified.
 1. **Add `SEGM`, `HIER`, `EFCT` to `TAG_REGISTRY`** — real UCFX chunks, converter-handled, but
    absent because their engine dispatch is not a LE `cmp eax,imm32` (BE-compared or jump-table),
    so the scan missed them. Handler hunt = follow-up. Same for converter-known `evnt`
-   (`[u32 count][u32 ts + 2 NUL strings]`), `trnm` (`[u16 count][u16 pad][u32 hashes]`), `watr`
+   (`[u32 count]` then per event `[f32 time][name NUL][category NUL]` — decoded over all 2,263
+   retail chunks in [`anim_clip_format.md`](anim_clip_format.md)), `trnm` (`[u16 count][u16 flags][u32 lead][count × u32 hashes]`), `watr`
    (watermap), `CERP` (precache), `SYEK`/`SRTS` (native-BE stringdb).
 2. **Registry label fix:** `Subsystem::EntityRuntime` → "MP session message dispatcher" (§9.1);
    per-tag decoded notes for all three non-WAD groups.
