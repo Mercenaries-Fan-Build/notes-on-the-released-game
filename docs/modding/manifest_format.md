@@ -109,6 +109,8 @@ mean the same thing on someone else's machine as on yours.
 | `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
 | `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` (`donor`, `textures`, `retarget`, `single_group` optional) |
 | `add_sound` | Data | `name`, `bank`, `sound` (`wavebank`/`soundbank`/`sounddb`) |
+| `add_animation` | Data | `name`, `clip`, `trnm` (`events` optional) |
+| `replace_animation` | Data | `target`, `clip`, `trnm` (`events` optional) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
@@ -121,6 +123,17 @@ mean the same thing on someone else's machine as on yours.
 | `place_file` | Code | `file`, `dest` |
 | `add_runtime_dll` | Code | `dll` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
+
+This table covers the kinds documented on this page. **`qm kinds` is the authoritative list** of every
+kind the installed `qm` reads (`qm kinds --json` prints `{"format":2,"kinds":[...]}`); a client that
+offers kinds should read it rather than keep a copy.
+
+**Removed kinds.** `add_ai_squad_template` and `add_schema` were removed in qm 3.1.0. A manifest that
+still uses one fails to parse, with a message naming the kind as removed. `add_ai_squad_template`
+shipped bytes under an author-supplied type id and type hash for an asset nobody has
+reverse-engineered, so nothing about it could be checked — ship such bytes with `raw` and a declared
+`touches`. `add_schema` had nothing to load it: a schema is the column layout of a component table
+inside a placement layer, not a standalone asset.
 
 `donor` is **optional on `add_outfit`**: omit it and the build hosts the outfit on the wearer's own
 hero model (`pmc_hum_mattias` / `pmc_hum_chris` / `pmc_hum_jen`), validated against the game stack
@@ -361,13 +374,53 @@ base WAD is missing.
   that is a WAD the game already ships (`vz`, `shell`, `loading`, `english`, `french`, `german`,
   `italian`, `spanish`, `japanese`, `russian`). So `add_language` can only add a WAD, never shadow
   one.
-- **M0201** (a warning) fires when the Shipment has no `native_hook`. PC has no in-game language
-  selector — the language is picked at boot from the OS locale — so a selector plugin is what makes
-  the new language reachable. It may be installed separately, which one manifest cannot see. The
-  plugin contract is in
+- Switching the game into the new language is **not** this kind's job, and a Shipment does not
+  carry anything for it. PC has no in-game language selector — the language is picked at boot from
+  the OS locale — and selecting an installed language is handled by Modkit. The engine side is in
   [`language_asi_hook_contract.md`](../reverse_engineer/language_asi_hook_contract.md).
 - Two Shipments adding the same language name conflict (M0207). The build needs the game stack, to
   read the `base` table.
+
+### `add_model`
+
+Adds a new model by injecting your geometry into a **donor** — a shipped model whose rig, materials
+and state machine it borrows, read-only.
+
+```yaml
+  - kind: add_model
+    name: my_crate               # the new asset's name
+    model: src/crate.glb
+    donor: oc_veh_helicopter_md500
+    group: 3                     # optional: the donor draw group that hosts the geometry
+    collision: follow_geometry   # optional, rigid only: donor (default) | follow_geometry
+    textures:                    # optional: the model's own maps
+      diffuse: src/crate_dm.png
+```
+
+Without `retarget:` the model is lowered **rigidly**: the geometry goes into one donor draw group
+(`group:`, default 0) and the rest are neutralised. With `retarget:` it takes the skinned path
+([below](#retarget--the-skinned-path-add_model-add_outfit)).
+
+`collision:` picks the prop's static collision: `donor` keeps the donor's `PHY2` as is;
+`follow_geometry` regenerates it from your own mesh. It is a rigid-path option — the skinned path's
+collision is ragdoll/capsule and is never re-authored — so **M0202** refuses
+`collision: follow_geometry` together with `retarget:` rather than ignore it.
+
+`textures:` gives the model its own skin. Each map (`diffuse`, `specular`, `normal`) ships as its own
+resident texture, `<name>_dm` / `_sm` / `_nm`, and the donor's MTRL is repointed onto it at that
+slot:
+
+- **rigid** — the hashes the **host group's** materials name at that slot. Each of those materials
+  must carry the textured flag `0x0080`: a material with flags `0x0000` is flat-shaded and ignores
+  whatever texture is bound
+  ([`field_guide.md` Trap 2](field_guide.md#trap-2--the-model-loads-fine-then-the-game-crashes-when-you-look-at-it)).
+  The build refuses a host group with such a material rather than ship a map nothing draws — pick a
+  `group:` whose materials are textured.
+- **skinned** (`retarget:`) — every donor material's hash at that slot.
+
+Either way, a map with nothing to repoint onto, or a repoint that matches nothing, fails the build.
+PNG only, 8-bit, dimensions a multiple of 4; normals are BC3/DXT5nm, diffuse and specular BC1 unless
+the source carries real alpha.
 
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
@@ -406,8 +459,9 @@ writes the whole Shipment — manifest plus `src/` — with the map it actually 
 ```
 
 Each map becomes its own resident texture block, and every donor hash at that MTRL slot is
-repointed onto it. **Needs `retarget:`** — the rigid path performs no repoint, so an outfit without
-it wears the donor's skin whatever is listed here, and the build refuses rather than substituting.
+repointed onto it. **Needs `retarget:`** — `add_outfit`'s rigid path performs no repoint, so an
+outfit without it wears the donor's skin whatever is listed here, and the build refuses rather than
+substituting. (`add_model`'s rigid path does repoint; see [`add_model`](#add_model).)
 PNG only, 8-bit, dimensions a multiple of 4.
 
 Slot order is `0 = diffuse, 1 = SPECULAR, 2 = NORMAL` — not the intuitive d/n/s. Normals are
@@ -453,6 +507,48 @@ Two warnings are worth understanding before you pick a target:
   also means every asset sharing that texture now gets your version.
 
 Neither blocks a build. Both change what your mod affects.
+
+### `add_animation`
+
+Adds a new Havok animation clip, as an `animation` asset (ASET type 16) under `name`.
+`replace_animation` takes the same sources and swaps a shipped clip in place, same hash (`target`
+instead of `name`).
+
+```yaml
+  - kind: add_animation
+    name: my_wave
+    clip: src/anim/my_wave.hkx      # Havok 5.5 packfile, one hka*Animation
+    trnm: src/anim/my_wave.trnm     # the track → bone binding
+    events: src/anim/my_wave.evnt   # optional: timed events
+```
+
+The build assembles the container every retail clip uses — `info` (`01 00`), `data` (the `clip`
+bytes), `trnm`, and `evnt` when `events` is given, packed with its CSUM — and ships each source
+verbatim. The layout is in [`anim_clip_format.md`](../anim_clip_format.md), including the `evnt`
+format:
+
+```text
+[u32 count]  then per event:  [f32 seconds] [name, NUL-terminated ASCII] [category, NUL-terminated ASCII]
+```
+
+Retail's events are sound cues, voice lines and gameplay markers (`opendoor`), with categories such
+as `sound`, `sound_surface`, `vo` and `camera`, or none.
+
+- `clip` is a Havok 5.5 packfile (magic `57 E0 E0 57 10 C0 C0 10`) as the Havok content tools write
+  it.
+- `trnm` is `[u16 count][u16 flags][u32 lead][count × u32 bone name-hash]`, the hashes being HIER
+  bone name-hashes of the rig the clip drives.
+
+**M0213** checks that the three belong together before anything is built, and the build checks it
+again: the clip must be a packfile with a readable `hkaAnimation`; the `trnm` must be exactly
+`8 + 4·count` bytes with `count` equal to the clip's `numTransformTracks`; the events must parse,
+with finite, non-negative times in non-decreasing order. An event may fire after the clip's
+duration — retail does.
+
+`replace_animation` needs the game stack: its target must be a shipped **Havok clip**. 29 retail
+`animation` assets are `MANM` keyframe animations instead, and a replace naming one is refused —
+these sources cannot express one. Omitting `events` on a replace ships the clip with no `evnt`,
+whatever the clip it replaces had.
 
 ## Composition
 
@@ -612,6 +708,31 @@ read its import table. What it records is *which bytes* were placed: every place
 the one that was built, not that it is safe. Treat installing one the way you would treat running
 any downloaded executable. A plugin that needs another Shipment's DLL must say so in
 `load.requires`; nothing checks its imports for it, and a missing DLL is a runtime failure.
+
+### `native_hook`
+
+```yaml
+  - kind: native_hook
+    target: retail
+    plugin: src/my_hook.asi
+    touches: ["0x004CF340", "0x004CF400"]
+    signature_guard:
+      "0x004CF340": "55 8B EC"
+      "0x004CF400": "53 56 57"
+```
+
+`plugin` is the `.asi`, placed in `scripts/`; `symbol` names a detour instead of (or as well as) a
+plugin, and one of the two is required (M0161). `touches` is the list of hooks the plugin installs,
+claimed `Exclusive` ([spelling below](#touches-how-hooks-are-spelled)).
+
+`signature_guard` records, per touched address, the prologue bytes the plugin expects to find there
+— the check a well-behaved plugin makes at load time before patching, so it leaves an exe that has
+shifted under it alone. **M0199** checks the guards: a guard for an address the hook does not
+`touch`, or a value that is not space-separated hex bytes, is an error; once some addresses are
+guarded, a touched address left unguarded is a warning; and with the game in hand
+(`qm lint --with-game`, and during `qm build`) a guard whose bytes do not match `Mercenaries2.exe`
+at that address is a warning — the local exe may be a different build than the hook targets.
+Declaring no guards at all is allowed.
 
 ### `touches`: how hooks are spelled
 
