@@ -318,13 +318,21 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    danger, camera-distance).
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
-6. **Bank-table unknowns (§11).** The multi-track cue body (693 of 1,198 `vz.wad` cues) is not
-   decoded; how the engine picks among a multi-wave group's weighted waves is not established; the
-   group fields marked *unknown* in §11.4 and the streamed wave record's `+0x1C` have no established
-   meaning. The §3.5 row for `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14")
-   does not describe the on-disk sounddb of §11.3 (counts at `+0x08`/`+0x0A`, 12-byte cue entries at
-   `+0x1C`, 8-byte category entries after them); whether it describes the loaded structure instead
-   has not been checked against the body.
+6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7, the streamed wave
+   record's `+0x1C`, and automation kinds 4, 7 and 8 have no established meaning; kind 10 is handled
+   by `FUN_0083b4a0` but no retail cue carries one, so its size is unmeasured. The §3.5 row for
+   `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads
+   of the *global* sounddb (category count at `+0x0A`, parameter count at `+0x0C`, category table
+   offset at `+0x14`), not the per-bank cue table of §11.3.
+7. **Sound generator seed (§11.8), confirm-live.** Pal init stores the low 32 bits of the tick
+   callback `0x0040B360` (a `jmp [0x0245E984]` import thunk SecuROM resolves at run time) as the
+   generator seed. Which Windows function that slot resolves to is not visible statically. Live step
+   (Windows, the Ess live harness running the retail exe under x32dbg): break at `0x0082E774`
+   (`call [0x00CF130C]`), step over it, and record `EAX` and `EDX`; follow `[0x0245E984]` in the dump
+   and name the export it lands on (x32dbg's symbol column); confirm the value just stored at
+   `[0x00DFCD1C]` equals the recorded `EAX`. Then break on the next execution of `0x00834A80` and
+   check the state it reads is still that seed (nothing else writes `0x00DFCD1C` before the first
+   draw, per the decomp's cross-references).
 
 ## 11. Sound bank tables — format specification
 
@@ -332,9 +340,12 @@ This section specifies the three on-disk tables a sound bank is made of — `wav
 and `sounddb` — well enough to read any retail bank and to write new ones. It is written as an open
 specification: every rule below was measured on the retail PC data and is enforced by a reference
 implementation (`mercs2_audio` in the `wad_simulator` workspace: `wave.rs`, `soundbank.rs`,
-`sounddb.rs`, `encode.rs`) whose test re-encodes **every** audio table in retail `vz.wad` (95
-wavebanks, 76 soundbanks, 77 sounddbs) byte-identically from its parsed fields
-(`crates/mercs2_audio/tests/retail_banks.rs`). The same layout holds, measured with a separate
+`multitrack.rs`, `sounddb.rs`, `select.rs`, `encode.rs`) whose test re-encodes **every** audio table in
+retail `vz.wad` (95 wavebanks, 76 soundbanks, 77 sounddbs, multi-track cues included) byte-identically
+from its parsed fields (`crates/mercs2_audio/tests/retail_banks.rs`). The engine behaviour it states —
+how a cue's tracks fire their sounds and how groups and entries are picked — is read from the
+decompiled PC exe, with the generator also disassembled from the unpacked image; the functions are
+named where each rule is given. The same layout holds, measured with a separate
 checker, for every audio table in `English.wad` and `shell.wad`.
 
 The key words **MUST** and **MUST NOT** are normative: a table that breaks one was not produced by the
@@ -365,20 +376,28 @@ code.
 
 ### 11.2 Resolving a cue
 
-`Sound.CueSound(name)` resolves in four hops:
+`Sound.CueSound(name)` resolves as follows (instance start `FUN_00834ad0`; FindCue `FUN_00835a70`;
+cue lookup `FUN_0082e820`; group lookup `FUN_0082e7d0`):
 
-1. **sounddb** — find the entry whose guid is `m2(name)`; it names a soundbank hash and a **cue index
-   in that soundbank**.
-2. **soundbank cue** — the cue at that index; its guid MUST equal the entry's. A single-track cue
-   names a soundbank (its own, in every retail bank) and a **group index**.
-3. **group** — the group at that index lists one or more waves `{wavebank hash, wave index, weight}`.
-4. **wavebank** — the record at the wave index holds the samples.
+1. **sounddb** — binary-search the entry whose guid is `m2(name)`; it names a soundbank hash and a
+   **cue index in that soundbank**.
+2. **soundbank cue** — `cue = bank + [bank+0x18] + [bank + [bank+0x1C] + 4·index]`; its guid MUST
+   equal the entry's.
+3. **sounds** — a single-track cue plays its one group at once. A multi-track cue (§11.7) starts every
+   track; each track fires each of its sounds once the track's elapsed time reaches the sound's start
+   time, and each fired sound picks one of its weighted entries `{soundbank, u16 group index}`
+   (§11.8).
+4. **group** — `group = bank + [bank+0x10] + [bank + [bank+0x14] + 4·index]`; the sound instance picks
+   one of its waves (§11.8): `{wavebank hash, u16 wave index}`.
+5. **wavebank** — the record at the wave index holds the samples.
 
-Over the 1,198 per-bank sounddb entries of `vz.wad`, with every bank of the file resident: 282 cues
-reach exactly one embedded wave; 102 reach a multi-wave group whose waves are all embedded; 693 are
-multi-track cues (§11.4, body not decoded); 119 reach waves streamed from `music.pws` /
-`ambience.pws`; 2 name a wavebank (`0x0843A8DC`) that is not in `vz.wad`. No entry fails on a bad index
-or a guid mismatch.
+Over the 1,198 per-bank sounddb entries of `vz.wad`, following every track, every entry and every
+wave, with every `vz.wad` bank resident: **1,012** cues resolve to embedded PCM on every path (628 of
+them multi-track; 843 reach a multi-wave group). **177** reach a wave streamed from `music.pws` or
+`ambience.pws`. **9** reach a wavebank `vz.wad` does not hold — `0x0843A8DC` (7 cues) and
+`0x421680B7` = `m2("vo_stream")` (2 cues), both in `English.wad`; with its wavebanks resident the 7
+resolve and the 2 reach `vo_stream.pws`, for 1,019 resolved. No entry fails on a bad index, a guid
+mismatch, an empty choice list or an unknown selection mode.
 
 ### 11.3 sounddb
 
@@ -404,6 +423,8 @@ offset  type  field
 - A **per-bank** sounddb (76 in `vz.wad`) has `K = P = 0` and exactly one entry per cue of the
   same-named soundbank: `C` equals the soundbank's cue count, each cue index appears once, and each
   entry's guid equals the guid of the soundbank cue it indexes.
+- `FUN_00835b80` loads the global table: `+0x0A` category count, categories at `[+0x14]` (8 bytes
+  each), `+0x0C` parameter count.
 - The **global** sounddb (`m2("mercs2globals")` = `0x37750257`, 188 bytes) has `C = 0`, the 19-entry
   category tree (`K = 19`) and `P = 2` (`0xD11ADEF6`, `0xD913464B`, the two uncracked global
   parameters of §7). The tree, as `category → parent`, with names where the hash is cracked:
@@ -465,24 +486,32 @@ Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
 Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
 
 ```
-0x2C  u8x4 [unknown, W = wave count, unknown, unknown]
+0x2C  u8   unknown (copied to the sound instance at +0x80, FUN_008369e0)
+0x2D  u8   W = wave count
+0x2E  u8   selection mode (§11.8): 0 sequential, 1 weighted random, 2 weighted random, no repeat
+0x2F  u8   unknown
 0x30  f32  unknown          0x34  f32  unknown
-0x38  u32  0x2C
+0x38  u32  0x2C — the engine reads wave i at group + [group+0x38] + 0x3C + 12·i
 0x3C  f32  unknown          0x40  f32  unknown
-0x44  u32  0
+0x44  u32  0 — when its low byte is set, FUN_008369e0 delays the start by the listener distance
 0x48  u32  unknown flag bytes
 0x4C  6 × f32 unknown
 0x64  f32  unknown
-0x68  W × wave { u32 wavebank hash, u32 wave index, f32 weight }
+0x68  W × wave { u32 wavebank hash, u16 wave index, u16 0, f32 weight }
 ```
 
-A group's waves may live in another bank's wavebank.
+A group's waves may live in another bank's wavebank. `FUN_008369e0` refuses (plays nothing for) the
+groups whose sound id is `0xEA1343AA`, `0xC05D8686` or `0xBB8AE67D` unless the Pal global at `+0x78`
+holds `0xB6A13123`, the value `FUN_006067b0` sets in its default case (the switch reads
+`*DAT_01176018`; its other cases set `0x8AAAF243`, `0x8A8C7573`, `0xE687CC7D`, `0xC2197ABB`).
 
 **Cue** — every cue starts with this head:
 
 ```
 0x00  u32   cue guid = m2(cue name)
-0x04  u8x4  [0, form, unknown, 0]; form 0 = single-track, 1 = multi-track
+0x04  u8x4  [0, form, limit, 0]; form 0 = single-track, 1 = multi-track. FUN_00834ad0 starts the
+            cue only while a u16 counter in the cue's runtime record (+4) is below `limit`, or when
+            `limit` is 0 (that the counter counts live instances is inferred)
 0x08  f32   gain
 0x0C  f32   length in seconds
 ```
@@ -495,9 +524,7 @@ Single-track form (form 0, exactly 24 bytes; 505 in `vz.wad`):
 0x16  u16  unknown (0 in most cues; in others it holds values shaped like the high half of an f32)
 ```
 
-Multi-track form (form 1; 693 in `vz.wad`): a variable-length track structure whose layout is not
-decoded (§10 item 6). Its size is a multiple of 4. A reader that does not decode it MUST carry it
-verbatim to re-encode the bank.
+Multi-track form (form 1; 693 in `vz.wad`, 800 across the three archives): specified in §11.7.
 
 For a single-track cue whose single-wave group names an embedded wave, the length MUST be
 `(f32)(frames / sample_rate)` computed in double precision — bit-exact on all 133 such cues in
@@ -565,6 +592,106 @@ shape of retail `ui_PDA_Open_01_st`, cue 57 → group 70 of `ui_hud`):
    configured like the game's own: group `+0x10` 0.95 (`0x3F733333`), `+0x14` 0, distances 10 / 1000,
    `+0x20` 1.0, pitch 1.0, `+0x28` 1.0, gain `0x3F21866C` (≈ 0.631), `+0x30` 0.0, weight 1.0; cue
    `+0x06` 0, gain `0x3F004DCE` (≈ 0.501), `+0x16` 0; sound id and clip hash both `m2(cue name)`.
+
+A writer MAY also author multi-wave groups (the multi-wave form, a selection mode 0–2, at least one
+wave) and multi-track cues (§11.7: every sound's slot below the cue's slot count, at least one entry,
+a selection mode 0–2). The length rule for those cues is not established; the reference encoder takes
+it as an input (retail's single-track cues on multi-wave groups mostly carry the longest wave's
+length, but not all).
+
+### 11.7 Multi-track cue body
+
+Every offset is relative to the cue's start; the engine reads the structure in place
+(`FUN_0083bf70`, `FUN_0083fc40`, `FUN_0083fee0`, `FUN_0083b310`).
+
+```
+0x10  u8   unknown (copied to the instance at +0x15D)
+0x11  u8   A = event record count
+0x12  u8   T = track count
+0x13  u8   P = parameter hash count
+0x14  u8   C = cue curve record count
+0x15  u8   S = selection-state slots (FUN_0082e370 allocates S u32s per cue, set to 0xFFFFFFFF)
+0x16  u16  0
+0x18  f32  unknown          0x1C  f32  unknown          0x20  f32  unknown
+0x24  f32  unknown (FUN_00834ad0 loads it into the cue's runtime timer on each start)
+0x28  u32  event records (= 0x44)          0x2C  u32  event offset table
+0x30  u32  track records                   0x34  u32  track offset table
+0x38  u32  parameter hashes
+0x3C  u32  cue curve records               0x40  u32  cue curve offset table
+0x44       event records | event offsets | curve records | curve offsets | tracks | track offsets
+           | parameter hashes — contiguous, in that order; the cue ends after the hashes
+```
+
+Each "records + offset table" pair holds its records back to back; the table gives each record's
+offset relative to the first record.
+
+**Track** (offsets relative to the track):
+
+```
+0x00  u8   unknown (copied to the track instance at +0xD5)
+0x01  u8   automation record count      0x02  u8  sound count      0x03  u8  0
+0x04  f32  unknown                       0x08  f32 unknown
+0x0C  u32  automation records (= 0x1C)   0x10  u32 automation offset table
+0x14  u32  sound records                 0x18  u32 sound offset table; the track ends after it
+```
+
+**Sound:**
+
+```
+0x00  u8   selection-state slot (< S)
+0x01  u8   unknown      0x02  u8  unknown
+0x03  u8   selection mode (§11.8); FUN_0083fee0 picks nothing for a value other than 0, 1, 2
+0x04  u8   entry count  0x05  3 × u8 0
+0x08  f32  start time: FUN_0083fee0 fires the sound once the track's elapsed time reaches it
+0x0C  u32  entry list offset (= 0x10)
+0x10       entries: { u32 soundbank hash, u16 group index, u16 0, f32 weight }
+```
+
+**Automation records** (event, cue-curve and track tables alike; interpreted by the track update
+`FUN_0083b4a0`): a `u32` kind, then —
+
+```
+kind 0 / 1  volume / pitch ramp:  f32 start, u32 mode, u32 unknown, f32 duration, f32 from, f32 to
+            (mode 0 applies to the running value — volume multiplied, pitch added; non-zero
+            overrides it)
+kind 2 / 3  volume / pitch LFO:   f32 start, u32 mode, u32 unknown, f32 duration, f32 period, f32 depth
+            (a sine table indexed by elapsed / period; low byte of mode 0 = oscillate)
+kind 5 / 6  volume / pitch curve over a parameter, and kind 8 (the cue curve table's only kind):
+            u32 unknown, u32 point count n, u32 parameter hash, u32 points offset (= 0x14),
+            n × { f32 x, f32 y }
+kind 4      17 × u32, meaning not established (dropped from the active list)
+kind 7      u32 unknown, u32 hash (dropped like kind 4)
+kind 9      u32 unknown, u32 parameter hash or 0xFFFFFFFF, u32 parameter hash or 0xFFFFFFFF
+```
+
+A reader MUST reject any other kind, or a record whose size its kind does not admit.
+
+### 11.8 Picking a wave or an entry
+
+A multi-wave group picks its wave with its `+0x2E` mode (`FUN_0083d410`); a multi-track sound picks
+its entry with its `+0x03` mode (`FUN_0083fee0`). Both keep one `u32` of state — per group per loaded
+soundbank, and per slot per multi-track cue — initialised to `0xFFFFFFFF`:
+
+- **0 — sequential** (`FUN_0083d540`, `FUN_00840480`): let `b` be the state's low byte; if `b` equals
+  the choice count or `0xFF`, set the state to 0 and `b` to 0; add one to the state; pick `b`.
+- **1 — weighted random** (`FUN_0083d450`, `FUN_0084039a`): draw `r`; keeping a single-precision sum,
+  add each choice's weight in order and pick the first choice whose sum reaches `r` (`r <= sum`); store
+  its index in the state. If none does, nothing plays.
+- **2 — weighted random, no immediate repeat** (`FUN_0083d5c0`, `FUN_008404f0`): if the state holds a
+  previous pick and there is more than one choice, draw `r` and, skipping the previous choice, add
+  `(weight + sum) + weight[previous] / (count - 1)` per step, picking the first whose sum reaches `r`;
+  otherwise behave as mode 1.
+
+**The generator** (`FUN_00834a80`, disassembled; the same sequence is inlined in the functions above):
+one global `u32` state `DAT_00DFCD1C`. A draw advances it twice with `x ← x·0x0019660D + 0x3C6EF35F`;
+with `u` the first new state and `x` the second, the draw is
+`bits_to_f32((((x & 0xFFFF01FF) | (u >> 16)) >> 9) | 0x3F800000) − 1.0`, a value in `[0, 1)`
+(`DAT_00B9B664` = 1.0). Pal init (`FUN_0082e6c0`) seeds the state once from a tick callback (§10 item
+7), so picks differ between runs; an implementation that wants reproducible picks takes the seed as
+an input.
+
+The order of draws follows the order sounds fire: each fired sound draws for its entry (modes 1 and 2)
+and then, as its instance starts, for its group's wave.
 
 ## Provenance
 
