@@ -417,7 +417,15 @@ Outputs `pws_manifest.json` per source directory and optional `pws_summary.json`
 |-----------|------|--------|
 | `0xF753F6D0` wavebank | [`wavebank_extractor.py`](../tools/wavebank_extractor.py) + [`ima_adpcm.py`](../tools/ima_adpcm.py) | `output/extracted/audio/wavebanks/{bank_hash}/clip_{clip_hash}.wav` |
 | `0x9F8BCA10` soundbank | (structural probe in manifest) | Event → clip hashes in [`audio_ue5_manifest.py`](../tools/audio_ue5_manifest.py) |
-| `0xE5273C14` sounddb | — | Block-level package manifest; load order **not** decoded |
+| `0xE5273C14` sounddb | — | Cue routing table: cue guid → (soundbank, soundbank cue index); the global one holds the category tree |
+
+All three tables start with the `u32` version `0x1D` and the bank hash, and a bank's three tables sit
+in one block under one name hash. A wavebank record's data offset (`+0x20`) is relative to the record's
+own start, and embedded clips are **PCM16** (the format byte `0x02` is bytes per sample, not an IMA
+codec id). The byte-level specification of all three — and how a cue name resolves through sounddb →
+soundbank cue → group → wavebank wave — is
+[`reverse_engineer/audio_code_map.md` §11](reverse_engineer/audio_code_map.md); the reference
+reader/writer (`mercs2_audio`) re-encodes every retail table in `vz.wad` byte-identically.
 
 UE5 index: [`audio_ue5_manifest.py`](../tools/audio_ue5_manifest.py) → `ue5_import/metadata/audio_ue5_manifest.json` (`scan_decoded_wavebanks()` when WAV tree exists). Design: [`docs/pandemic_audio_system_design.md`](pandemic_audio_system_design.md), plan: [`docs/audio_ue5_path.md`](audio_ue5_path.md).
 
