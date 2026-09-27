@@ -133,10 +133,11 @@ D3D handle is filed into a `%0x1200` open-addressed table by `id` via `FUN_0085b
 retains an intact CTAB** (creator `Microsoft (R) HLSL Shader Compiler 9.19.949.2111`, no preshader
 strip) → constant **names + register indices are recoverable offline** — the identification key, no
 name→blob hash needed to decode. Static-mesh VS is `PgMeshVP` / `PgMeshVPAmbientWind` (registered in
-`FUN_0084f130`). ⚠ **Open (delivery only):** the record `id` is NOT `FNV(name)` (verified by hash
-inversion vs 344 known names + content-hash tests); it is needed only for Route-1 additive
-registration — **Route-2 (d3d9 bytecode-hash shim) sidesteps it** and is the preferred iteration
-vehicle. Closing it = find the `%0x1200` *reader* and see what hash feeds it.
+`FUN_0084f130`). **Record id — solved:** `id = pandemic_hash_m2(stem + "_3.sho")` in `shader3.bin`
+(`stem + "_3l.sho"` in `shader3Low.bin`), where `stem` is the registered `.sho` file name minus `.sho`.
+The reader is `FUN_0085b6f0`. A bare name hash is not the id; the suffixed stem is. This gives Route-1
+additive registration a real key. The full format and loader limits are in
+[shader_store_format.md](../shader_store_format.md).
 
 **The five build pieces that remain (in order):**
 1. **Shader splice — ✅ DONE and LIVE-VERIFIED (R0 PASS, 2026-08-04).** The CTAB-driven operand-redirect
