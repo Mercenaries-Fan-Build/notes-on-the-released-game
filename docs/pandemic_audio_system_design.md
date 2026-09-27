@@ -46,22 +46,28 @@ Soundbank (`type_id=21`, `type_hash=0x9F8BCA10`) follows the same path with a 32
 
 ### 3.1 On-disk layout (PC)
 
+Measured on every wavebank in retail `vz.wad`, `English.wad` and `shell.wad`; the full specification
+is [`reverse_engineer/audio_code_map.md` §11.5](reverse_engineer/audio_code_map.md). The earlier table
+here had `+0x00` as a count and the data offset/size at `+12`/`+16`; both were wrong.
+
 | Region | Size | Fields |
 |--------|------|--------|
-| Header | 24 | `count(u32)`, `self_hash(u32)`, `flags(u16)`, `more_flags(u16)`, `hash2(u32)`, `records_offset(u32)=24`, pad |
+| Header | 24 (40 streamed) | `version(u32)=0x1D`, `bank_hash(u32)`, `record_count(u16)`, `kind(u16)` 0 embedded / 1 streamed, `bank_hash(u32)` again, `records_offset(u32)` 24 / 40, `0(u32)`; streamed banks add the 16-byte NUL-padded `.pws` name |
 | Records | `count × 36` | See below |
-| Audio blob | rest | Raw codec frames |
+| Blob area | rest (embedded only) | PCM16 blobs in record order, each 16-byte aligned, zero fill between and after; the body ends on a 16-byte boundary |
 
 **Per record (36 bytes):**
 
 | Off | Type | Role |
 |-----|------|------|
-| 0 | u32 | `clip_hash` — FNV name id for cue lookup |
-| 4 | u8×4 | `[pad, channels, codec, pad]` — **codec is dispatch key** |
+| 0 | u32 | `clip_hash` |
+| 4 | u8×4 | `[0, channels, format, 0]` — format is bytes per sample (`2`, PCM16) when embedded, `4` when streamed |
 | 8 | u32 | `sample_rate` |
-| 12 | u32 | **`data_offset`** — byte offset into body (pointer) |
-| 16 | u32 | **`data_size`** — byte length |
-| 20 | 16 | Extra metadata (often zero) |
+| 12 | u32 | `data_size` in bytes (= frames × channels × 2 when embedded) |
+| 16 | u32 | `frames` (samples per channel) |
+| 20 | 8 | zero |
+| 28 | u32 | zero when embedded; unknown when streamed |
+| 32 | u32 | `data_offset` — **relative to the record's own start** when embedded; the offset in the `.pws` when streamed |
 
 ### 3.2 Runtime structures (inferred)
 
@@ -113,14 +119,19 @@ struct PalWaveClip {
 
 ### 4.2 Body sections
 
+Measured on every soundbank in retail `vz.wad`, `English.wad` and `shell.wad`; the full specification
+is [`reverse_engineer/audio_code_map.md` §11.4](reverse_engineer/audio_code_map.md). The header's
+`sub_count`/`sub_count2` are the **group** and **cue** counts, and the four sections are:
+
 | Section | Range | Content |
 |---------|-------|---------|
-| A | `[data_start, section_off1)` | `sub_count` fixed-size **event records** (hashes, f32 params, u8×4 flags) |
-| B | `[section_off1, section_off2)` | `sub_count` × u32 — **indices** into wavebank clips or internal voice slots |
-| C | `[section_off2, section_off3)` | `sub_count2` parameter records |
-| D | `[section_off3, end)` | `sub_count2` × u32 index table |
+| Groups | `[0x20, +0x14)` | the groups back to back: 64-byte single-wave groups and `0x68 + 12 × waves`-byte multi-wave groups (form word at `+0x0C`); each names its category and its `{wavebank, wave index, weight}` wave(s) |
+| Group offsets | `[+0x14, +0x18)` | group count × u32, each group's offset relative to `0x20` |
+| Cues | `[+0x18, +0x1C)` | the cues back to back: 24-byte single-track cues `{guid, flags, gain, length, soundbank, group index}` and variable-size multi-track cues (not decoded) |
+| Cue offsets | `[+0x1C, end)` | cue count × u32, each cue's offset relative to the cue section |
 
-**Known u8×4 flag offsets within record stride** (from cross-platform diff; per-record base + offset mod record_size): `0x2C`, `0x34`, `0x4C`, `0xA0`, `0xA8`, `0xC0` when record base is 0x20.
+There is no fixed record stride: the "stride" of earlier notes was the average of variable-size
+groups. A cue plays a group, a group plays one of its waves; the sounddb routes a cue name to the cue.
 
 ### 4.3 Load algorithm
 
@@ -168,11 +179,17 @@ From `docs/audio_crash_analysis.md`:
 
 ---
 
-## 7. Audio group descriptor (`type_hash 0xE5273C14`)
+## 7. Sound database (`sounddb`, `type_hash 0xE5273C14`)
 
-28-byte header + 12-byte records (`entry_hash`, `parent_hash`, `index u16`). Co-located in blocks with banks — likely **block-level manifest** listing which soundbank/wavebank hashes belong to one logical audio package (vehicle, weapon, shell).
+Not a package manifest and not load-order data: a **cue routing table**. Specification:
+[`reverse_engineer/audio_code_map.md` §11.3](reverse_engineer/audio_code_map.md).
 
-Load order inference: parse group → load listed banks in dependency order (wavebank before soundbank).
+28-byte header (`version 0x1D`, bank hash, u16 cue count, u16 category count, u32 parameter count,
+three table offsets), then 12-byte cue entries `{cue guid, soundbank hash, soundbank cue index}`
+sorted by guid. A per-bank sounddb has one entry per cue of the same-named soundbank; the third field
+is that cue's index **in the soundbank** (not a wave index, and not a u16 "index" with a parent hash).
+The global `Mercs2Globals` sounddb instead carries the 19-entry category tree
+`{category, parent}` and two parameter hashes.
 
 ---
 
