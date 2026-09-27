@@ -624,6 +624,7 @@ only if they spell the same hook the same way**. Spell each hook kind one way:
 | game code, at a fixed address | `0xVVVVVVVV`, the virtual address in that EXE build | `0x004CF340` |
 | an exported Windows API function | `module!function`, the module lowercased and without `.dll` | `ws2_32!connect` |
 | a COM method | `Interface::Method` | `IDirect3DDevice9::EndScene` |
+| a Lua binding's C function | `Table.Function`, declared next to its `0xVVVVVVVV` | `Player.SetCash` |
 
 Declare each hook **by its symbol name** (`luaB_type`, `ws2_32!connect`,
 `IDirect3DDevice9::EndScene`) **and**, where it has fixed addresses, **by the VA for every EXE build
