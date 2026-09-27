@@ -376,10 +376,17 @@ appearance stays 100% novel; only the scaffolding is inherited.
 destruction + physics suite (`SEGM/SWIT/STAT/STAM/CHDR/CEXE/PHY2`). There is **no "simple
 non-destructible" template**. Conforming preserves all of it, which is exactly why conforming is safe.
 
-**Related shader trap (skinned models).** A skinned model **must** use the skinned-human shader
-`0x406b230e` with material flag `0x98`. Static models use the building shader `0x0A164785` with
-flag `0x80`. Put a static shader on a skinned model and it cannot skin → NULL deref at material
-bind → `0x00858DB8`.
+**Related shader trap (the material's shader key).** The first word of a material's 104-byte
+preamble is **not** a shader. That word is `0x406b230e` in the skinned template and `0x0A164785` in
+the static one; `Mtrl_Parse` stores it and looks nothing up with it. The pixel shader is the word
+**after the texture hashes**: `pandemic_hash_m2` of a registered logical name. Examples:
+`0xCAEFE1FE` = `PgDiffSpecNormFP` (static template), `0x322FCD56` = `PgDiffSpecReflNormAmbOccRimFP`
+(skinned template, material flag `0x98`; the static template uses `0x80`).
+
+`0x00858DB8` happens when that key was never registered. The key may be made up, or `tex_count` may
+disagree with the hashes written, so a hash or a float lands in the key slot. The lookup then misses
+and `Mtrl_Parse` reads `+8` of a null entry. See
+[shader_store_format.md](../shader_store_format.md) §6–7.
 
 **Related destructible trap.** Most buildings and all vehicles are destructibles — a `SWIT` node
 swap where each mesh group carries **twin/multi PRMT records** (a state/LOD pair). A converter that
@@ -731,7 +738,7 @@ Three standing rules:
 | Address / status | Meaning | Trap |
 |---|---|---|
 | `0x00855691` | NULL shader slot at draw time — you grew the MTRL record count | 2 |
-| `0x00858DB8` | `Mtrl_Parse` shader-pool NULL — wrong-sized MTRL record / static shader on a skinned model | 10 |
+| `0x00858DB8` | `Mtrl_Parse` pixel-shader key not registered — made-up key, or `tex_count` disagrees with the hashes | 10 |
 | `0x0084DD5B` | MTRL texture-count overrun of the fixed 10-slot array | 12 |
 | `0x004CC064` | Engine rejected a hand-authored (from-scratch) UCFX container | 10 |
 | `0x00478E43` | PRMT records collapsed to one on a destructible → state machine reads off the end | 10 |
