@@ -493,12 +493,17 @@ offset  type  field
 0x14  u32  0 or 1: 1 = positional — with an emitter its instances play from the emitter's own source,
            otherwise from the shared 2D source (FUN_00837830, 0x008378A9). The sounddb record has no
            such flag (§11.3)
-0x18  f32  minimum distance (inferred)
-0x1C  f32  maximum distance (inferred)
+0x18  f32  minimum distance: full volume up to it (FUN_0083d3a0)
+0x1C  f32  maximum distance: silent from it (FUN_0083d3a0)
 0x20  f32  unknown (1.0 in all but one retail group)
-0x24  f32  pitch (inferred)
-0x28  f32  unknown
+0x24  f32  distance fall-off exponent (FUN_0083d3a0)
+0x28  f32  Doppler scale (FUN_0083b120)
 ```
+
+`+0x14`..`+0x2B` are the wave's 3D parameters: for an instance whose emitter source is 3D (holder
+`+0x98` = 2), `FUN_00837830` (`0x00837C08`) passes `group + 0x14` to the wave's vtable `+0x60`
+(`0x00838F70`), which copies the 24 bytes to wave `+0x5C`; otherwise it passes 24 zero bytes (§11.9,
+*Emitter sources*).
 
 Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
 
@@ -640,7 +645,7 @@ shape of retail `ui_PDA_Open_01_st`, cue 57 → group 70 of `ui_hud`):
 3. Lay out each table exactly as §11.3–§11.5 require, and wrap each per §11.1.
 4. Fields marked *unknown* or *(inferred)* are inputs. `ui_PDA_Open_01_st`'s values, for a UI sound
    configured like the game's own: group `+0x10` 0.95 (`0x3F733333`), `+0x14` 0, distances 10 / 1000,
-   `+0x20` 1.0, pitch 1.0, `+0x28` 1.0, gain `0x3F21866C` (≈ 0.631), `+0x30` 0.0, weight 1.0; cue
+   `+0x20` 1.0, exponent 1.0, Doppler scale 1.0, gain `0x3F21866C` (≈ 0.631), `+0x30` 0.0, weight 1.0; cue
    `+0x06` 0, gain `0x3F004DCE` (≈ 0.501), `+0x16` 0; sound id and clip hash both `m2(cue name)`.
 
 A writer MAY also author multi-wave groups (the multi-wave form, a selection mode 0–2, at least one
@@ -896,20 +901,54 @@ source (mix object vtable `0x00BE23CC`): `FUN_0083ade0` prepares (above); `MixWa
 which calls the wave's mix (`FUN_00839ae0`, wave vtable `+0x58`) with the frame count, the scratch,
 the channel byte and the rate; slot `+0x10`, `FUN_0083afc0`, then commits:
 `acc = trunc((f32) scratch × gain[c] + (f32) acc)`. In the wave mix, `FUN_0083e1d0` sets
-`master = clamp(d × (w[+0xAC] × w[+0xA4] × w[+0xA0]), 0, 2)` (doubled first when byte `+0xF5` is
-set) and `gain[c] = clamp(ch[c] × d, 0, 2)`, `d` the volume the instance set and `ch` its
-output-channel multipliers. For every 2D retail wave the three factors are 1.0 and `+0xF5` is 0: the
-setters at wave slots `+0xCC` / `+0xD4` are not called from the audio code, and `+0xAC` is set from
-the group's `+0x14` byte only for a 3D play — INFERRED from the call sites, not observed live. The kernels take `trunc(g × 32768)`. A
+`m = d × ((w[+0xAC] × w[+0xA4]) × w[+0xA0])` (doubled when byte `+0xF5` is set),
+`master = clamp(m, 0, 2)` and `gain[c] = clamp(ch[c] × m, 0, 2)`, `d` the volume the instance set and
+`ch` its output-channel multipliers. `+0xA4` and `+0xA0` are 1.0 and `+0xF5` is 0 for every retail
+wave (the setters at wave slots `+0xCC` / `+0xD4` are not called from the audio code — INFERRED from
+the call sites, not observed live); `+0xAC` is the distance volume, which only a positional wave
+changes from 1.0 (*Emitter sources*, below). The kernels take `trunc(g × 32768)`. A
 wave whose integer master is 19 or less only advances (`FUN_0083a440`: position += step × frames,
 then the loop wrap). Otherwise the kernel steps a 32.32 read position by
-`step = (freq << 32) / rate` (integer division; `freq` = the wave's frequency × its Doppler factor
-`+0xA8`, 1.0 in 2D), mixes chunks of `min(((len << 32) − pos) / step, frames left)` (at least 1)
+`step = (freq << 32) / rate` (integer division; `freq` = `trunc((f32) frequency × w[+0xA8])`, the
+frequency getter `FUN_0083e170` on the x87 stack with the rounding control set to chop; `+0xA8` is
+the Doppler factor, 1.0 in 2D), mixes chunks of `min(((len << 32) − pos) / step, frames left)` (at least 1)
 frames of the sample at the integer position — no interpolation — and at `pos ≥ len` calls
 `FUN_00839e90` (looping waves, above). A mono wave adds `(s × g[c]) >> 15` to all six channels
 (`FUN_0083e970`); a stereo wave (`FUN_0083eb00`) adds left to channels 0/2/4 and right to 1/3/5,
 with two shortcuts: both of the first two gains ≥ `0xFFEC` add `s × 2` to channels 0 and 1 only, both
 ≥ `0x14` add `(s × g) >> 15` to channels 0 and 1 only.
+
+**Emitter sources.** An emitter's source holder carries its position (`+0x2C`) and velocity
+(`+0x5C`). `MixWavesToOutput` computes its distance to listener 0 as
+`sqrt((dz² + dy²) + dx²)` (`d` = listener − emitter) and passes it, per wave, to `FUN_0083b120`;
+before that, the source's prepare `FUN_0083ade0` (slot `+0x08`) does two things for a 3D source
+(`+0x18` = 2):
+
+- **Speaker gains** (`FUN_0083d090`, `edi` = source `+0x1C`): with `dx`, `dz` the horizontal offset
+  from listener 0, `dist = sqrt(dz² + dx²)`, `u = (dx/dist, 0 × (1/dist), dz/dist)` (zero at
+  `dist == 0`) and `prox = 1 − dist / R` when `R > dist` (else 0), each of five speaker directions
+  — `(0.7, 0, 0.7)`, `(−0.7, 0, 0.7)`, `(0.7, 0, −0.7)`, `(−0.7, 0, −0.7)`, `(−0, 0, 1)`
+  (`0x019C67A0`, from `DAT_00DFDDD8` / `DAT_00BEB45C` / `DAT_00BEAA2C`) — goes through
+  `D3DXVec3TransformNormal` with listener 0's matrix (`d3dx9_36.dll`; its SSE2 path, `0x0074F5FE`,
+  computes `(y·row1 + x·row0) + z·row2` in single precision) to `t`, and its gain is
+  `clamp01(clamp01((t.z·u.z + t.x·u.x) + u.y·t.y) + prox)`. `R` is engine `+0x1D8` (`0x019C6348`),
+  copied at init (`FUN_00835fd0`) from the descriptor `FUN_006067b0` builds with `DAT_00DF6804` —
+  1.0 in the shipped image; a command-line option (hash `0x21C3DCBE`, `FUN_004c2c20`) can replace
+  it. The commit applies `+0x1C`, `+0x20`, `+0x2C`, `+0x30`, `+0x24`, `+0x28` to channels 0–5, so the
+  five gains feed front left, front right, back left, back right and centre (channels 0, 1, 4, 5, 2);
+  LFE (`+0x30`) keeps the source constructor's 0.0 (`0x00834471`; only the 2D prepare writes 1.0).
+- **Doppler** (source `+0x34`): with `u` the unit vector from listener 0 to the emitter
+  (`dist = sqrt((dx² + dz²) + dy²)`), `1 − ((Δv.x·u.x + Δv.y·u.y) + Δv.z·u.z) × DAT_00BEB460`
+  (`0x3B3FA030`, ≈ 1/342), `Δv` = emitter velocity − listener 0's velocity (`0x019C61D0`).
+
+The mix reads listener slot 0 directly (`0x019C61C0` position, `0x019C61D0` velocity, the matrix at
+`0x019C6190`), not the closest listener. `FUN_0083b120` hands each wave `1 + (D − 1) × w[+0x70]` when
+the wave's Doppler scale `+0x70` (group `+0x28`) is positive, else 1.0 — computed on the x87 stack —
+and `FUN_00839ae0` clamps it to `[0.1, 2.0]` (`DAT_00B92B58`, `DAT_00B92874`) into `+0xA8` (vtable
+`+0xE4`). A wave whose `+0x5C` is set first takes its distance volume from `FUN_0083d3a0`: 1.0 while
+`dist ≤ +0x60`, 0.0 once `dist ≥ +0x64`, else `1 − (f32) pow((f64) ((dist − min) / (max − min)),
+(f64) +0x6C)`, stored at `+0xAC` (vtable `+0xEC`, `0x00839120`, which also flags a change larger than
+`DAT_00B92958`). 2D sources pass Doppler 1.0 and their waves' `+0x5C` is 0.
 
 **The cue filter** (kind 9). A wave whose cue has a kind-9 event carries a biquad low-pass filter
 (`FUN_00839db0` → `FUN_0083f2d0`, vtable `0x00BE2678`; cutoff `+0x08` starts at 22,050, resonance
@@ -943,9 +982,8 @@ parameter with no value or past a curve's last point, a kind-9 curve index past 
 cue with more curves than events (the filter scan), and a kind-7 child that would itself be refused.
 Its mixer hands the six-channel mix to a device with six or more channels, channels 0 and 1 to a
 stereo device and channel 0 to a mono one — a stand-in for DirectSound's fold-down, which is not
-modelled — and refuses 3–5 channels. An emitter source's gains are not traced (`FUN_0083d090`, with
-the distance volume of `FUN_0083d3a0`): it takes the left/right gains of its own spatial model on
-channels 0 and 1 and 0 elsewhere. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
+modelled — and refuses 3–5 channels. Emitter sources mix as above (speaker gains, distance volume,
+Doppler); its cue API carries a position but no velocity, so its emitters are at rest. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
 1,012 resolve and **all 1,012 play** (66 loop a track or the cue, 278 reach a looping wave, 4 start a
 child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with their waves' filters
 attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
