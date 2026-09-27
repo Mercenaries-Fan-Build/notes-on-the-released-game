@@ -8,9 +8,9 @@ links back here.
 
 Start from the [template repo][template] rather than from a blank file.
 
-Format version: **1**. A manifest declaring a *newer* format is rejected loudly rather than parsed
-optimistically — a field this build does not understand is a field it would silently drop. Older
-formats are accepted.
+Format version: **2**, the only format. A manifest declaring any other `format` — older or newer,
+including `1` — is rejected loudly (M0100) rather than parsed optimistically: a field this build does
+not understand is a field it would silently drop.
 
 ## The file
 
@@ -22,14 +22,18 @@ YAML is preferred, and it is what `qm` writes, because this file is mostly prose
 that people read and review.
 
 ```yaml
-format: 1
+format: 2
 
 shipment:
-  name: my-shipment          # lowercase, dashes; becomes build/<name>.wad
-  version: 1.0.0
+  name: my-shipment          # lowercase, dashes; becomes _build/<name>.wad
+  version: 1.0.0             # semver, MAJOR.MINOR.PATCH
   target: retail             # retail | reimpl
   authors: [your-name]
   description: One line about what this does.
+
+load:
+  requires:
+    - { shipment: lua-bridge, version: "^1.0.0" }
 
 contributions:
   - kind: replace_texture
@@ -40,6 +44,24 @@ contributions:
 `target` picks the engine: `retail` is the shipped game, `reimpl` the fan-build engine. There is no
 value meaning "both" — a Shipment that claims to target both has almost certainly been tested
 against neither, and the layers available differ (ASI plugins exist only on retail).
+
+`shipment.name` is a slug and must not be a **reserved name** (M0211): the stem of a DLL no
+Shipment may ship — `pmc_bb`, `cruise`, `dxwrapper`, `binkw32` — compared case-insensitively.
+`shipment.version` must be semver (M0100).
+
+### `supersedes`
+
+A top-level list of legacy files this Shipment replaces — typically a mod's old loose-file install:
+
+```yaml
+supersedes:
+  - { dest: on_load, file: 1_Ess.lua }
+```
+
+`dest` is one of the `place_file` destination names and `file` a single filename. While any of them
+is still in the game folder (matched case-insensitively), `qm build` refuses and `qm preflight` /
+`qm link` report **M0208**. qm never deletes the file; remove it (Modkit offers to, with undo) and
+build again.
 
 ## Names and hashes
 
@@ -70,7 +92,7 @@ makes that class of drift impossible.
 my-shipment/
   manifest.yaml     this file
   src/              your .glb / .png / .lua / raw payloads
-  build/            qm output: <name>.wad + .sha256 + build.log   (gitignore this)
+  _build/           qm output: <name>.wad + .sha256 + build.log + placement.json   (gitignore this)
   README.md         your own description
 ```
 
@@ -91,11 +113,13 @@ mean the same thing on someone else's machine as on yours.
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
 | `edit_stringdb` | Data | `target`, `strings` |
+| `add_language` | Data (new base WAD) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `activate_layer` | Script | `layer` (`replaces:` optional) |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `place_file` | Code | `file`, `dest` |
+| `add_runtime_dll` | Code | `dll` |
 | `raw` | any | `payload`, `target_layer`, `touches` |
 
 `donor` is **optional on `add_outfit`**: omit it and the build hosts the outfit on the wearer's own
@@ -181,7 +205,9 @@ The overlay is an **in-place patch**, not a regeneration: the layer block is sha
 bytes and only the named records' transform/model words are overwritten, because the `Placement`
 parse drops the record's `+16` pad and `+36` tail and cannot round-trip a full rebuild. An edit that
 resolves to no change is a hard error — a no-op overlay would ship an identical block for nothing.
-Merge is last-wins per entity across Shipments, ordered by Shipment name.
+Two Shipments editing one layer conflict (M0207): each overlay shadows the whole layer, so one
+Shipment's edits would be silently absent. An `add_placement` on the same layer conflicts with it
+too.
 
 Scope and the step-0/1/2 proof are in
 [`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
@@ -272,7 +298,8 @@ composed addition reaches the game without mods fighting over one script:
   `qm_modloader` when the PMC interior loads and runs it once. This line never changes no matter how
   many UI mods are installed, so the resident script is not edited and re-edited per mod.
 - Installing several UI mods together merges cleanly: their registrations concatenate into one
-  `qm_modloader`, ordered by Shipment name so the bytes are identical regardless of install order,
+  `qm_modloader`, in load order (the order `requires` and the installer's list give; see
+  [Composition](#composition)), so the same set always produces the same bytes,
   and the single trampoline is shared. Each registration runs under `pcall`, so one bad movie cannot
   wedge the loader.
 
@@ -284,8 +311,11 @@ its own.
 
 ### `edit_stringdb`
 
-Corrects or localises UI text. Same-hash and last-wins, like `replace_texture`: the overlay carries
-an edited copy of the target string table and the mount order decides which wins. Arbitrary-length
+Corrects or localises UI text. The Shipment's own overlay carries one edited copy of the target
+string table, with all of the Shipment's string contributions to that table applied in order;
+installed beside other Shipments editing the same table, `qm link` merges all their edits into one
+table, in load order (see [String tables are merged](#string-tables-are-merged)).
+Arbitrary-length
 edits are supported — the codec (`mercs2_formats::stringdb`, proven byte-identical against all six
 retail language tables) rebuilds the heap and re-points the offsets.
 
@@ -305,6 +335,39 @@ silently-dropped correction is worse than a failed build.
 from BOTH `shell.wad` (front end) and `vz.wad` (gameplay). One overlay reaches one mount point, so a
 shared UI string edited in a single Shipment may show in only one. Deploy it to mount last in every
 session, or ship a shell copy too (`docs/fixpack/wad_duplicate_inventory.md` §C).
+
+### `add_language`
+
+Adds a **new language** the game never shipped. It is the one kind that places a new **base WAD**,
+`data/<name>.wad`, rather than an overlay: the engine builds both the mounted file name
+(`.\Data\<name>.wad`) and the language's string-table key from the same name, and it exits if that
+base WAD is missing.
+
+```yaml
+  - kind: add_language
+    name: klingon          # the WAD file name and the string table's name
+    display: Klingon       # the label a selector (Modkit) shows; not written into any WAD
+    strings: src/klingon.txt
+    base: english          # the shipped table to start from; omit for english
+```
+
+- `strings:` has the same format as [`edit_stringdb`](#edit_stringdb)'s. The build copies the `base`
+  table, applies these edits (keys you leave out keep the base text; a key the base does not have is
+  a hard error), and re-keys the copy under the new language's name. A file with no strings at all is
+  refused.
+- The string table goes into the Shipment's own overlay, which is always mounted; `data/<name>.wad`
+  is emitted too, because the engine requires it to exist.
+- **M0200** refuses a `name` that is not a lowercase `[a-z0-9_]` token (it becomes a file name) or
+  that is a WAD the game already ships (`vz`, `shell`, `loading`, `english`, `french`, `german`,
+  `italian`, `spanish`, `japanese`, `russian`). So `add_language` can only add a WAD, never shadow
+  one.
+- **M0201** (a warning) fires when the Shipment has no `native_hook`. PC has no in-game language
+  selector — the language is picked at boot from the OS locale — so a selector plugin is what makes
+  the new language reachable. It may be installed separately, which one manifest cannot see. The
+  plugin contract is in
+  [`language_asi_hook_contract.md`](../reverse_engineer/language_asi_hook_contract.md).
+- Two Shipments adding the same language name conflict (M0207). The build needs the game stack, to
+  read the `base` table.
 
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
@@ -427,6 +490,56 @@ Every claim a Shipment makes carries a class:
 because somebody reversed it and wrote it down; it cannot infer that for something nobody has
 studied. Failing closed keeps an unknown edit *expressible* — it just cannot silently co-install.
 
+### Conflict classes by kind
+
+Two Shipments in one installed set conflict (**M0207**, a hard error before anything is built) when
+they claim one target in a class that cannot be shared:
+
+| kind(s) | what two Shipments on one target do |
+|---|---|
+| `replace_texture` | `LastWins` — load order picks; never a conflict |
+| `replace_shader`, `replace_fx`, `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
+| `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
+| `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
+| `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
+| `add_*` minting a name (`add_model`, `add_movie`, `add_script`, …) | `KeyedSet` — the same new name twice is a conflict |
+| `native_hook`, `place_file`, `add_runtime_dll` file names | `Exclusive` per game-folder path, **compared lowercased** (Windows file names are case-insensitive) |
+| `native_hook` `touches` | `Exclusive` per hooked address or symbol, exactly as spelled (see the Code layer) |
+| `raw` | `Exclusive` on every declared target |
+
+Within **one** Shipment, two contributions claiming one target in any class but an append are
+**M0120**: only one of them can take effect.
+
+A Shipment can also declare conflicts outright: `load.conflicts` names a Shipment, optionally within
+a version range (`- { shipment: other-mod, version: "<2" }`). An installed match is **M0206**.
+
+### String tables are merged
+
+A Shipment's own build applies all of its `edit_stringdb` / `add_stringdb_keys` /
+`replace_stringdb_text` contributions to one table **in contribution order**, each against the table
+as edited so far, and ships the result as one copy of the table: an edit of a key the table (so far)
+does not have, or an addition of one it has, is an error. So a Shipment can replace, by text, what its
+own earlier `edit_stringdb` wrote.
+
+Each Shipment's overlay carries a whole edited copy of its table, so installed together the last
+mounted would silently drop the others' edits. `qm link` therefore merges every installed Shipment's
+writes to one table into a single link-owned table — with the same code — applied in load order with
+the later write winning:
+
+- `edit_stringdb` / `add_stringdb_keys` go by key hash — a key that exists is overwritten, one that
+  does not is added;
+- `replace_stringdb_text` matches text in the table **as merged so far**, so it sees every earlier
+  write. A pair that matches nothing there is an error naming the Shipment, the table and the text —
+  in `qm link`, and in the Shipment's own build.
+
+`replace_stringdb_text`'s `pairs:` file has one `old<TAB>new` pair per line; a line starting with `#`
+is a comment and blank lines are skipped. The text is taken exactly as written (nothing is trimmed or
+unescaped), so it can contain spaces, `:` and `=`. A line with no tab, more than one tab, or an empty
+old text is an error naming the file and line.
+
+One Shipment may fix a table by key and by text. The link WAD carries the merged table, and the load
+plan's `link_block_paths` names it so a deploy step drops the per-Shipment copies.
+
 ### Write-sets and read-sets
 
 A claim is not only a write. Shipment A can *read* something Shipment B provides; uninstall B and A's
@@ -442,12 +555,24 @@ them — and two Shipments that each ship their own copy of that block cannot bo
 installed erases the other, silently.
 
 You therefore declare an **append**, and `qm link` composes every installed Shipment's appends onto
-the base script, compiles once, and emits a single WAD mounted last.
+the base script, compiles once, and emits a single WAD mounted last. This works for **any** script:
+there is no list of scripts that may be patched. A wholesale `replace_lua` cannot compose — an append
+to it would land on source that is no longer there — so it conflicts with any other writer to that
+script.
 
-Ordering is by Shipment name, not install order. That matters more than it looks: a saved costume is
-stored as a *position* in the outfit list, so if load order changed the indices, reinstalling mods in
-a different order would silently re-dress the player — or leave a saved index pointing at nothing and
-wedge the load.
+The order the appends are concatenated in is the **load order**: a Shipment always comes after the
+Shipments it `requires`, and the order the installer lists them in breaks ties. The same order
+decides everything else ordered in a link — which of two string edits wins, the order `add_script`
+modules are minted. A stable order matters more than it looks: a saved costume is stored as a
+*position* in the outfit list, so if the order changed the indices, reinstalling mods would silently
+re-dress the player — or leave a saved index pointing at nothing and wedge the load.
+
+`add_script` modules and `import`: at link time `qm link` warns (**M0209**, a warning that never
+fails the link) about a **literal** `import("x")` / `import('x')` whose `x` is no shipped script, no
+`add_script` in the set and no module qm mints. **Dynamic imports are not checked**:
+`dynamic_import(...)`, `import(<expression>)`, a concatenated name (`import("a" .. b)`), the
+`import "x"` call without parentheses, and names reached through data such as a task's
+`sModuleName` all resolve at runtime, where the linker cannot see them.
 
 The same reasoning is why the availability count is derived from the final list length instead of
 written by each Shipment. Two mods that each append one outfit and each hard-code "one more outfit"
@@ -455,53 +580,85 @@ produce the same number: both outfits are in the WAD, in the table, and one is u
 
 ## The Code layer
 
-`native_hook` can carry a prebuilt `.asi` plugin, loaded on retail by `pmc_bb.dll`.
+Three kinds place native-code files in the game folder, and none takes a path: the destination is a
+closed set of names, and the file name comes from the source file.
 
-**A prebuilt ASI is arbitrary native code.** The Quartermaster does not compile it and cannot
-meaningfully inspect it. What it can do is pin *which bytes* you get: every external requirement
-carries a `sha256`, and plugins are distributed through GitHub release pages, which publish a digest
-for every asset.
+- **`native_hook`** places one prebuilt `.asi` plugin in `scripts/`, where `pmc_bb.dll` loads it on
+  retail. M0160 rejects attaching one to a `reimpl` target, where the loader does not exist, and
+  M0161 a hook with neither a plugin nor a symbol.
+- **`place_file`** places a companion file (an `.ini` beside a plugin, a Lua framework's `.lua`
+  files) under a destination name: `game_root`, `scripts`, `plugins`, `update`, `on_boot`, `on_load`,
+  `on_key`. It refuses `.asi`, `.wad`, `.exe` and `.dll`.
+- **`add_runtime_dll`** places one runtime DLL — a library other plugins import by name — in the game
+  root, the directory Windows searches first:
 
-That is **integrity, not authenticity** — it guarantees you received the file the author published,
-not that the file is safe. Treat installing an ASI the way you would treat running any downloaded
-executable.
+  ```yaml
+  - kind: add_runtime_dll
+    dll: src/my-runtime.dll
+  ```
 
-Two checks apply here: M0170 rejects a malformed digest, and M0171 rejects fetching over an
-untrusted transport. M0160 rejects attaching an ASI to a `reimpl` target, where the loader does not
-exist.
+  The file must be named **`<shipment.name>.dll`** (compared case-insensitively), so a runtime
+  Shipment ships exactly one DLL, named after itself, and two Shipments can never ship one name. Its
+  stem must not be on the deny list — `pmc_bb` (the loader), `cruise` (its sidecar), `dxwrapper`,
+  `binkw32` — which is also why those are reserved Shipment names (M0211).
 
-Hook claims are `Exclusive` keyed on the hooked address, and a collision is a hard error — because,
-as above, there is no load order that fixes it.
+**M0162** refuses a file name no Shipment may write (any of the rules above). **M0178** refuses a
+plugin or runtime DLL the game could not load: not an i386 PE image with the DLL flag, since
+`Mercenaries2.exe` is a 32-bit process and `LoadLibrary` refuses anything else.
+
+**A prebuilt ASI or DLL is arbitrary native code.** The Quartermaster does not compile it and does not
+read its import table. What it records is *which bytes* were placed: every placement's sha256 is in
+`placement.json` and the load plan. That is **integrity, not authenticity** — it proves the file is
+the one that was built, not that it is safe. Treat installing one the way you would treat running
+any downloaded executable. A plugin that needs another Shipment's DLL must say so in
+`load.requires`; nothing checks its imports for it, and a missing DLL is a runtime failure.
+
+### `touches`: how hooks are spelled
+
+`native_hook` `touches` are claimed `Exclusive`, and a collision is a hard error — no load order
+fixes two plugins hooking one function. The claim is on the exact string, so **two plugins collide
+only if they spell the same hook the same way**. Spell each hook kind one way:
+
+| hook kind | spelling | example |
+|---|---|---|
+| game code, at a fixed address | `0xVVVVVVVV`, the virtual address in that EXE build | `0x004CF340` |
+| an exported Windows API function | `module!function`, the module lowercased and without `.dll` | `ws2_32!connect` |
+| a COM method | `Interface::Method` | `IDirect3DDevice9::EndScene` |
+| a Lua binding's C function | `Table.Function`, declared next to its `0xVVVVVVVV` | `Player.SetCash` |
+
+Declare each hook **by its symbol name** (`luaB_type`, `ws2_32!connect`,
+`IDirect3DDevice9::EndScene`) **and**, where it has fixed addresses, **by the VA for every EXE build
+the plugin supports** — so a plugin that picks its addresses per build declares each of them.
 
 ### Dependencies
 
-`load.requires` declares what must be present for a Shipment to work, in one of two forms.
-
-An **external pin** — `{ url, sha256 }` — names a third-party artifact by URL and locks it to a
-digest. It is the form for an ASI you neither built nor manage: the pin is integrity, not
-authenticity (as above), and it freezes that one build. M0170 and M0171 guard its digest and
-transport.
-
-A **managed requirement** — `{ name, version }` — names a component the toolchain manages (for
-example `m2-sdk`, the shared SDK runtime every SDK-based plugin links against) and a semver
-*range*, not a fixed build:
+`load.requires` declares what must be installed for a Shipment to work. **Every dependency is a
+Shipment**, runtimes included; there is no other kind. Three forms:
 
 ```yaml
 load:
   requires:
-    - name: m2-sdk
-      version: "^0.1"
+    - lua-bridge                                     # that Shipment, any version
+    - { shipment: lua-bridge, version: "^1.0.0" }    # that Shipment, within a semver range
+    - { capability: widescreen }                     # any Shipment that `provides: [widescreen]`
 ```
 
-This resolves the way a package manager resolves a dependency: at deploy time the highest released
-version satisfying the range is installed, one copy shared across every Shipment that needs it, and
-it updates on its own cadence — a patch to the component reaches every mod without any of them
-being re-released. A byte-exact pin can do none of that, which is exactly why a managed component
-takes a range and never a digest. M0172 rejects a range that is not valid semver.
+Before a build, `qm preflight` (and `qm link`) checks the whole installed set: a requirement with no
+provider, or a provider outside the range, is **M0204**; two Shipments with one name are **M0203**.
+A requirement also orders the load: a Shipment loads after the Shipments it requires (a cycle is
+**M0174**).
 
-A managed dependency is **developer infrastructure** — a shared library the plugin links against,
-not content a player chooses. Resolution is silent: deploying the Shipment installs the dependency
-with no prompt and no UI, logged for a developer and invisible to a player.
+Ranges are semver ranges with Cargo's grammar (**M0172** rejects one that does not parse). Note the
+caret on a `0.x` version: **`^0.6` means `>=0.6.0, <0.7.0`**, so it excludes `0.7.0`. Write
+`">=0.6, <1"` when you mean "any 0.x from 0.6". A Shipment naming itself in `requires` or `conflicts`
+is **M0173**. `shipment.quartermaster`, when present, is a range the running qm must satisfy
+(**M0210**).
+
+**Removed forms.** `{ name, version }` is not a requirement form; validation says to write
+`{ shipment: <name>, version: <range> }`. The external pin `{ url, sha256 }` is gone and does not
+parse, and with it M0170 and M0171: a Shipment never installs a file from a URL — a plugin you depend
+on is required as the Shipment that ships it. `load.after` / `load.before` are gone too; the load
+order comes from `requires`.
 
 ## Limits
 
