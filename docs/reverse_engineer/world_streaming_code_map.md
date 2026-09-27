@@ -66,7 +66,7 @@ string only) and the marriage is PC-anchored.
 | HighRes→LowRes GUID map (runtime) | `TerrainGuidMappingHighResToLowRes` | `FUN_004a88a0` | H |
 | Terrain patch Activate / Deactivate | `TerrainObject::Activate/Deactivate` | `FUN_0066cac0` / `FUN_0066d030` | M |
 | Terrain descriptors + deserializers | `TerrainObject`/`LowResTerrainObject`/`TerrainFade`/`TerrainKey` | `FUN_00644260`/`FUN_00644470`/`FUN_00644300`/`FUN_00661750` (+ `FUN_0063d590`/`FUN_0063d6e0`) | H |
-| Terrain height queries | `GetTerrainHeight_Fast/Slow`, `ProcessTerrainCast` | — (Havok sampled-heightfield) | open |
+| Terrain height queries | `GetTerrainHeight_Fast/Slow`, `ProcessTerrainCast` | — (collider is a `WpMeshShape16` + MOPP, not a heightfield) | open |
 | HibernationControl descriptor (field-size 6) | `HibernationControl` | `FUN_00640a40` | H |
 | `Object.{Set/Get/Is/Revert}Hibernation*` cfuncs | `SetHibernationDistance` etc. | `0x5CF4F0/0x5CF420/0x5CF240/0x5CF600` | H |
 | Population hibernate-out gate | `DeathCheck`/`DeathCompute` | `FUN_00500b40`→`FUN_005007d0` | H |
@@ -254,7 +254,7 @@ Xbox symbols are the **height-query family** and `CanActivate`.
 | TerrainKey — deserialize | `TerrainKey` `@0x00315b0` (enum `@0x003a1b0`) | **`FUN_00661750`** | read body: refs `s_TerrainKeyEnum_00bc72c4`; 4 B → pool `DAT_017bdfa4` | H |
 | Terrain shader combo validator | (terrain shader family) | `FUN_004a8f30` | read body: emits `"BAD_TERRAIN_VS_PS_COMBO: mesh %s…"` | M |
 | Terrain shader registry (already married) | `PgTerrainMeshFP4D @0x822db050` | `FUN_0084f130` | reference only (world-streaming.md) | — |
-| `GetTerrainHeight_Fast/Slow`, `GetHeightAboveTerrain`, `ProcessTerrainCast` | names `@0x001714c/0x0017134/0x0029ab4/0x00213ec` | — | unlocated (Havok sampled-heightfield inference below) | open |
+| `GetTerrainHeight_Fast/Slow`, `GetHeightAboveTerrain`, `ProcessTerrainCast` | names `@0x001714c/0x0017134/0x0029ab4/0x00213ec` | — | unlocated (see Open below) | open |
 
 ### Annotated excerpts
 
@@ -290,14 +290,17 @@ has direct callers → both are reached through the entity vtable, exactly as
 
 ### Open (honest)
 
-- **Height-query family** has **no PC string anchor** — not bound. Structural inference: PC terrain
-  collision uses a Havok **sampled-heightfield** shape — the real terrain shape ctor is
-  `hkpSampledHeightFieldShape FUN_00a0e3d0` (corrected by [`physics_code_map.md`](physics_code_map.md);
-  the earlier `FUN_008bfb60` is the shape-enum→string TABLE, not the query), with getters
-  `hkpStorageSampledHeightFieldShape FUN_00a0a2f0` / `hkpTriSampledHeightFieldCollection FUN_00a0d2f0`.
-  So "Fast" = direct bilinear grid sample (the Rust engine's `height_at`), "Slow"/`ProcessTerrainCast`
-  = full `hkpWorldRayCaster` down-cast (physics map §3).
-  Confirm-live to bind VAs.
+- **Height-query family** has **no PC string anchor** — not bound. *(Corrected 2026-09-27: this
+  item used to infer a Havok sampled-heightfield collider and read "Fast" as a bilinear grid sample.
+  That inference is refuted by the bytes.)* The streamed terrain collider is a **`WpMeshShape16` +
+  `hkpMoppBvTreeShape`/`hkpMoppCode`** in every cell's `PHY2` — one per cell, 400/400 — and **zero**
+  `hkpSampledHeightFieldShape` / `hkpTriSampledHeightFieldBvTreeShape` instances are serialized in
+  `vz.wad` ([`terrain_collision_regeneration.md`](terrain_collision_regeneration.md) §1;
+  [`../terrain_cell_format.md`](../terrain_cell_format.md) §8). The render ground is a triangle mesh
+  too; there is no height grid on disk. The heightfield ctor `FUN_00a0e3d0` exists but no disk bytes
+  feed it; whether the engine builds a runtime-only heightfield for a "fast" query is open
+  ([`terrain_collision_regeneration.md`](terrain_collision_regeneration.md) §1). How "Fast" and
+  "Slow"/`ProcessTerrainCast` differ is unknown. Confirm-live to bind VAs.
 - **Doc reconciliation:** ECS-doc `06` labels the TerrainObject *field-schema builder* `FUN_00662460`
   while world-streaming.md labels the *reflection-descriptor setup* `FUN_00644260` — different roles
   of the same class, consumer/deserializer `FUN_0063d590` for both. Not a contradiction.
@@ -403,9 +406,9 @@ pointing at it, read `+4` = cfunc VA. **The walk reproduces the population doc's
    loading screen up vs dismissed).
 
 **Terrain**
-5. Height sampler VAs (`GetTerrainHeight_Fast/Slow`, `ProcessTerrainCast`) — HW-read bp on the loaded
-   Havok sampled-heightfield shape, or break where terrain Y is queried (player ground-clamp), to
-   bind the PC VAs (inference-only today).
+5. Height sampler VAs (`GetTerrainHeight_Fast/Slow`, `ProcessTerrainCast`) — HW-read bp on a loaded
+   cell's `WpMeshShape16` vertex pool / `hkpMoppCode` bytes, or break where terrain Y is queried
+   (player ground-clamp), to bind the PC VAs (unlocated today).
 6. Confirm `FUN_0066cac0`/`FUN_0066d030` sit in the `TerrainObject` entity vtable's Activate/Deactivate
    slots (promotes those marriages M→H); `FUN_005857e0` = the RtTerrainChildren getter.
 
