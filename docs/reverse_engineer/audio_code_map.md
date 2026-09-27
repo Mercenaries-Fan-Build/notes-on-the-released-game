@@ -319,11 +319,27 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
 6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7 and the streamed
-   wave record's `+0x1C` have no established meaning. Automation kinds 4, 7, 8, 9 and 10 are read
-   (§11.9) but what consumes kind 4's channels 2–7 and kind 9/10's track fields `+0x68`/`+0x6C`/`+0x74`
-   is not traced; kind 10 is handled by `FUN_0083b4a0` but no retail cue carries one, so its size is
-   unmeasured. Nor is the reader of the sound instance's `+0x80` byte (the multi-wave group's loop
-   count, §11.4) traced, so how a looping group repeats its wave is open. The §3.5 row for
+   wave record's `+0x1C` have no established meaning; kind 10 is handled by `FUN_0083b4a0` but no
+   retail cue carries one, so its size is unmeasured. Three behaviours sit behind SecuROM-protected
+   pointers and are confirm-live (Windows, the Ess live harness running the retail exe under x32dbg):
+   - **The wave loop.** A multi-wave group's `+0x2C` loop count reaches the wave at `+0xBC`
+     (`FUN_008369e0` → instance `+0x80` → `FUN_00837830` → wave vtable `+0x04` = `0x0083DAE0`). No code
+     in `.text` or `Stext` reads wave `+0xBC`; the wave's data fetch `FUN_00839e90` / `FUN_00839820`
+     jumps through `0x0244F65C` / `0x0244FDAC` into stubs that enter the protection's dispatcher
+     (`0x01AAFF10` → `[0x021FD554]`). Step: start a cue whose group has `+0x2C` = 1, set a hardware
+     read breakpoint on the wave's `+0xBC` (the wave pointer is the instance's `+0x30` after
+     `0x00837A2D`), run to the wave's end, and record where execution reads it and where the read
+     position is reset; repeat with `+0x2C` = `0xFF`.
+   - **The cue filter.** Kind 9 feeds the biquad filter `FUN_00839db0` creates on the wave (§11.9);
+     it runs inside the wave mix `FUN_00839ae0` over the buffer its caller `MixWavesToOutput`
+     (`0x00838860`, reached through `0x02455DA8`) passes. Step: break at `0x00839AE0` while
+     `0xD8CE1427` plays and compare the buffer argument (`[esp+8]`) with the mixer's int32
+     accumulator (`DAT_01995D70 + 0x68`, §3.4); also read the vtable of the object at cue `+0x7C`
+     and confirm its slot `+0x04` returns cue `+0x84` / `+0x88`.
+   - **The child-cue start.** `FUN_0082e930` allocates through `thunk_FUN_024b9220`; that it is the
+     same start as `Sound.CueSound` and that the parent's `+0x118` / `+0xC8` word it passes is the
+     emitter position are inferred from the arguments. Step: break at `0x0082E930` on a kind-7 track
+     end and follow the call into the start at `0x0082E966`, recording the argument words. The §3.5 row for
    `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads
    of the *global* sounddb (category count at `+0x0A`, parameter count at `+0x0C`, category table
    offset at `+0x14`), not the per-bank cue table of §11.3.
@@ -491,8 +507,9 @@ Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
 Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
 
 ```
-0x2C  u8   loop count, copied to the sound instance at +0x80 (FUN_008369e0); retail's cue lengths
-           are −1 exactly where it is non-zero (§11.4, cue length)
+0x2C  u8   wave loop count, copied to the sound instance at +0x80 (FUN_008369e0) and on to the
+           wave at +0xBC (FUN_00837830); how the wave consumes it is behind SecuROM (§10 item 6).
+           Retail's cue lengths are −1 exactly where it is non-zero (§11.4, cue length)
 0x2D  u8   W = wave count
 0x2E  u8   selection mode (§11.8): 0 sequential, 1 weighted random, 2 weighted random, no repeat
 0x2F  u8   unknown
@@ -688,12 +705,15 @@ kind 2 / 3  volume / pitch LFO:   f32 start, u32 mode, u32 unknown, f32 duration
 kind 5 / 6  volume / pitch curve over a parameter, and kind 8 (the cue curve table's only kind):
             u32 unknown, u32 point count n, u32 parameter hash, u32 points offset (= 0x14),
             n × { f32 x, f32 y }
-kind 4      17 × u32: six multipliers for the instance parameter channels 2–7, clamped and
-            optionally jittered with the generator (FUN_0083f8e0)
-kind 7      u32 unknown, u32 cue hash: the child cue the track starts when it finishes
-            (FUN_0083c070 → FUN_0082e930)
-kind 9      u32 unknown, u32 parameter hash or 0xFFFFFFFF, u32 parameter hash or 0xFFFFFFFF:
-            evaluates kind 8 curves into the track fields +0x68 / +0x6C / +0x74 (kind 10 likewise)
+kind 4      f32 start, 6 × u8 jitter flags (+0x08..+0x0D), u16 0, 6 × f32 jitter offsets
+            (+0x10..+0x24), 2 × u32 not read by the engine (+0x28, +0x2C), 6 × f32 base multipliers
+            (+0x30..+0x44): the six output-channel multipliers (FUN_0083f8e0, §11.9)
+kind 7      f32 start, u32 child cue guid: the cue the track (or, in the event table, the cue) starts
+            when it finishes or is stopped (FUN_0083c070, FUN_00835060, FUN_0083c470 → FUN_0082e930)
+kind 9      f32 start, u32 curve index, u32 curve index (each the low byte of an index into the cue
+            curve table, or 0xFFFFFFFF for none): evaluates those kind-8 curves into +0x68 / +0x6C of
+            the automation state — for the event table, cue +0x84 / +0x88 (kind 10: one index, into
+            +0x74 / cue +0x90)
 ```
 
 How each kind is evaluated is in §11.9.
@@ -741,25 +761,81 @@ a single-wave group takes `+0x30`), base volume (`FUN_0083d770`: `+0x50`/`+0x54`
 delay (`FUN_0083d7e0`: always draws; a multi-wave group's range is `[max(+0x3C − +0x40, 0),
 +0x40 + +0x3C]`, a single-wave group's is 0).
 
-**Per frame** (elapsed `dt`), for a multi-track cue:
+**Blocks.** A cue passes its tracks, and a track its instances, a block of eight floats: a volume, a
+pitch in semitones and six output-channel multipliers.
 
-1. The cue's volume is `clamp01(cue +0x08 gain × V)` and its pitch `P`, where `V`, `P` are the
-   cue-automation outputs of the **previous** frame (the update reads them before evaluating), 1.0 and
-   0.0 at start.
-2. The cue time advances by `dt`. While the cue's loop count is non-zero and its time reaches the loop
-   end `+0x20`, the time wraps to `+0x1C + overshoot` and the count drops by one unless it is `0xFF`.
-   The cue's event table is evaluated at the cue time.
-3. Each track in order: its time advances by `dt`, wrapping at `+0x08` to `+0x04 + overshoot` by the
-   same loop-count rule; its automation is evaluated at the track time; its volume parameter is
-   `track volume × cue volume` and its pitch parameter `track pitch + cue pitch`; every sound from the
-   next unfired one whose start time is ≤ the track time fires; every live instance of the track then
-   takes the parameters.
-4. A sound instance plays at volume `base volume × volume parameter` and pitch `base pitch + pitch
-   parameter` semitones. While a ramp with a non-zero mode is active, its override value replaces the
-   base volume or pitch; the cue's override wins over the track's.
+**Per frame** (elapsed `dt`), for a multi-track cue (`FUN_00835060`):
 
-A single-track cue starts its one instance on its first frame, with volume parameter
-`clamp01(cue gain)` and pitch parameter 0.
+1. The cue block is `{clamp01(cue +0x08 gain × V), P, C}`, where `V`, `P`, `C` are the cue
+   automation's outputs of the **previous** frame (the update reads them before evaluating), 1.0,
+   0.0 and 1.0 at start.
+2. If the cue's loop count (`+0x15D`, from `+0x10`) is non-zero and `time + dt ≥` its loop end
+   (`+0x20`): the event table's automation rewinds to the loop start (`+0x1C`); every track runs a
+   **loop restart** against the cue's loop points with the cue's raw previous-frame automation block
+   (no gain, no clamp) and `loop end − time`; the time becomes `loop start + ((time + dt) − loop end)`,
+   which is also the `dt` the tracks advance by this frame; the count drops by one unless it is `0xFF`.
+   Otherwise the time advances by `dt`.
+3. The event table is evaluated at the cue time.
+4. Each track advances (below). When every track is done, a cue whose loop count was non-zero at the
+   start of the frame waits for its loop; otherwise it starts the child cue a kind-7 event named and
+   waits for it (state 3), or is done.
+
+**A track** (`FUN_0083c070`), with the cue block and the cue's override: if its loop count (`+0xD5`,
+from track `+0x00`) is non-zero and `time + dt ≥` its loop end (`+0x08`), it runs a loop restart
+against its own loop points with `{cue volume × previous track volume, cue pitch + previous track
+pitch, cue channels}` and `loop end − time`, then takes `loop start + ((dt + time) − loop end)` as its
+time and its `dt`, and drops the count unless it is `0xFF`; otherwise its time advances by `dt`. Its
+automation is evaluated at the track time, and its sounds fire and update with
+`{track volume × cue volume, track pitch + cue pitch, track channels × cue channels}`. When its
+sounds are done and its loop count was 0 at the start of the frame, it starts the child cue a kind-7
+record named and waits for it (state 3), or is done. The update runs for every track that has been
+played, done ones included (a done track keeps its time and automation running).
+
+**A loop restart** (`FUN_0083c3c0`): the track's sounds fire up to the loop end and its instances
+update with the given block and time; its automation rewinds to the loop start (`FUN_0083bdb0`:
+the active list empties and activation resumes at the first record whose start is at or after the
+loop start — unchanged if there is none); its sounds rewind (`FUN_00840230`: firing resumes at the
+first sound whose start is at or after the loop start, **except that a match on sound 0 does not end
+the search** — when sound 1 matches too, firing resumes at sound 1 and sound 0 does not fire again);
+the track is playing again.
+
+**Sounds** (`FUN_0083fee0`): while the list is firing, every sound from the next unfired one whose
+start is at or before the time fires (entry pick, then `FUN_00840280` → instance start). Then every
+instance that finished on an earlier update is dropped, and every other one takes the override block
+if there is one and is updated. The list is *fired* once everything has fired and no instance is
+left, and *done* on the next update that finds no instance.
+
+**An instance** (`FUN_00836c70`) multiplies its six channel multipliers (`+0x48`..`+0x5C`, 1.0 at
+start) by the block's — the product is stored, so a multiplier persists — and plays at volume
+`base volume × block volume` and pitch `base pitch + block pitch`. Its multipliers go to the wave's
+output channels 0–5 (wave vtable `+0x10C`, `FUN_008391d0`), which the mix kernels
+(`FUN_0083e970`, …) apply to the interleaved output channels in order; on a stereo buffer channel 0
+is left and 1 is right. An override block — a ramp with a non-zero mode, the cue's if active, else the
+track's — replaces the base volume and pitch and resets the multipliers to 1.0 (the override block's
+channel slots are never written). An instance is finished once its wave is (`CheckFinished`), or when
+no wave can be created for it.
+
+A single-track cue (`FUN_0083bec0`) starts its one instance on its first frame and updates it with
+`{clamp01(cue gain), 0, 1.0 × 6}`; it is done on the update after its instance finishes.
+
+**Child cues** (kind 7). A child start (`FUN_0082e930`) that fails — the cue is not in the sound
+database, or its soundbank is not loaded — or whose play-probability draw drops it runs the parent's
+completion callback at once (a track: done, child −1, `LAB_0083c550`; a cue: done, `LAB_008359a0`,
+after which `FUN_00835060` still sets it to wait for the child). A child that plays calls the callback
+when it finishes. A cue started during the cue-list walk (`FUN_0082ee60`) is appended and advances in
+the same frame.
+
+**Stopping** (`FUN_00835720`): every track's loop count becomes 0, its instances stop with a fade and
+its sounds stop firing, and it starts the child cue its kind-7 record named (or stops the running
+one); the cue does the same with its own child; the cue then waits (state 3) until its tracks and
+children are done.
+
+**Kind 4** (`FUN_0083f8e0`), when it activates, sets the automation's six output-channel multipliers
+for that step only (every step starts them at 1.0; kind 4 never joins the active list). Record
+channel `k` (flag byte `+0x08 + k`, offset `+0x10 + 4k`, base `+0x30 + 4k`) goes to output channel
+0, 1, 4, 2, 3, 5 for `k` = 0…5, and the engine fills the outputs in order 0–5, drawing once for each
+record channel whose flag is 1: `((r − 0.5) × 2 + offset) + base`, else `base`; each is clamped to
+`[0, 1]`. **Kind 7**, when it activates, stores its child cue guid (`+0x7C`), which a rewind keeps.
 
 **Automation evaluation** (one record list — a track's automation table or the cue's event table —
 against that list's time `t`): start from volume 1.0 and pitch 0.0, then
@@ -790,12 +866,16 @@ single-precision `sin(π)`); its FNV-1a-64 over the little-endian bytes is `0x63
 `q = (i16) trunc(p × (1/24) × 8192)` clamped to `±0x2000` (a quarter or four times the rate at the
 clamps).
 
-**What the reference implementation refuses.** It plays kinds 0–3, 5 and 6 as above. A cue that
-carries kind 4, 7, 8 (reached through 9 / 10) or 9, that loops (any loop count non-zero), whose curve
-parameter has no value, or whose parameter lies past a curve's last point is refused when it is
-started. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident: 707 play; 2 are refused for
-kind 4, 1 for kind 9, 278 for a group loop count, 22 for a track loop count, 2 for a cue loop count;
-the other 186 do not resolve (§11.2).
+**What the reference implementation refuses.** It plays kinds 0–7 as above, and track and cue loops.
+It refuses, when the cue is started: a cue that can reach a multi-wave group with a non-zero
+`+0x2C` (the wave loop, §10 item 6); kind 9 (the filter, §10 item 6); kind 4 on a mixer with more than
+two outputs (it applies output channels 0 and 1 only); a curve parameter with no value or past a
+curve's last point; and a kind-7 child that would itself be refused. Over the 1,198 `vz.wad` cues with
+every `vz.wad` bank resident, 1,012 resolve and **733 play** (24 of them loop a track or the cue);
+**278** are refused for a looping wave and **1** (`0xD8CE1427`) for kind 9 — both lists are asserted
+in `tests/retail_banks.rs` — and the other 186 do not resolve (§11.2). With `English.wad`'s wavebanks
+also resident, 735 play and 283 are refused for a looping wave. Every retail cue carrying kind 7 also
+reaches a looping wave, so no retail child cue plays yet.
 
 ## Provenance
 
