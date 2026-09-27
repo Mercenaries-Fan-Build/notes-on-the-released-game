@@ -127,7 +127,7 @@ is [`reverse_engineer/audio_code_map.md` §11.4](reverse_engineer/audio_code_map
 |---------|-------|---------|
 | Groups | `[0x20, +0x14)` | the groups back to back: 64-byte single-wave groups and `0x68 + 12 × waves`-byte multi-wave groups (form word at `+0x0C`); each names its category and its `{wavebank, wave index, weight}` wave(s) |
 | Group offsets | `[+0x14, +0x18)` | group count × u32, each group's offset relative to `0x20` |
-| Cues | `[+0x18, +0x1C)` | the cues back to back: 24-byte single-track cues `{guid, flags, gain, length, soundbank, group index}` and variable-size multi-track cues (not decoded) |
+| Cues | `[+0x18, +0x1C)` | the cues back to back: 24-byte single-track cues `{guid, flags, gain, length, soundbank, group index}` and variable-size multi-track cues (tracks of timed sounds, each picking one of several groups; audit map §11.7) |
 | Cue offsets | `[+0x1C, end)` | cue count × u32, each cue's offset relative to the cue section |
 
 There is no fixed record stride: the "stride" of earlier notes was the average of variable-size
