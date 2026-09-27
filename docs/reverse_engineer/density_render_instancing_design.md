@@ -120,9 +120,10 @@ via `FUN_0085b810`. **All 556 blobs retain an intact CTAB** (creator `Microsoft 
 9.19.949.2111`) → constant **names + register indices readable offline**, which is how `objectData` /
 `viewContextData` and their exact registers were recovered above — **no name→blob hash needed to
 identify or decode.** There are **60 non-skinned `objectData` VS** = the static-prop set to splice.
-⚠ The record `id` is **not** `FNV(name)` (verified by hash inversion + content-hash tests) — needed only
-for Route-1 additive registration; **Route 2 (§2.2) sidesteps it.** Tooling: Rust `shader3` module +
-`shaderforge` bin in `tools/wad_simulator/crates/mercs2_formats`.
+The record `id` is `pandemic_hash_m2(stem + "_3.sho")` (`"_3l.sho"` in `shader3Low.bin`) of the
+registered `.sho` file name minus `.sho` (`FUN_0085b6f0`). Route-1 additive registration therefore has a
+real key; see [shader_store_format.md](../shader_store_format.md). Tooling: Rust `shader3` +
+`sm3asm` modules and the `shaderforge` bin in `tools/wad_simulator/crates/mercs2_formats`.
 
 #### 2.1b Two runtime-validation rules — ✅ splice LIVE-VERIFIED (R0 PASS, 2026-08-04)
 The splice was proven against the REAL dxwrapper D3D9 runtime in-game: `tools/shader_accept_probe/`
