@@ -320,38 +320,38 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
 6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7 and the streamed
    wave record's `+0x1C` have no established meaning; kind 10 is handled by `FUN_0083b4a0` but no
-   retail cue carries one, so its size is unmeasured. Three behaviours sit behind SecuROM-protected
-   pointers and are confirm-live (Windows, the Ess live harness running the retail exe under x32dbg):
-   - **The wave loop.** A multi-wave group's `+0x2C` loop count reaches the wave at `+0xBC`
-     (`FUN_008369e0` → instance `+0x80` → `FUN_00837830` → wave vtable `+0x04` = `0x0083DAE0`). No code
-     in `.text` or `Stext` reads wave `+0xBC`; the wave's data fetch `FUN_00839e90` / `FUN_00839820`
-     jumps through `0x0244F65C` / `0x0244FDAC` into stubs that enter the protection's dispatcher
-     (`0x01AAFF10` → `[0x021FD554]`). Step: start a cue whose group has `+0x2C` = 1, set a hardware
-     read breakpoint on the wave's `+0xBC` (the wave pointer is the instance's `+0x30` after
-     `0x00837A2D`), run to the wave's end, and record where execution reads it and where the read
-     position is reset; repeat with `+0x2C` = `0xFF`.
-   - **The cue filter.** Kind 9 feeds the biquad filter `FUN_00839db0` creates on the wave (§11.9);
-     it runs inside the wave mix `FUN_00839ae0` over the buffer its caller `MixWavesToOutput`
-     (`0x00838860`, reached through `0x02455DA8`) passes. Step: break at `0x00839AE0` while
-     `0xD8CE1427` plays and compare the buffer argument (`[esp+8]`) with the mixer's int32
-     accumulator (`DAT_01995D70 + 0x68`, §3.4); also read the vtable of the object at cue `+0x7C`
-     and confirm its slot `+0x04` returns cue `+0x84` / `+0x88`.
-   - **The child-cue start.** `FUN_0082e930` allocates through `thunk_FUN_024b9220`; that it is the
-     same start as `Sound.CueSound` and that the parent's `+0x118` / `+0xC8` word it passes is the
-     emitter position are inferred from the arguments. Step: break at `0x0082E930` on a kind-7 track
-     end and follow the call into the start at `0x0082E966`, recording the argument words. The §3.5 row for
-   `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads
-   of the *global* sounddb (category count at `+0x0A`, parameter count at `+0x0C`, category table
-   offset at `+0x14`), not the per-bank cue table of §11.3.
-7. **Sound generator seed (§11.8), confirm-live.** Pal init stores the low 32 bits of the tick
-   callback `0x0040B360` (a `jmp [0x0245E984]` import thunk SecuROM resolves at run time) as the
-   generator seed. Which Windows function that slot resolves to is not visible statically. Live step
-   (Windows, the Ess live harness running the retail exe under x32dbg): break at `0x0082E774`
-   (`call [0x00CF130C]`), step over it, and record `EAX` and `EDX`; follow `[0x0245E984]` in the dump
-   and name the export it lands on (x32dbg's symbol column); confirm the value just stored at
-   `[0x00DFCD1C]` equals the recorded `EAX`. Then break on the next execution of `0x00834A80` and
-   check the state it reads is still that seed (nothing else writes `0x00DFCD1C` before the first
-   draw, per the decomp's cross-references).
+   retail cue carries one, so its size is unmeasured. The §3.5 row for `FUN_00835b80` ("u16 counts
+   @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads of the *global* sounddb
+   (category count at `+0x0A`, parameter count at `+0x0C`, category table offset at `+0x14`), not the
+   per-bank cue table of §11.3.
+
+   **SecuROM splices, resolved statically.** A splice replaces an instruction or two of a `.text`
+   function with `jmp [slot]` into a stub that enters the protection's VM (`0x01AAFF10` →
+   `[0x021FD554]` = `0x02A30000`); the VM runs the stolen instructions — through `.text` gadgets —
+   and returns to the next `.text` address, where the function carries on in plain code. Emulating
+   the runtime memory dump (`mercenaries-one-source/_ghidra/_ghidra/securom_dump/image.bin`,
+   `file offset = VA − 0x400000`, which holds the VM decrypted) with Unicorn from the spliced
+   instruction to its return address, with sentinel values in registers and memory, shows what the
+   stolen instructions did:
+
+   | Splice | Stolen instruction(s) | What follows in `.text` |
+   | --- | --- | --- |
+   | `0x00839E96` (`FUN_00839e90`, wave data end) via `0x0244F65C` | `mov edx, [eax+0x110]` — the wave's `GetLoopCount` slot (`0x0099C6C0`: `mov eax, [ecx+0xBC]`) | the loop (§11.9, *Looping waves*) |
+   | `0x00838856` (`MixWavesToOutput`) via `0x02455DA8` | `mov ecx, [0x01176404]` (the profiler) | the source mix (§11.9, *The cue filter*) |
+   | `0x0082E960` (`thunk_FUN_024b9220`, the Pal cue start) via `0x0244F728` | `mov ecx, [0x01176400]` (the instance pool) | allocation, `FUN_00834ad0`, list append |
+   | `0x0040B360` (the Pal-init tick callback) via `0x0245E984` | relocated code at `0x00415A20` that calls `[0x00B05124]` = `KERNEL32!QueryPerformanceCounter` and returns the 64-bit count in `EDX:EAX` | — |
+
+   Still open: which argument `Sound.CueSound`'s start passes for the instance flag `+0x83` (its
+   8th start argument). The object-sound path at `0x00593BA0` passes `(its argument 2 == 5)` and 0
+   for `+0x82`; children and the music decks pass 0. `Sound.CueSound` posts a message
+   (`0x005E10DD` → `0x00446340`) whose handler reaches the start through code that is neither a
+   direct call nor a `push`/`ret` of `0x0082E960`, so the static search found no call site for it.
+   `+0x83` matters only on a stereo or surround device for a group whose `+0x14` byte is 0: it then
+   replaces the instance's output-channel multipliers with 0.7 / 0.7 / 0 / 0 / 0 / 0
+   (`FUN_00836c70`, from `0x0083741D`). Step (x32dbg, Ess live harness): break at `0x0082E960` after a
+   `Sound.CueSound("…")` from Lua and read the 8th stack argument.
+7. **Sound generator seed (§11.8).** Pal init stores the low 32 bits of the tick callback
+   `0x0040B360`, which is `QueryPerformanceCounter` (item 6), as the generator seed.
 
 ## 11. Sound bank tables — format specification
 
@@ -488,7 +488,9 @@ offset  type  field
 0x08  u32  0
 0x0C  u32  form: 0 = single-wave, 1 = multi-wave
 0x10  f32  unknown
-0x14  u32  unknown, 0 or 1
+0x14  u32  0 or 1: 1 = positional — with an emitter its instances play from the emitter's own source,
+           otherwise from the shared 2D source (FUN_00837830, 0x008378A9). The sounddb record has no
+           such flag (§11.3)
 0x18  f32  minimum distance (inferred)
 0x1C  f32  maximum distance (inferred)
 0x20  f32  unknown (1.0 in all but one retail group)
@@ -508,8 +510,8 @@ Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
 
 ```
 0x2C  u8   wave loop count, copied to the sound instance at +0x80 (FUN_008369e0) and on to the
-           wave at +0xBC (FUN_00837830); how the wave consumes it is behind SecuROM (§10 item 6).
-           Retail's cue lengths are −1 exactly where it is non-zero (§11.4, cue length)
+           wave at +0xBC (FUN_00837830): the wave plays 1 + count times (§11.9). Retail's cue
+           lengths are −1 exactly where it is non-zero (§11.4, cue length)
 0x2D  u8   W = wave count
 0x2E  u8   selection mode (§11.8): 0 sequential, 1 weighted random, 2 weighted random, no repeat
 0x2F  u8   unknown
@@ -740,9 +742,9 @@ soundbank, and per slot per multi-track cue — initialised to `0xFFFFFFFF`:
 one global `u32` state `DAT_00DFCD1C`. A draw advances it twice with `x ← x·0x0019660D + 0x3C6EF35F`;
 with `u` the first new state and `x` the second, the draw is
 `bits_to_f32((((x & 0xFFFF01FF) | (u >> 16)) >> 9) | 0x3F800000) − 1.0`, a value in `[0, 1)`
-(`DAT_00B9B664` = 1.0). Pal init (`FUN_0082e6c0`) seeds the state once from a tick callback (§10 item
-7), so picks differ between runs; an implementation that wants reproducible picks takes the seed as
-an input.
+(`DAT_00B9B664` = 1.0). Pal init (`FUN_0082e6c0`) seeds the state once with the low 32 bits of
+`QueryPerformanceCounter` (§10 item 7), so picks differ between runs; an implementation that wants
+reproducible picks takes the seed as an input.
 
 The order of draws follows the order sounds fire: each fired sound draws for its entry (modes 1 and 2)
 and then, as its instance starts, for its group's wave.
@@ -866,16 +868,50 @@ single-precision `sin(π)`); its FNV-1a-64 over the little-endian bytes is `0x63
 `q = (i16) trunc(p × (1/24) × 8192)` clamped to `±0x2000` (a quarter or four times the rate at the
 clamps).
 
-**What the reference implementation refuses.** It plays kinds 0–7 as above, and track and cue loops.
-It refuses, when the cue is started: a cue that can reach a multi-wave group with a non-zero
-`+0x2C` (the wave loop, §10 item 6); kind 9 (the filter, §10 item 6); kind 4 on a mixer with more than
-two outputs (it applies output channels 0 and 1 only); a curve parameter with no value or past a
-curve's last point; and a kind-7 child that would itself be refused. Over the 1,198 `vz.wad` cues with
-every `vz.wad` bank resident, 1,012 resolve and **733 play** (24 of them loop a track or the cue);
-**278** are refused for a looping wave and **1** (`0xD8CE1427`) for kind 9 — both lists are asserted
-in `tests/retail_banks.rs` — and the other 186 do not resolve (§11.2). With `English.wad`'s wavebanks
-also resident, 735 play and 283 are refused for a looping wave. Every retail cue carrying kind 7 also
-reaches a looping wave, so no retail child cue plays yet.
+**Looping waves** (`FUN_00839e90`, reached from the mix kernels when the read position reaches the
+end of the data). It reads the wave's loop count (`+0xBC`, from the group's `+0x2C` via instance
+`+0x80`). If it is 0, an embedded wave (whose `+0x18`, read by vtable `+0x128`, is 0) stops
+(`+0x120` = 0, `+0x124` = the length, vtable `+0x24`); otherwise the integer read position `+0x124`
+drops by the data length — playback resumes at the start with the overshoot kept — vtable `+0xB4` is
+called with 4, and, the count being positive, it is set to count − 1
+(vtable `+0x114`, `0x00839230`). The count is the byte zero-extended, so `0xFF` is 255 and plays 256
+times. For a retail embedded wave the length is the whole clip (wave `+0xC4` stays −1 because the
+record's `+0x18` is 0, so `FUN_00838e10` returns `+0x48`, the data size). An instance whose wave
+cannot be created stays alive to try again when its group's count is `0xFF`, and finishes otherwise
+(`FUN_00836c70`).
+
+**The final volume** of an instance — base volume × block volume × the engine's master fade ×
+its category's volume — is clamped to `[0, 1]` (`0x008373AA`..`0x008373D5`) before the wave's
+`SetVolume` (vtable `+0x104`, `0x008373E4`).
+
+**The cue filter** (kind 9). A wave whose cue has a kind-9 event carries a biquad low-pass filter
+(`FUN_00839db0` → `FUN_0083f2d0`, vtable `0x00BE2678`; cutoff `+0x08` starts at 22,050, resonance
+term `+0x0C` at 1.4142, rate `+0x10` at 44,100). On every instance update the wave copies the cue
+parameter object at `+0x7C` (vtable `0x00BE1E60`: slot `+0x04` returns `+0x08` / `+0x0C`, i.e. cue
+`+0x84` / `+0x88`, the kind-9 outputs) into the filter (`FUN_0083e5c0` → `SetParam`, `0x0083F670`):
+cutoff = `nyquist + (100 − nyquist) × −1 × (v − 1)`, resonance term =
+`2 + (0.70710677 − 2) × −1 × (v − 1)`. `Process` (`FUN_0083f430`) recomputes, when a value changed,
+`k = (f32) tan(cutoff / rate × π)`, `kk = (f32) pow(k, 2)`, `d = (q·k + kk) + 1`, `n = 1/d`,
+`b0 = b2 = n·kk`, `b1 = 2·b0`, `a1 = (kk − 1)·n·2`, `a2 = (d − 2·q·k)·n`, and filters int32 samples in
+place: `y = trunc((((x₂·b2 + x₁·b1) + x·b0) − y₁·a1) − y₂·a2)`, one history per wave channel,
+channel `c` covering `count` samples from `buffer + c·count`. The mix passes it the buffer and count
+of the wave's *source*: `MixWavesToOutput` (`FUN_00838850`) hands each wave to its source object,
+whose `FUN_0083b120` mixes the wave into the source's int32 scratch `DAT_00FC34B0` (six ints per
+frame, zeroed per source by `FUN_0083ade0`) with `count` = frames × the source's channel byte
+`+0x39`, and the wave mix then runs the filter over that buffer, before `FUN_0083afc0` adds the
+scratch into the accumulator with the source's six channel gains. 2D instances share one source per
+channel class (`FUN_0082f110` / `FUN_0082f140`), so the filter runs over every 2D wave mixed before
+it in the pass.
+
+**What the reference implementation refuses.** It plays kinds 0–7 as above, track and cue loops,
+and looping waves. It refuses, when the cue is started: kind 9 — its filter needs the per-source
+mix path above, and the reference mixer mixes each voice straight into one stereo accumulator; kind
+4 on a mixer with more than two outputs (it applies output channels 0 and 1 only); a curve
+parameter with no value or past a curve's last point; and a kind-7 child that would itself be
+refused. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident, 1,012 resolve and **1,010
+play** (66 loop a track or the cue, 277 reach a looping wave, 4 start a child cue); **2**
+(`0xD8CE1427`, `0xF23B9836`) are refused for kind 9 — asserted in `tests/retail_banks.rs` — and the
+other 186 do not resolve (§11.2). With `English.wad`'s wavebanks also resident, 1,017 of 1,019 play.
 
 ## Provenance
 
