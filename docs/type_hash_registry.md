@@ -52,7 +52,7 @@ Sorted by frequency (most common first). ASET `type_id` is the integer discrimin
 | 11 | `0x5608BD5A` | 29 | 314 | 1 | **effect** | Particle/VFX definitions. All 314 in `effects` block |
 | 12 | `0xF753F6D0` | 6 | 95 | 87 | **wavebank** | Audio wave bank data. In vehicle, weapon, ambient sound blocks |
 | 13 | `0x665EF13E` | 5 | 86 | 38 | **facefxanimationset** | FaceFX facial animation sets (44–46 KB). In contract/briefing/mission blocks for dialogue lip-sync |
-| 14 | `0xE5273C14` | 13 | 77 | 69 | **sounddb** | Sound database metadata (88–172 bytes). In vehicle/weapon blocks, co-occurs with wavebank/soundbank entries |
+| 14 | `0xE5273C14` | 13 | 77 | 69 | **sounddb** | Cue routing table: cue guid → (soundbank, soundbank cue index). Beside the same-named soundbank in its block; the global one holds the category tree |
 | 15 | `0x9F8BCA10` | 21 | 76 | 68 | **soundbank** | Sound bank data. Same blocks as wavebank entries |
 | 16 | `0xFE0E8320` | 23 | 60 | 29 | **scaleformgfx** | Scaleform GFX UI assets (inner CFX + zlib-compressed payload). In c316XX and contract blocks |
 | 17 | `0x1CF649BB` | 34 | 31 | 28 | **facefxactor** | FaceFX actor definitions (facial animation rigs). In starter blocks and misc c3 blocks |
@@ -139,7 +139,7 @@ FaceFX facial animation sets for dialogue lip-sync. Found in contract blocks (`m
 
 ### `0xE5273C14` → **sounddb** — ASET type_id 13 — 77 entries across 69 blocks
 
-Sound database metadata entries (88–172 bytes). In vehicle and weapon blocks, always co-occurring with `wavebank` and `soundbank` entries. Maps sound events to audio assets — the configuration layer that tells the engine which wavebank/soundbank entries to play for each game event.
+The cue routing table. A per-bank sounddb (76 in `vz.wad`) sits in the same block as, and under the same name hash as, its bank's `soundbank`, and holds one 12-byte entry per soundbank cue: `{cue guid = m2(cue name), soundbank hash, cue index in that soundbank}`, sorted by guid. `Sound.CueSound(name)` finds the entry, then the soundbank cue, whose group names the `wavebank` wave. The global `mercs2globals` sounddb (188 bytes) has no cue entries; it holds the 19-entry sound category tree and two parameter hashes. Sizes run from 112 bytes to several KB. Byte layout: [`reverse_engineer/audio_code_map.md` §11.3](reverse_engineer/audio_code_map.md).
 
 ### `0xFE0E8320` → **scaleformgfx** — ASET type_id 23 — 60 entries across 29 blocks
 
