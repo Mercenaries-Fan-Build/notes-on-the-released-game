@@ -24,7 +24,7 @@ Status: Validated=42, Registered=27, NeedsInvestigation=163
 | `BNDS` | 0x004a86dc | Validated |  |
 | `BODY` | 0x00750aa5 | Validated |  |
 | `BSHI` | 0x00478318 | Validated | blendshape index @FUN_00478270 (decomp): reads count*2 u16 array (count from INFO param_1[0x6a]); converter swaps u16. Validated: body % 2 == 0 |
-| `COLR` | 0x004930e5 | Validated | colour palette @0x4930e5: stores a fixed 0xC8 (200-byte) record into the effect palette heap. Validated: body >= 0xC8 |
+| `COLR` | 0x004930e5 | Validated | colour-over-life @0x4930e5: copies exactly 800 bytes (100 keys × 8 B) into the effect stream table, reserving 200 stream words (the `0xC8`). Validated: body >= 0xC8 (every retail COLR is 800 B — see effect_container_format.md §6) |
 | `COMP` | 0x006549ef | Validated |  |
 | `DAMG` | 0x0045f558 | Validated | ECS damage ref array @0x45f558: count×4 u32 refs (count from INFO field, overflow-guarded). Validated: body % 4 == 0 |
 | `DEBR` | 0x0045f9a8 | Validated | ECS debris ref array @0x45f9a8: count×4 u32 refs (overflow-guarded). Validated: body % 4 == 0 |
@@ -441,26 +441,31 @@ Behavior/placement graph cluster (`FUN_004cf340`, ECS_PlacementParse):
   12600B, zero slack — empirically verified), loaded into count×0x20 **in-memory** records (the
   decomp's 0x20 is the alloc stride, not the disk stride). Hash namespace is shared with effect
   `TEXT` chunks.
-- `EFCT` (**missing from registry**): u16-packed effect header — magic 0x0226 @ +2,
-  sub-component count @ +14. Words pack two u16 halves; must byteswap as u32 or the count zeroes
-  → NULL-deref @ 0x493102 (`spatial_hash_crash_analysis.md`).
-- `EMTR`: u16 count + count×4 module refs; `EMIT`: emitter timing, delegates to FUN_0048cc30.
-- `ATRB` / `FRCE`: 4-byte inner hash → per-attribute / per-force-type sub-readers
-  (gravity/drag/vortex taxonomy). Implement as hash→typed-reader dispatch; **skip unknown hashes
-  by size, don't abort** — attribute sets grow across versions.
-- `COLR`: fixed 0xC8 (200-byte) gradient/palette record into the effect palette heap (sampled by
-  particle age). The older "16-byte-stride color keys" reading in `fxdict_format.md §4.2` was a
-  low-confidence hypothesis — the fixed-0xC8 handler read supersedes it.
-- `TEXT`: leading u32 + u32 hash list (texture/param refs — not ASCII text).
-- `PTYP`: 1 flags byte (bit0→+0x205, bit1→+0x206); `POFF`: vec3 emitter offset;
-  `TRFM`: 16×f32 4×4 matrix (row-major, D3D convention); effect-arm `GEOM`: 2×u16 table indices.
+- **Effect tree** — specified in [`effect_container_format.md`](effect_container_format.md)
+  (314/314 retail effects re-encode byte for byte). The short form:
+- `EFCT` (**missing from registry**): nine u16 — emitter count, magic `0x0226`, force count,
+  then three `(entries, words)` table reservations (linear curves; an empty third table; COLR/TEXT/
+  resampled curves). Computed, not authored. The Xbox byteswap hazard for these words is in
+  `spatial_hash_crash_analysis.md`.
+- `EMTR`: u16 = number of `GEOM` children; each child `GEOM` = u32 k + k × 13 f32 shape records.
+  `EMIT` is a **marker** row whose children are `TRFM` (+ 9 channel `ATRB`s) and an optional
+  4-byte `GEOM` (u16 shape index, u16) — the effect-arm GEOM at 0x48ccbd.
+- `ATRB`: 12 B `{u32 hash, u32 flags, u32|f32 value}`; the hash selects the reader. Flag bit 0 =
+  f32 value, bit 10 = owns an `ANIM`, bits 7/8/9 authored (bit 8 = resample a TRFM curve to 100).
+- `ANIM` / `AKEY` **exist**: `ANIM` (4 B, u32 key count) is the child of an `ATRB`, `AKEY`
+  (8 B `{f32 time, f32 value}`) its children; 1,880 curves in retail. They are consumed inside
+  the ATRB readers (`FUN_00493150` for TRFM channels), not dispatched as top-level tags.
+- `FRCE`: u32 kind hash (`gravity` 0x14BD1BBD, `drag` 0xED791C4B, `wind` 0xC9F7A9D7,
+  `attractor` 0xC235456B, `vortex` 0xF4D85A49) + fixed parameters (16/4/16/28/56 B), then the
+  force's `ATRB`s. An unknown kind reads nothing.
+- `COLR`: **800 bytes** = 100 keys × `{u8×4 colour, binary16, u16 0}`, sampled over particle
+  life. The `0xC8` (200) in the handler is the stream-word reservation, not the byte size.
+- `TEXT`: u32 n + n texture hashes.
+- `PTYP`: **u32** flags (bit0→+0x205, bit1→+0x206); its children are 19 `ATRB`, `COLR`,
+  13 `ATRB`, `TEXT`. `TRFM`: 16×f32 4×4 matrix. No retail effect contains `POFF`.
 - `PTCH` count×0x38 / `PTMS` count×8: renderable-consumer records (FUN_004a4c40 family), counts
   from the renderable INFO. Likely attachment/patch descriptors — check first u32 of each PTCH
   record for bone hashes to confirm (unverified).
-- `AKEY` / `ANIM` listed in `fxdict_format.md §4` **do not exist** as dispatched FourCCs — no
-  hits in registry, tags.rs, convert.rs, or the binary scan. Stale doc; the anim path uses
-  TRCK/VALU/KEYS/MANM/TRNS/MINF/ASTO, and Havok anim payloads ride in `data` chunks under
-  type_hash 0x18166555.
 
 ## 8. Animation cluster
 
