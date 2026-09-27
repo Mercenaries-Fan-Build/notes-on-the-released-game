@@ -231,7 +231,8 @@ Selected high-value bindings (full 88+11 table in `docs/data/audio_code_map.json
 
 | Lua name | shim | impl | notes |
 |---|---|---|---|
-| `CueSound` | `FUN_005e0ff0` | builds 0x38-byte event → `thunk_FUN_024b65e0` | queue-post SecuROM-morphed → PalSound dispatcher |
+| `CueSound` | `FUN_005e0ff0` | posts `{0, object, 4, 0, f32 DAT_00DFDB5C, cue hash, 0}` → `0x00446340` (game message queue) | handler reaches the cue start through the object's emitter record (§11.9, *Cues on objects*) |
+| `TestCueSound` | `FUN_005e0db0` | same message as `CueSound` | one argument (the cue name); the object is one the shim looks up (`FUN_006cd960(0)` → `FUN_006cdaf0`, its `+0x20`; which object is not established) |
 | `StopSound`/`PauseSound` | `FUN_005e10f0`/`11f0` | `thunk_FUN_024b65e0` | same event, opcode differs |
 | `SetCategoryVolume`/`Pitch` | `FUN_005e12f0`/`1390` | `FUN_00607960` | double-buffered pending list (max 10/frame) |
 | `TransitionMusic` | `FUN_005e1600` | musicSM+0x115C write | SM = soundsys+0x48 + regionIdx·0x119C; optional net bcast |
@@ -313,7 +314,7 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    > (The eight `0x0083xxxx` engine-vtable entries were not individually re-checked.)
 2. **Message-bus & singleton constructors** (`DAT_015386xx`, 14-slot factory fill) are in
    SecuROM-relocated code — break on first write to `DAT_015386b0` to catch construction live.
-3. **SecuROM-thunked hot paths** — confirm-live: cue dispatch `thunk_FUN_024b65e0`, `LoadBank`
+3. **SecuROM-thunked hot paths** — confirm-live: `LoadBank`
    `*_DAT_0244fb2c`, `OpenStreamFile` `thunk_FUN_035f0000`, `VO.Cue` `thunk_FUN_028da000`, ambience
    update `thunk_FUN_024f2850`, audio-enabled gate `thunk_FUN_024e67b0`.
 4. **8 uncracked m2 hashes** (§7) — add to the rainbow table (candidates: interior, underwater,
@@ -342,18 +343,31 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    | `0x00838856` (`MixWavesToOutput`) via `0x02455DA8` | `mov ecx, [0x01176404]` (the profiler) | the source mix (§11.9, *The cue filter*) |
    | `0x0082E960` (`thunk_FUN_024b9220`, the Pal cue start) via `0x0244F728` | `mov ecx, [0x01176400]` (the instance pool) | allocation, `FUN_00834ad0`, list append |
    | `0x0040B360` (the Pal-init tick callback) via `0x0245E984` | relocated code at `0x00415A20` that calls `[0x00B05124]` = `KERNEL32!QueryPerformanceCounter` and returns the 64-bit count in `EDX:EAX` | — |
+   | `0x00446340` (the game message post, `thunk_FUN_024b65e0`) via `0x024552AC` | `cmp byte [0x0122DDA0], 0` | the queue append at `0x00446347` (§11.9, *Cues on objects*) |
+   | `0x006035F0` (`thunk_FUN_024e6ae0`) via `0x0245DE9C` | none: registers and stack unchanged | the emitter record find/create at `0x0047ADC0` |
+   | `0x00603EF0` via `0x0245EEB8` | none: registers and stack unchanged | the object-sound start at `0x00593BA0` |
+   | `0x00603D3B` (in `FUN_00603d20`) via `0x0244FDD4` | an obfuscated load of `ebp` (`0x00582736`), which the body uses as the Pal engine (`[ebp+0x50]`, the cue-instance list) | the record's cue walk at `0x00603D41` |
 
-   Still open: which argument `Sound.CueSound`'s start passes for the instance flag `+0x83` (its
-   8th start argument). The object-sound path at `0x00593BA0` passes `(its argument 2 == 5)` and 0
-   for `+0x82`; children and the music decks pass 0. `Sound.CueSound` posts a message
-   (`0x005E10DD` → `0x00446340`) whose handler reaches the start through code that is neither a
-   direct call nor a `push`/`ret` of `0x0082E960`, so the static search found no call site for it.
-   `+0x83` matters only on a stereo or surround device for a group whose `+0x14` byte is 0: it then
-   replaces the instance's output-channel multipliers with 0.7 / 0.7 / 0 / 0 / 0 / 0
-   (`FUN_00836c70`, from `0x0083741D`). Step (x32dbg, Ess live harness): break at `0x0082E960` after a
-   `Sound.CueSound("…")` from Lua and read the 8th stack argument.
+   **`Sound.CueSound`'s start, resolved.** Its message is handled by `FUN_005fd760` case 0, which
+   queues a cue command that `PgSoundPlayer::Update` runs through the object's emitter record to
+   `0x00593BA0` (§11.9, *Cues on objects*). `0x00593BA0` passes `(its argument 2 == 5)` for the
+   instance flag `+0x83` (the start's 8th argument) and 0 for `+0x82`; its argument 2 is the command's
+   `+0x0C`, the message's `+0x08`, which the `CueSound` shim sets to 4 (`0x005E10B5`). So
+   `Sound.CueSound` starts its cue with `+0x82` = `+0x83` = 0, as children and the music decks do.
+   (`+0x83` matters only on a stereo or surround device for a group whose `+0x14` byte is 0: it then
+   replaces the instance's output-channel multipliers with 0.7 / 0.7 / 0 / 0 / 0 / 0, `FUN_00836c70`,
+   from `0x0083741D`.)
 7. **Sound generator seed (§11.8).** Pal init stores the low 32 bits of the tick callback
    `0x0040B360`, which is `QueryPerformanceCounter` (item 6), as the generator seed.
+8. **Object emitters (§11.9, *Cues on objects*).** Two things the emitter update does are not
+   pinned down. (a) Which objects the sound object table `DAT_01175FAC` (`+0x10` entries of `0x94`
+   bytes, `+0x14` count, entry `+0x88` position) holds: `FUN_006036c0` moves a record's emitter only
+   while its object is in it, and no writer of the table was found statically. The reference
+   implementation moves every emitter whose object is live in the world. (b) When the object is not
+   in the table and the record has cues, `FUN_006036c0` calls `FUN_00603d20(0, 0, 1)`, which stops
+   (`FUN_00835720(0)`, for a cue in state 0 or 1) the record's cues that loop for ever
+   (`FUN_00835910`: cue `+0x15D`, or — when `+0x15E` bit 2 is set — a track's `+0xD5` or one of its
+   instances' `+0x80`, is `0xFF`). Traced, not modelled in the reference implementation.
 
 ## 11. Sound bank tables — format specification
 
@@ -753,6 +767,13 @@ with `u` the first new state and `x` the second, the draw is
 `QueryPerformanceCounter` (§10 item 7), so picks differ between runs; an implementation that wants
 reproducible picks takes the seed as an input.
 
+The rest of the game runs the same generator, inlined, over a different state: **`DAT_00DFCBAC`**, the
+game's global random state (176 stores in the runtime dump; the emitter jitter of §11.9 is one of its
+users). No store that seeds it was found. Its value before the game draws is `0x94153A94`: the dumps
+taken before runtime init (`mercs2_nodrm_v2.exe`, `mercs2_nodrm_v3.exe`, whose `DAT_011763FC` is
+still 0) hold it there, and `image.bin` holds it in `DAT_00DFCD1C` and `DAT_00DFCBB8`; `image.bin`'s
+`DAT_00DFCBAC`, `0xD36E7EE6`, is it stepped 514 times (257 draws).
+
 The order of draws follows the order sounds fire: each fired sound draws for its entry (modes 1 and 2)
 and then, as its instance starts, for its group's wave.
 
@@ -950,6 +971,51 @@ and `FUN_00839ae0` clamps it to `[0.1, 2.0]` (`DAT_00B92B58`, `DAT_00B92874`) in
 (f64) +0x6C)`, stored at `+0xAC` (vtable `+0xEC`, `0x00839120`, which also flags a change larger than
 `DAT_00B92958`). 2D sources pass Doppler 1.0 and their waves' `+0x5C` is 0.
 
+**Cues on objects.** `Sound.CueSound(object, cue)` (shim `FUN_005e0ff0`) posts a 0x1C-byte message
+`{0, object, 4, 0, f32 DAT_00DFDB5C, cue hash, 0}` to the game message queue (`0x00446340`: up to
+0x80 records at `0x0122CF20` with a subscriber bitmask per record at `0x0122DD20`). `PgSound`'s
+`CollisionHandling` (`FUN_005fd5f0`) drains it (`FUN_0058c7c0`) into `FUN_005fd760`, whose case 0
+drops the cue hash `0xBA71C11C` and whatever `FUN_005fd5b0` refuses, then queues a 0x28-byte cue command
+in `DAT_01175FAC`'s list (`FUN_00607510`, mode 0) that carries the object's position: the vector is
+zeroed (`0x00607530`..`0x0060756F`) and, for a non-zero object not already marked in the table's
+`+0x08` list, filled by `FUN_00665af0` (the object's position; left zero when the lookup fails).
+`PgSoundPlayer::Update` runs the command (`FUN_00607610` case 0 → `FUN_006033c0`):
+
+1. **Find or create the object's emitter record** (`FUN_006035f0` → `0x0047ADC0`) in the player's
+   record list (`PgSoundPlayer::Update`'s second argument; `FUN_006034b0` walks the same list). A new
+   record comes from the free list at `DAT_01175FA4 +0x14` and is appended; for a non-zero object,
+   `FUN_00603b30` asks the Pal engine (`DAT_019C6170`) for a source holder (vtable `+0x0C`) at record `+0x14`
+   and sets its position to the command's (`+0x14`, `0x00838310`) and its velocity to
+   `DAT_011766F0`..`DAT_011766F8` (zero; `+0x10`, `0x00838330`).
+2. **Start the cue on it** (`FUN_00603c10` → `FUN_00603ef0` → `0x00593BA0`): find the cue
+   (`FUN_00835a70`) and start it (`FUN_0082e960`) with the emitter `record[0] ? record[+0x14] : 0`
+   — object 0 plays 2D — then link the cue into the record's cue list (record `+0x04`, count `+0x10`).
+
+**Emitter motion.** Each frame, after the cue commands and before the Pal update
+(`FUN_0082ee60`), `FUN_006034b0` calls `FUN_006036c0` for every record in list order, with the frame
+time `dt` (`PgSoundPlayer +0x1A8`). It drops the record's cues whose instance is gone or finished
+(state 2), then — when the record has an object and a holder and the object is in the sound object
+table `DAT_01175FAC` (§10 item 8) — moves the holder:
+
+1. three draws from the game's global random state `DAT_00DFCBAC` (§11.8), `a`, `b`, `c` in draw
+   order, make the direction `(c, b, a)` (`0x006038A6`..`0x00603998`), normalised by `FUN_00401630`:
+   `len = sqrt((x·x + y·y) + z·z)` (`fsqrt` of the single sum, stored single), `(0, 0, 0)` when
+   `len == 0`, else each component × `1 / len`;
+2. a fourth draw `d` picks the jitter `s`: `DAT_00BEB524` (`0x3951B717`, +0.0002) when
+   `0.5 > d` (`DAT_00BBB99C`), else `DAT_00BEB520` (`0xB951B717`, −0.0002);
+3. the new position is the object's table position (entry `+0x88`..`+0x90`) + direction × `s`;
+4. the velocity is `(new position − holder +0x2C) × (1 / dt)` in single precision
+   (`0x00603A8C`..`0x00603ABD`), or `DAT_011766F0`..`DAT_011766F8` (zero) when `dt` equals
+   `DAT_00B9B690` (0.0; an unordered compare computes the difference);
+5. `SetPosition` (holder vtable `0x00BE21C4` `+0x14`), then `SetVelocity` (`+0x10`)
+   (`0x00603AC3`..`0x00603ADF`).
+
+Every such update takes four draws — eight steps of `DAT_00DFCBAC` — per record, however many cues
+the record holds. The engine never reads a physics or object velocity: the holder's finite
+difference is the velocity the Doppler factor sees. After the update, `FUN_006034b0` frees a record
+whose cue count is 0: the holder goes back to the Pal engine (`DAT_019C6170` vtable `+0x10`) and the
+record to the free list.
+
 **The cue filter** (kind 9). A wave whose cue has a kind-9 event carries a biquad low-pass filter
 (`FUN_00839db0` → `FUN_0083f2d0`, vtable `0x00BE2678`; cutoff `+0x08` starts at 22,050, resonance
 term `+0x0C` at 1.4142, rate `+0x10` at 44,100). `FUN_00839db0` looks for the kind-9 record among
@@ -983,7 +1049,11 @@ cue with more curves than events (the filter scan), and a kind-7 child that woul
 Its mixer hands the six-channel mix to a device with six or more channels, channels 0 and 1 to a
 stereo device and channel 0 to a mono one — a stand-in for DirectSound's fold-down, which is not
 modelled — and refuses 3–5 channels. Emitter sources mix as above (speaker gains, distance volume,
-Doppler); its cue API carries a position but no velocity, so its emitters are at rest. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
+Doppler). `Sound.CueSound(object, cue)` plays through the object's emitter record as above, and once
+a frame, before its tick, the host moves every record's emitter with its object's world position —
+the jitter drawn from one game-wide `DAT_00DFCBAC` state seeded `0x94153A94`, the velocity the finite
+difference — so a moving object's cues are Doppler-shifted; it does not stop a gone object's
+for-ever-looping cues (§10 item 8). Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident,
 1,012 resolve and **all 1,012 play** (66 loop a track or the cue, 278 reach a looping wave, 4 start a
 child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with their waves' filters
 attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
