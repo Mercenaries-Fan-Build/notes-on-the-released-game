@@ -84,39 +84,27 @@ Default path: `output/_scratch/fx_probe/fxdict.json`
 
 ---
 
-## 4. effect UCFX container — **~70% confidence**
+## 4. effect UCFX container
 
-Each of the **314** effect payloads is a UCFX container. Chunk sets are mostly consistent; first retail effect (`asset_hash 0xFE62017A`) includes:
+**Specified in [`effect_container_format.md`](effect_container_format.md)**, measured against all
+314 retail effects (each re-encodes byte for byte; the computed `EFCT` equals the stored one in
+314/314). The container flattening is in [`ucfx_tree_container.md`](ucfx_tree_container.md).
+Summary:
 
-| Chunk | Payload size | Header hints | Probable role |
-|-------|--------------|--------------|---------------|
-| **EFCT** | 18 | `{u32 ×4; u16}` | Effect header. **`0x0226` magic @ byte +2; sub-component count @ byte +14** (gates the loader's `[EDI+0x60]` descriptor-array alloc, engine `0x00492AF0`). Several u32 words pack two u16 halves — **must byteswap as u32**, not u16, or the count zeroes → NULL-deref crash @ `0x00493102`. See `spatial_hash_crash_analysis.md` §2026-06-01c |
-| **EMTR** | 2 | `u2=9`, `u3=2` | Emitter table metadata (counts in header) |
-| **EMIT** | 0 | `u2` = 1–7 typical | Emitter count / spawn slots (**histogram verified**) |
-| **GEOM** | 4 | — | Unknown index / LOD hook |
-| **TRFM** | 64 | — | 4×4 row-major `f32` transform |
-| **ATRB** | 12 | — | Render/blend attribute scalars |
-| **PTYP** | 4 | `u2` particle type | Particle class id |
-| **ANIM** | 4 | `u3=4` | Animation driver |
-| **AKEY** | 8 | — | Animation keys |
-| **COLR** | ~800 (varies) | 16-byte stride | Color over life (~50 keys when 800 B) — **layout hypothesis** |
-| **TEXT** | ~260 | leading `u32` | Texture / param hash list (`u32` after first word) |
-| **FRCE** | 20 | — | Force / acceleration |
-
-Effect-specific tags also referenced in `tools/ucfx_be_to_le.py`: `PTYP`, `COLR`, `TEXT`, `FRCE`, `ANIM`, `AKEY`, `ATRB`, `TRFM`, `EFCT`, `EMTR`.
-
-### 4.1 TEXT chunk — **~75% confidence**
-
-- First `u32` often `0x40` (64) — may be count or byte length (**hypothesis**).
-- Following words are **`u32` asset hashes** (texture or fxdict parameter hashes).
-- Cross-check: `0x8410A32A` appears in both fxdict DICT row 9 and effect0 `TEXT` — parameter/texture hash namespace is shared.
-
-### 4.2 COLR chunk — **~50% confidence**
-
-- Stride **16 bytes** per key when `len % 16 == 0`.
-- Bytes look like **BGRA-ish** color stops with time; exact field order not confirmed.
-
----
+- One tree rooted at `EFCT` (18 B, nine u16, computed). Children: `EMTR` (u16 = GEOM child count;
+  each `GEOM` = u32 k + k × 13 f32), then one (`EMIT` marker, `PTYP`) pair per emitter, then the
+  `FRCE`s.
+- `EMIT` → `TRFM` (64 B 4×4) with the nine channel `ATRB`s (`posx`…`sclz`), and an optional
+  `GEOM` (u16 shape index, u16).
+- `PTYP` (u32 flags; bits 0/1 read) → 19 `ATRB`, `COLR`, 13 `ATRB`, `TEXT`, in a fixed order.
+- `ATRB` (12 B `{u32 hash, u32 flags, u32|f32 value}`) may own `ANIM` (u32 key count) → `AKEY`
+  × n (8 B `{f32 time, f32 value}`). `ANIM` and `AKEY` exist; 1,880 retail curves.
+- `COLR` is **800 bytes** = 100 × `{u8×4 colour, binary16, u16 0}`. (The 200 the loader stores is
+  the stream-word reservation, not the byte size.)
+- `TEXT` = u32 n + n texture hashes (`4 + 4n` bytes in every retail TEXT).
+- `FRCE` = u32 kind (`gravity`, `drag`, `wind`, `attractor`, `vortex` — all `pandemic_hash_m2`
+  of the name) + 16 / 4 / 16 / 28 / 56 bytes of parameters, then the force's `ATRB`s.
+- No retail effect contains `POFF`.
 
 ## 5. UE5 mapping (downstream)
 
@@ -140,41 +128,49 @@ See [`audio_ue5_path.md`](audio_ue5_path.md) §2.
 | DICT `default` / `value_b` / `value_c` as three `f32` + `flags` | **Medium–high** |
 | DICT `value_b`/`value_c` semantics (max/min) | **Hypothesis** |
 | Parameter string names | **Low** (hash-only) |
-| effect per-chunk field map | **Medium** (tags + sizes; few payloads fully semantic) |
-| COLR key structure | **Low–medium** |
+| effect tree, sizes and EFCT rule | **High** — 314/314 byte-identical re-encode ([`effect_container_format.md`](effect_container_format.md)) |
+| COLR key structure (100 × 8 B) | **High** for the layout; colour channel order and the binary16's role unknown |
 
 ---
 
 ## 7. Encoder (Rust, native)
 
-The inverse of every `parse_X` in [`mercs2_formats::fxdict`](../tools/wad_simulator/crates/mercs2_formats/src/fxdict.rs) now exists on the same module:
+[`mercs2_formats::fxdict`](../tools/wad_simulator/crates/mercs2_formats/src/fxdict.rs) reads and
+writes both containers.
 
-| Chunk | Encoder | Notes |
-|-------|---------|-------|
-| DICT record | `write_fxparam` / `write_fxdict_dict` | 20 B stride, matches retail 630-record shape |
-| INFO | `write_fxdict_info` | `u32 count` |
-| EFCT | `write_efct` | 16 B, magic @ +2, sub_count @ +14, rest zero |
-| EMTR | `write_emtr` | `u16` count + `count × u32` module refs |
-| EMIT | `write_emit` | `n × f32` timing values |
-| POFF | `write_poff` | 12 B vec3 offset |
-| TRFM | `write_trfm` | 64 B row-major 4×4 |
-| PTYP | `write_ptyp` | 1 B flags |
-| COLR | `write_colr` | 200 B (50 RGBA8 stops — same hypothesis as parse) |
-| FRCE | `write_frce` | `u32 hash` + `param_count × f32` (clamped to 4) |
-| TEXT | `write_text` | `u32 count` + `count × u32` refs |
+**fxdict:** `parse_fxdict` / `parse_fxdict_container` and `write_fxparam` / `write_fxdict_dict` /
+`write_fxdict_info` / `write_fxdict_container`. The container is two top-level leaves, `INFO`
+(`x2 = 1`) then `DICT` (`x2 = 0`). The retail container re-encodes byte for byte.
 
-Container assemblers:
-- `write_effect_container(&EffectTemplate) -> Vec<u8>` — full UCFX with CSUM, walkable by `mercs2_formats::ucfx::extract_chunk_body`
-- `write_fxdict_container(&[FxParam]) -> Vec<u8>` — the resident singleton (INFO + DICT chunk pair)
-- `write_ucfx_container(&[(tag, u2, u3, body)])` — generic assembler used by both
+**effect:** `parse_effect_container(&[u8]) -> Result<EffectContainer, String>` and
+`write_effect_container(&EffectContainer) -> Result<Vec<u8>, String>`, over a typed model:
 
-Roundtripped by 15 tests in that module (`cargo test -p mercs2_formats fxdict`): each `write_X → parse_X` preserves the struct value, and both container assemblers verify their own CSUM and reparse cleanly through `ucfx::verify_ucfx_container` + `extract_chunk_body`.
+| Type | Holds |
+|---|---|
+| `EffectContainer` | `shapes` (EMTR GEOMs), `emitters`, `forces` |
+| `Emitter` | TRFM matrix, 9 channel `Atrb`s, optional `EmitterGeom`, `ParticleType` |
+| `ParticleType` | PTYP flags, 32 `Atrb`s, `Colr`, `Text` |
+| `Atrb` | `hash`, `flags`, `value` (`AtrbValue::F32`/`U32`), `curve` (`Option<Vec<AnimKey>>`) |
+| `Colr` | 100 `ColrKey { colour: [u8; 4], half_bits: u16 }` |
+| `Force` | `ForceKind` (typed per kind) + its `Atrb`s |
 
-The `EffectTemplate::to_chunks` order is the same one `from_chunks` sees on retail: EFCT → EMTR → EMIT → POFF → TRFM → PTYP → COLR → FRCE… → TEXT. Multiple `FRCE` chunks are emitted, one per `Force`.
+- `EFCT` is computed (`EffectContainer::efct_words`), never stored in the model.
+- `ATRB` flag bits 0 (f32 value) and 10 (has curve) are derived; an authored flag word that
+  disagrees is an error.
+- Attribute runs are checked against the position tables (`TRFM_CHANNELS`,
+  `PTYP_ATTRIBUTES_BEFORE_COLR` / `_AFTER_COLR`, `FRCE_*_ATTRIBUTES`), which also carry the
+  recovered names.
+- The container is flattened by `ucfx::write_ucfx_tree` (computed `x2`/`x3`, marker rows,
+  contiguous bodies, `CSUM`) and read by the strict `ucfx::parse_ucfx_tree`.
 
-Fields the parse side calls **hypothesis** (COLR interior layout, FRCE force-kind classification, PTYP bit meanings) are inherited by the encoder — a roundtrip proves we're internally consistent, not that the retail parser accepts them. Byte-identical vs a retail effect container is not yet asserted (no captured fixture); the parse side's tests establish that our field model matches at least the observable behaviour.
+Tests: `cargo test -p mercs2_formats fxdict ucfx` (hermetic: every FRCE kind's size, COLR 800 B,
+CSUM, flag rejection, an authored one-emitter `magenta_burst` effect that re-parses and satisfies
+the tree rules) and `tests/effect_retail_roundtrip.rs` (game-gated: 314/314 byte-identical,
+computed `EFCT` 314/314, fxdict container byte-identical, C4 effect name resolution).
 
----
+The previous encoder wrote a 16-byte `EFCT`, `EMTR` as count + refs, a float `EMIT` body, a `POFF`
+chunk, a 1-byte `PTYP`, a 200-byte `COLR` and FRCE params clamped to four, and padded bodies to
+4 bytes with `x2 = x3 = 0`; none of that is what retail contains.
 
 ## 8. Related docs
 
