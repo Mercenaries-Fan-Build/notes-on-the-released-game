@@ -74,9 +74,9 @@ Optional `--blocks-dir output/extracted/batch_vz/blocks` parses pre-decompressed
 
 ### 1.4 Gaps
 
-- ~~No `wavebank_extractor.py`~~ — **done** (IMA ADPCM codec `0x02` → WAV; verified on `ui_hud` block)
-- Soundbank event names unresolved (hash-only in section A/B)
-- `sounddb` (0xE5273C14) group load order not parsed into manifest
+- ~~No `wavebank_extractor.py`~~ — **done**, but its codec reading is wrong: the wavebank format byte `0x02` is **bytes per sample** and embedded clips are **PCM16**, not IMA ADPCM; and a record's data offset (`+0x20`) is relative to the record's own start. Specification: [`reverse_engineer/audio_code_map.md` §11.5](reverse_engineer/audio_code_map.md).
+- Soundbank layout is decoded (groups and single-track cues; [§11.4](reverse_engineer/audio_code_map.md)); cue and group ids are `m2` hashes, so names still come from the rainbow table. Multi-track cues (about 58% of `vz.wad` cues) are not decoded, and how the engine picks among a multi-wave group's weighted waves is not established — a `USoundCue` built from a multi-wave group needs that choice made explicitly.
+- `sounddb` (0xE5273C14) is not a load-order manifest: it is the cue routing table, cue guid → (soundbank, soundbank cue index) ([§11.3](reverse_engineer/audio_code_map.md)). A cue → wave map for the manifest follows sounddb → soundbank cue → group → wavebank wave.
 - `import_audio.py` stub exists; Interchange batch import needs in-Editor validation
 
 ---
