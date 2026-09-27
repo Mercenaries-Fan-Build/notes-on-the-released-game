@@ -318,9 +318,12 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    danger, camera-distance).
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
-6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7, the streamed wave
-   record's `+0x1C`, and automation kinds 4, 7 and 8 have no established meaning; kind 10 is handled
-   by `FUN_0083b4a0` but no retail cue carries one, so its size is unmeasured. The §3.5 row for
+6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7 and the streamed
+   wave record's `+0x1C` have no established meaning. Automation kinds 4, 7, 8, 9 and 10 are read
+   (§11.9) but what consumes kind 4's channels 2–7 and kind 9/10's track fields `+0x68`/`+0x6C`/`+0x74`
+   is not traced; kind 10 is handled by `FUN_0083b4a0` but no retail cue carries one, so its size is
+   unmeasured. Nor is the reader of the sound instance's `+0x80` byte (the multi-wave group's loop
+   count, §11.4) traced, so how a looping group repeats its wave is open. The §3.5 row for
    `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads
    of the *global* sounddb (category count at `+0x0A`, parameter count at `+0x0C`, category table
    offset at `+0x14`), not the per-bank cue table of §11.3.
@@ -340,11 +343,13 @@ This section specifies the three on-disk tables a sound bank is made of — `wav
 and `sounddb` — well enough to read any retail bank and to write new ones. It is written as an open
 specification: every rule below was measured on the retail PC data and is enforced by a reference
 implementation (`mercs2_audio` in the `wad_simulator` workspace: `wave.rs`, `soundbank.rs`,
-`multitrack.rs`, `sounddb.rs`, `select.rs`, `encode.rs`) whose test re-encodes **every** audio table in
+`multitrack.rs`, `sounddb.rs`, `select.rs`, `duration.rs`, `automation.rs`, `playback.rs`,
+`encode.rs`) whose test re-encodes **every** audio table in
 retail `vz.wad` (95 wavebanks, 76 soundbanks, 77 sounddbs, multi-track cues included) byte-identically
 from its parsed fields (`crates/mercs2_audio/tests/retail_banks.rs`). The engine behaviour it states —
-how a cue's tracks fire their sounds and how groups and entries are picked — is read from the
-decompiled PC exe, with the generator also disassembled from the unpacked image; the functions are
+how a cue's tracks fire their sounds, how groups and entries are picked, and how a playing cue's
+volume and pitch are computed — is read from the decompiled PC exe, with the generator, the
+automation evaluator and the instance-start draws also disassembled from the unpacked image; the functions are
 named where each rule is given. The same layout holds, measured with a separate
 checker, for every audio table in `English.wad` and `shell.wad`.
 
@@ -478,24 +483,29 @@ offset  type  field
 Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
 
 ```
-0x2C  f32  linear gain (inferred)
-0x30  f32  unknown
+0x2C  f32  base volume of the sound instance (FUN_0083d770)
+0x30  f32  base pitch of the sound instance, semitones (FUN_0083d700)
 0x34  wave { u32 wavebank hash, u32 wave index, f32 weight = 1.0 }
 ```
 
 Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
 
 ```
-0x2C  u8   unknown (copied to the sound instance at +0x80, FUN_008369e0)
+0x2C  u8   loop count, copied to the sound instance at +0x80 (FUN_008369e0); retail's cue lengths
+           are −1 exactly where it is non-zero (§11.4, cue length)
 0x2D  u8   W = wave count
 0x2E  u8   selection mode (§11.8): 0 sequential, 1 weighted random, 2 weighted random, no repeat
 0x2F  u8   unknown
 0x30  f32  unknown          0x34  f32  unknown
 0x38  u32  0x2C — the engine reads wave i at group + [group+0x38] + 0x3C + 12·i
-0x3C  f32  unknown          0x40  f32  unknown
+0x3C  f32  start delay a    0x40  f32  start delay b: the instance's start delay is drawn in
+           [max(a − b, 0), b + a] (FUN_0083d7e0)
 0x44  u32  0 — when its low byte is set, FUN_008369e0 delays the start by the listener distance
 0x48  u32  unknown flag bytes
-0x4C  6 × f32 unknown
+0x4C  f32  unknown
+0x50  f32  base volume low   0x54  f32  base volume high: drawn in [low, high] (FUN_0083d770)
+0x58  f32  unknown
+0x5C  f32  base pitch low    0x60  f32  base pitch high, semitones: drawn in [low, high] (FUN_0083d700)
 0x64  f32  unknown
 0x68  W × wave { u32 wavebank hash, u16 wave index, u16 0, f32 weight }
 ```
@@ -512,8 +522,8 @@ holds `0xB6A13123`, the value `FUN_006067b0` sets in its default case (the switc
 0x04  u8x4  [0, form, limit, 0]; form 0 = single-track, 1 = multi-track. FUN_00834ad0 starts the
             cue only while a u16 counter in the cue's runtime record (+4) is below `limit`, or when
             `limit` is 0 (that the counter counts live instances is inferred)
-0x08  f32   gain
-0x0C  f32   length in seconds
+0x08  f32   gain (FUN_00835060 multiplies the cue's volume by it each frame)
+0x0C  f32   length in seconds, or −1 when the cue loops
 ```
 
 Single-track form (form 0, exactly 24 bytes; 505 in `vz.wad`):
@@ -526,9 +536,28 @@ Single-track form (form 0, exactly 24 bytes; 505 in `vz.wad`):
 
 Multi-track form (form 1; 693 in `vz.wad`, 800 across the three archives): specified in §11.7.
 
-For a single-track cue whose single-wave group names an embedded wave, the length MUST be
-`(f32)(frames / sample_rate)` computed in double precision — bit-exact on all 133 such cues in
-`vz.wad`. (The streamed `music` cues do not follow this rule.)
+**Cue length.** The engine never computes `+0x0C`; it reads it in one place, `FUN_005faca0` (FindCue,
+then `movss xmm0, [cue+0x0C]`; 0 when the cue is missing), whose two callers are the
+`Sound.GetMaxDuration` binding (`0x005E3860`, returns it to Lua) and the VO line start `FUN_00515c10`
+(`0x00515C50`, where a length ≤ 0 is replaced by 5.0 s, `DAT_00B9B700`). Nothing in the mixer, the
+instance update or the bank loader reads it. It is authored data, and the retail banks carry it by
+this rule, measured over every cue of `vz.wad` and `English.wad`:
+
+- **−1.0** when anything the cue plays loops: a multi-wave group it can reach with a non-zero `+0x2C`
+  loop count, a track with a non-zero `+0x00` loop count, or a multi-track cue `+0x10` loop count
+  (§11.7).
+- otherwise the latest end among the cue's sounds — `start + the longest wave any of its groups can
+  pick`, computed in double precision — and its ramps and LFOs (automation kinds 0–3,
+  `start + duration` in single precision), rounded to `f32`.
+
+A wave's length is `frames / rate` for an embedded record and `+0x10 / (rate × channels × 2)` for a
+streamed one, whose `+0x10` counts decoded PCM16 bytes rather than frames (§11.5). The rule gives
+14,818 of the 14,834 lengths bit for bit. The 16 it does not, all in `vz.wad`, as (soundbank, cue
+index): `0x0873D14E` 55, `0x08E43A91` 2, `0x5EE5CB98` 4, `0x766467E0` 0, `0x874E66BC` 5,
+`0xAF27F8D2` 10, `0xB796AE64` 22 / 25 / 65 / 66, `0xDCCF8AFA` 6 / 7 / 45, `0xEB61D6E1` 8 / 9,
+`0xF2175845` 59 — nine far from any end of the cue (hand-set or stale), six one unit in the last place
+off, and one −1 on a cue with nothing looping. A writer SHOULD compute the length by the rule; the
+reference encoder does, and takes no length as input.
 
 ### 11.5 wavebank
 
@@ -595,9 +624,8 @@ shape of retail `ui_PDA_Open_01_st`, cue 57 → group 70 of `ui_hud`):
 
 A writer MAY also author multi-wave groups (the multi-wave form, a selection mode 0–2, at least one
 wave) and multi-track cues (§11.7: every sound's slot below the cue's slot count, at least one entry,
-a selection mode 0–2). The length rule for those cues is not established; the reference encoder takes
-it as an input (retail's single-track cues on multi-wave groups mostly carry the longest wave's
-length, but not all).
+a selection mode 0–2). Every cue's length follows §11.4's rule, which needs the waves each group can
+pick, so the reference encoder requires a cue's groups and their waves to be in the bank it writes.
 
 ### 11.7 Multi-track cue body
 
@@ -605,14 +633,15 @@ Every offset is relative to the cue's start; the engine reads the structure in p
 (`FUN_0083bf70`, `FUN_0083fc40`, `FUN_0083fee0`, `FUN_0083b310`).
 
 ```
-0x10  u8   unknown (copied to the instance at +0x15D)
+0x10  u8   loop count (copied to the instance at +0x15D; see §11.9)
 0x11  u8   A = event record count
 0x12  u8   T = track count
 0x13  u8   P = parameter hash count
 0x14  u8   C = cue curve record count
 0x15  u8   S = selection-state slots (FUN_0082e370 allocates S u32s per cue, set to 0xFFFFFFFF)
 0x16  u16  0
-0x18  f32  unknown          0x1C  f32  unknown          0x20  f32  unknown
+0x18  f32  play probability: FUN_008354e0 draws r once (§11.8) and plays the cue only if this ≥ r
+0x1C  f32  loop start       0x20  f32  loop end (§11.9)
 0x24  f32  unknown (FUN_00834ad0 loads it into the cue's runtime timer on each start)
 0x28  u32  event records (= 0x44)          0x2C  u32  event offset table
 0x30  u32  track records                   0x34  u32  track offset table
@@ -628,9 +657,9 @@ offset relative to the first record.
 **Track** (offsets relative to the track):
 
 ```
-0x00  u8   unknown (copied to the track instance at +0xD5)
+0x00  u8   loop count (copied to the track instance at +0xD5; see §11.9)
 0x01  u8   automation record count      0x02  u8  sound count      0x03  u8  0
-0x04  f32  unknown                       0x08  f32 unknown
+0x04  f32  loop start                    0x08  f32 loop end
 0x0C  u32  automation records (= 0x1C)   0x10  u32 automation offset table
 0x14  u32  sound records                 0x18  u32 sound offset table; the track ends after it
 ```
@@ -653,16 +682,21 @@ offset relative to the first record.
 ```
 kind 0 / 1  volume / pitch ramp:  f32 start, u32 mode, u32 unknown, f32 duration, f32 from, f32 to
             (mode 0 applies to the running value — volume multiplied, pitch added; non-zero
-            overrides it)
+            overrides the sound instances' base value)
 kind 2 / 3  volume / pitch LFO:   f32 start, u32 mode, u32 unknown, f32 duration, f32 period, f32 depth
-            (a sine table indexed by elapsed / period; low byte of mode 0 = oscillate)
+            (low byte of mode 0 = oscillate)
 kind 5 / 6  volume / pitch curve over a parameter, and kind 8 (the cue curve table's only kind):
             u32 unknown, u32 point count n, u32 parameter hash, u32 points offset (= 0x14),
             n × { f32 x, f32 y }
-kind 4      17 × u32, meaning not established (dropped from the active list)
-kind 7      u32 unknown, u32 hash (dropped like kind 4)
-kind 9      u32 unknown, u32 parameter hash or 0xFFFFFFFF, u32 parameter hash or 0xFFFFFFFF
+kind 4      17 × u32: six multipliers for the instance parameter channels 2–7, clamped and
+            optionally jittered with the generator (FUN_0083f8e0)
+kind 7      u32 unknown, u32 cue hash: the child cue the track starts when it finishes
+            (FUN_0083c070 → FUN_0082e930)
+kind 9      u32 unknown, u32 parameter hash or 0xFFFFFFFF, u32 parameter hash or 0xFFFFFFFF:
+            evaluates kind 8 curves into the track fields +0x68 / +0x6C / +0x74 (kind 10 likewise)
 ```
+
+How each kind is evaluated is in §11.9.
 
 A reader MUST reject any other kind, or a record whose size its kind does not admit.
 
@@ -692,6 +726,76 @@ an input.
 
 The order of draws follows the order sounds fire: each fired sound draws for its entry (modes 1 and 2)
 and then, as its instance starts, for its group's wave.
+
+### 11.9 Playing a cue
+
+How a started cue turns into sound-instance volumes and pitches, read from the cue update
+`FUN_00835060`, the track update `FUN_0083c070`, sound firing `FUN_0083fee0`, the automation evaluator
+`FUN_0083b4a0` (with `FUN_0083f7e0` for curves and `FUN_0083f860` for oscillators) and instance start
+`FUN_008369e0`. All arithmetic is single precision, in the order given. The reference implementation is
+`automation.rs` and `playback.rs`; `tests/retail_banks.rs` plays every resolvable retail cue through it.
+
+**Instance start.** A fired sound picks its entry, then its group's wave (§11.8), then draws, in this
+order: base pitch (`FUN_0083d700`: a multi-wave group draws `r·(hi − lo) + lo` over `+0x5C`/`+0x60`,
+a single-wave group takes `+0x30`), base volume (`FUN_0083d770`: `+0x50`/`+0x54`, or `+0x2C`), start
+delay (`FUN_0083d7e0`: always draws; a multi-wave group's range is `[max(+0x3C − +0x40, 0),
++0x40 + +0x3C]`, a single-wave group's is 0).
+
+**Per frame** (elapsed `dt`), for a multi-track cue:
+
+1. The cue's volume is `clamp01(cue +0x08 gain × V)` and its pitch `P`, where `V`, `P` are the
+   cue-automation outputs of the **previous** frame (the update reads them before evaluating), 1.0 and
+   0.0 at start.
+2. The cue time advances by `dt`. While the cue's loop count is non-zero and its time reaches the loop
+   end `+0x20`, the time wraps to `+0x1C + overshoot` and the count drops by one unless it is `0xFF`.
+   The cue's event table is evaluated at the cue time.
+3. Each track in order: its time advances by `dt`, wrapping at `+0x08` to `+0x04 + overshoot` by the
+   same loop-count rule; its automation is evaluated at the track time; its volume parameter is
+   `track volume × cue volume` and its pitch parameter `track pitch + cue pitch`; every sound from the
+   next unfired one whose start time is ≤ the track time fires; every live instance of the track then
+   takes the parameters.
+4. A sound instance plays at volume `base volume × volume parameter` and pitch `base pitch + pitch
+   parameter` semitones. While a ramp with a non-zero mode is active, its override value replaces the
+   base volume or pitch; the cue's override wins over the track's.
+
+A single-track cue starts its one instance on its first frame, with volume parameter
+`clamp01(cue gain)` and pitch parameter 0.
+
+**Automation evaluation** (one record list — a track's automation table or the cue's event table —
+against that list's time `t`): start from volume 1.0 and pitch 0.0, then
+
+1. apply every **active** record in activation order. A ramp adds
+   `(to − from) / ((duration + start) − start) × (t − start) + from` to the pitch or multiplies it into
+   the volume, and stays active for ever (it extrapolates past both ends); after a volume ramp the
+   volume is clamped to `[0, 1]`. An LFO yields `sine[trunc((t − start) × (1/period) × (8192/2π) × 2π
+   + 0.5) & 0x1FFF] × depth + 1.0` (1.0 when the low byte of its mode is non-zero), multiplied into the
+   volume or added to the pitch, and leaves the list once `t ≥ duration + start`. A curve applies its
+   value at the parameter's current value;
+2. **activate** records from the first not yet activated to the end of the list, each whose start
+   (its `+0x04` word) is below `t`, applying each at once (a volume curve then clamps the volume); the
+   next activation resumes after the last one activated, so an earlier record still waiting is passed
+   over for good.
+
+A curve yields `y₀` for `x ≤ x₀`, otherwise interpolates on the first segment with `xᵢ < x ≤ xᵢ₊₁`;
+past the last point `FUN_0083f7e0` reads the word after the record's points, outside the curve. Its
+parameter is the cue's own (the `P` hashes at `+0x38`) or, if not one of them, the Pal global
+parameter table, whose missing entries read −1.0 (`DAT_00DFDB5C`).
+
+The sine table `DAT_00CE8F08` holds 8,192 `f32`: entry `i` is `sin(x / 8192)` with `x` the
+single-precision product `f32(2π) × i`, the division and sine in double precision, rounded to `f32` —
+except entry 4096, which holds `0xB3BBBD4D` (the
+single-precision `sin(π)`); its FNV-1a-64 over the little-endian bytes is `0x63421FAD6B050CCA`.
+
+**Pitch to rate.** A voice at pitch `p` semitones plays its wave at `trunc(2^(q / 4096) × rate)` with
+`q = (i16) trunc(p × (1/24) × 8192)` clamped to `±0x2000` (a quarter or four times the rate at the
+clamps).
+
+**What the reference implementation refuses.** It plays kinds 0–3, 5 and 6 as above. A cue that
+carries kind 4, 7, 8 (reached through 9 / 10) or 9, that loops (any loop count non-zero), whose curve
+parameter has no value, or whose parameter lies past a curve's last point is refused when it is
+started. Over the 1,198 `vz.wad` cues with every `vz.wad` bank resident: 707 play; 2 are refused for
+kind 4, 1 for kind 9, 278 for a group loop count, 22 for a track loop count, 2 for a cue loop count;
+the other 186 do not resolve (§11.2).
 
 ## Provenance
 
