@@ -30,7 +30,7 @@ converter for the same asset), [`reverse_engineer/terrain_collision_regeneration
 | UCFX `type_hash` | `0x7C569307` (`pandemic_hash_m2("terrainmesh")`) | PROVEN |
 | ASET `type_id` | 32; exactly 400 rows in PC `vz.wad` | PROVEN (400/400) |
 | Carrying block | a c3 cell block (e.g. `blocks\VZ\c31411_P000_Q3.block`), alongside one terrain texture and several `scrub` (`0x600B904E`) ground-cover packages | PROVEN (example) |
-| Placement | a `TerrainObject` COMP record `{u32 entity_key, u32 terrainmesh_hash}` in `layers_static`, joined by key to the entity's `Transform` | PROVEN (400/400) |
+| Placement | a `TerrainObject` COMP record `{u32 entity_key, u32 terrainmesh_hash}` in `layers_static`, joined by key to the entity's `Transform` in the same sub-block. Every record has one: across all 747 `layers_static` / `vz_state_*` layers, 400/400 `TerrainObject` (and 1,043/1,043 `ScrubObject`) records join, counted against the raw COMP records | PROVEN (400/400) |
 | Grid | 20 × 20 cells of 400 m. Every tile sits at `(-3800 + 400·col, 0, -3800 + 400·row)` with identity rotation; 396 carry the entity name `Terrain_rRR_cCC 0`, 4 carry an empty name and sit on the same grid | PROVEN (400/400) |
 
 Worked example: the PMC HQ (2647, 10, -951) lies in `Terrain_r07_c16`, terrainmesh `0xA241BC0C`, centre
