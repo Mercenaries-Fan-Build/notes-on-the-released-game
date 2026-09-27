@@ -102,7 +102,7 @@ consumed as *floats* and combined into a `1 − b − c` complement — a 3-way 
 | EMIT | 0x54494D45 | FUN_0048cc30 → FUN_00493150 | emitter data @ effect+0x20; ANIM/AKEY key curves |
 | ATRB | 0x42525441 | FUN_00492af0 | param-hash → scalar setters; emitter+0x1EC/+0x1F0 |
 | TEXT | 0x54584554 | FUN_00492af0 → FUN_004911a0 | 16-B descriptor → effect stream table; f16 pack |
-| COLR | 0x524C4F43 | FUN_00492af0 | 200-entry/800-B gradient descriptor; emitter+0x1D8 |
+| COLR | 0x524C4F43 | FUN_00492af0 | copies exactly 800 B = 100 keys × `{u8×4 colour, binary16, u16 0}`; reserves 200 stream-table words (`*desc = 200`); stream index → emitter+0x1D8 ([effect_container_format.md](../effect_container_format.md) §6) |
 
 GEOM/TRFM/AKEY are consumed inside the EMIT path, not as top-level tags.
 
