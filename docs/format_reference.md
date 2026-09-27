@@ -463,6 +463,7 @@ Global: **`texture_index.json`** (repo-relative default under `extracted/`) from
 - [`tools/README.md`](../tools/README.md) — commands, pipeline, artifact index, env vars.
 - [`docs/gameplay_data_ue5_mapping.md`](gameplay_data_ue5_mapping.md) — non-mesh data → UE5 systems inventory.
 - [`docs/skeleton_status.md`](skeleton_status.md), [`docs/watermap_format.md`](watermap_format.md), [`docs/fxdict_format.md`](fxdict_format.md), [`docs/audio_ue5_path.md`](audio_ue5_path.md), [`docs/glue_gap_closeout.md`](glue_gap_closeout.md) — recent decode tracks + integration gaps.
+- [`docs/shader_store_format.md`](shader_store_format.md) — PC shader stores: layout, record ids, loader limits, material → pixel-shader binding.
 - [`tools/wad_simulator/README.md`](../tools/wad_simulator/README.md) — Rust consumption / byte-swap validation.
 - [`docs/game_extractor_notes.md`](game_extractor_notes.md), [`docs/quickbms_notes.md`](quickbms_notes.md) — external tooling workflows.
 - [`docs/modding_deep_dive.md`](modding_deep_dive.md) — DRM analysis, hash system identification, Lua bytecode format, `vz.bin` decode, and modding feasibility roadmap.

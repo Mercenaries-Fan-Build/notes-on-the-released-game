@@ -143,8 +143,10 @@ RT handles land at renderer `this[0xfa4..0xfae]`. Tail loop calls device `vtbl+0
 **`FUN_0084f130`** (12,959 B, sole caller ctor `FUN_007492d0` @0x0074957a) = the global shader
 registry: one long run of register calls into pool `DAT_01977a38`.
 
-1. **Base blobs first:** 2–5 `FUN_0085b3f0(&DAT_01977a38)` (the 3rd/4th/5th gated on `DAT_01176288+0x5e4`
-   bit2/bit3).
+1. **Base stores first:** five `FUN_0085b3f0(&DAT_01977a38)` call sites, two or four loads (x86 decode of
+   the `mov eax, <path>` operands). `shader3.bin` and `shader3Low.bin` always load. Then
+   `shaderVT.bin` + `shaderVTLow.bin` load if `DAT_01176288+0x5e4` bit2 is set; otherwise
+   `shaderR2VB.bin` + `shaderR2VBLow.bin` load if bit3 is set.
 2. **~700 name registrations** via **`FUN_0085ac90(logical_name, name.sho, variant)`**. Families in
    order: PgBlurH/V FP, PgAntiAliasingFP, `PgMesh*VP` (NoTangent/NoColor/Morph/Refract/AmbientWind/Fast),
    `PgSkin1*VP`, `PgSkin*VP`, PgDiffRefract FP, all shadow caster VPs, then (further in) the lit material
@@ -157,12 +159,17 @@ registry key), **`record[0x23] = arg4`** (the variant/class index), inline-`strc
 [lighting_code_map.md](lighting_code_map.md) §4. Draw-time bind resolves name→u16 (`FUN_0085abd0`, u16
 at `rec+2`), never offset dispatch — why grep finds no render-side references to the VP name strings.
 
-**`.sho` blob loader `FUN_0085b3f0`** (called 5× for the base sets): builds the path into `+0x6c10`,
-opens (`FUN_00827660`/`GetFileSizeEx`), streams 0x8000-byte chunks, and per shader sub-blob dispatches
-on a type word — `psVar8[1]==1` ⇒ **`device->CreateVertexShader`** (`[[PTR_PTR_00dfc2fc+0x2d28]]+0x16c`,
+**`.sho` blob loader `FUN_0085b3f0`** (five call sites, two or four loads): builds the path into
+`+0x6c10`, opens (`FUN_00827660`/`GetFileSizeEx`) and reads the whole store. It copies each record's
+blob into one 0x8000-byte scratch buffer, with no size check, so 0x8000 is a hard cap per blob. Then it
+dispatches on the record's kind word — `psVar8[1]==1` ⇒ **`device->CreateVertexShader`** (`[[PTR_PTR_00dfc2fc+0x2d28]]+0x16c`,
 idx 91); `psVar8[1]==0` ⇒ **`device->CreatePixelShader`** (`+0x1a8`, idx 106). Error path logs
 `Error Loading Shader: %08X` + `%s(%i): %s->%s` with `Odi...` @0xbe897c (lines 0x225/0x235). **Both the
-device slot (+0x2d28) and the two D3D create indices are proven.**
+device slot (+0x2d28) and the two D3D create indices are proven.** Each created handle is filed
+under the record id in a 0x1200-slot table (`FUN_0085b810`). The id is
+`pandemic_hash_m2(stem + "_3.sho" | "_3l.sho")` of the registered `.sho` name, looked up by
+`FUN_0085b6f0`. The records of all loaded stores must stay below 0x1200, and on a duplicate id the
+first loaded record wins. Full spec: [shader_store_format.md](../shader_store_format.md).
 
 **Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, decal `FUN_02475bc0`
 (SecuROM island), shader-table helper `FUN_00852730` (builds the `OcclusionMaterial` default template),

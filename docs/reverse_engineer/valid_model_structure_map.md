@@ -163,7 +163,7 @@ authority is a real container's bytes at the same tree position.
 | MESH/PRMG/PRMT | 2 / 2 / 2 | 1 / 1 / 1 | LOD/group expectations |
 | destruction chunks | SEGM/SWIT/STAT/CHDR | none | crashes destructible template reader |
 | decl / stride | game-exporter decl | hand-written DECL20/DECL40 | **shader rejects unknown decl** |
-| shader | vehicle/scene shaders | static `0x0A164785` everywhere | wrong shader for the render path |
+| shader | vehicle/scene shaders | pixel-shader key `0xCAEFE1FE` (`PgDiffSpecNormFP`) on every material; `0x0A164785` is only the first preamble word, which selects no shader ([shader_store_format.md](../shader_store_format.md) §6) | wrong shader for the render path |
 | provenance | game exporter | invented | "every deviation is a bug" |
 
 The from-scratch material is *structurally* plausible (flags 0x80, count 3, stride
