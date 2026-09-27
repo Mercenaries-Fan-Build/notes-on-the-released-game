@@ -210,6 +210,9 @@ stream-block pump is merged into UpdateLoads (`FUN_00601dd0`, owns stream-state 
 | `FUN_0070a230` | PgMoviePlayer frame pump: `BinkWait → BinkDoFrame → BinkCopyToBuffer → BinkNextFrame`; `BinkSetSoundTrack(4,…)` = 4 audio tracks |
 | `FUN_00621ab0`/`00621bc0` | movie pause/unpause (`BinkPause`) from UI screen driver |
 
+**On-disk tables:** the byte layouts of `sounddb`, `soundbank` and `wavebank`, and how a cue name
+resolves through them to a wave, are specified in §11.
+
 **sounddb chain:** Lua `Sound.AddPgAsset("Mercs2Globals","sounddb")` → `FUN_006025d0` (0xE5273C14) →
 cmd ring → `FUN_00607c50` → parser `FUN_00835b80` (into PalGlobalTable `DAT_011763fc`) → runtime
 lookup `FUN_00835a70` FindCue ← wrapper `FUN_005faca0` ← VO path `FUN_00515c10` (cue name literally
@@ -315,6 +318,253 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    danger, camera-distance).
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
+6. **Bank-table unknowns (§11).** The multi-track cue body (693 of 1,198 `vz.wad` cues) is not
+   decoded; how the engine picks among a multi-wave group's weighted waves is not established; the
+   group fields marked *unknown* in §11.4 and the streamed wave record's `+0x1C` have no established
+   meaning. The §3.5 row for `FUN_00835b80` ("u16 counts @+0xA/+0xC, 8-byte GUID entries @+0x14")
+   does not describe the on-disk sounddb of §11.3 (counts at `+0x08`/`+0x0A`, 12-byte cue entries at
+   `+0x1C`, 8-byte category entries after them); whether it describes the loaded structure instead
+   has not been checked against the body.
+
+## 11. Sound bank tables — format specification
+
+This section specifies the three on-disk tables a sound bank is made of — `wavebank`, `soundbank`
+and `sounddb` — well enough to read any retail bank and to write new ones. It is written as an open
+specification: every rule below was measured on the retail PC data and is enforced by a reference
+implementation (`mercs2_audio` in the `wad_simulator` workspace: `wave.rs`, `soundbank.rs`,
+`sounddb.rs`, `encode.rs`) whose test re-encodes **every** audio table in retail `vz.wad` (95
+wavebanks, 76 soundbanks, 77 sounddbs) byte-identically from its parsed fields
+(`crates/mercs2_audio/tests/retail_banks.rs`). The same layout holds, measured with a separate
+checker, for every audio table in `English.wad` and `shell.wad`.
+
+The key words **MUST** and **MUST NOT** are normative: a table that breaks one was not produced by the
+retail toolchain, and the reference reader rejects it. Field names marked *unknown* are fields whose
+meaning is not established; a writer carries them as given (e.g. copied from a retail bank), it does
+not invent them. Names marked *(inferred)* are read off the values the field holds, not off engine
+code.
+
+### 11.1 Conventions and packaging
+
+- All integers are little-endian; `f32` is IEEE-754 single precision, little-endian. `u8x4` is four
+  single bytes.
+- `m2(s)` is `pandemic_hash_m2`: FNV-1a over the bytes of `s` with each byte OR'd with `0x20`, then
+  one more round on `0x2A`.
+- Every table begins with the `u32` **table version `0x1D`** followed by the `u32` **bank hash**.
+- A table is the body of the single `data` descriptor of a UCFX container. The container MUST be
+  exactly `UCFX | data_area_off = 40 | 0 | 0 | 1 descriptor {"data", 0, len, 0, 0} | body | "CSUM" |
+  crc` (the shape `mercs2_formats::ucfx::build_wrapped_block` produces); every retail audio container
+  is this shape byte for byte.
+- A bank named `N` ships its three tables as three entries of **one block**, each with name hash
+  `m2(N)` and type hash `0x9F8BCA10` (soundbank, ASET type 21), `0xE5273C14` (sounddb, ASET type 13)
+  and `0xF753F6D0` (wavebank, ASET type 6); the block-entry `+0x08` word is 0. In `vz.wad` every
+  soundbank has its sounddb beside it; one soundbank (`0xDCCF8AFA`, in `sound_resident`) plays waves
+  from other blocks' wavebanks and has no wavebank of its own; 19 blocks hold a lone wavebank and one
+  (`mercs2globals`) the lone global sounddb. The bank hash inside each table is `m2(N)`. In
+  `English.wad` the block-entry name hash differs from the table's bank hash — e.g. the `vo_mattias`
+  entries are named `m2("vo_mattias.english")` while their tables carry `m2("vo_mattias")`.
+
+### 11.2 Resolving a cue
+
+`Sound.CueSound(name)` resolves in four hops:
+
+1. **sounddb** — find the entry whose guid is `m2(name)`; it names a soundbank hash and a **cue index
+   in that soundbank**.
+2. **soundbank cue** — the cue at that index; its guid MUST equal the entry's. A single-track cue
+   names a soundbank (its own, in every retail bank) and a **group index**.
+3. **group** — the group at that index lists one or more waves `{wavebank hash, wave index, weight}`.
+4. **wavebank** — the record at the wave index holds the samples.
+
+Over the 1,198 per-bank sounddb entries of `vz.wad`, with every bank of the file resident: 282 cues
+reach exactly one embedded wave; 102 reach a multi-wave group whose waves are all embedded; 693 are
+multi-track cues (§11.4, body not decoded); 119 reach waves streamed from `music.pws` /
+`ambience.pws`; 2 name a wavebank (`0x0843A8DC`) that is not in `vz.wad`. No entry fails on a bad index
+or a guid mismatch.
+
+### 11.3 sounddb
+
+```
+offset  type  field
+0x00    u32   version = 0x1D
+0x04    u32   bank hash
+0x08    u16   C = cue entry count
+0x0A    u16   K = category entry count
+0x0C    u32   P = parameter count
+0x10    u32   cue table offset       = 0x1C
+0x14    u32   category table offset  = 0x1C + 12·C
+0x18    u32   parameter table offset = 0x1C + 12·C + 8·K
+0x1C          cue table:       C × { u32 cue guid, u32 soundbank hash, u32 soundbank cue index }
+              category table:  K × { u32 category hash, u32 parent category hash (0 = root) }
+              parameter table: P × u32 parameter-name hash
+```
+
+- The body length MUST be `0x1C + 12·C + 8·K + 4·P`; the three offsets MUST be the values above.
+- Cue entries MUST be strictly ascending by guid (the engine binary-searches them, `FUN_0083c570`).
+  Category entries are strictly ascending by hash in the one table that has them.
+- The third cue-entry field is an index into the **soundbank's cue table**, not into a wavebank.
+- A **per-bank** sounddb (76 in `vz.wad`) has `K = P = 0` and exactly one entry per cue of the
+  same-named soundbank: `C` equals the soundbank's cue count, each cue index appears once, and each
+  entry's guid equals the guid of the soundbank cue it indexes.
+- The **global** sounddb (`m2("mercs2globals")` = `0x37750257`, 188 bytes) has `C = 0`, the 19-entry
+  category tree (`K = 19`) and `P = 2` (`0xD11ADEF6`, `0xD913464B`, the two uncracked global
+  parameters of §7). The tree, as `category → parent`, with names where the hash is cracked:
+  `0x6413FB86` (root, uncracked) ← `sfx`, `music`, `vo`; `sfx` ← `ui`, `non_ui`; `non_ui` ←
+  `Non_Action_Hijack`, `0xD40AD42A`; `Non_Action_Hijack` ← `explosion`, `vehicle`, `collision`,
+  `foley`, `ambience`, `weapon`, `0x888456AD`, `0xA2007430`; `music` ← `source`, `0x9FE0DCAD`;
+  `vo` ← `chatter`.
+
+### 11.4 soundbank
+
+```
+offset  type  field
+0x00    u32   version = 0x1D
+0x04    u32   bank hash
+0x08    u16   G = group count
+0x0A    u16   Q = cue count
+0x0C    u32   bank hash (repeated)
+0x10    u32   group section start = 0x20
+0x14    u32   group-offset table position
+0x18    u32   cue section start
+0x1C    u32   cue-offset table position
+0x20          group section: the G groups, back to back
+              group-offset table: G × u32, each group's offset relative to 0x20
+              cue section: the Q cues, back to back
+              cue-offset table: Q × u32, each cue's offset relative to the cue section start
+```
+
+- The sections MUST be contiguous with no padding: the group-offset table starts where the last group
+  ends, the cue section where that table ends, the cue-offset table where the last cue ends, and the
+  body ends at the end of the cue-offset table. Group offsets start at 0 and each is the previous one
+  plus the previous group's size; likewise for cues. A cue's size is the distance to the next cue
+  (the last cue's, to the cue-offset table).
+- `G ≥ 1` and `Q ≥ 1` in every retail bank; the layout of an empty bank is not measured.
+
+**Group** — every group starts with this head:
+
+```
+0x00  u32  sound id (unknown; equals the guid of the cue that plays it in some banks, not others)
+0x04  u32  category hash = m2(category name), one of the global category tree's (§11.3)
+0x08  u32  0
+0x0C  u32  form: 0 = single-wave, 1 = multi-wave
+0x10  f32  unknown
+0x14  u32  unknown, 0 or 1
+0x18  f32  minimum distance (inferred)
+0x1C  f32  maximum distance (inferred)
+0x20  f32  unknown (1.0 in all but one retail group)
+0x24  f32  pitch (inferred)
+0x28  f32  unknown
+```
+
+Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
+
+```
+0x2C  f32  linear gain (inferred)
+0x30  f32  unknown
+0x34  wave { u32 wavebank hash, u32 wave index, f32 weight = 1.0 }
+```
+
+Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
+
+```
+0x2C  u8x4 [unknown, W = wave count, unknown, unknown]
+0x30  f32  unknown          0x34  f32  unknown
+0x38  u32  0x2C
+0x3C  f32  unknown          0x40  f32  unknown
+0x44  u32  0
+0x48  u32  unknown flag bytes
+0x4C  6 × f32 unknown
+0x64  f32  unknown
+0x68  W × wave { u32 wavebank hash, u32 wave index, f32 weight }
+```
+
+A group's waves may live in another bank's wavebank.
+
+**Cue** — every cue starts with this head:
+
+```
+0x00  u32   cue guid = m2(cue name)
+0x04  u8x4  [0, form, unknown, 0]; form 0 = single-track, 1 = multi-track
+0x08  f32   gain
+0x0C  f32   length in seconds
+```
+
+Single-track form (form 0, exactly 24 bytes; 505 in `vz.wad`):
+
+```
+0x10  u32  soundbank hash (the cue's own bank in every retail cue)
+0x14  u16  group index
+0x16  u16  unknown (0 in most cues; in others it holds values shaped like the high half of an f32)
+```
+
+Multi-track form (form 1; 693 in `vz.wad`): a variable-length track structure whose layout is not
+decoded (§10 item 6). Its size is a multiple of 4. A reader that does not decode it MUST carry it
+verbatim to re-encode the bank.
+
+For a single-track cue whose single-wave group names an embedded wave, the length MUST be
+`(f32)(frames / sample_rate)` computed in double precision — bit-exact on all 133 such cues in
+`vz.wad`. (The streamed `music` cues do not follow this rule.)
+
+### 11.5 wavebank
+
+```
+offset  type  field
+0x00    u32   version = 0x1D (not a record count)
+0x04    u32   bank hash
+0x08    u16   R = record count (≥ 1 in every retail bank)
+0x0A    u16   bank kind: 0 = embedded, 1 = streamed
+0x0C    u32   bank hash (repeated)
+0x10    u32   record table offset: 24 (embedded) or 40 (streamed)
+0x14    u32   0
+0x18    16 B  streamed banks only: the .pws file name, ASCII, NUL-padded (≥ 1 NUL)
+              record table: R × 36-byte records
+              embedded banks only: the blob area
+```
+
+Record (36 bytes):
+
+```
+0x00  u32   clip hash
+0x04  u8x4  [0, channels (1 or 2), format, 0]; format = 2 (bytes per sample, PCM16) when
+            embedded, 4 when streamed
+0x08  u32   sample rate
+0x0C  u32   data size in bytes
+0x10  u32   frame count (samples per channel)
+0x14  8 B   0
+0x1C  u32   0 when embedded; unknown when streamed (non-zero in some records)
+0x20  u32   data offset: when embedded, RELATIVE TO THIS RECORD'S OWN START; when streamed, the
+            byte offset in the .pws file
+```
+
+Embedded banks (93 in `vz.wad`, 2,043 clips):
+
+- The payload is interleaved little-endian PCM16: `size = frames × channels × 2` MUST hold.
+- Blobs MUST follow the record table in record order. Each blob starts at the first 16-byte boundary
+  (of the body) at or after the end of the previous blob — for the first, at or after the end of the
+  record table. The body MUST end at the first 16-byte boundary at or after the end of the last
+  blob. All bytes between and after blobs MUST be zero. This is why 54 of the 93 embedded banks end
+  2–14 bytes past their last blob.
+- Reading the offset relative to the body start instead lands every offset inside the record table;
+  relative to the record, all 2,043 blobs land exactly where the alignment rule puts them.
+
+Streamed banks (2 in `vz.wad`: `music` → `music.pws`, `ambience` → `ambience.pws`; `English.wad`'s
+`vo_stream` → `vo_stream.pws`) carry no blob area: the body ends at the end of the record table, and
+each record's `(offset, size)` addresses the `.pws` file.
+
+### 11.6 Writing a bank
+
+A writer producing a new bank of single-track, single-wave cues (the reference encoder's shape; the
+shape of retail `ui_PDA_Open_01_st`, cue 57 → group 70 of `ui_hud`):
+
+1. For cue `i` with name `n`, PCM16 audio `(channels, rate, samples)` and category `c`: write wave
+   record `i` (embedded, format 2, `frames = samples / channels`), group `i` (single-wave, category
+   `m2(c)`, its wave `{m2(N), i, weight}`), and cue `i` (single-track, guid `m2(n)`,
+   `{m2(N), group i}`, length per §11.4).
+2. Write one sounddb entry `{m2(n), m2(N), i}` per cue, sorted ascending by guid; reject two cue
+   names that hash alike.
+3. Lay out each table exactly as §11.3–§11.5 require, and wrap each per §11.1.
+4. Fields marked *unknown* or *(inferred)* are inputs. `ui_PDA_Open_01_st`'s values, for a UI sound
+   configured like the game's own: group `+0x10` 0.95 (`0x3F733333`), `+0x14` 0, distances 10 / 1000,
+   `+0x20` 1.0, pitch 1.0, `+0x28` 1.0, gain `0x3F21866C` (≈ 0.631), `+0x30` 0.0, weight 1.0; cue
+   `+0x06` 0, gain `0x3F004DCE` (≈ 0.501), `+0x16` 0; sound id and clip hash both `m2(cue name)`.
 
 ## Provenance
 
