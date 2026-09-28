@@ -738,13 +738,16 @@ name — `bank`, or `<bank>.<language>` for a `vo_*` bank — so the game's own 
 them. A cue of the game's bank that `cues` does not declare is gone from the bank; nothing checks
 for it.
 
-The waves go in a wavebank of their own, `qm_<shipment>_<entry>` (for example
-`qm_my-mod_vo_mattias.german`), which the loader of each session that loads the bank loads
+For a bank retail Lua loads, the waves go in a wavebank of their own, `qm_<shipment>_<entry>` (for
+example `qm_my-mod_vo_mattias.german`), which the loader of each session that loads the bank loads
 (`LoadWaveBank` only; [below](#where-a-sound-override-ships)). A retail wavebank can be shared between banks
 ([`audio_code_map.md` §11.4](../reverse_engineer/audio_code_map.md#114-soundbank)), and the `vo_*`
 banks have none of their own (their waves stream from `vo_stream`, `mrxsoundbootstrap.lua:218-245`),
 so the replacement's waves are not written into a game wavebank. The override wavebank's name does
 not start with `vo_`, so Lua loads it under exactly that name.
+
+For a bank the engine loads ([below](#banks-the-engine-loads)), the waves go in the bank's own
+wavebank, after its retail waves, which stay at their indices because other banks may play them.
 
 Where the tables ship is [below](#where-a-sound-override-ships). Two Shipments replacing one bank
 conflict (M0207).
@@ -766,9 +769,10 @@ Replaces one cue of a bank the game ships, leaving every other cue of the bank a
 The build forks the game's soundbank — or the replacement, when a `replace_sound_bank` of the same
 entry is in the installed set — appends one single-wave group, and rewrites the cue as a
 single-track cue playing it. The cue keeps its index, so the bank's own sounddb still routes to it
-and is not shipped; every other cue and group is byte-identical. The wave goes in the override
-wavebank `qm_<shipment>_<entry>`, as for `replace_sound_bank`. The cue must be in the bank
-(**M0218**).
+and is not shipped; every other cue and group is byte-identical. The wave goes where a
+`replace_sound_bank`'s waves go: the override wavebank `qm_<shipment>_<entry>` for a bank retail Lua
+loads, the bank's own wavebank after its retail waves for a bank the engine loads (which then ships
+the game's sounddb beside it). The cue must be in the bank (**M0218**).
 
 Two Shipments replacing different cues of one bank compose: `qm link` merges every
 `replace_sound_cue` of the set into one soundbank per bank ([Sound banks are
@@ -777,15 +781,15 @@ merged](#sound-banks-are-merged)). One cue replaced by two Shipments conflicts (
 ### Where a sound override ships
 
 An override's tables and its wavebank ship to every level that both carries the bank and loads it —
-each level WAD runs its own Lua, and `shell.wad` and `vz.wad` are never mounted together — and that
-level's loader loads the wavebank:
+each level WAD runs its own Lua, and `shell.wad` and `vz.wad` are never mounted together. For a
+bank retail Lua loads, that level's loader loads the wavebank; the engine loads the others itself:
 
 | bank | read from | loaded in | the tables and the wavebank ship to |
 |---|---|---|---|
 | `vo_*` | the declared `language`'s WAD (`English.wad`, …) | gameplay | the tables to that language's patch (`language_patch/<language>.wad`, merged into `data/<language>-patch.wad`); the wavebank to the Shipment overlay |
 | `ui_hud`, `music` | `vz.wad` and `shell.wad` | gameplay and the front end | both to the Shipment overlay and to the shell patch (`<shipment>.shell-patch.wad`, merged into `data/shell-patch.wad`) |
 | `ui_shell` | `shell.wad` | the front end | both to the shell patch |
-| any other bank `vz.wad` carries | `vz.wad` | gameplay | both to the Shipment overlay |
+| any other bank `vz.wad` carries (the engine loads it) | `vz.wad` | gameplay | one block of the Shipment overlay, under the retail name ([below](#banks-the-engine-loads)) |
 
 Where retail loads each bank
 ([`audio_code_map.md` §11.10](../reverse_engineer/audio_code_map.md#1110-where-banks-are-loaded)):
@@ -796,7 +800,8 @@ Where retail loads each bank
 - **Gameplay** loads 11 banks by name in `MrxSoundBootstrap.LoadBanks`
   (`resident/mrxsoundbootstrap.lua:195-245`, `ui_hud` and `music` among them) and the `vo_*` banks
   per language. `vz.wad` carries 76 soundbanks: those 11, `ui_shell`, and 64 that no Lua in the
-  corpus loads by a literal name; an override of one of the 64 loads in gameplay.
+  corpus loads by a literal name, which the engine loads in gameplay
+  ([`audio_code_map.md` §11.11](../reverse_engineer/audio_code_map.md#1111-the-banks-the-engine-loads-soundeffect)).
 - `vz.wad` also carries the front end's scripts and `ui_shell`, but its copy of
   `EnterShellState` runs only from `GameBootstrap.Start`, which returns at once once the main menu
   has handed over to the game (`Sys.FinishedShell()`, `gamebootstrap.lua:43-46`). So `ui_shell`
@@ -806,6 +811,33 @@ Where retail loads each bank
 A bank in no carrier, or one no carrier loads (a `vz.wad`-only `ui_shell`), is **M0218**.
 
 A shell patch is stamped with `shell.wad`'s CSUM row, the WAD it mounts above.
+
+### Banks the engine loads
+
+A bank is Lua-loaded when a retail load site names it (the front end's `EnterShellState`, gameplay's
+`LoadBanks`) or its name starts with `vo_`; the sites are the corpus's literal `LoadSoundBank` calls
+(`the_sound_load_sites_are_the_corpus_calls`). Every other bank `vz.wad` carries — the 38 `veh_*` and 26 `wpn_*` banks — is
+loaded by the engine by its retail name: the `SoundEffect` component of a vehicle or weapon template
+names the bank, and the engine requests its soundbank and wavebank
+([`audio_code_map.md` §11.11](../reverse_engineer/audio_code_map.md#1111-the-banks-the-engine-loads-soundeffect)).
+`wpn_grapplegun` is named by no template and ships the same way.
+
+An override of such a bank ships its three tables in one block of the Shipment overlay, the shape
+of the retail block,
+`blocks\VZ\mod_<entry hash>.block`, each under `m2(<bank>)`:
+
+- the soundbank — the game's with the cue overrides applied, or the replacement's;
+- the sounddb — the game's for `replace_sound_cue`, the replacement's for `replace_sound_bank`;
+- the wavebank — the game's, every retail wave byte-identical at its own index, then the override
+  waves. Every cue of any bank that plays a retail wave still finds it: `veh_largedieselold` and
+  `veh_largedieselnew` play waves of `veh_largegasold`'s wavebank.
+
+The engine's request loads the soundbank and the wavebank; it does not request the sounddb. No
+loader loads anything for the bank, and it claims no loader script. The build checks that every such
+bank's block carries all three rows under the retail name; a missing row is a build error naming the
+bank. What the override changes is what the engine loads for the local player's own weapon or
+vehicle (INFERRED from the callers, which run on the local player's equipment and seat changes); AI
+units are INFERRED to be unaffected.
 
 ### The front-end loader
 
@@ -968,7 +1000,8 @@ has the guid (`FUN_00835a70`): of two banks adding one cue name, one is never he
 has one winner in the table the game loads.
 
 Each sound kind also claims the scripts its loaders live in, additive, for each session it loads in
-(an `add_sound`'s `load_in`; for an override, the sessions retail loads its bank in): gameplay claims
+(an `add_sound`'s `load_in`; for an override of a bank retail Lua loads, the sessions retail loads
+its bank in; an override of a bank the engine loads claims none): gameplay claims
 `wifpmcinterior` and `mrxsoundbootstrap` in `vz.wad`; the front end claims `qm_shell_modloader` and
 `mrxsound` in `shell.wad`. A script claim names its level, so the front end's `mrxsound` is not
 `vz.wad`'s. Any number of sound Shipments share the loaders; a `replace_lua` of a host a sound
@@ -986,7 +1019,10 @@ so a deploy step drops the per-Shipment copies. The link writes them to
 `zz-quartermaster-link.wad` (overlay), `zz-quartermaster-link.shell-patch.wad` (shell patch) and
 `language_patch/<language>.wad` (language patch), each recorded in `placement.json`.
 
-The override wavebanks are not merged: each is named for its Shipment, so they never collide.
+The override wavebanks are not merged: each is named for its Shipment, so they never collide. A
+bank the engine loads has no override wavebank: its merged block carries the game's sounddb (or the
+set's replacement's) and one wavebank, the retail waves at their indices followed by each
+Shipment's override waves in load order, each cue playing its own Shipment's wave.
 
 The link also bakes one loader per session over the set: `qm_modloader` in `scripts_vz`, and
 `qm_shell_modloader` in `shell.wad`'s scripts block, which it writes to
@@ -1221,10 +1257,13 @@ Fix: remove `language` from a non-`vo_*` override; name the language on a `vo_*`
 
 ### M0218
 
-**A sound override's bank or cue is not in the game, or the game never loads the bank.** Fires when
-no carrier holds a soundbank under the override's entry name — the carriers being the game stack
-(`vz.wad` and the declared languages' WADs) and `shell.wad` beside it — when no carrier that holds
-it loads it ([Where a sound override ships](#where-a-sound-override-ships)), or when a
+**A sound override's bank or cue is not in the game, or no level that carries the bank loads it.**
+Fires when no carrier holds a soundbank under the override's entry name — the carriers being the
+game stack (`vz.wad` and the declared languages' WADs) and `shell.wad` beside it — when no carrier
+that holds it loads it ([Where a sound override ships](#where-a-sound-override-ships)): `shell.wad`
+loads only the banks its front end's Lua loads, and `vz.wad` loads every bank it carries but
+`ui_shell`, which retail Lua loads only in the front end (the engine loads the banks no Lua names,
+[Banks the engine loads](#banks-the-engine-loads)); or when a
 `replace_sound_cue`'s cue is not in that bank (a cue the same Shipment's `replace_sound_bank`
 declares for the bank counts as in it).
 
