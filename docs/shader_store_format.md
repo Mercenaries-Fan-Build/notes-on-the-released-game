@@ -203,3 +203,109 @@ A conforming writer:
 text into blobs, including a CTAB laid out as in §3. It also disassembles every retail record to text
 that reassembles byte-identically. `shaderforge asm` and `shaderforge store-id` are the CLI entry
 points.
+
+## 9. Registration
+
+The store records become shaders the engine draws with only through the **registry**: a name the
+engine keys the shader by, bound to a `.sho` stem. `FUN_0084f130` (called once, from the renderer
+constructor `FUN_007492d0` at `0x0074957a`) loads the stores and then makes every registration.
+
+### The call
+
+Each registration is (**PROVEN**, x86 decode of `FUN_0084f130` and `FUN_0085ac90`):
+
+```text
+push class; push sho; push name; mov ecx, <record>; call FUN_0085ac90
+FUN_0085ac90(this = record, name, sho, class)       // __thiscall, ret 0xc
+    record+0x04 = pandemic_hash_m2(name)             // the registry key
+    record+0x8c = class                              // the light class
+    strcpy(record+0x0b, sho)
+    record->vtbl[+8](record+0x0b, 0)                 // load: resolve the store record, assign the index
+```
+
+`record` is a **static object**, one per registration, built by a CRT static initializer: the base
+constructor (`FUN_0085ace0` for a pixel shader, `this` in `ECX`; `FUN_0085ade0` for a vertex shader,
+`this` in `EAX`) sets the index word `+8` to `0xffff` and zeroes the record, and the initializer then
+stores the family vtable. Emulating every initializer that builds a record the registry names
+reproduces the vtables the runtime image holds for all 374 of them (**PROVEN**).
+
+Several registrations sit in SecuROM islands that the decompiler renders as empty (`FUN_02475bc0`,
+`FUN_005726e0`, `FUN_006188b0`, `FUN_02485980`, reached from `FUN_0084f130` through `jmp [stub]`
+thunks); they call `FUN_0085ac90` through `push <continuation>; push FUN_0085ac90; ret`. The committed
+table `crates/mercs2_quartermaster/data/registered_shaders.tsv` is written by executing the registry
+under each configuration (`tools/extract_shader_registry.py`): 411 registrations, of which each
+configuration makes 227 (ShaderLevel off) or 371 (ShaderLevel on). The ShaderLevel-on count, 242
+pixel and 129 vertex names, is the live count of the registry in a runtime image of the game.
+
+### Families
+
+The record's vtable is its **family**. There are 45: 19 load as vertex shaders (vtable `+8` =
+`FUN_0085af00`) and 26 as pixel shaders (`+8` = `FUN_0085b1a0`). Each vtable has six slots: the
+destructor, `FUN_0085ac90`, the load, the reload (clear the handle, load again: the device-reset
+path), the constant binder, and the set call (`SetVertexShader` / `SetPixelShader`). The families,
+their record sizes and their binders' constants are `crates/mercs2_quartermaster/data/shader_families.tsv`.
+
+| record field | pixel | vertex |
+|---|---|---|
+| `+0x04` key, `+0x08` u16 index, `+0x0b` sho, `+0x8c` class | both | both |
+| `CTAB` interface | `+0xf4` | `+0x10c` |
+| D3D shader handle | `+0xf8` | `+0x110` |
+| base size | 0xfc | 0x114 |
+
+### The registries
+
+Both registries live in the pool `DAT_01977a38` (**PROVEN**, `FUN_0085ab00` / `FUN_0085ab70` /
+`FUN_0085abd0`):
+
+| | pixel | vertex |
+|---|---|---|
+| count | `0x01977a38` | `0x0197da40` |
+| key table (probe) | `0x01979a40`, 0x800 slots | `0x0197de48`, 0x100 slots |
+| index → record | `0x0197ba40`, 0x800 entries | `0x0197e248`, 0x100 entries |
+| assign | `FUN_0085ab70` | `FUN_0085abd0` |
+| insert | `FUN_0085b7c0` (`& 0x7ff`) | `FUN_00632250` (`& 0xff`) |
+
+The load handler assigns the index when the record's index is `0xffff`: a key already present
+returns its index, otherwise the index is the count, the record goes into the index table, and the
+insert increments the count. So registrations of new keys made back to back get **consecutive**
+indices. Neither insert gives up on a full table: the registries hold 0x800 pixel and 0x100 vertex
+names, and one more hangs.
+
+### Light classes
+
+The draw (`FUN_00855420`) selects a material's pixel shader as
+`index_table[material+0x182 + light]`, where `light` is the draw's light class (`item_light+0x2a0`)
+and is forced to 0 when the ShaderLevel byte `DAT_00dfc345` is 0. So a lit pixel shader is four
+registrations in a row — base, `_pl` (1), `_sl` (2), `_pl_sl` (3) — and the registry makes classes
+1–3 only when `DAT_00dfc345 != 0`.
+
+A registration of a `_li` `.sho` follows some `_pl`/`_sl`/`_pl_sl` registrations:
+`if (record+0xf8 == 0) FUN_0085ac90(record_li, name, name_li.sho, class)`. It runs only when the
+plain record has no D3D handle — its stem has no store record — and it has the same name, so it gets
+the plain registration's index. In retail every plain `_pl`/`_sl`/`_pl_sl` stem has a record, so no
+`_li` registration is made.
+
+`DAT_00dfc345` is written by the settings load (`FUN_00753280`, `[Render] ShaderLevel`, default 1)
+and by the settings apply `FUN_0074c7ac`, which copies the whole settings block `0x00dfc320` and
+forces it to 0 when caps word `+0x5e4` bit `0x40` is clear. A change after registration is not
+followed by a new registration; a device reset reloads each record's handle with the current store
+suffix (**PROVEN** statically; the effect in game is not observed).
+
+### Adding registrations
+
+The m2-sdk's `shader-registry` capability calls `FUN_0085ac90` for an author's shaders right after
+`FUN_0084f130`'s own registrations, on process-lifetime records it builds the same way as the static
+ones, which is what `add_shader` targets (see
+[`modding/manifest_format.md`](modding/manifest_format.md#add_shader)).
+
+## 10. Constant binding
+
+The load handler reads the shader's constant table (`GetFunction`, then
+`D3DXGetShaderConstantTable`) and calls the family's binder (vtable `+0x10`). The binder resolves a
+fixed list of names, each through `FUN_0085ac40` (`EAX` = name, `ESI` = the constant table, `EDI` =
+the output): `GetConstantByName`, then `GetConstantDesc`, storing the handle and the register index
+in the record (**PROVEN**). The draw sets constants through those fields, so a `CTAB` constant that
+is not in its family's list is never set. The base vertex binder is `FUN_0085aff0` (15 names:
+`objectData`, `LocalToWorld`, `viewContextData.ViewProj`, …); the base pixel binder is
+`FUN_0085b290` (12 names: `materialData`, `globalLightData`, `pointLights`, …). Every family's list
+is in `shader_families.tsv`. Samplers are bound by texture stage, not by this list.
