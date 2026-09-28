@@ -684,7 +684,7 @@ through one single-track cue — the shape of retail `ui_PDA_Open_01_st` (cue 57
 | `distance_exponent` | f32 | group `+0x24` | exponent of the fall-off between the two distances | `FUN_0083d3a0` (PROVEN) |
 | `doppler_scale` | f32 | group `+0x28` | how much of the Doppler shift applies | `FUN_0083b120` (PROVEN) |
 | `start_limit` | u8 | cue `+0x06` | the cue starts only while fewer than this many instances of it are playing; 0 starts it every time | `FUN_00834ad0` (decomp 627053–627066) compares it with a counter in the cue's runtime record that `FUN_008354e0` raises when an instance plays and `FUN_00835850` lowers when one finishes (PROVEN) |
-| `sound_id` | u32 | group `+0x00` | one reader: for the ids `0xEA1343AA`, `0xC05D8686` and `0xBB8AE67D` nothing plays unless the game runs in English; any other value has no effect found | `FUN_008369e0`, `0x00836A27`–`0x00836A45` (PROVEN); no other reader in the Pal code `0x0082A000`–`0x00842000` (INFERRED, bounded search) |
+| `sound_id` | u32 | group `+0x00` | one reader: for the ids `0xEA1343AA`, `0xC05D8686` and `0xBB8AE67D` nothing plays unless the game runs in English; any other value has no known effect | `FUN_008369e0`, `0x00836A27`–`0x00836A45` (PROVEN); no other reader in the Pal code `0x0082A000`–`0x00842000` (INFERRED, bounded search) |
 | `priority` | f32 | group `+0x10` | voice-stealing priority: with every voice busy, a new instance takes the voice of the lowest-priority wave only when its own priority (this value times its distance volume) is higher; otherwise no wave is created for it | `GetWavePriority` `FUN_00837e10` (`0x00837EDF`), `FUN_00837830` (`0x00837A0C`) (PROVEN) |
 | `group_20` | f32 | group `+0x20` | no reader known; carried as written | copied into the wave at `+0x68` (`0x00838F70`); the only reader of wave `+0x68` is the getter `0x00838F30` at vtable `+0x44` of both wave vtables, and it has no call site in `0x00828000`–`0x00842000` (INFERRED) |
 | `cue_16` | u16 | single-track cue `+0x16` | no reader known; carried as written | the cue's `{bank, group}` reference is read at `+0x10` and `+0x14` only (`FUN_0082e7d0`, `FUN_0083d410`); the instance field that holds the reference (`+0x28`, written at `0x00836A05`) is otherwise only cleared (`0x00836BEE`) (INFERRED) |
@@ -903,8 +903,8 @@ has one winner in the table the game loads.
 
 ### Sound banks are merged
 
-Each Shipment's build ships a whole soundbank per bank it overrides, so installed together the
-last mounted would drop the others' cues. `qm link` therefore merges every bank a
+Each Shipment's build ships a whole soundbank per bank it overrides, and of several copies of one
+bank the last mounted is the one the game reads. `qm link` merges every bank a
 `replace_sound_cue` in the set targets: per carrier (the overlay, the shell patch, each language
 patch), one soundbank at `blocks\VZ\mod_<entry hash>.block`, starting from the set's
 `replace_sound_bank` of that entry when there is one and the game's bank otherwise, with every
