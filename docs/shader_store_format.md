@@ -304,8 +304,12 @@ The load handler reads the shader's constant table (`GetFunction`, then
 `D3DXGetShaderConstantTable`) and calls the family's binder (vtable `+0x10`). The binder resolves a
 fixed list of names, each through `FUN_0085ac40` (`EAX` = name, `ESI` = the constant table, `EDI` =
 the output): `GetConstantByName`, then `GetConstantDesc`, storing the handle and the register index
-in the record (**PROVEN**). The draw sets constants through those fields, so a `CTAB` constant that
-is not in its family's list is never set. The base vertex binder is `FUN_0085aff0` (15 names:
+in the record (**PROVEN**). The draw sets constants through those fields; a `CTAB` constant that is
+not in its family's list is set only by code that addresses its register directly. Of the 772 retail
+records a registration loads, 766 declare only their family's constants; the other six are three
+shaders in both stores: `PgColorFPConst` (`color`), `PgLtiDebugZPassFP` (`depthRange`) and
+`PgLtiTerrainShadowVP` (`PositionOffset`) (**PROVEN**, each record's `CTAB` against its family's
+list). The base vertex binder is `FUN_0085aff0` (15 names:
 `objectData`, `LocalToWorld`, `viewContextData.ViewProj`, …); the base pixel binder is
 `FUN_0085b290` (12 names: `materialData`, `globalLightData`, `pointLights`, …). Every family's list
 is in `shader_families.tsv`. Samplers are bound by texture stage, not by this list.
