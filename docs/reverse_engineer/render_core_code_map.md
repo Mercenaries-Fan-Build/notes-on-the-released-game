@@ -152,9 +152,12 @@ registry: one long run of register calls into pool `DAT_01977a38`.
    `PgSkin1*VP`, `PgSkin*VP`, PgDiffRefract FP, all shadow caster VPs, then (further in) the lit material
    FP family, terrain/road/blob/decal/water/sky/post.
 
-**Insert helper `FUN_0085ac90`** (`__thiscall`, 66 B): `record[1] = FUN_00824270()` (FNV-1a name hash →
-registry key), **`record[0x23] = arg4`** (the variant/class index), inline-`strcpy` the name into
-`record+0xb`, then a `vtbl+8` call. The variant arg is **the LOD index on Xbox terrain (0–3)** and the
+**Insert helper `FUN_0085ac90`** (`__thiscall` on a static record object, args `name, sho, class`,
+`ret 0xc`, 66 B): `record+4 = FUN_00824270(name)` (FNV-1a name hash → registry key), **`record+0x8c =
+class`** (the variant/class index), inline-`strcpy` the **sho** into `record+0xb`, then a `vtbl+8` call:
+the family's load handler, which resolves the store record and assigns the registry index. The record's
+vtable is its family (45 of them); see
+[`shader_store_format.md` §9](../shader_store_format.md#9-registration). The variant arg is **the LOD index on Xbox terrain (0–3)** and the
 **light-class on PC lit material FPs (0=base / 1=`_pl` / 2=`_sl` / 3=`_pl_sl`)** — see
 [lighting_code_map.md](lighting_code_map.md) §4. Draw-time bind resolves name→u16 (`FUN_0085abd0`, u16
 at `rec+2`), never offset dispatch — why grep finds no render-side references to the VP name strings.
@@ -171,9 +174,13 @@ under the record id in a 0x1200-slot table (`FUN_0085b810`). The id is
 `FUN_0085b6f0`. The records of all loaded stores must stay below 0x1200, and on a duplicate id the
 first loaded record wins. Full spec: [shader_store_format.md](../shader_store_format.md).
 
-**Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, decal `FUN_02475bc0`
-(SecuROM island), shader-table helper `FUN_00852730` (builds the `OcclusionMaterial` default template),
-plus family stubs `FUN_005726e0`/`FUN_006188b0`/`FUN_02485980` (**inferred**, unopened).
+**Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, and the SecuROM
+islands reached through `jmp [stub]` thunks — decal `FUN_02475bc0` (via `0x0049c8b0`), `FUN_005726e0`
+(via `0x00494390`), `FUN_006188b0` (via `0x004a0bb0`), `FUN_02485980` (via `0x004ae3b0`). The decompiler
+renders the islands as one call or as `return;`; executing them shows each chains several
+`FUN_0085ac90` calls through `push <continuation>; push FUN_0085ac90; ret` (**PROVEN**, emulation;
+`tools/extract_shader_registry.py`). Then the shader-table helper `FUN_00852730` builds the
+`OcclusionMaterial` default template.
 
 **PC vs Xbox:** PC ships **precompiled `.sho` blobs** loaded straight into CreateVertex/PixelShader —
 there is **no runtime shader compilation** in the PC cluster. The Xbox `SSM*`/`Compile*` micro-code
