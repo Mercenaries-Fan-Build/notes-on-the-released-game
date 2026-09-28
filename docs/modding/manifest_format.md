@@ -137,7 +137,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
 | `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` (`donor`, `textures`, `retarget`, `single_group` optional) |
-| `add_sound` | Data + Script | `bank`, `category`, `cues` ([sound cue fields](#sound-cue-fields)) |
+| `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
 | `add_animation` | Data | `name`, `clip`, `trnm` (`events` optional) |
@@ -628,6 +628,7 @@ loaded.
   - kind: add_sound
     bank: mymod_sounds         # the bank name; every table of the bank carries m2(bank)
     category: ui               # the category of every cue's group (M0216)
+    load_in: [gameplay, front_end]   # where the bank loads: one or both, each once (M0221)
     cues:
       - name: mymod_click      # Sound.CueSound("mymod_click")
         wave: src/click.wav
@@ -652,18 +653,22 @@ sounddb (13, `0xE5273C14`) and wavebank (6, `0xF753F6D0`) — as three entries o
 `m2(bank)`, at `blocks\VZ\mod_<hash>.block`, each with one primary ASET row, the shape of every
 retail bank ([`audio_code_map.md` §11.1](../reverse_engineer/audio_code_map.md#111-conventions-and-packaging)).
 Each cue becomes one embedded wave, one single-wave group and one single-track cue at the cue's
-index, and one sounddb entry routing `m2(name)` to it (§11.6). The block ships in the Shipment
-overlay.
+index, and one sounddb entry routing `m2(name)` to it (§11.6).
 
-The bank plays only once it is loaded, and retail Lua loads banks by name. The Script half is a
-registration in the mod loader (`qm_modloader`, see [`add_ui`](#add_ui)): it runs
+The bank plays only once it is loaded, and retail Lua loads banks by name. `load_in` names the
+sessions whose loader loads it, and the block ships to each one's WAD:
+
+| `load_in` | the loader | the block ships in |
+|---|---|---|
+| `gameplay` | `qm_modloader`, run from `wifpmcinterior._OnEnter` (PMC-interior entry, every session) and unloaded after `MrxSoundBootstrap.ExitGame` | the Shipment overlay |
+| `front_end` | `qm_shell_modloader`, run after `MrxSound.EnterShellState` (the main menu opening) and unloaded after `ExitShellState` ([The front-end loader](#the-front-end-loader)) | the shell patch |
+
+`load_in` is required: it lists at least one session, each once (**M0221**). Each loader runs
 `MrxSoundBanks.LoadWaveBank(bank)` then `MrxSoundBanks.LoadSoundBank(bank)`, the calls
 `mrxsoundbootstrap.lua` makes for the game's own banks. Loading a soundbank also requests the
 sounddb of the same name (`0x00602768`–`0x006027A1`), which is what makes FindCue see the cues. A
-`qm build` of a Shipment with an `add_sound` links the loader, so it needs the game stack and the
+`qm build` of a Shipment with an `add_sound` links the loaders, so it needs the game stack and the
 Lua corpus.
-
-The loader runs on PMC-interior entry, so an added bank is not loaded in the front end.
 
 A cue named like a cue the game already has never plays: FindCue answers from the first loaded table
 that has the guid, which is the game's (**M0220**). To change a game cue, use
@@ -734,8 +739,8 @@ them. A cue of the game's bank that `cues` does not declare is gone from the ban
 for it.
 
 The waves go in a wavebank of their own, `qm_<shipment>_<entry>` (for example
-`qm_my-mod_vo_mattias.german`), in the Shipment overlay, which the mod loader loads
-(`LoadWaveBank` only). A retail wavebank can be shared between banks
+`qm_my-mod_vo_mattias.german`), which the loader of each session that loads the bank loads
+(`LoadWaveBank` only; [below](#where-a-sound-override-ships)). A retail wavebank can be shared between banks
 ([`audio_code_map.md` §11.4](../reverse_engineer/audio_code_map.md#114-soundbank)), and the `vo_*`
 banks have none of their own (their waves stream from `vo_stream`, `mrxsoundbootstrap.lua:218-245`),
 so the replacement's waves are not written into a game wavebank. The override wavebank's name does
@@ -771,18 +776,72 @@ merged](#sound-banks-are-merged)). One cue replaced by two Shipments conflicts (
 
 ### Where a sound override ships
 
-| bank | read from | ships to |
-|---|---|---|
-| `vo_*` | the declared `language`'s WAD (`English.wad`, …) | that language's patch: `language_patch/<language>.wad`, merged into `data/<language>-patch.wad` |
-| carried by `vz.wad` | `vz.wad` | the Shipment overlay |
-| carried by `shell.wad` | `shell.wad` | the shell patch: `<shipment>.shell-patch.wad`, merged into `data/shell-patch.wad` |
+An override's tables and its wavebank ship to every level that both carries the bank and loads it —
+each level WAD runs its own Lua, and `shell.wad` and `vz.wad` are never mounted together — and that
+level's loader loads the wavebank:
 
-A bank both archives carry ships to both. `ui_hud`, `ui_shell` and `music` are in both, as
-byte-identical tables (`cue_guids_across_sounddbs`). A bank in no carrier is **M0218**.
+| bank | read from | loaded in | the tables and the wavebank ship to |
+|---|---|---|---|
+| `vo_*` | the declared `language`'s WAD (`English.wad`, …) | gameplay | the tables to that language's patch (`language_patch/<language>.wad`, merged into `data/<language>-patch.wad`); the wavebank to the Shipment overlay |
+| `ui_hud`, `music` | `vz.wad` and `shell.wad` | gameplay and the front end | both to the Shipment overlay and to the shell patch (`<shipment>.shell-patch.wad`, merged into `data/shell-patch.wad`) |
+| `ui_shell` | `shell.wad` | the front end | both to the shell patch |
+| any other bank `vz.wad` carries | `vz.wad` | gameplay | both to the Shipment overlay |
 
-The override wavebanks always ship in the overlay, and the mod loader that loads them runs on
-PMC-interior entry, so they are not loaded in the front end: a replaced cue that plays only in the
-front end is silent there.
+Where retail loads each bank
+([`audio_code_map.md` §11.10](../reverse_engineer/audio_code_map.md#1110-where-banks-are-loaded)):
+
+- **The front end** loads `ui_shell`, `ui_hud` and `music` in `MrxSound.EnterShellState`
+  (`shell/mrxsound.lua:9-14`, called from `mrxguishell.lua:505`) — the only bank-load call site among
+  `shell.wad`'s 28 scripts — and `shell.wad` carries exactly those three soundbanks.
+- **Gameplay** loads 11 banks by name in `MrxSoundBootstrap.LoadBanks`
+  (`resident/mrxsoundbootstrap.lua:195-245`, `ui_hud` and `music` among them) and the `vo_*` banks
+  per language. `vz.wad` carries 76 soundbanks: those 11, `ui_shell`, and 64 that no Lua in the
+  corpus loads by a literal name; an override of one of the 64 loads in gameplay.
+- `vz.wad` also carries the front end's scripts and `ui_shell`, but its copy of
+  `EnterShellState` runs only from `GameBootstrap.Start`, which returns at once once the main menu
+  has handed over to the game (`Sys.FinishedShell()`, `gamebootstrap.lua:43-46`). So `ui_shell`
+  loads in the front end only, and a `ui_shell` override ships to the shell patch alone.
+
+`ui_hud`, `ui_shell` and `music` are byte-identical in both archives (`cue_guids_across_sounddbs`).
+A bank in no carrier, or one no carrier loads (a `vz.wad`-only `ui_shell`), is **M0218**.
+
+A shell patch is stamped with `shell.wad`'s CSUM row, the WAD it mounts above.
+
+### The front-end loader
+
+The front end runs `shell.wad`'s own Lua VM, so the gameplay loader is not there. When any
+registration loads a bank in the front end, the build links a second loader into `shell.wad`'s
+scripts block (`blocks\Shell\resident_P000_Q3.block`, 28 scripts) and ships the block in the shell
+patch, with every ASET row copied from `shell.wad`:
+
+- **`qm_shell_modloader`** — a new script the Quartermaster mints into that block. It publishes
+  `_G._QMS` with `load_sounds()` and `unload_sounds()`, generated by the same code as the gameplay
+  loader's: each bank's `LoadWaveBank` (and, for an `add_sound` bank, `LoadSoundBank`), in load
+  order and then by bank name, each bank loaded once until it is unloaded (`_QMS.loaded`). No
+  callback is passed, so the batch callback retail's `EnterShellState` sets (`_StartShellMusic`)
+  stands.
+- **A trampoline appended to the front end's `mrxsound`** (its source from the corpus's `shell/`):
+  `EnterShellState` and `ExitShellState` each call retail's first, then `import("qm_shell_modloader")`
+  and `_QMS.load_sounds()` / `_QMS.unload_sounds()`. The front end calls them when the main menu
+  opens and closes (`mrxguishell.lua:505`, `:589`) and when the shell exits
+  (`mrxsoundshellbootstrap.lua:99`).
+
+`import` finds a script by the hash of its name and the script type through the engine's typed
+asset lookup, with no block or WAD in the key (`_SYS._IMPORT` = `0x005AE2D0`), so a script minted
+into the shell patch's copy of the block is found like the shell's own.
+
+The gameplay loader works the same way in `vz.wad`: `wifpmcinterior._OnEnter` calls retail's, then
+`_QM.load_sounds()` (each bank once per session, `_QM.loaded`) and `_QM.run()`; a trampoline
+appended to `mrxsoundbootstrap` makes `ExitGame` call retail's `UnloadBanks`, then
+`_QM.unload_sounds()`. The sound calls run with no `pcall` and no existence check.
+
+`MrxSoundBanks` reports no failure: its completion callback takes no argument
+(`mrxsoundbanks.lua:141-152`) and the engine's carries no flag, and a `LoadWaveBank` of a name no
+mounted WAD holds is released after a timeout with no error
+([`audio_code_map.md` §11.2](../reverse_engineer/audio_code_map.md#112-resolving-a-cue)). So the build
+checks it: every bank a loader loads must have its wavebank among the blocks shipped to that
+loader's level, in `qm build` and in `qm link` (for the link, the blocks each Shipment's own build
+ships); a bank without one is a build error naming the bank and the level.
 
 ### The `language` field
 
@@ -908,6 +967,13 @@ An added cue name is a key across the set because FindCue answers from the first
 has the guid (`FUN_00835a70`): of two banks adding one cue name, one is never heard. A replaced cue
 has one winner in the table the game loads.
 
+Each sound kind also claims the scripts its loaders live in, additive, for each session it loads in
+(an `add_sound`'s `load_in`; for an override, the sessions retail loads its bank in): gameplay claims
+`wifpmcinterior` and `mrxsoundbootstrap` in `vz.wad`; the front end claims `qm_shell_modloader` and
+`mrxsound` in `shell.wad`. A script claim names its level, so the front end's `mrxsound` is not
+`vz.wad`'s. Any number of sound Shipments share the loaders; a `replace_lua` of a host a sound
+Shipment loads through (`replace_lua wifpmcinterior` beside a `ui_hud` override) is a conflict.
+
 ### Sound banks are merged
 
 Each Shipment's build ships a whole soundbank per bank it overrides, and of several copies of one
@@ -921,6 +987,12 @@ so a deploy step drops the per-Shipment copies. The link writes them to
 `language_patch/<language>.wad` (language patch), each recorded in `placement.json`.
 
 The override wavebanks are not merged: each is named for its Shipment, so they never collide.
+
+The link also bakes one loader per session over the set: `qm_modloader` in `scripts_vz`, and
+`qm_shell_modloader` in `shell.wad`'s scripts block, which it writes to
+`zz-quartermaster-link.shell-patch.wad` with the merged banks. `link_block_paths` always lists
+`blocks\Shell\resident_P000_Q3.block` after the `vz.wad` scripts blocks, so a deploy step drops each
+Shipment's own copy of the front end's scripts block and keeps the link's.
 
 ### Write-sets and read-sets
 
@@ -1097,8 +1169,8 @@ still cannot ship a broken Shipment.
 listed on purpose: a linter that silently omits its most dangerous checks reads as a clean bill of
 health.
 
-The sound and language rules below are errors. M0214–M0217 need no game; M0218–M0220 need the game
-stack and run in `qm lint --with-game` and in `qm build`.
+The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
+need the game stack and run in `qm lint --with-game` and in `qm build`.
 
 ### M0214
 
@@ -1149,10 +1221,12 @@ Fix: remove `language` from a non-`vo_*` override; name the language on a `vo_*`
 
 ### M0218
 
-**A sound override's bank or cue is not in the game.** Fires when no carrier holds a soundbank under
-the override's entry name — the carriers being the game stack (`vz.wad` and the declared languages'
-WADs) and `shell.wad` beside it — or when a `replace_sound_cue`'s cue is not in that bank (a cue the
-same Shipment's `replace_sound_bank` declares for the bank counts as in it).
+**A sound override's bank or cue is not in the game, or the game never loads the bank.** Fires when
+no carrier holds a soundbank under the override's entry name — the carriers being the game stack
+(`vz.wad` and the declared languages' WADs) and `shell.wad` beside it — when no carrier that holds
+it loads it ([Where a sound override ships](#where-a-sound-override-ships)), or when a
+`replace_sound_cue`'s cue is not in that bank (a cue the same Shipment's `replace_sound_bank`
+declares for the bank counts as in it).
 
 Fix: write the bank name exactly as the game's Lua loads it (`ui_hud`, `vo_mattias`) and, for a
 `vo_*` bank, the right `language`. To add a cue the bank does not have, use
@@ -1177,5 +1251,14 @@ guid (`FUN_00835a70`), so the game's cue plays and the added one never does.
 
 Fix: to change the game's cue, use [`replace_sound_cue`](#replace_sound_cue); to add a cue, give it
 a new name.
+
+### M0221
+
+**An `add_sound`'s `load_in` is empty or lists a session twice.** `load_in` names the sessions whose
+loader loads the bank — `gameplay`, `front_end` — and the bank's block ships to each one's WAD
+([`add_sound`](#add_sound)). An empty list loads the bank nowhere.
+
+Fix: list where the bank plays, each session once: `[gameplay]`, `[front_end]` or
+`[gameplay, front_end]`.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
