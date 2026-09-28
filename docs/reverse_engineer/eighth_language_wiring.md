@@ -308,3 +308,71 @@ are all in writable `.data`, patchable live).
    when `DAT_00cf255c == -1`, but the struct-sync gap (#1) makes this worth a live check.
 6. **Multiplayer/region gating** (`s_mercenaries2_enru` region string, `DAT_00cffbd3`) — a new
    language's interaction with region checks was not examined.
+
+---
+
+## 10. Fonts, atlases and the engine language table
+
+Addresses in this section are VAs in the runtime image
+(`mercenaries-one-source/_ghidra/_ghidra/securom_dump/image.bin`, file offset = VA − `0x400000`) and
+the decomp `output/_ghidra/mercs2_unpacked.exe_decomp.txt`. `docs/modding/manifest_format.md` cites
+this section for the `language` values of the sound kinds and for what `add_language` forks.
+
+### 10.1 The engine language table
+
+PROVEN unless marked.
+
+- **The table.** `0x00CF281C`, nine entries, bounded by `8 < i` in `FUN_00826a10`: 0 `english`,
+  1 `spanish`, 2 `italian`, 3 `french`, 4 `german`, 5 `japanese`, 6 `english_uk`, 7 `allcaps`,
+  8 `russian` (§1).
+- **The runtime index.** `*DAT_01176018` is written by the SecuROM-stolen setter at `0x00630B70`,
+  called at `0x004C3930`, from `DAT_00CF255C` (emulated from the runtime image).
+- **The detected index.** `DAT_00CF255C` is set from the command-line option whose hash is
+  `0xC13F3DE2`, through `FUN_00826a10` (a case-insensitive compare against the table); otherwise from
+  the OS locale through `FUN_00826a90`: primary LANGID `0x07` → 4 german, `0x0A` → 1 spanish,
+  `0x0C` → 3 french, `0x10` → 2 italian, `0x11` → 5 japanese, `0x19` → 8 russian, any other → 0
+  english (the table at `0x00826DC0`).
+- **`english_uk` (6) and `allcaps` (7)** are not reachable from the OS locale, only from the command
+  line, and the `GetLanguage` Lua binding (`0x005E6420`) returns `"English"` for both. That they are
+  development leftovers is INFERRED.
+- **`japanese` (5)** is reachable from the locale, but the Pal voice-over language gate
+  (`FUN_006067b0`, which sets the english hash for any index above 4) and the Bink soundtrack
+  default to English, and no `japanese.wad` ships.
+- **`Gui.GetLanguageName`** (`0x005B4BC0`) returns the table entry, lowercase.
+
+The entry is the name every language-keyed path uses: `.\Data\<entry>.wad` (`FUN_004BFE20`, §4),
+`.\Data\<entry>-patch.wad` (`FUN_004BFEF0`, §4), the string table `m2(<entry>)`, and the suffix retail
+Lua appends to a `vo_*` sound bank name (`_GetLocalizedName`, `mrxsoundbanks.lua:80-87`:
+`name .. "." .. Gui.GetLanguageName()`). The Quartermaster's `language` values are the table without
+`english_uk` and `allcaps`: `english`, `spanish`, `italian`, `french`, `german`, `japanese`,
+`russian`.
+
+### 10.2 Fonts and their atlases
+
+- **A font** is an asset of type `0x99E77ACE` (ASET type 15) whose UCFX rows are `INFO`, `CHAR` and
+  `MTRL`. `MTRL` is 7 materials × 120 bytes; each has a texture count of 1, a texture name hash,
+  `0x7CCBEC4E` (= `m2("PgDiffuseFP")`) and `0xED057225`. `Mtrl_Parse` (`FUN_00858790`, decomp
+  652011–652041) builds `{hash, 0xF011157A}` for each texture and acquires it through
+  `FUN_00873f20` / `FUN_00874150` by (type hash, name hash). A font reaches its atlas **by name hash
+  only** (PROVEN).
+- **The engine does not find a texture by its `NAME` chunk.** Its only reader, `FUN_00750a30` (decomp
+  453111–453113, disassembly at `0x00750E7B`), copies it into a 256-byte stack buffer that nothing
+  then reads (the read PROVEN; that the buffer is unused INFERRED), and it is the only site of the
+  `0x454D414E` (`NAME`) tag in the decomp. So a texture is re-keyed by changing its block-entry hash,
+  its ASET hash and every `MTRL` reference to it; the `NAME` chunk can stay as it is.
+- **English's fonts.** `shell.wad` block 29, `blocks\Shell\english_P000_Q3.block`, holds the fonts
+  `english_20` (`0x13C26ABC`) and `english_18` (`0x093F42E5`), 4,738 bytes each; the string table
+  `english` (`0xB6A13123`); and the atlases `english_20_main` (`0x40BA4038`) and `english_18_main`
+  (`0x6C3B162F`), 131,285 bytes each, whose `NAME` is a `d:\projects\…\english_2x_main.ftga` path.
+  Each font's `MTRL` references its `_main` atlas once; the other six references point at
+  `common_18_*` / `common_20_*` textures in block 8.
+- **The GFx font libraries** — `fonts_enext` (`0x6C2B27D6`) and `fonts_ru` (`0xAD3108BF`) in
+  `Loading.wad`, type `0xFE0E8320` — are a separate path, loaded by `FUN_0060e9c0` (§5). They name
+  their atlas by file name (`"fonts_enext_F0.tga"`), which is `m2`-hashed at `0x004ADA62`; where the
+  `.tga` is stripped is not resolved (INFERRED).
+
+This is what the Quartermaster's `add_language` forks for a new language `<name>` from `base`
+(default `english`): the fonts `<base>_18` / `<base>_20` as `<name>_18` / `<name>_20`, each with its
+one `MTRL` reference to `<base>_18_main` / `<base>_20_main` repointed to `<name>_18_main` /
+`<name>_20_main`, and those atlases as the base atlases under the new name hashes, `NAME` unchanged.
+The six `common_*` references stay as they are.
