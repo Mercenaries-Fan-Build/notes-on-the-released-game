@@ -409,7 +409,7 @@ WAD holds:
 | the string table | the `base` table, translated | `m2(name)`, type `0x39E5E978` |
 | fonts `<name>_18`, `<name>_20` | `<base>_18`, `<base>_20` | the font's one `MTRL` reference to `<base>_18_main` / `<base>_20_main` repointed to `<name>_18_main` / `<name>_20_main`; every other byte as the base has it |
 | atlases `<name>_18_main`, `<name>_20_main` | `<base>_18_main`, `<base>_20_main` | the base atlas under the new name hash; the texture's `NAME` chunk unchanged |
-| voice-over tables | every soundbank, sounddb and streamed wavebank of `English.wad` | re-keyed from `m2("<bank>.english")` to `m2("<bank>.<name>")`, computed from the bank hash each table carries; the table bytes unchanged |
+| voice-over tables | every soundbank, sounddb and wavebank of `English.wad`, streamed and embedded | re-keyed from `m2("<bank>.english")` to `m2("<bank>.<name>")`, computed from the bank hash each table carries; the table bytes unchanged |
 
 A font reaches its atlas only through the name hash in its `MTRL` chunk, and the engine reads a
 texture's `NAME` chunk into a buffer nothing uses, so a re-keyed atlas needs no other edit
@@ -428,9 +428,16 @@ and sha256, and the deploy step copies the file. The build writes two placements
 - `data_wad { relative: data/<name>.wad, display }`;
 - `stream_copy { from: data/Audios/vo_stream.english.pws, to: data/Audios/vo_stream.<name>.pws }`.
 
-An **embedded** wavebank carries its audio inside the table, and `add_language` does not ship one:
-`English.wad`'s `vo_solanoahj` wavebank (`0x0843A8DC`) is embedded, so the cues that play it are
-silent in the new language.
+`vo_stream` is the one streamed wavebank of `English.wad`. Its other 42 wavebanks are
+**embedded**: each carries its waves' audio inside the table (1,498 waves in all), so the re-keyed
+copy in `data/<name>.wad` carries that audio to the new language and the 1,492 English cues that
+play those waves play them in the new language too. They are the 13 `vo_*Con*` banks
+(`vo_allCon001`, `vo_oilCon021`, `vo_pmcCon003`, …), the 25 `vo_job_*` banks (`vo_job_all_Conrad`,
+`vo_job_heros`, `vo_job_pmc`, …), `vo_helirec001`, `vo_jetRec001`, `vo_mechRec001`, and
+`vo_solanoahj`, whose waves the `vo_Chris`, `vo_Jen`, `vo_mattias` and `vo_Misc` soundbanks play.
+Retail's `vo_job_all_gonzalez` wavebank holds 26 waves of all-zero samples, and its copy is the
+same. The census is the retail test `english_wad_embedded_voice_over_wavebank_census`
+(`mercs2_quartermaster/tests/build_retail.rs`).
 
 - **M0200** refuses a `name` that is not a lowercase `[a-z0-9_]` token (it becomes a file name) or
   that is a WAD the game already ships (`vz`, `shell`, `loading`, `english`, `french`, `german`,
