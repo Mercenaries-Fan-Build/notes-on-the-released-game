@@ -1264,7 +1264,7 @@ out of the game (`vz/xQ!L.lua:612`). Briefings and starters load their `vo_*` ba
 data tables through `LoadTempBank` (`resident/mrxbriefing.lua:510`, `resident/mrxstarter.lua:452`;
 the tables in `vz/wifbriefingdata.lua`, `vz/wifstarterdata.lua`, `resident/mrxhq.lua:69-76`,
 `vz/wifpmcinterior.lua:95`). `vz.wad` carries 76 soundbanks: the 11 above, `ui_shell`, and 64 that no
-Lua in the corpus names in a load call. How those 64 are loaded is not traced (UNPROVEN).
+Lua in the corpus names in a load call; the engine loads those 64 by name (§11.11).
 
 **`ui_shell` in `vz.wad` — the call site PROVEN, its reach INFERRED.** `vz.wad` carries `ui_shell`
 (`vz.wad#3525`, byte-identical to `shell.wad#35`, [`wad_duplicate_inventory.md`](../fixpack/wad_duplicate_inventory.md))
@@ -1302,6 +1302,70 @@ handler `_FlagAssetOpComplete` takes no argument (`:141-152`), `Sound.LoadBankWi
 also after the 20.0 timeout of a name no mounted WAD holds (§11.2). Lua cannot tell a failed load
 from a loaded one, and no `Sound` binding reports whether a bank is loaded (the 88 entries of the
 table at `0x00B98C98`).
+
+### 11.11 The banks the engine loads: `SoundEffect`
+
+The 64 soundbanks of `vz.wad` that no Lua load call names — 38 `veh_*` and 26 `wpn_*` — are
+loaded by the engine, by name, from the `SoundEffect` ECS component. The census is
+`sound_effect_names_the_engine_loaded_banks` (`mercs2_quartermaster`, `retail` feature).
+
+**Packaging — PROVEN (census).** Each of the 64 has exactly one soundbank, one sounddb and one
+wavebank row under `m2(<bank>)`, all three naming one block (`blocks\VZ\<bank>_P000_Q3.block`), and
+every one of the 64 wavebanks embeds its waves (none streams). `shell.wad` carries none of them.
+
+**The component — PROVEN (census).** `SoundEffect` (m2 `0xB40954F5`, descriptor base
+`0x017BDFD8`, [`mercs2-ecs/05_presentation_audio_fx.md`](../mercs2-ecs/05_presentation_audio_fx.md))
+is a `COMP` of `vz.wad`'s one world-entity container that carries it (type hash `0x5647C35D`,
+ASET type 17). Its `schm` gives a 0x1C-byte payload of seven fields:
+
+| word | byte | field hash | schm type | meaning |
+|---|---|---|---|---|
+| 0 | 0x00 | `0x2EB62242` | U32 | *unknown* (below) |
+| 1 | 0x04 | `0xC43322C3` | F32 | *unknown* |
+| 2 | 0x08 | `0x29F15442` | F32 | *unknown* |
+| 3 | 0x0C | `0x4E97DE03` | Ref | *unknown* |
+| 4 | 0x10 | `0x14A67FA6` | U32 | the soundbank name hash, `m2(<bank>)`; 0 for none |
+| 5 | 0x14 | `0xD932985B` | F32 | *unknown* |
+| 6 | 0x18 | `0x11957817` | Ref | *unknown* |
+
+The `data` chunk is grouped: `[u32 n][n × u32 entity key][7-word payload]`, repeated. In `vz.wad`
+it is 1,080 groups over 2,754 entity keys, and the groups consume its 11,394 words exactly. Word 4
+names 63 of the 64 banks and no bank retail Lua loads. The entities are vehicle and weapon
+templates (by the `Name` component: `veh_jeep` on `M151 (Base)`, `wpn_pistol` on `Pistol`).
+`wpn_grapplegun` is named by no payload: the `Grapple` template's word 4 is 0. Three payloads'
+word 4 is not a soundbank `vz.wad` carries: `0x38BBF29A` = `m2("wpn_heavyatmissile_fire")`, a cue
+name (the `AT Missile`, `Vehicle AT Missile (Hellfire)`, `AT Missile (CH)` and `FA Missile`
+templates), and `0x07ED495F` (`_outskirt_bld_market04`) and `0xF3B81041` (`DLC_50cal`), which name
+nothing known.
+
+Word 0 is *unknown*: of the 1,080 payloads, 14 carry 0; of the other 1,066, 81 equal the guid of a
+cue of some `vz.wad` soundbank, never one of the bank word 4 names, and 985 match no cue guid or
+sounddb entry of `vz.wad` (measured with a one-off scan of this run, not a committed test).
+
+**The request — PROVEN for the call sites.** `FUN_005FF140` (`0x005FF1C8`–`0x005FF1E2`) and
+`FUN_005FF230` (`0x005FF4ED`–`0x005FF505`) each look the entity's `SoundEffect` up
+(`mov ecx, 0x17BDFD8`; `call 0x005857E0`), read word 4 (`mov eax, [eax+0x10]`), and, when it is
+non-zero, call `0x006022B0` with it and the Pg bank manager `[0x01175F9C]` (§11.2). `0x006022B0` is
+relocated into the protected image; its body there calls `0x00602060(bank, 0x9F8BCA10)` (`push
+0x9F8BCA10` at `0x02481B03`) and `0x00602060(bank, 0xF753F6D0)` (`68 D0 F6 53 F7`, the bytes
+before `0x02481B26`): the soundbank and the wavebank of that name. The sounddb, which
+`LoadSoundBank` also requests (§11.2), is not among them, so these banks' cues are not routed by
+name through FindCue from this load. `FUN_005FE880` calls both functions (`0x005FE909`, `0x005FEBCA`,
+`0x005FEC28`), and `FUN_005FF230` calls `FUN_005FF140` (`0x005FF51E`).
+
+**When — INFERRED.** The callers run on the local player's equipment changes (`FUN_005FF140`) and
+seat changes (`FUN_005FF230`, `FUN_005FE880`); these trigger meanings are read off the call
+structure, not traced to their events. So an override of one of these banks changes what the engine
+loads for the local player's own weapon or vehicle (INFERRED); AI units are INFERRED to be
+unaffected, as these requests come from the local player's changes. Callers of `0x006022B0` other
+than the two above are not enumerated, and whether another path loads these banks for other units
+is UNPROVEN.
+
+**Shared waves — PROVEN (census).** Over every group of every soundbank in `vz.wad`, `shell.wad`
+and `English.wad`, `veh_largedieselold` and `veh_largedieselnew` play waves of
+`veh_largegasold`'s wavebank; no other soundbank plays a wave of another of the 64 banks'
+wavebanks (`no_other_soundbank_plays_an_engine_loaded_banks_waves`). A writer that changes one of
+these wavebanks keeps every retail wave at its index.
 
 ## Provenance
 
