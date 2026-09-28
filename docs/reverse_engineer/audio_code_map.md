@@ -325,7 +325,7 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    group's `+0x2F`, `+0x30`, `+0x34`, `+0x48`, `+0x4C`, `+0x58`, `+0x64`; a multi-track sound's
    `+0x01`, `+0x02`; the `u32` marked *unknown* in automation kinds 0–3, 5, 6 and 8) and the streamed wave record's `+0x1C` have no established meaning. The group
    `+0x20`, the single-track cue `+0x16` and the wave record `+0x00` are marked *no reader known*:
-   a bounded search found no engine code that reads them (§11.4, §11.5). Kind 10 is handled by `FUN_0083b4a0` but no
+   no engine code in a bounded search range reads them (§11.4, §11.5). Kind 10 is handled by `FUN_0083b4a0` but no
    retail cue carries one, so its size is unmeasured. The §3.5 row for `FUN_00835b80` ("u16 counts
    @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads of the *global* sounddb
    (category count at `+0x0A`, parameter count at `+0x0C`, category table offset at `+0x14`), not the
@@ -387,9 +387,9 @@ checker, for every audio table in `English.wad` and `shell.wad`.
 
 The key words **MUST** and **MUST NOT** are normative: a table that breaks one was not produced by the
 retail toolchain, and the reference reader rejects it. Field names marked *unknown* are fields whose
-meaning is not established; fields marked *no reader known* are fields a bounded search of the
-engine code found nothing reading, and the search is named beside each. A writer carries both as its
-author gives them, it does not invent them. Names marked *(inferred)* are read off the values the
+meaning is not established; fields marked *no reader known* are fields no engine code in a bounded
+search range reads, and the range is named beside each. A writer carries both as its author gives
+them. Names marked *(inferred)* are read off the values the
 field holds, not off engine code. The retail counts quoted for the fields an author declares are
 asserted by the census tests of `crates/mercs2_audio/tests/retail_fields.rs` (`retail` feature),
 named where each count is given.
@@ -561,7 +561,7 @@ offset  type  field
 (`0x00838F70`), which copies the 24 bytes to wave `+0x5C`; otherwise it passes 24 zero bytes (§11.9,
 *Emitter sources*).
 
-**`+0x00` sound id.** The one reader found is `FUN_008369e0` at `0x00836A27`–`0x00836A45`
+**`+0x00` sound id.** The one known reader is `FUN_008369e0` at `0x00836A27`–`0x00836A45`
 (`8B 00`, then `cmp eax` with `0xEA1343AA`, `0xC05D8686`, `0xBB8AE67D`, then
 `cmp [edi+0x78], 0xB6A13123`): for a group with one of those three ids it clears the instance's
 group pointer — nothing plays — unless the Pal language hash at `+0x78` is `m2("english")` (the
