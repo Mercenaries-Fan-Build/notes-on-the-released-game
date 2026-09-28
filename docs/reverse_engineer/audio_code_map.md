@@ -1234,6 +1234,75 @@ child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with the
 attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
 (§11.2). With `English.wad`'s wavebanks also resident, all 1,019 play.
 
+### 11.10 Where banks are loaded
+
+A bank's tables are read only once Lua loads the bank, and each level WAD runs its own Lua VM, so
+where a bank is loaded is a property of the level and the session. The call sites below are the
+decompiled corpus's (`crates/mercs2_script/corpus/mercs2-luacd/src`); the corpus scan and the
+carrier census are tests in `mercs2_quartermaster` (`the_sound_load_sites_are_the_corpus_calls`,
+`the_carried_soundbanks_against_the_retail_load_sites`).
+
+**The front end (`shell.wad`) — PROVEN.** `MrxSound.EnterShellState` (`shell/mrxsound.lua:5-15`)
+loads `ui_shell`, `ui_hud` and `music` (soundbank and wavebank each, with one batch callback,
+`_StartShellMusic`) after `_LoadRequiredAssetsCommon`. `ExitShellState` (`:17-27`) unloads them.
+`EnterShellState` is called from `MrxGuiShell._OpenShell` (`shell/mrxguishell.lua:505`), which runs
+when the `Shell` game state is entered (`HandleGameStateChangeEvent`, `:211-221`), requested by
+`MrxGuiShellBootstrap.ShellScreenLoaded` (`shell/mrxguishellbootstrap.lua:67-70`). `ExitShellState`
+is called from `_CloseShell` (`shell/mrxguishell.lua:589`) and from
+`MrxSoundShellBootstrap.ExitShell` (`shell/mrxsoundshellbootstrap.lua:98-100`), which `ShellBootstrap`
+runs on the way out of the shell (`shell/shellbootstrap.lua:111-121`). These are the only bank-load
+calls among the shell's 28 scripts, and `shell.wad` carries exactly these three soundbanks.
+
+**Gameplay (`vz.wad`) — PROVEN for the call sites.** `MrxSoundBootstrap.LoadBanks`
+(`resident/mrxsoundbootstrap.lua:192-246`, from `Init`, `:108`) loads 11 soundbanks by name —
+`ambience`, `amb_birds`, `collision_shared`, `destruction_shared`, `fol_shared`, `veh_shared`,
+`wpn_shared`, `building_destruct`, `veh_support`, `music`, `ui_hud` — the wavebanks (`amb_shared`
+and `vo_stream` wavebank-only; the `building_destruct` soundbank's wavebank is spelled
+`bulding_destruct`), and the `vo_*` soundbanks, localized. `ExitGame` (`:188-190`) calls
+`UnloadBanks` (`:248-302`); `vz`'s `ResetSingleton` calls `MrxSoundBootstrap.ExitGame()` on the way
+out of the game (`vz/xQ!L.lua:612`). Briefings and starters load their `vo_*` banks by name from
+data tables through `LoadTempBank` (`resident/mrxbriefing.lua:510`, `resident/mrxstarter.lua:452`;
+the tables in `vz/wifbriefingdata.lua`, `vz/wifstarterdata.lua`, `resident/mrxhq.lua:69-76`,
+`vz/wifpmcinterior.lua:95`). `vz.wad` carries 76 soundbanks: the 11 above, `ui_shell`, and 64 that no
+Lua in the corpus names in a load call. How those 64 are loaded is not traced (UNPROVEN).
+
+**`ui_shell` in `vz.wad` — the call site PROVEN, its reach INFERRED.** `vz.wad` carries `ui_shell`
+(`vz.wad#3525`, byte-identical to `shell.wad#35`, [`wad_duplicate_inventory.md`](../fixpack/wad_duplicate_inventory.md))
+and, in its resident block, the same `mrxsound.lua` and `mrxguishell.lua` as the shell. Across the
+corpus, `EnterShellState` has exactly two callers, `resident/mrxguishell.lua:505` and
+`shell/mrxguishell.lua:505`. In `vz`, the `Shell` widget exists only once
+`MrxGuiShellBootstrap.EnterShell` / `LoadShell` (`resident/mrxguishellbootstrap.lua:55-83`) loads
+its layout; their callers are `GameBootstrap.Start` (`resident/gamebootstrap.lua:58-75`) and
+`ClosePrecacheOnLoad` (reached from `LoadPrecache`, which no `vz` or resident script calls).
+`GameBootstrap.Init` returns before `Start` when `Sys.FinishedShell()` is true
+(`resident/gamebootstrap.lua:43-46`); `Sys.FinishedShell` (`0x005E54C0`) returns
+`DAT_01175A72 != 0`, which `FUN_004BC6D0` sets to 1 in its state 1 (decomp 96533) and to 0 in state 8
+when `DAT_01175A84 == 1` (decomp 96642); no static write to `DAT_01175A84` is in the decomp. A
+vanilla menu-to-game run logs `##@ GameBootstrap - bailing because finished shell`
+([`dlc_pc_activation_checklist.md`](../dlc_pc_activation_checklist.md)). No gameplay path calls
+`EnterShellState`: the pause menu's quit is `Sys.RequestGameState("unloading")` then
+`Net.QuitGame()` (`resident/mrxguipausescreen.lua:403-404`), and the return to the menu is a level
+swap to `shell` (`FUN_004C1280`). So `ui_shell` is loaded in the front end; the `vz` level reaches
+its own copy of `EnterShellState` only on a boot that enters `vz` with `Sys.FinishedShell()` false
+(INFERRED; whether a retail boot does is UNPROVEN).
+
+**The swap.** Only one of `shell.wad` and `vz.wad` is mounted at a time
+([`wad_duplicate_inventory.md` §B.5](../fixpack/wad_duplicate_inventory.md)). The script host is
+created and closed by the subsystem toggle `FUN_004C0730`
+([`scripting_host_binding_code_map.md` §1.5](scripting_host_binding_code_map.md#15-vm-lifetime)),
+so each level's Lua state, and any table a loader keeps in it, starts fresh (INFERRED). Whether the
+Pg bank manager's slots (`[0x01175F9C]`, 65 slots) survive `FUN_005FAB20` / `FUN_004BF8C0` across
+the swap is UNPROVEN. A load of a bank that is loaded only registers the callback (§11.2), so a
+loader that loads again after a swap costs nothing.
+
+**No failure report.** `MrxSoundBanks` keeps one batch callback (`_funcBatchComplete`,
+`mrxsoundbanks.lua:10-36`): a load or unload given a callback replaces the caller's. Its completion
+handler `_FlagAssetOpComplete` takes no argument (`:141-152`), `Sound.LoadBankWithCallback`
+(`FUN_005E2BF0`) hands the request to `FUN_006026C0`, and the callback fires with no success flag,
+also after the 20.0 timeout of a name no mounted WAD holds (§11.2). Lua cannot tell a failed load
+from a loaded one, and no `Sound` binding reports whether a bank is loaded (the 88 entries of the
+table at `0x00B98C98`).
+
 ## Provenance
 
 All addresses PC retail, base 0x400000. Anchors are (a) Pal self-named profiler-scope strings —
