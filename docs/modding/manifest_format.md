@@ -100,6 +100,35 @@ Every path in the manifest is relative to the Shipment root and must resolve **u
 that escapes the root — through `..` or a symlink — is refused (M0111), because a Shipment has to
 mean the same thing on someone else's machine as on yours.
 
+### `placement.json`
+
+Every `qm build` and `qm link` output directory holds one `placement.json`: what each output is,
+its size and sha256, and where a deploy step puts it. An output that produced nothing writes
+`"placements": []`.
+
+```json
+{
+  "format": 2,
+  "placements": [
+    { "name": "my-shipment.wad", "bytes": 81920, "sha256": "…", "destination": { "kind": "overlay" } }
+  ]
+}
+```
+
+`format` is 2. `destination.kind` is one of:
+
+| kind | fields | what the deploy step does |
+|---|---|---|
+| `overlay` | — | mounts the WAD as a patch overlay on `vz.wad` |
+| `game_folder` | `relative` | copies the file to that path under the game folder (the Code layer) |
+| `data_wad` | `relative`, `display` | places a new base WAD at `relative` (`data/<name>.wad`, [`add_language`](#add_language)); `display` is the label a language selector shows |
+| `language_patch` | `language`, `relative` | merges the WAD's blocks, with every installed Shipment's for that language, into `data/<language>-patch.wad`, which the engine mounts directly above `data/<language>.wad` (`FUN_004BFEF0`, `"%s\%s-patch.wad"` with the language table's entry) |
+| `shell_patch` | — | merges the WAD's blocks, with every installed Shipment's, into `data/shell-patch.wad`, which the engine mounts above `shell.wad` in the front end (`FUN_004BFDA0` with the name `shell`, which `FUN_004C1280` writes at `0x004C12DD`) |
+| `stream_copy` | `from`, `to` | copies the game file `from` to `to`, both relative to the game folder; `bytes` and `sha256` describe `from` as the build read it, and no bytes are in the output directory |
+
+A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_quartermaster`'s
+`build.rs`.
+
 ## Contribution kinds
 
 | kind | layer | required fields |
@@ -108,14 +137,16 @@ mean the same thing on someone else's machine as on yours.
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
 | `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` (`donor`, `textures`, `retarget`, `single_group` optional) |
-| `add_sound` | Data | `name`, `bank`, `sound` (`wavebank`/`soundbank`/`sounddb`) |
+| `add_sound` | Data + Script | `bank`, `category`, `cues` ([sound cue fields](#sound-cue-fields)) |
+| `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
+| `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
 | `add_animation` | Data | `name`, `clip`, `trnm` (`events` optional) |
 | `replace_animation` | Data | `target`, `clip`, `trnm` (`events` optional) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
 | `edit_stringdb` | Data | `target`, `strings` |
-| `add_language` | Data (new base WAD) | `name`, `display`, `strings` (`base` optional) |
+| `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `activate_layer` | Script | `layer` (`replaces:` optional) |
@@ -368,8 +399,39 @@ base WAD is missing.
   table, applies these edits (keys you leave out keep the base text; a key the base does not have is
   a hard error), and re-keys the copy under the new language's name. A file with no strings at all is
   refused.
-- The string table goes into the Shipment's own overlay, which is always mounted; `data/<name>.wad`
-  is emitted too, because the engine requires it to exist.
+
+`data/<name>.wad` is the whole of the language's data; the Shipment overlay carries nothing for it.
+The build needs the game stack, and opens `English.wad` beside `vz.wad` as well as the stack. The
+WAD holds:
+
+| what | from | as |
+|---|---|---|
+| the string table | the `base` table, translated | `m2(name)`, type `0x39E5E978` |
+| fonts `<name>_18`, `<name>_20` | `<base>_18`, `<base>_20` | the font's one `MTRL` reference to `<base>_18_main` / `<base>_20_main` repointed to `<name>_18_main` / `<name>_20_main`; every other byte as the base has it |
+| atlases `<name>_18_main`, `<name>_20_main` | `<base>_18_main`, `<base>_20_main` | the base atlas under the new name hash; the texture's `NAME` chunk unchanged |
+| voice-over tables | every soundbank, sounddb and streamed wavebank of `English.wad` | re-keyed from `m2("<bank>.english")` to `m2("<bank>.<name>")`, computed from the bank hash each table carries; the table bytes unchanged |
+
+A font reaches its atlas only through the name hash in its `MTRL` chunk, and the engine reads a
+texture's `NAME` chunk into a buffer nothing uses, so a re-keyed atlas needs no other edit
+([`eighth_language_wiring.md` §10](../reverse_engineer/eighth_language_wiring.md#10-fonts-atlases-and-the-engine-language-table)).
+The fonts and atlases of `base` are read from `vz.wad`'s stack and from `shell.wad`; a copy in both
+must match byte for byte (M0219 when `base` has none). In the retail install only `english` has
+them (`shell.wad` block `blocks\Shell\english_P000_Q3.block`), so `base` is `english` in practice.
+
+Retail Lua loads a `vo_*` bank as `<bank>.<language>` (`_GetLocalizedName`,
+`mrxsoundbanks.lua:80-87`), so the re-keyed tables are the ones the new language's voice-over
+loads. The streamed `vo_stream` wavebank's waves play from `Audios\vo_stream.<language>.pws`
+(`_OpenFile`, `mrxsoundbanks.lua:96-107`), so the build records a `stream_copy` placement from
+`data/Audios/vo_stream.english.pws` to `data/Audios/vo_stream.<name>.pws`, with the source's size
+and sha256, and the deploy step copies the file. The build writes two placements for the language:
+
+- `data_wad { relative: data/<name>.wad, display }`;
+- `stream_copy { from: data/Audios/vo_stream.english.pws, to: data/Audios/vo_stream.<name>.pws }`.
+
+An **embedded** wavebank carries its audio inside the table, and `add_language` does not ship one:
+`English.wad`'s `vo_solanoahj` wavebank (`0x0843A8DC`) is embedded, so the cues that play it are
+silent in the new language.
+
 - **M0200** refuses a `name` that is not a lowercase `[a-z0-9_]` token (it becomes a file name) or
   that is a WAD the game already ships (`vz`, `shell`, `loading`, `english`, `french`, `german`,
   `italian`, `spanish`, `japanese`, `russian`). So `add_language` can only add a WAD, never shadow
@@ -550,6 +612,189 @@ duration — retail does.
 these sources cannot express one. Omitting `events` on a replace ships the clip with no `evnt`,
 whatever the clip it replaces had.
 
+### `add_sound`
+
+Adds a new sound bank. `Sound.CueSound("<cue name>")` plays one of its cues once the bank is
+loaded.
+
+```yaml
+  - kind: add_sound
+    bank: mymod_sounds         # the bank name; every table of the bank carries m2(bank)
+    category: ui               # the category of every cue's group (M0216)
+    cues:
+      - name: mymod_click      # Sound.CueSound("mymod_click")
+        wave: src/click.wav
+        group_gain_db: -4
+        cue_gain_db: -6
+        pitch_semitones: 0
+        positional: false
+        min_distance: 10
+        max_distance: 1000
+        distance_exponent: 1
+        doppler_scale: 1
+        start_limit: 0
+        sound_id: 0x1C2B3A49
+        priority: 0.95
+        group_20: 1
+        cue_16: 0
+        clip_hash: 0x1C2B3A49
+```
+
+The build encodes the bank's three tables — soundbank (ASET type 21, type hash `0x9F8BCA10`),
+sounddb (13, `0xE5273C14`) and wavebank (6, `0xF753F6D0`) — as three entries of one block under
+`m2(bank)`, at `blocks\VZ\mod_<hash>.block`, each with one primary ASET row, the shape of every
+retail bank ([`audio_code_map.md` §11.1](../reverse_engineer/audio_code_map.md#111-conventions-and-packaging)).
+Each cue becomes one embedded wave, one single-wave group and one single-track cue at the cue's
+index, and one sounddb entry routing `m2(name)` to it (§11.6). The block ships in the Shipment
+overlay.
+
+The bank plays only once it is loaded, and retail Lua loads banks by name. The Script half is a
+registration in the mod loader (`qm_modloader`, see [`add_ui`](#add_ui)): it runs
+`MrxSoundBanks.LoadWaveBank(bank)` then `MrxSoundBanks.LoadSoundBank(bank)`, the calls
+`mrxsoundbootstrap.lua` makes for the game's own banks. Loading a soundbank also requests the
+sounddb of the same name (`0x00602768`–`0x006027A1`), which is what makes FindCue see the cues. A
+`qm build` of a Shipment with an `add_sound` links the loader, so it needs the game stack and the
+Lua corpus.
+
+The loader runs on PMC-interior entry, so an added bank is not loaded in the front end.
+
+A cue named like a cue the game already has never plays: FindCue answers from the first loaded table
+that has the guid, which is the game's (**M0220**). To change a game cue, use
+[`replace_sound_cue`](#replace_sound_cue). A bank named `vo_*` is refused (**M0215**): retail Lua
+appends the language to such a name before loading it.
+
+### Sound cue fields
+
+Every field is required; none has a default. A cue is one PCM16 wave played by one single-wave group
+through one single-track cue — the shape of retail `ui_PDA_Open_01_st` (cue 57 → group 70 of
+`ui_hud`). Offsets are into the group, the cue or the wave record of
+[`audio_code_map.md` §11.4–§11.5](../reverse_engineer/audio_code_map.md#114-soundbank). In YAML a
+`u32` field takes a decimal or an unquoted `0x` hex integer.
+
+| field | type | written to | what the engine does with it | evidence |
+|---|---|---|---|---|
+| `name` | string | cue `+0x00` guid = `m2(name)`; the sounddb entry's guid | `Sound.CueSound(name)` looks up `m2(name)` | FindCue `FUN_00835a70` (PROVEN) |
+| `wave` | `src/` path | wave record and its embedded PCM16 data | the samples the wave plays | the strict reader `mercs2_audio::wav::read_pcm16_wav`: RIFF/WAVE, format 1, 16 bits, 1 or 2 channels, rate above 0, whole frames (M0214) |
+| `group_gain_db` | number, dB | group `+0x2C`, as the f32 `10^(dB/20)` | base volume of the sound instance | `FUN_0083d770` (PROVEN); −4 dB gives `0x3F21866C` and −6 dB `0x3F004DCE`, retail `ui_PDA_Open_01_st`'s bits |
+| `cue_gain_db` | number, dB | cue `+0x08`, as the f32 `10^(dB/20)` | multiplies the cue's volume each frame | `FUN_00835060` (PROVEN) |
+| `pitch_semitones` | f32 | group `+0x30` | base pitch of the sound instance, in semitones | `FUN_0083d700` (PROVEN) |
+| `positional` | bool | group `+0x14` (1 / 0) | `true`: with an emitter, the instance plays from the emitter's own source, positioned; `false`: from the shared 2D source | `FUN_00837830`, `0x008378A9` (PROVEN) |
+| `min_distance` | f32 | group `+0x18` | full volume up to this distance from the listener | `FUN_0083d3a0` (PROVEN) |
+| `max_distance` | f32 | group `+0x1C` | silent from this distance | `FUN_0083d3a0` (PROVEN) |
+| `distance_exponent` | f32 | group `+0x24` | exponent of the fall-off between the two distances | `FUN_0083d3a0` (PROVEN) |
+| `doppler_scale` | f32 | group `+0x28` | how much of the Doppler shift applies | `FUN_0083b120` (PROVEN) |
+| `start_limit` | u8 | cue `+0x06` | the cue starts only while fewer than this many instances of it are playing; 0 starts it every time | `FUN_00834ad0` (decomp 627053–627066) compares it with a counter in the cue's runtime record that `FUN_008354e0` raises when an instance plays and `FUN_00835850` lowers when one finishes (PROVEN) |
+| `sound_id` | u32 | group `+0x00` | one reader: for the ids `0xEA1343AA`, `0xC05D8686` and `0xBB8AE67D` nothing plays unless the game runs in English; any other value has no effect found | `FUN_008369e0`, `0x00836A27`–`0x00836A45` (PROVEN); no other reader in the Pal code `0x0082A000`–`0x00842000` (INFERRED, bounded search) |
+| `priority` | f32 | group `+0x10` | voice-stealing priority: with every voice busy, a new instance takes the voice of the lowest-priority wave only when its own priority (this value times its distance volume) is higher; otherwise no wave is created for it | `GetWavePriority` `FUN_00837e10` (`0x00837EDF`), `FUN_00837830` (`0x00837A0C`) (PROVEN) |
+| `group_20` | f32 | group `+0x20` | no reader known; carried as written | copied into the wave at `+0x68` (`0x00838F70`); the only reader of wave `+0x68` is the getter `0x00838F30` at vtable `+0x44` of both wave vtables, and it has no call site in `0x00828000`–`0x00842000` (INFERRED) |
+| `cue_16` | u16 | single-track cue `+0x16` | no reader known; carried as written | the cue's `{bank, group}` reference is read at `+0x10` and `+0x14` only (`FUN_0082e7d0`, `FUN_0083d410`); the instance field that holds the reference (`+0x28`, written at `0x00836A05`) is otherwise only cleared (`0x00836BEE`) (INFERRED) |
+| `clip_hash` | u32 | wave record `+0x00` | no reader known; carried as written | `FUN_00837830` reads the record at `+0x05`, `+0x06`, `+0x08`, `+0x0C`, `+0x14`, `+0x18`, `+0x1C`, `+0x20` and not `+0x00` (`0x00837883`–`0x0083789F`, `0x00837AB7`–`0x00837AF4`); no wave method reads the record pointer it stores as data (INFERRED) |
+
+The retail values of each raw field are counted by the census tests in `mercs2_audio`'s
+`tests/retail_fields.rs` (`group_sound_id_against_the_playing_cue_guids`, `group_priority_values`,
+`group_word_20_values`, `cue_start_limit_values`, `single_track_cue_word_16_values`,
+`wave_clip_hash_against_sound_id_and_cue_guid`) and listed in
+[`audio_code_map.md` §11.4](../reverse_engineer/audio_code_map.md#114-soundbank).
+
+The build derives the rest of each table:
+
+- group `+0x04` = `m2(category)`, `+0x08` = 0, form 0 (single-wave), and its wave
+  `{wavebank hash, wave index, weight 1.0}` — the engine does not read a single-wave group's weight
+  (`FUN_0083d410` returns the wave at `+0x34` directly, decomp 633049–633051, PROVEN), and it is 1.0
+  in every retail single-wave group (`single_wave_group_weight_is_one`);
+- cue form 0 (single-track), its `{bank hash, group index}`, and its length `+0x0C` by §11.4's rule;
+- the wave record's channels, format, rate, size, frame count and data offset, from the WAV;
+- the sounddb, sorted by guid.
+
+### `replace_sound_bank`
+
+Replaces a bank the game ships, by the name the game's Lua loads it under.
+
+```yaml
+  - kind: replace_sound_bank
+    bank: vo_mattias
+    language: german           # vo_* banks only (M0217)
+    category: vo
+    cues:
+      - name: MATTIAS_LINE_001
+        wave: src/mattias_001.wav
+        # … every sound cue field
+```
+
+The build encodes the bank's soundbank and sounddb from `cues` and ships both under the bank's entry
+name — `bank`, or `<bank>.<language>` for a `vo_*` bank — so the game's own load of the bank reads
+them. A cue of the game's bank that `cues` does not declare is gone from the bank; nothing checks
+for it.
+
+The waves go in a wavebank of their own, `qm_<shipment>_<entry>` (for example
+`qm_my-mod_vo_mattias.german`), in the Shipment overlay, which the mod loader loads
+(`LoadWaveBank` only). A retail wavebank can be shared between banks
+([`audio_code_map.md` §11.4](../reverse_engineer/audio_code_map.md#114-soundbank)), and the `vo_*`
+banks have none of their own (their waves stream from `vo_stream`, `mrxsoundbootstrap.lua:218-245`),
+so the replacement's waves are not written into a game wavebank. The override wavebank's name does
+not start with `vo_`, so Lua loads it under exactly that name.
+
+Where the tables ship is [below](#where-a-sound-override-ships). Two Shipments replacing one bank
+conflict (M0207).
+
+### `replace_sound_cue`
+
+Replaces one cue of a bank the game ships, leaving every other cue of the bank as the game has it.
+
+```yaml
+  - kind: replace_sound_cue
+    bank: ui_hud
+    category: ui
+    cue:
+      name: ui_PDA_Open_01_st  # the cue it replaces
+      wave: src/pda_open.wav
+      # … every other sound cue field
+```
+
+The build forks the game's soundbank — or the replacement, when a `replace_sound_bank` of the same
+entry is in the installed set — appends one single-wave group, and rewrites the cue as a
+single-track cue playing it. The cue keeps its index, so the bank's own sounddb still routes to it
+and is not shipped; every other cue and group is byte-identical. The wave goes in the override
+wavebank `qm_<shipment>_<entry>`, as for `replace_sound_bank`. The cue must be in the bank
+(**M0218**).
+
+Two Shipments replacing different cues of one bank compose: `qm link` merges every
+`replace_sound_cue` of the set into one soundbank per bank ([Sound banks are
+merged](#sound-banks-are-merged)). One cue replaced by two Shipments conflicts (M0207).
+
+### Where a sound override ships
+
+| bank | read from | ships to |
+|---|---|---|
+| `vo_*` | the declared `language`'s WAD (`English.wad`, …) | that language's patch: `language_patch/<language>.wad`, merged into `data/<language>-patch.wad` |
+| carried by `vz.wad` | `vz.wad` | the Shipment overlay |
+| carried by `shell.wad` | `shell.wad` | the shell patch: `<shipment>.shell-patch.wad`, merged into `data/shell-patch.wad` |
+
+A bank both archives carry ships to both. `ui_hud`, `ui_shell` and `music` are in both, as
+byte-identical tables (`cue_guids_across_sounddbs`). A bank in no carrier is **M0218**.
+
+The override wavebanks always ship in the overlay, and the mod loader that loads them runs on
+PMC-interior entry, so they are not loaded in the front end: a replaced cue that plays only in the
+front end is silent there.
+
+### The `language` field
+
+`language` names which language's copy of a `vo_*` bank a sound override replaces. Its values are
+the engine's language table (`0x00CF281C`) without `english_uk` and `allcaps`, which the game selects
+only from the command line and whose Lua `GetLanguage` reports English:
+
+`english` · `spanish` · `italian` · `french` · `german` · `japanese` · `russian`
+
+The table entry is the base name of the language's WAD (`.\Data\<entry>.wad`) and the suffix retail
+Lua appends to a `vo_*` bank's name ([`eighth_language_wiring.md`
+§10](../reverse_engineer/eighth_language_wiring.md#10-fonts-atlases-and-the-engine-language-table)).
+A bank that is not `vo_*` has one copy for every language and takes no `language` (**M0217**).
+
+When a contribution declares a language, `qm` and the Workshop open `vz.wad` and then that
+language's WAD from the same folder (every declared language, in table order); `add_language` adds
+`English.wad`. A declared language whose WAD is not there is an error — the retail install ships no
+`japanese.wad`.
+
 ## Composition
 
 Two Shipments that touch the same thing must not silently produce one winner and one no-op. This is
@@ -599,6 +844,9 @@ they claim one target in a class that cannot be shared:
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
 | `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
 | `add_*` minting a name (`add_model`, `add_movie`, `add_script`, …) | `KeyedSet` — the same new name twice is a conflict |
+| `add_sound` | `KeyedSet` on the bank name and on each cue — the same bank or cue name added twice is a conflict |
+| `replace_sound_bank` | `Exclusive` on the bank's entry (`<bank>` or `<bank>.<language>`) and on every cue it declares |
+| `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
 | `native_hook`, `place_file`, `add_runtime_dll` file names | `Exclusive` per game-folder path, **compared lowercased** (Windows file names are case-insensitive) |
 | `native_hook` `touches` | `Exclusive` per hooked address or symbol, exactly as spelled (see the Code layer) |
 | `raw` | `Exclusive` on every declared target |
@@ -635,6 +883,37 @@ old text is an error naming the file and line.
 
 One Shipment may fix a table by key and by text. The link WAD carries the merged table, and the load
 plan's `link_block_paths` names it so a deploy step drops the per-Shipment copies.
+
+### Sound cues are claimed by guid and language
+
+A sound contribution claims each cue as `SoundCue { guid, language }`: `guid` is `m2` of the cue's
+name, and `language` is the declared language of a `vo_*` override (none otherwise). Each language's
+`vo_*` banks are separate entries (`<bank>.<language>`), so claims in different languages never
+conflict.
+
+| kind | claims | intent | class |
+|---|---|---|---|
+| `add_sound` | the bank (an asset) and each cue | additive | `KeyedSet` |
+| `replace_sound_bank` | the bank's entry (an asset) and every declared cue | replace | `Exclusive` |
+| `replace_sound_cue` | the cue | replace | `Exclusive` |
+
+An added cue name is a key across the set because FindCue answers from the first loaded table that
+has the guid (`FUN_00835a70`): of two banks adding one cue name, one is never heard. A replaced cue
+has one winner in the table the game loads.
+
+### Sound banks are merged
+
+Each Shipment's build ships a whole soundbank per bank it overrides, so installed together the
+last mounted would drop the others' cues. `qm link` therefore merges every bank a
+`replace_sound_cue` in the set targets: per carrier (the overlay, the shell patch, each language
+patch), one soundbank at `blocks\VZ\mod_<entry hash>.block`, starting from the set's
+`replace_sound_bank` of that entry when there is one and the game's bank otherwise, with every
+`replace_sound_cue` applied in load order. The load plan's `link_block_paths` lists these blocks,
+so a deploy step drops the per-Shipment copies. The link writes them to
+`zz-quartermaster-link.wad` (overlay), `zz-quartermaster-link.shell-patch.wad` (shell patch) and
+`language_patch/<language>.wad` (language patch), each recorded in `placement.json`.
+
+The override wavebanks are not merged: each is named for its Shipment, so they never collide.
 
 ### Write-sets and read-sets
 
@@ -810,5 +1089,85 @@ still cannot ship a broken Shipment.
 `qm rules` lists every rule, including the ones that are known but **not yet implemented**. Those are
 listed on purpose: a linter that silently omits its most dangerous checks reads as a clean bill of
 health.
+
+The sound and language rules below are errors. M0214–M0217 need no game; M0218–M0220 need the game
+stack and run in `qm lint --with-game` and in `qm build`.
+
+### M0214
+
+**A sound cue's WAV is not uncompressed 16-bit mono or stereo PCM.** Fires when the strict reader
+(`mercs2_audio::wav::read_pcm16_wav`) refuses a cue's `wave`: the file cannot be read, is not
+RIFF/WAVE, its format is not 1 (PCM), its bits per sample are not 16, its channels are not 1 or 2,
+its rate is 0, its block align is not `channels × 2`, its `data` chunk is empty or ends inside a
+frame, it lacks or repeats a `fmt ` or `data` chunk, `data` comes before `fmt `, or its RIFF size
+and chunks do not add up to the file. The build reads the file through the same reader.
+
+Fix: export the sound as uncompressed 16-bit PCM WAV, mono or stereo.
+
+### M0215
+
+**A sound bank or cue name the engine cannot reach.** Fires on:
+
+- two cues of one bank whose names hash to one guid — `m2` folds case, so `Click` and `click`
+  collide;
+- a bank or cue name that is empty, written as a bare `0xHHHHHHHH` hash, or has surrounding
+  whitespace (the whitespace is hashed with the name);
+- a bank with no cues;
+- an `add_sound` bank whose name starts with `vo_`: retail Lua appends the language to such a name
+  before loading it (`_GetLocalizedName`, `mrxsoundbanks.lua:80-87`), so the loader would ask for
+  `<bank>.<language>` and find nothing.
+
+Fix: give each cue a distinct name, write names as plain trimmed text, declare at least one cue, and
+name an added bank without the `vo_` prefix.
+
+### M0216
+
+**A sound bank's `category` is not a category of the game's tree.** A group's category hash must be
+one of the 19 categories of the global sounddb's tree
+([`audio_code_map.md` §11.3](../reverse_engineer/audio_code_map.md#113-sounddb)). 14 have known
+names: `ambience`, `chatter`, `collision`, `explosion`, `foley`, `music`, `Non_Action_Hijack`,
+`non_ui`, `sfx`, `source`, `ui`, `vehicle`, `vo`, `weapon`; the other five have no known name, so a
+manifest cannot name them.
+
+Fix: use one of the 14 names; the diagnostic suggests the nearest.
+
+### M0217
+
+**A sound override's `language` does not match its bank.** Fires on `language` on a
+`replace_sound_bank` / `replace_sound_cue` whose bank is not `vo_*` (the game has one copy of it for
+every language), or on no `language` on one whose bank is `vo_*` (each language has its own copy,
+`<bank>.<language>`). See [The `language` field](#the-language-field).
+
+Fix: remove `language` from a non-`vo_*` override; name the language on a `vo_*` one.
+
+### M0218
+
+**A sound override's bank or cue is not in the game.** Fires when no carrier holds a soundbank under
+the override's entry name — the carriers being the game stack (`vz.wad` and the declared languages'
+WADs) and `shell.wad` beside it — or when a `replace_sound_cue`'s cue is not in that bank (a cue the
+same Shipment's `replace_sound_bank` declares for the bank counts as in it).
+
+Fix: write the bank name exactly as the game's Lua loads it (`ui_hud`, `vo_mattias`) and, for a
+`vo_*` bank, the right `language`. To add a cue the bank does not have, use
+[`add_sound`](#add_sound).
+
+### M0219
+
+**An `add_language` base has no fonts or font atlases to fork.** Fires when the `base` language
+(default `english`) has no fonts `<base>_18` / `<base>_20` or atlases `<base>_18_main` /
+`<base>_20_main` in `vz.wad`'s stack or in `shell.wad`, or when the two hold different bytes for
+one of them. In the retail install only `english` has them.
+
+Fix: omit `base`, or set it to `english`.
+
+### M0220
+
+**An `add_sound` cue has the name of a cue the game already has.** Fires when an added cue's guid is
+routed by a sounddb in the game stack. FindCue walks the loaded sound tables from the first loaded
+and answers with the first that has the guid (`FUN_00835a70`), so the game's cue plays and the added
+one never does.
+
+Fix: to change the game's cue, use [`replace_sound_cue`](#replace_sound_cue); to add a cue, give it
+a new name.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
