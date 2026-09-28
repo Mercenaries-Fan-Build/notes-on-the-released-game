@@ -713,7 +713,7 @@ A source is `{asm: <path>}`, SM3 assembly in `sm3asm`'s syntax, or `{blob: <path
 `vs_3_0` / `ps_3_0` blob whose disassembly must assemble back to the same bytes. Either way the
 bytecode must be a whole token stream of at most 0x8000 bytes with a `CTAB`, and its version token
 must be the family's stage (**M0230**). Every constant its `CTAB` names must be one the family's
-binder resolves, or the engine never sets it (**M0237**).
+binder resolves, or nothing sets it (**M0237**).
 
 The shaders register at runtime, not from the WAD: `qm build` writes `_build/<shipment>.shaders.h`,
 one `m2_shader_class` table and family enumerator per `add_shader`, and the Shipment's own ASI queues
@@ -1497,8 +1497,13 @@ registry.
 ### M0237
 
 **A shader constant its family never binds.** A family's binder (the record's vtable `+0x10`)
-resolves a fixed list of constant names; a `CTAB` constant outside it is never set. Samplers are
-bound by texture stage and are not checked.
+resolves a fixed list of constant names, and the engine sets a shader's constants through those. A
+`CTAB` constant outside the list is set only by code that addresses it directly: three retail
+shaders declare one (`PgColorFPConst` `color`, `PgLtiDebugZPassFP` `depthRange`,
+`PgLtiTerrainShadowVP` `PositionOffset`), and no engine code addresses a new shader's. So an
+`add_shader` source may declare only its family's constants, and a `replace_shader` source only its
+family's plus those its retail record declares. Samplers are bound by texture stage and are not
+checked.
 
 ### M0238
 
