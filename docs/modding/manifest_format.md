@@ -1163,9 +1163,10 @@ Fix: omit `base`, or set it to `english`.
 ### M0220
 
 **An `add_sound` cue has the name of a cue the game already has.** Fires when an added cue's guid is
-routed by a sounddb in the game stack. FindCue walks the loaded sound tables from the first loaded
-and answers with the first that has the guid (`FUN_00835a70`), so the game's cue plays and the added
-one never does.
+routed by a sounddb in the game stack or in any language WAD installed beside `vz.wad` (the running
+language's `vo_*` banks load at boot, `mrxsoundbootstrap.lua:219-245`, before the mod loader runs).
+FindCue walks the loaded sound tables from the first loaded and answers with the first that has the
+guid (`FUN_00835a70`), so the game's cue plays and the added one never does.
 
 Fix: to change the game's cue, use [`replace_sound_cue`](#replace_sound_cue); to add a cue, give it
 a new name.
