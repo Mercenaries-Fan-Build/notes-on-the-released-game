@@ -125,6 +125,7 @@ its size and sha256, and where a deploy step puts it. An output that produced no
 | `language_patch` | `language`, `relative` | merges the WAD's blocks, with every installed Shipment's for that language, into `data/<language>-patch.wad`, which the engine mounts directly above `data/<language>.wad` (`FUN_004BFEF0`, `"%s\%s-patch.wad"` with the language table's entry) |
 | `shell_patch` | — | merges the WAD's blocks, with every installed Shipment's, into `data/shell-patch.wad`, which the engine mounts above `shell.wad` in the front end (`FUN_004BFDA0` with the name `shell`, which `FUN_004C1280` writes at `0x004C12DD`) |
 | `stream_copy` | `from`, `to` | copies the game file `from` to `to`, both relative to the game folder; `bytes` and `sha256` describe `from` as the build read it, and no bytes are in the output directory |
+| `data_file` | `relative`, `base_sha256` | replaces the game data file at `relative` with the output file at the same relative path. `relative` is one of `data/shader3.bin` and `data/shader3Low.bin`. `base_sha256` is the sha256 of the original the output was built from (`--original-data`), and `sha256` / `bytes` describe the output file ([Shader stores](#shader-stores-and---original-data)) |
 
 A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_quartermaster`'s
 `build.rs`.
@@ -141,6 +142,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
 | `add_animation` | Data | `name`, `clip`, `trnm` (`events` optional) |
+| `add_shader` | Data + Code | `family`, `classes` ([`add_shader`](#add_shader)) |
+| `replace_shader` | Data | `target`, `shader` (`shader_low` when the stem has a low record) |
 | `replace_animation` | Data | `target`, `clip`, `trnm` (`events` optional) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
@@ -491,6 +494,50 @@ Either way, a map with nothing to repoint onto, or a repoint that matches nothin
 PNG only, 8-bit, dimensions a multiple of 4; normals are BC3/DXT5nm, diffuse and specular BC1 unless
 the source carries real alpha.
 
+#### The shader import
+
+The host group names two vertex shaders in its primitive-group `INFO` — the main one at `+0x0C` and
+the shadow one at `+0x10`, each `m2` of a registration name — and each of its materials names a
+pixel shader in the `MTRL` word after its texture hashes. `add_model` writes all three (on the
+skinned path, for every host group), resolved by the convention retail follows:
+
+| shader | the input it follows | example |
+|---|---|---|
+| pixel | the material's texture count and which slots are non-zero | `3:011` → `PgDiffRefractNormFP` |
+| vertex | the group's sub-object kind (`MESH`, `SKIN`, `TINY`), its vertex declaration's `usage.index` elements in order, and its materials' one pixel shader | `MESH`, `0.0+5.0+3.0+6.0`, `PgDiffSpecNormFP` → `PgMeshNoColorVP` |
+| shadow | the kind, the main vertex shader, and whether the materials' flags carry `0x08` (`alpha`) or none do (`opaque`) | `MESH`, `PgMeshNoColorVP`, alpha → `PgMeshTexShadowVP` |
+
+The convention is the census of every retail model (`crates/mercs2_quartermaster/data/shader_import_rules.tsv`,
+recomputed from `vz.wad` by the game-gated test `shader_import_census`). An input retail gives one
+shader resolves to it. Where retail uses several shaders for one input, nothing in the model says
+which, and `qm` stops and names the choices. The census finds this for most inputs:
+
+- **pixel** — only `3:011` has one choice. A material with a diffuse map alone has six
+  (`PgDiffFP`, `PgFastFP`, `PgDiffAmbOccFP`, …), and one with diffuse, specular and normal maps has
+  fifteen (the `Refl`, `Metal`, `SSS`, `AmbOcc` and `Rim` variants of `PgDiffSpecNormFP`). The
+  material flags, its float preamble and the vertex colour do not separate them.
+- **vertex** — 43 of 51 inputs have one choice. The rest differ by `AmbientWind` (`MESH` / `SKIN`
+  with vertex colour) or `_Ruin` (`TINY`).
+- **shadow** — 31 of 39 inputs have one choice. Flag `0x08` always selects the `Tex` shadow shader;
+  without it retail uses both.
+
+Declare a shader in the glTF's `extras`, by registration name: `pixel_shader` on a material,
+`vertex_shader` and `shadow_vertex_shader` on a mesh or a primitive. One declaration applies to
+every host material or group; two different declarations of one key are an error.
+
+```json
+"materials": [{ "extras": { "pixel_shader": "PgDiffSpecNormFP" } }],
+"meshes": [{ "extras": { "shadow_vertex_shader": "PgMeshShadowVP" }, "primitives": [...] }]
+```
+
+A declared or resolved name must be registered in every configuration: a retail registration, or
+an [`add_shader`](#add_shader) of this Shipment (at `qm link`, also of a Shipment it requires). A
+pixel name that is not is **M0235**, a vertex name **M0236**. The main vertex shader must read only
+inputs the group's vertex declaration supplies (**M0238**): each `dcl` input's usage and index, in
+every store that holds the shader, must be an element of the declaration. The host's vertex
+declaration is kept, so a vertex shader that reads vertex colour (usage 10) cannot draw a group
+without one.
+
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
 Without `retarget:` a model is lowered RIGIDLY: hosted on the donor with empty joints. Correct for
@@ -618,6 +665,96 @@ duration — retail does.
 `animation` assets are `MANM` keyframe animations instead, and a replace naming one is refused —
 these sources cannot express one. Omitting `events` on a replace ships the clip with no `evnt`,
 whatever the clip it replaces had.
+
+### `add_shader`
+
+Registers new shaders in the engine's shader registry and adds their bytecode to the shader stores.
+
+```yaml
+load:
+  requires:
+    - capability: shader-registry        # the m2-sdk registers them at runtime (M0231)
+
+contributions:
+  - kind: add_shader
+    family: pixel                        # the record family the engine constructs
+    classes:                             # a pixel family: base, _pl, _sl, _pl_sl, in that order
+      - { name: GlowFP,       stem: GlowFP,       shader: {asm: src/glow.asm},       shader_low: {asm: src/glow_low.asm} }
+      - { name: GlowFP_pl,    stem: GlowFP_pl,    shader: {asm: src/glow_pl.asm},    shader_low: {asm: src/glow_pl_low.asm} }
+      - { name: GlowFP_sl,    stem: GlowFP_sl,    shader: {asm: src/glow_sl.asm},    shader_low: {asm: src/glow_sl_low.asm} }
+      - { name: GlowFP_pl_sl, stem: GlowFP_pl_sl, shader: {asm: src/glow_pl_sl.asm}, shader_low: {asm: src/glow_pl_sl_low.asm} }
+  - kind: add_shader
+    family: vertex
+    classes:                             # a vertex family: exactly one
+      - { name: GlowVP, stem: GlowVP, shader: {blob: src/glow_vp.vso}, shader_low: {blob: src/glow_vp_low.vso} }
+```
+
+- **`family`** is the record family the engine constructs for the shader: one of the 45 record
+  vtables of the retail exe, which decides the registry (vertex or pixel), the record's size, and the
+  constants the engine binds by name. The names and each family's constants are
+  `crates/mercs2_quartermaster/data/shader_families.tsv`: `pixel` and `vertex` are the base
+  families most shaders use; the others (`blur_pixel`, `water_vertex`, `scaleform_strip_pixel`, …)
+  are the subclasses the engine's own subsystems construct
+  ([`shader_store_format.md` §9](../shader_store_format.md#9-registration)).
+- **`classes`**: exactly 4 for a pixel family, exactly 1 for a vertex family (**M0234**). A material
+  names its pixel shader once and the draw adds the light class — 0 base, 1 `_pl` (point light),
+  2 `_sl` (spot light), 3 `_pl_sl` — to its registry index, so the four classes register one after
+  the other. With the ShaderLevel setting off the engine registers class 0 alone and draws every
+  material with it.
+- **`name`** is the name a material or primitive group keys the shader by (`m2` of it). It must be
+  new: a retail registration's key, or another added one, is **M0233** (the registry keeps the first).
+- **`stem`** is the store record the registration loads: `<stem>_3.sho` in `shader3.bin`,
+  `<stem>_3l.sho` in `shader3Low.bin`. Classes may share a stem; then their sources must assemble to
+  the same bytes (**M0230**) and one record is added.
+- **`shader`** is the `shader3.bin` bytecode and **`shader_low`** the `shader3Low.bin` bytecode, which
+  the engine loads with ShaderLevel off. Both are required.
+
+A source is `{asm: <path>}`, SM3 assembly in `sm3asm`'s syntax, or `{blob: <path>}`, a compiled
+`vs_3_0` / `ps_3_0` blob whose disassembly must assemble back to the same bytes. Either way the
+bytecode must be a whole token stream of at most 0x8000 bytes with a `CTAB`, and its version token
+must be the family's stage (**M0230**). Every constant its `CTAB` names must be one the family's
+binder resolves, or the engine never sets it (**M0237**).
+
+The shaders register at runtime, not from the WAD: `qm build` writes `_build/<shipment>.shaders.h`,
+one `m2_shader_class` table and family enumerator per `add_shader`, and the Shipment's own ASI queues
+them from `DllMain` with the m2-sdk's `m2_shader_add_pixel` / `m2_shader_add_vertex`. The m2-sdk
+registers them right after the game's own shaders. Because nothing registers them without it, an
+`add_shader` Shipment requires the `shader-registry` capability (**M0231**), which the m2-sdk
+Shipment provides.
+
+### `replace_shader`
+
+Replaces the bytecode of a shipped shader's store records, in place.
+
+```yaml
+  - kind: replace_shader
+    target: PgMeshVP                     # the registered .sho stem (PgMeshVP.sho)
+    shader: {asm: src/mesh_vp.asm}       # its shader3.bin record, PgMeshVP_3.sho
+    shader_low: {asm: src/mesh_vp_low.asm}  # its shader3Low.bin record, PgMeshVP_3l.sho
+```
+
+`target` is a stem a retail registration loads (the `.sho` name without `.sho`; the logical name can
+differ — `PgMeshNoTangentVP` loads `PgMeshVPNoTangent.sho`). `shader` replaces its `shader3.bin`
+record. `shader_low` replaces its `shader3Low.bin` record and is required exactly when the stem has
+one there. Each source's stage must be its record's (**M0232**). The record keeps its id and position.
+
+### Shader stores and `--original-data`
+
+The shader kinds edit the game's stores, `data/shader3.bin` and `data/shader3Low.bin`. `qm build`,
+`qm link` and `qm lint --with-game` read the originals only from the directory `--original-data`
+names, never from the game folder, whose copy is whatever the last deploy left there: a Shipment
+with a shader kind and no `--original-data` is an error. The game's `shaderVT*.bin` and
+`shaderR2VB*.bin` pairs are read from its `data` folder for one purpose: an added record's id must
+be free in every set of stores the engine loads together — both stores plus the VT pair, or both
+plus the R2VB pair — and each set must stay below the engine's 0x1200-slot id table (**M0233**).
+
+- `qm build` applies the Shipment's edits in contribution order and writes `_build/data/shader3.bin`
+  and `_build/data/shader3Low.bin`, each a `data_file` placement whose `base_sha256` is the sha256 of
+  the original.
+- `qm link` applies every installed Shipment's edits in load order, one store per file, emitted the
+  same way. The load plan's `link_file_paths` lists both files when any Shipment in the set has a
+  shader kind, and each item's `data_files` lists the files that Shipment edits: a deploy step drops
+  the per-Shipment `data_file` placements of the files `link_file_paths` lists and deploys link's.
 
 ### `add_sound`
 
@@ -937,7 +1074,8 @@ they claim one target in a class that cannot be shared:
 | kind(s) | what two Shipments on one target do |
 |---|---|
 | `replace_texture` | `LastWins` — load order picks; never a conflict |
-| `replace_shader`, `replace_fx`, `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
+| `replace_fx`, `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
+| `replace_shader`, `add_shader` | `Exclusive` on each store stem (`m2` of the stem, so case does not matter) and on each registration name: a replace and an add of one stem, two adds of one stem, and two adds of one name all conflict. The classes of one `add_shader` may share a stem |
 | `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
 | `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
@@ -1299,5 +1437,79 @@ loader loads the bank — `gameplay`, `front_end` — and the bank's block ships
 
 Fix: list where the bank plays, each session once: `[gameplay]`, `[front_end]` or
 `[gameplay, front_end]`.
+
+The shader rules below cover [`add_shader`](#add_shader), [`replace_shader`](#replace_shader) and
+[the shader import](#the-shader-import). M0230, M0231 and M0234 need no game (M0230 needs the
+Shipment's files); M0232, M0233, M0237 and M0239 need the game stack and `--original-data`, and run
+in `qm lint --with-game` and `qm build`; M0235 and M0236 check the built WAD and `qm link`'s set;
+M0238 runs in the `add_model` lowering.
+
+### M0230
+
+**A shader source does not load.** Fires when an `asm` source does not assemble; when a `blob`
+does not disassemble, or its disassembly assembles to different bytes; when the bytecode is over
+0x8000 bytes, is not a whole token stream, lacks the end token or a `CTAB`; when its version token is
+not the family's stage (`add_shader`); or when classes sharing a stem assemble to different bytes.
+
+Fix: assemble the source with `shaderforge asm` and fix what it reports; give a pixel family
+`ps_3_0` sources and a vertex family `vs_3_0` ones; give classes of one stem one source.
+
+### M0231
+
+**`add_shader` without the `shader-registry` capability.** The shaders register at runtime through
+the m2-sdk, so the Shipment must `load.requires: [{capability: shader-registry}]`.
+
+### M0232
+
+**A `replace_shader` target is not a registered store record of that stage.** Fires when the stem
+has no record in `shader3.bin` (or, for `shader_low`, in `shader3Low.bin`); when a record's stage is
+not the source's; when no retail registration loads the stem (the engine never reads the record);
+or when `shader_low` is missing for a stem `shader3Low.bin` has, or given for one it does not.
+
+### M0233
+
+**A shader store id or registration name collides, or the stores fill the id table.** Fires when an
+added stem's id is held by a store the engine loads with it; when an added name's key is a retail
+registration's or another added one's (the registry keeps the first); or when a set of stores loaded
+together reaches 0x1200 records, where the engine's id table insert never returns.
+
+### M0234
+
+**An `add_shader`'s classes are malformed for its family.** Fires when a pixel family has other than
+4 classes or a vertex family other than 1, when a name is empty, has surrounding whitespace or shares
+a key with another class (`m2` folds case), or when a stem is empty, ends in `.sho`, has a path
+separator or a non-printable character, or makes `<stem>.sho` longer than 128 characters.
+
+### M0235
+
+**A material's pixel-shader key is not registered in every configuration** (HANG). `Mtrl_Parse`
+(`FUN_00858790`) looks the key up in the pixel registry and, on a miss, reads the null entry at
+`0x00858DB8` ([`shader_store_format.md` §7](../shader_store_format.md#7-the-0x00858db8-crash)). The key
+must be a retail pixel registration made in every configuration, or light class 0 of an
+`add_shader` of the Shipment (at `qm link`, of it or a Shipment it requires).
+
+### M0236
+
+**A primitive group's vertex-shader key is not a registered vertex shader** (HANG). The group
+loaders (`FUN_00478270`, `FUN_004796f0`) look the `INFO` words `+0x0C` and `+0x10` up in the vertex
+registry.
+
+### M0237
+
+**A shader constant its family never binds.** A family's binder (the record's vtable `+0x10`)
+resolves a fixed list of constant names; a `CTAB` constant outside it is never set. Samplers are
+bound by texture stage and are not checked.
+
+### M0238
+
+**A vertex shader reads an input the group's vertex declaration does not supply.** The resolved main
+vertex shader's `dcl` inputs, in every store holding it, must all be elements of the group's
+declaration.
+
+### M0239
+
+**The shader registry's capacity is exceeded** (HANG). A configuration registers more than 0x800
+pixel names or 0x100 vertex names, counting retail's (242 pixel and 129 vertex with ShaderLevel on).
+The registry inserts (`FUN_0085b7c0`, `FUN_00632250`) never give up on a full table.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
