@@ -46,12 +46,15 @@ The save **path shape** is recovered end-to-end — Lua `Pg.SaveGame`/`SaveSingl
 save-event handler `FUN_005a4520` (`SaveData`/`InitialSaveData`) → hash-dispatched per-object
 serializer `FUN_00874150` under CS `DAT_01174ffc` → the zlib stream cluster `FUN_00759xxx`, sourced
 from the **profile/economy singleton `[0x1176054]`** — and the on-disk `.profile` header is a proven
-13,404-byte LE layout (`version==4`, `data_size==len-4`, zlib at `0x468`). The **two genuinely-open
-items are the RE meat**: (1) the `ProfileHash` **integrity algorithm** over the blob (@0x00; *not*
-crc32/fnv1a/sum/xor/adler over any obvious range) and (2) the **`saveProfile` disk-write body**
-(LE-header + deflate + write to `SaveGames\*.profile`) — both are registration-anchored / absent from
-the Ghidra dump and are the primary confirm-live targets. The Save-cfunc VAs are all
-registration-table anchored, not decompiled bodies.
+13,404-byte LE layout (`version==4`, `data_size==len-4`, zlib at `0x468`). The `ProfileHash`
+**integrity algorithm** (@0x00 over `[4:]`) is **DERIVED 2026-08-07 — CRC-32/BZIP2 (non-reflected)**,
+poly `0x04C11DB7`, init/xorout `0xFFFFFFFF`, shipped in
+[`save_write::profile_hash`](../../tools/wad_simulator/crates/mercs2_formats/src/save_write.rs)
+(byte-exact against all 8 retail saves) — see [[profile-hash-is-crc32-bzip2]]. The **one remaining
+write-side unknown** is the native `saveProfile` disk-write **body** (LE-header + deflate + write to
+`SaveGames\*.profile`) — registration-anchored / absent from the Ghidra dump; structural only, since
+`save_write::write_profile` is a faithful reimplementation that round-trips byte-exact. The
+Save-cfunc VAs are all registration-table anchored, not decompiled bodies.
 
 ---
 
@@ -71,7 +74,7 @@ as everywhere in this build). "PC addr" is the retail VA; **audit** = registrati
 | zlib stream (de)serialize used by SaveData | — | **`FUN_0075b070`** → `FUN_007597e0`/`FUN_00759970` | READ: called from `FUN_005a4520@0x5a4708`; 4-byte-prefixed inflate stream (the `FUN_00759xxx` codec cluster) | H |
 | section-offset-table binary save (structural analog) | — | `FUN_00759020` (`PrecacheManager::Save`) | READ: `fopen`→16B header→N×0x20 offset table→per-section `ftell` fixups→rewrite table; the engine's own "dir + sections" disk idiom | H (analog) |
 | `SetLuaSaveVersion` cfunc (version stamp) | `SetLuaSaveVersion` (`0x002c5a4`) | `0x005E6120` (audit; body unlocated) | audit §3.15 CERTAIN | M(VA) |
-| **`ProfileHash`** integrity | `ProfileHash` (`0x003fc78`) | — (no body in dump; `.profile@0x00`) | Xbox symbol + on-disk field; **algorithm unreversed** | open |
+| **`ProfileHash`** integrity | `ProfileHash` (`0x003fc78`) | — (no body in dump; `.profile@0x00`) | Xbox symbol + on-disk field; **algorithm DERIVED = CRC-32/BZIP2 (non-reflected) over `[4:]`** — [`save_write::profile_hash`](../../tools/wad_simulator/crates/mercs2_formats/src/save_write.rs) (byte-exact vs all 8 retail saves) | H (algo derived) / open (native site) |
 | **`hasCorruptedSave`** reject FSM | `hasCorruptedSave`(`0x002fe14`) + `File corrupted!` | **`FUN_00614080`** | READ: save-dialog FSM fires `hasCorruptedSave`(hash `0x32ff679b`) / `hasAutosave`(`0x13edde28`) triggers | H (FSM), open (the byte-compare) |
 | `Autosave`/`RequestAutosave` cfunc | `autoSave`(`0x002fee4`)/`gameAutoSave`(`0x002f9d8`) | `0x005E61F0` (audit) | audit §3.15 | M(VA) |
 | autosave dispatch (game-state) | `autoSave` | in `FUN_00614540` (case `0x5a06a0a6` → `s_autoSave`) | READ: `_stricmp(...,s_autoSave)`→SecuROM worker `thunk_FUN_024ef560` | M |
@@ -240,7 +243,10 @@ fflush; fclose;
 
 The profile writer (`saveProfile`) is expected to follow this same fixup pattern for its
 header+zlib+hash — write header, write compressed body, seek back, stamp `data_size` and
-`ProfileHash` — but its body is **not in the dump** (§9).
+`ProfileHash` — but its native body is **not in the dump** (§9). The **hash algorithm itself is
+now derived** (§3.2 — CRC-32/BZIP2 over `[4:]`, shipped in `save_write::profile_hash`), so a
+faithful writer (`save_write::write_profile`) already exists; the missing native body is
+structural context, not a blocker.
 
 ---
 
@@ -254,18 +260,43 @@ retail saves; `save.rs::VERSION = 4`). Body not in the dump → the VA is regist
 confirm-live to read the store site and the `GetINILoadLastSave 0x002c6ec` companion (which selects
 the last-save path).
 
-### 3.2 `ProfileHash` = the integrity hash — **OPEN** (the key unknown)
+### 3.2 `ProfileHash` = the integrity hash — **DERIVED 2026-08-07** (was OPEN)
 
 `.profile@0x00` is a u32 that **varies every save** — it is not a magic; it is the per-file
 `ProfileHash` (Xbox symbol `0x003fc78`). The on-disk sentinels that make the file self-describing are
 `version==4 @0x04` and `data_size == file_len-4 == 0x3458 @0x08` — i.e. **the hash covers `[4:]`**
-(the 13,400 bytes after the 4-byte hash). But the **algorithm is unreversed**: `save.rs` /
-`SAVE_FORMAT.md` exhaustively ruled out crc32, fnv1a, sum, xor, and adler over `[4:]`, `[8:]`,
-`[4:0x468]`, and `[0x468:]`. It is stored, **not** validated, by the Rust reader. The FNV
-`Hash_String 0x824270` family (used for *class-name* keys in §2.2) is a plausible relative but does
-not match over the obvious ranges. **This is the single most important confirm-live item** (§8): break
-the `saveProfile 0x7BC628` write path and watch the `@0x00` word get computed to recover the algorithm
-and the exact covered range.
+(the 13,400 bytes after the 4-byte hash).
+
+**Algorithm — CRC-32/BZIP2 (non-reflected):**
+
+| parameter | value |
+|-----------|-------|
+| polynomial | `0x04C11DB7` |
+| init | `0xFFFFFFFF` |
+| final XOR | `0xFFFFFFFF` |
+| reflect in | **No** |
+| reflect out | **No** |
+| covered range | file bytes `[4:]` (13,400 B) |
+| check value | `profile_hash(b"123456789") == 0xFC891918` |
+
+Shipped in
+[`tools/wad_simulator/crates/mercs2_formats/src/save_write.rs`](../../tools/wad_simulator/crates/mercs2_formats/src/save_write.rs)
+(`profile_hash` + `write_profile`), byte-exact against every retail save fixture — the reader now
+validates via `Profile::hash_ok()` and the writer stamps a real hash. Memory:
+[[profile-hash-is-crc32-bzip2]]. `SAVE_FORMAT.md` line 36 carries the same derivation.
+
+**Why the earlier "not crc32" ruling was wrong.** `save.rs` / `SAVE_FORMAT.md` (pre-2026-08-07)
+claimed crc32/fnv1a/sum/xor/adler had all been ruled out over `[4:]`, `[8:]`, `[4:0x468]`,
+`[0x468:]`. Two compounding mistakes: (1) only the *reflected* CRC-32/ISO-HDLC (zlib) form was
+actually tested — the non-reflected BZIP2 form matches, consistent with the engine's `ntohl` BE
+SaveData blob; (2) on a machine without the retail-save fixtures each candidate loop ran zero
+times and passed while asserting nothing (a [[wad-dependent-tests-skip-silently]] variant — the
+claim was true when written and unchecked from then on). See `save_write.rs` module docs for the
+full history.
+
+The native `@0x00` stamp site inside `saveProfile` remains unlocated in the Ghidra dump (§9),
+but the algorithm and covered range are now known, so recovering the site is only a
+structural-confirm-live, no longer a blocker.
 
 ### 3.3 `hasCorruptedSave` reject FSM — `FUN_00614080` (H FSM, open compare)
 
@@ -283,9 +314,10 @@ case 3: FUN_00615680(0xc87c625c, 0x32ff679b, 1, ..., s_hasCorruptedSave_00bbc440
 So `FUN_00614080` is the **corruption-rejection *dispatcher*** (it raises `hasCorruptedSave` as a Lua
 trigger, hash `0x32ff679b`, that the shell UI shows as the "File corrupted!" dialog). The actual
 byte-level "is this save corrupt" *compare* (hash mismatch / version mismatch) lives on the
-`loadProfile`/`ProfileHash` side, which is unlocated — reached only after the hash algo (§3.2) is
-recovered. Its sibling `s_hasAutosave` trigger (hash `0x13edde28`) is how the shell offers "resume
-autosave".
+`loadProfile`/`ProfileHash` side, which is unlocated — but no longer gated on §3.2 (hash algo is
+now derived), so the compare is a direct x32dbg confirm-live: break `hasCorruptedSave` being
+raised and walk back to the compare site. Its sibling `s_hasAutosave` trigger (hash `0x13edde28`)
+is how the shell offers "resume autosave".
 
 ---
 
@@ -304,7 +336,7 @@ the six retail saves: `const=4363 / vary=9041` bytes.
 
 | Offset | Size | Field | Status | Notes |
 |---|---|---|---|---|
-| `0x00` | u32 | `ProfileHash` (checksum) | FACT (opaque) | **Not a magic** — varies every save. Integrity hash over `[4:]`. **Algorithm unreversed** (§3.2). Stored, not validated. |
+| `0x00` | u32 | `ProfileHash` (checksum) | FACT (algorithm DERIVED §3.2) | **Not a magic** — varies every save. **CRC-32/BZIP2 (non-reflected)** over `[4:]` (poly `0x04C11DB7`, init/xorout `0xFFFFFFFF`). Validated by the Rust reader via `Profile::hash_ok()`; the writer (`save_write::profile_hash` / `write_profile`) stamps a real one. |
 | `0x04` | u32 | `version` | FACT | Always `4` (`SetLuaSaveVersion`, §3.1). Validated. |
 | `0x08` | u32 | `data_size` | FACT | `= file_len - 4 = 0x3458` (13400) — the range the hash covers. Validated. |
 | `0x0C` | u32 | `unknown_0x0C` | FACT (const) | Constant `3` across all saves. |
@@ -397,15 +429,16 @@ is the Lua↔engine bridge.
 
 ## 8. Confirm-live inventory (x32dbg, read-only while PAUSED — [[x32dbg-mcp-no-resume]])
 
-**The two RE-meat items (highest priority):**
-1. **`ProfileHash` algorithm + covered range** — HW-write bp on `.profile@0x00` during a save; watch
-   the `@0x00` word get computed and single-step the hash loop to recover the algo and confirm it
-   covers `[4:]` (13,400 B). Cross-check against `Hash_String 0x824270` (FNV) with the correct
-   seed/range. **Still open.**
+**The RE-meat items:**
+1. ~~`ProfileHash` algorithm + covered range~~ — **SETTLED 2026-08-07 (§3.2)**: CRC-32/BZIP2
+   (non-reflected) over `[4:]`, shipped in `save_write::profile_hash`, byte-exact against all 8
+   retail saves. No confirm-live needed.
 2. **The profile disk-write body** — confirm the header+zlib+hash fixup follows the
    `PrecacheManager::Save` idiom (§2.3): write LE header, deflate the `return{}` blob to `0x468`,
-   seek-back and stamp `data_size@0x08` + `ProfileHash@0x00`. **Still open — but not via the recipe
-   below.**
+   seek-back and stamp `data_size@0x08` + `ProfileHash@0x00`. Still open, but **structural**
+   only — `save_write::write_profile` already reimplements the observed behaviour end-to-end
+   (round-trips byte-exact), so the native site is context for confirm-live, not a blocker. Do
+   not use the recipe below.
 
 > **⚠ Recipe retracted 2026-07-26 — `0x7BC628` is not a function.** Both items above used to say
 > *"break `saveProfile 0x7BC628`"*, item 1 adding *"via a `DecompileProfileAccessors.java`-style
@@ -450,11 +483,16 @@ is the Lua↔engine bridge.
 
 ## 9. Open / unlocated (honest)
 
-- **`ProfileHash` algorithm** — the on-disk integrity hash (@0x00 over `[4:]`) is **unreversed**; ruled
-  out crc32/fnv1a/sum/xor/adler over every obvious range (save.rs / SAVE_FORMAT.md). Primary open item.
+- ~~**`ProfileHash` algorithm**~~ — SETTLED 2026-08-07 (§3.2): CRC-32/BZIP2 (non-reflected) over
+  `[4:]`, shipped in `save_write::profile_hash` / `write_profile` (byte-exact vs all 8 retail
+  saves). Memory: [[profile-hash-is-crc32-bzip2]]. The previous "ruled out crc32/…" ruling only
+  tested the *reflected* zlib form and — a [[wad-dependent-tests-skip-silently]] variant — ran
+  zero iterations on machines without the fixtures.
 - **`saveProfile 0x7BC628` disk-write body** — not in the Ghidra dump (registration-anchored VA). The
-  actual LE-header + deflate + write-to-`SaveGames\*.profile` code (and where the hash is stamped) is
-  the missing write side; `PrecacheManager::Save FUN_00759020` is only a *structural* analog.
+  actual LE-header + deflate + write-to-`SaveGames\*.profile` code (and the `data_size`/`ProfileHash`
+  stamp sites) is the missing native write side; `PrecacheManager::Save FUN_00759020` is only a
+  *structural* analog. **Not a blocker** — `save_write::write_profile` reimplements every observed
+  behaviour and round-trips byte-exact; the native site is structural context.
 - **All Save-namespace cfunc VAs in audit §3.15** (`0x7B8AC4`, `0x7B44FC`, `0x5E6120`, `0x5E61F0/E0/10/70`,
   `0x7BC190/1A0/6C4/628`) are **registration/binding-table anchored, not decompiled bodies** — treat as
   "where the table entry lives", confirm-live for the real prologue. (Consistent with [[shell-menu-and-save-browser]]:
@@ -480,13 +518,14 @@ save ([[shell-menu-and-save-browser]]). This map is the **write-side reimpl targ
 - **The container** (§4): fixed 13,404-byte file, LE header (`version=4`, `data_size=len-4`), zlib at
   `0x468`, then the two-layer note — the *inner* engine blob is BE (`ntohl`) with a `{ver=1,…}` header,
   the *outer* file header is LE. A faithful writer reproduces both.
-- **The integrity hash** (§3.2) is a **hard blocker** for producing loadable saves: until the
-  `ProfileHash` algorithm is recovered (confirm-live #1), the engine can *read* but cannot *write* a
-  save the retail exe will accept — a modern reimpl either recovers the algo or (if it owns both ends)
-  substitutes its own. This is the single most valuable open item in row 29.
+- ~~**The integrity hash** (§3.2) is a **hard blocker** for producing loadable saves~~ — RESOLVED
+  2026-08-07: `ProfileHash` = CRC-32/BZIP2 (non-reflected) over `[4:]`, shipped in
+  `save_write::profile_hash` / `write_profile` (byte-exact vs retail; the retail exe accepts
+  round-tripped saves).
 - **Autosave gating** (§6) and the **corruption-reject trigger** (§3.3) are the shell/UX behaviors to
-  mirror once the write path exists.
+  mirror.
 
 Net: row 29's *shape* is fully mapped (Lua seam → `FUN_005a4520`/`FUN_00874150` → zlib → singleton
-`[0x1176054]`), the on-disk header is proven, and the two write-side unknowns — the `ProfileHash`
-algorithm and the `saveProfile` disk-write body — are isolated and confirm-live-ready.
+`[0x1176054]`), the on-disk header is proven, and the write side is now **implemented** — read ✅ /
+write ✅ via `mercs2_formats::save_write`. The remaining native `saveProfile` disk-write body is
+structural context (registration-anchored VA), not a blocker.

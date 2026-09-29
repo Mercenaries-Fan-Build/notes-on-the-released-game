@@ -82,10 +82,11 @@ of the retail engine that any hardening plan must fit inside.
 
 ## The seam today (what modders trip on)
 
-The failure modes divide into two groups: F1–F7 for mission-shaped mods (add_script, patch_lua
-into `mrxmissionflow`), F8–F10 for the other Shipment kinds (wardrobe outfits, store items,
-localisation). Each is either directly seen in this project or directly implied by the Ess
-codebase's own defensive design.
+The failure modes divide into two groups: F1–F7 + F11 for mission-shaped mods (add_script,
+patch_lua into `mrxmissionflow`), F8–F10 for the other Shipment kinds (wardrobe outfits, store
+items, localisation). Each is either directly seen in this project or directly implied by the Ess
+codebase's own defensive design. (F11 was documented later than F1–F10, hence the ordering; it is
+still mission-shaped.)
 
 ### F1–F7 — mission-shaped mods
 
@@ -188,6 +189,55 @@ Adjacent, worth calling out explicitly: **`AddSupportData(tData, sKey)` silently
 `g_bIsDlc` is true** (`mrxsupportdata.lua:2459`). Store-item Shipments must set that flag before
 adding a row, or the row disappears without a message.
 
+### F11 — Story-milestone gate leak (starter side-effect)
+
+Mission-shaped, discovered after F1–F10 on new-game boot with `mercs2-fiona-wave-defense` v0.9.4
+installed. A mission's `sStarter` (e.g. `"PmcBoss"` for Fiona) is a *briefing-room actor handle*
+that is **also a world-state trigger**. Calling `UnlockMission` on a mission with
+`sStarter="PmcBoss"` before the player has earned PMC ownership fires this seven-hop cascade:
+
+1. `UnlockMission` runs `_AddBriefingToStarter()` at
+   [`mrxmissionflow.lua:302`](../../tools/wad_simulator/workshop_data/lua/resident/mrxmissionflow.lua#L302).
+2. → `MrxStarterManager.RequestStarter("PmcBoss"):AddBriefing("<mission_id>", ...)`.
+3. → `Starter:AddBriefing` at
+   [`mrxstarter.lua:153-154`](../../tools/wad_simulator/workshop_data/lua/resident/mrxstarter.lua#L153-L154):
+   **`if not self:IsActivated() then self:Activate()`**. On a new game the PmcBoss starter has
+   `_bActive = nil`, so Activate runs.
+4. → `Starter:Activate` at
+   [`mrxstarter.lua:303-317`](../../tools/wad_simulator/workshop_data/lua/resident/mrxstarter.lua#L303-L317)
+   sets `_bActive=true` and calls `RefreshBriefingRoomDisplay()`.
+5. → `RefreshBriefingRoomDisplay` at
+   [`mrxstarter.lua:535-546`](../../tools/wad_simulator/workshop_data/lua/resident/mrxstarter.lua#L535-L546):
+   PmcBoss carries `bPmcStarter=true`
+   ([`wifstarterdata.lua:687`](../../tools/wad_simulator/workshop_data/lua/vz/wifstarterdata.lua#L687)),
+   so this calls `WifPmcInterior.RefreshUiDisplay()`.
+6. → `RefreshUiDisplay` at
+   [`wifpmcinterior.lua:816-874`](../../tools/wad_simulator/workshop_data/lua/vz/wifpmcinterior.lua#L816-L874):
+   `bDisplay = true` (not gated by `_bUnlocked` — only by the unset `_bEntranceLock`), and calls
+   **`_EnablePortals(bDisplay, false)`** at line 874.
+7. → `_EnablePortals(true, false)` at
+   [`wifpmcinterior.lua:993-1011`](../../tools/wad_simulator/workshop_data/lua/vz/wifpmcinterior.lua#L993-L1011)
+   arms every `_sExterior_Entrance` portal with `_OnEnter` as callback. **Player walks into the
+   HQ door and is teleported inside — before `WifPmcInterior.Unlock()` at
+   [`wifmissionflow.lua:144`](../../tools/wad_simulator/workshop_data/lua/vz/wifmissionflow.lua#L144)
+   has ever fired**, and therefore before `_bUnlocked=true`, before `_OnPmcHibernation(building,
+   true)` initialised any building, before the parking-lot / transit / garage / wager wiring —
+   the player is inside a half-instantiated HQ.
+
+Vanilla never hits this because every shipped PMC-faction contract with `sStarter="PmcBoss"`
+(PmcCon002/003/031/032/033/034 …) is `UnlockMission`'d only from the `PmcCon001` flow-rule's
+fConseq at [`wifmissionflow.lua:142-146`](../../tools/wad_simulator/workshop_data/lua/vz/wifmissionflow.lua#L142-L146),
+in the same block as `WifPmcInterior.Unlock()`. `PmcCon001` itself has **no `sStarter`**
+([`wifmissiondata.lua:783-791`](../../tools/wad_simulator/workshop_data/lua/vz/wifmissiondata.lua#L783-L791)),
+so unlocking it doesn't touch PmcBoss. The ordering is implicit in the shipped scripts, not
+documented; a modder authoring a Shipment with `sStarter="PmcBoss"` has no way to know without
+the decomp. Every faction's starter is subject to the same class: `AllChiBoss`/`GurBoss`/etc.
+each guard their own faction-HQ portal state via the same `RefreshBriefingRoomDisplay` →
+`Hq:RefreshUiDisplay` fan-out ([`mrxstarter.lua:539-541`](../../tools/wad_simulator/workshop_data/lua/resident/mrxstarter.lua#L539-L541)).
+
+Confirmed live: v0.9.4 armed the portal on new-game boot; the register append gated `UnlockMission`
+on `HasKey("PmcCon001")` in v0.9.5.
+
 ## Per-tool responsibility split
 
 The four tools we have are a natural stack: `qm` at compile time, Modkit at
@@ -257,6 +307,32 @@ so the 13,404-byte cap is not violated at runtime.
 
 `qm build` uses this to emit the companion cleanup hooks (F6) and to feed Modkit's provider
 registry.
+
+**Story-gate declaration** (F11). Missions declare the story milestone they unlock behind. Data-
+driven, not hardcoded — the 1% of missions authored to be available from game start (a debug
+range, a tutorial, an intro contract) opt out explicitly rather than being blocked by a rule:
+
+```yaml
+    mission:
+      requires:
+        mission_complete: PmcCon001   # or a list: [PmcCon001, OilCon001]
+        # mission_complete: null      # explicit opt-out; mission available from game start
+```
+
+Defaultable from `sStarter`: `qm build` infers a sensible default whenever `requires:` is absent,
+using the vanilla starter→gate mapping (PmcBoss/HelPmcBoss/MecPmcBoss/JetPmcBoss →
+`mission_complete: PmcCon001`, AllChiBoss → `mission_complete: AllCon001`, and so on — the same
+milestones every shipped faction contract's flow-rule implicitly gates on). Explicit `requires:`
+overrides. Explicit `mission_complete: null` opts out. Missing declaration + unknown `sStarter`
+is `error M0xxx` — the modder gets asked which gate applies, they don't get a silent default that
+doesn't fit.
+
+At build time, `qm build` emits a `HasKey(<mission>)` guard around every Shipment-authored
+`UnlockMission` call site for that mission. Modders never need to write the guard themselves; the
+generated code is symmetrical with the retry loop the framework already provides via
+`_RefreshComplete`. Runtime side (below) enforces the same declaration as a backstop, so a mod
+that predates the manifest field or hand-writes its own `UnlockMission` in a place `qm` cannot
+statically see still gets gated.
 
 **Capability declaration.** The manifest gains a `capabilities:` block listing the binding
 namespaces the Shipment intends to touch (`spawns`, `layers`, `factions`, `ui`, `audio`,
@@ -383,11 +459,23 @@ call. Belt-and-suspenders with `qm lint`'s compile-time check.
 Without this, Modkit's "uninstall while running" UX either kicks the player to menu (unfriendly)
 or leaks a live mission (broken).
 
+**Story-gate enforcement** (F11 runtime backstop). The SDK hooks `mrxmissionflow.UnlockMission`.
+When called for a mission whose Shipment manifest declares `mission.requires.mission_complete`,
+the SDK checks the requirement (`HasKey(...)` for each entry) and refuses the unlock if any
+required key is missing. Refusal logs `[mod-gate-defer] <shipment_id>/<mission_id> waiting for
+<mission_complete>` to `Sys.WriteToConsole` (not `Debug.Printf` — dead stub, see F5) and posts
+`SupersededByGate` into the flow-refresh callback chain so the Shipment's install fires
+automatically the instant the gate flips (no per-mod retry loop required). A mod whose Lua does
+its own `UnlockMission` before the SDK sees it (a pre-manifest-field mod, or a modder who forgot)
+still gets gated — the wrap catches the call at the module surface, not at the call site.
+`Mercs2.Mods.status(id)` (below) surfaces the deferred reason so Modkit's dashboard can show
+"waiting on: PmcCon001 complete" instead of the mod appearing broken.
+
 **Live introspection surface.** Expose `Mercs2.Mods.list()`, `Mercs2.Mods.status(id)`,
 `Mercs2.Mods.crashLog(id)`, `Mercs2.Mods.evict(id)` to Lua, and mirror the same as a JSON
 endpoint for Modkit's dashboard. Both the game's own script layer and out-of-process tools (this
 project's live-bridge REPL, a future Modkit dashboard) get the same view of what's loaded,
-active, quarantined.
+active, quarantined, or deferred behind a story gate.
 
 ## Community accelerators
 
@@ -420,29 +508,55 @@ no `Pg.Spawn` page a modder can Ctrl-F. A generator (Rust binary, no new RE):
 The template Shipment repo ships a `.luarc.json` that pulls the stubs in. This is the fastest
 thing in the whole plan to build and the biggest single community accelerator on it.
 
-## Ess.Contract and Ess.Sandbox in this world
+## MrxTutorial, Ess.Contract, and Ess.Sandbox in this world
 
-`Ess.Contract` was built without the decomp; it deliberately refuses to touch the native contract
-system (`80_contract.lua` header: "the native contract system corrupts saves because it registers
-into `WifMissionData`, serializes MrxTask nodes INTO the save, and drives missions through
-dynamic_import + mrxbriefing + the MrxState load gate. This framework touches NONE of that").
-Once the hardened seam exists, the native contract system is safe — so authors gain a second,
-save-resume-capable option. `Ess.Contract` stays as the "give me an ephemeral wave-defense /
-challenge-arena / tutorial with no save contract at all" answer; the native mission Shipment
-becomes the "give me a proper contract that survives save/reload" answer. Neither is
-second-class.
+The seam hardening above targets the heavyweight offering-and-persistence path (MrxTaskContract
++ starter briefing + `_tActiveMissions` + `SaveInstance`). But it is not the only shipped mission
+pattern, and modders who reflex-reach for it are frequently choosing a heavier tool than their
+mission actually needs. Two lighter, F1–F11-immune-by-construction options already exist:
 
-Concretely: an ephemeral wave-defense like FioDef001 "Hold The Line" is arguably a *better* fit
-for `Ess.Contract`'s model — the mission is designed to reset on next load anyway. A proper
-critical-path contract with checkpoint semantics is a better fit for the hardened-native path.
-Modders pick based on the mission, not based on which framework happens to not corrupt saves.
+**`MrxTutorial` (shipped-native, F1-immune)** — the lightweight mission class Pandemic themselves
+built for wiftutorial*.lua and shooting-gallery-style mode logic
+([mrxtutorial.lua](../../tools/wad_simulator/workshop_data/lua/resident/mrxtutorial.lua)).
+No `MrxTaskState`, no `SaveInstance`, no `_tSaveData`, no starter interaction, no
+`_tActiveMissions` registration. `MrxTutorialManager.SaveSingleton` at
+[line 219](../../tools/wad_simulator/workshop_data/lua/resident/mrxtutorialmanager.lua#L219) saves
+*only* a bounded list of completed-tutorial names — a shape that cannot participate in any of
+F1/F3/F4/F11 by construction. The engine's own second mission-lifecycle class, always available,
+zero dependency cost to modders.
 
-`Ess.Sandbox` (`63_sandbox.lua`) is the reference spec for the reference-counted-mutation
-system above. Wally already enumerated the providers that need reversal: layer add/remove,
-faction attitude, contract-active flag, HUD-element registration, music-state transitions,
-ambient overrides. The engine-side implementation should cover **every** provider Ess covers,
-not just layers/factions/contract-active. Ess-in-Lua opts *in* per mission; the hardened seam
-does it *unconditionally* at the C-binding boundary.
+**`Ess.Contract`** ([`80_contract.lua`](../../../mercs2-lua-essentials/src/80_contract.lua))
+does the same for authors who want a richer offering UI (multi-page menu, custom accept/decline
+dialog) than MrxTutorial provides. Built without the decomp, it explicitly refuses to touch the
+native contract system (file header: "the native contract system corrupts saves because it
+registers into `WifMissionData`, serializes MrxTask nodes INTO the save, and drives missions
+through dynamic_import + mrxbriefing + the MrxState load gate. This framework touches NONE of
+that"). Same "no save-write participation" property as MrxTutorial, layered on a custom UI stack.
+
+**When to choose which** — a modder authoring a mission has three viable lifecycle options, plus
+five offering options, plus three persistence options, and the shipped-vs-Ess choice is
+independent of that. The combinability matrix and per-recipe guidance is at
+[`docs/reverse_engineer/mission_construction_patterns.md`](../reverse_engineer/mission_construction_patterns.md).
+Concrete rule of thumb: **prefer the lightest lifecycle that meets the mission's real needs.**
+A wave-defense arena is Recipe C (MrxTutorial-shape + region trigger + tiny persistent-key), not
+Recipe A (MrxTaskContract + starter briefing + full save row) — and it doesn't matter that the
+seam is hardened; the lighter recipe is still less surface. FioDef001 v0.10.0's rewrite from
+Recipe A to Recipe C dropped the mod's poisoning surface to zero and cut its overlay WAD from
+15.2 MB to 2.6 MB in the process — the heavier path was pulling in the whole scripts_vz block
+for no gain.
+
+Once the hardened seam exists, the native MrxTaskContract path is *also* safe. Authors then pick
+based on **the mission's semantics** (does it need save-resume mid-mission? does it need a starter-
+table briefing UI? does it own persistent world mutations?), not based on which path happens to
+avoid corruption today.
+
+**`Ess.Sandbox`** ([`63_sandbox.lua`](../../../mercs2-lua-essentials/src/63_sandbox.lua)) is the
+reference spec for the reference-counted-mutation system in the SDK design. Wally already
+enumerated the providers that need reversal: layer add/remove, faction attitude, contract-active
+flag, HUD-element registration, music-state transitions, ambient overrides. The engine-side
+implementation should cover **every** provider Ess covers, not just layers/factions/contract-
+active. Ess-in-Lua opts *in* per mission; the hardened seam does it *unconditionally* at the
+C-binding boundary.
 
 ## Migration path
 
@@ -477,6 +591,19 @@ predates a new feature just does not get that feature, without breaking.
 
 ## Related
 
+- [`docs/reverse_engineer/mission_construction_patterns.md`](../reverse_engineer/mission_construction_patterns.md)
+  — the peer doc on the Lua-side authoring patterns (offering × lifecycle × persistence,
+  combinability matrix, per-recipe guidance including Recipe C for wave-defense/challenge-arena
+  modes). If this doc says "here's why the seam bites", that doc says "here's which patterns
+  don't bite in the first place."
+- [`docs/reverse_engineer/mission_inventory.md`](../reverse_engineer/mission_inventory.md) —
+  every shipped mission classified by lifecycle class, starter, and unlock trigger. Useful for
+  cross-referencing "does the seam-hardening design cover the way vanilla mission `X` works?"
+  and for picking a shipped mission to model a new mod on (Recipe A → PmcCon031-shape,
+  Recipe B → PmcJob001-shape, etc.).
+- [`docs/reverse_engineer/mission_contract_flow_code_map.md`](../reverse_engineer/mission_contract_flow_code_map.md)
+  — the native-side map (Pg cfuncs, `Sys.RequestGameState`, layer streaming, context actions)
+  that both docs above sit on top of.
 - [[custom-mission-inherit-mrxtask-required]] — the failure that motivated this document.
 - [[custom-mission-add-script-loading-screen-wedge]] — the lifecycle-hole class this belongs to.
 - [[profile-hash-is-crc32-bzip2]] — closes the save-blob-steward RE prerequisite.
@@ -485,6 +612,8 @@ predates a new feature just does not get that feature, without breaking.
 - `mercs2-lua-essentials/src/80_contract.lua` — Wally's from-Lua answer to the same seam problems.
 - `mercs2-lua-essentials/src/63_sandbox.lua` — the reference provider list for §Reference-counted
   world mutations.
+- `mercs2-lua-essentials/src/24_save.lua` — the shared save-gate pattern (`Ess.Save.gate`/
+  `.ungate`); Recipe E's `save_schema: none` opt-out is a native-side generalisation of this.
 - `mercs2-lua-essentials/FEATURE_SHEET.md` — Design Principle 2 ("make a footgun impossible").
 - `docs/modding/manifest_format.md` — the current manifest surface these additions land on.
 - `docs/modding/field_guide.md` — the collected traps that will be lint-preventable once shipped.
