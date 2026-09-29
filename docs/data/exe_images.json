@@ -1,0 +1,643 @@
+{
+  "schema_version": "1",
+  "manifest_id": "mercs2-exe-atlas-phase1",
+  "generated": "2026-09-06",
+  "companion_narrative": "docs/reverse_engineer/exe_images.md",
+  "governing_rules": [
+    "Every 'FUN_XXX' or '0xNNNN' address anywhere in Mercs2 RE docs is keyed to ONE of these images — reference addresses by (image_id, va).",
+    "SHA-256 is the primary identity. Filenames are metadata — see aliases[] on each row.",
+    "The corpus's 'ghidra' source currently indexes ONLY v10_dump (output/_ghidra/mercs2_unpacked.exe_decomp.txt). Every other image needs its own decomp before its addresses become corpus-searchable — Phase 2 work.",
+    "The Xbox 360 devkit images (Jul 11 2008 Profile/Final) are ~6-8 weeks pre-ship — they drift from retail. Use as name/RTTI oracle only, not as address-parity oracle.",
+    "Multiple images may share the same size but different SHA-256 (mercs2_nodrm_v2, mercs2_nodrm_v3, and the retail cracked exe are all 53,482,288 B). Never key by size alone.",
+    "The PS3 asset VZ.WAD is partially encrypted (envelope 0x80800 bytes, stream cipher). Header work as of 2026-05-21 recovered an 18-byte keystream prefix; full crack is blocked on completing PS3 EBOOT RE. See wad row ps3_retail_vz_wad."
+  ],
+  "vintage_notes": [
+    "The cross_platform/ analysis tree (May-June 2026) was superseded on some points: the DLC hang bisect there predates the streaming-livelock work (June 2026+) and the DLC01-is-a-level architecture. Where they conflict, later corpus work wins.",
+    "The Xenon devkits from Jul 11 2008 were widely believed close to retail early on — subsequent work confirmed real drift. Rely on them only for RTTI/string anchoring."
+  ],
+  "engine_images": [
+    {
+      "image_id": "v10_retail_packed",
+      "canonical_name": "Mercenaries2.exe (v1.0 retail packed)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "securom_packed",
+      "runnable": true,
+      "sha256": "a1532b4c7652fe9feee1191f5bd04aa073cd0f036e49831c754e7d895241dfa8",
+      "size_bytes": 17122568,
+      "md5_known": "596efbf5e6c88924acef1fd8b0891012",
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries2.exe",
+      "aliases": [
+        "game-files/Mercenaries2-signed.exe",
+        "game-files/Mercenaries2.signed.personal.exe"
+      ],
+      "lineage": "v1.0",
+      "provenance": "Original v1.0 retail disc; SecuROM-packed; runs the game with a disc check.",
+      "decomp": {"state": "none", "reason": "encrypted at rest; use v10_dump for statics"},
+      "corpus_indexed": false,
+      "atlas_role": "identity anchor for v1.0 lineage"
+    },
+    {
+      "image_id": "v10_community_a237",
+      "canonical_name": "Mercenaries2.A237.exe (community unsigned)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "unknown_community",
+      "runnable": null,
+      "sha256": "ada5545526c4d09d8000f0e7600c0cbc24b7b360638fa2dde407cd7f976534d7",
+      "size_bytes": 16846848,
+      "primary_path": "game-files/Mercenaries2.A237.exe",
+      "aliases": [
+        "game-files/Mercenaries2(1).exe",
+        "game-files/Mercenaries2.community-member-original.exe",
+        "game-files/Mercenaries2.random-unsigned.exe",
+        "game-files/Mercenaries2.unpatched.uncracked.exe",
+        "game-files/Mercenaries2.updated-com-mem-modded.exe"
+      ],
+      "lineage": "v1.0-adjacent",
+      "provenance": "Community-supplied variant; six identical copies across game-files/. 275,720 bytes SMALLER than v1.0 retail packed. Provenance unknown — a pre-crack or community-rebuilt trim; NOT a bit-for-bit v1.0 retail.",
+      "decomp": {"state": "none"},
+      "corpus_indexed": false,
+      "atlas_role": "candidate v1.0-lineage clean image; investigate before treating as authoritative",
+      "caveats": [
+        "The name 'A237' also appears in the FESL b-version builder memory as a specific PC exe variant — cross-check whether this file is that build."
+      ]
+    },
+    {
+      "image_id": "v11_uncracked",
+      "canonical_name": "Mercenaries2.exe (v1.1 patched uncracked)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "securom_packed",
+      "runnable": false,
+      "sha256": "7a348847e103d71e8c17e7a51a0f3b4d4422e0c9cb46ec6acc9fe5e4e6be36b5",
+      "size_bytes": 53944080,
+      "md5_known": "5b9976f162e050f4adcc51bb997ba97f",
+      "primary_path": "output/mercs2_v1.1_uncracked.exe",
+      "aliases": [
+        "game-files/Mercenaries2(2).exe",
+        "game-files/Mercenaries2(3).exe",
+        "game-files/Mercenaries2.patched.uncracked.exe"
+      ],
+      "lineage": "v1.1",
+      "provenance": "v1.0 retail + tools/patches/mercs2_v1.0_to_v1.1_update.bspatch. Static-analysis reference only — will not launch (SecuROM still installed).",
+      "pe_timestamp": "0x48cae190",
+      "decomp": {
+        "state": "backup_present",
+        "path": "output/_ghidra/decomp_backups/2026-07-06/v1.1_genuine_patched_decomp.txt",
+        "fnsig_path": "output/_ghidra/decomp_backups/2026-07-06/fnsig_v1.1.json"
+      },
+      "ghidra_project": "output/_ghidra/proj_unpacked (2nd program: genuine_patched_unpacked.exe)",
+      "corpus_indexed": false,
+      "atlas_role": "v1.1 static-analysis oracle"
+    },
+    {
+      "image_id": "v11_cracked",
+      "canonical_name": "Mercenaries2.exe (v1.1 patched cracked, runnable)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "cracked",
+      "runnable": true,
+      "sha256": "23fe7f3816b7cc43b5b3499e8ae72e664df59c34498cd1d944b4c357918914ac",
+      "size_bytes": 53482288,
+      "md5_known": "857b3387d54774a32c1328effb5de4d4",
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/Mercenaries2.exe",
+      "aliases": [
+        "game-files/Mercenaries2 (1).exe",
+        "game-files/Mercenaries2.community-member-modded.exe",
+        "game-files/Mercenaries2.patched.cracked.crusedll.exe"
+      ],
+      "lineage": "v1.1",
+      "provenance": "v1.1 + tools/patches/mercs2_v1.1_securom_bypass.bspatch; imports pmc_bb.dll (or cruise.dll depending on variant). Ships with pre-rename cruise.dll variant on some copies; SHA-256 identifies which.",
+      "decomp": {"state": "none", "reason": "hooked into pmc_bb.dll ordinal #1; use v10_dump statically"},
+      "corpus_indexed": false,
+      "atlas_role": "the actual runnable target — behavioural gate for any ASI",
+      "caveats": [
+        "'community-member-modded' filename is misleading: SHA-256 matches the runnable game exactly. Whatever the community modded, it was NOT this exe."
+      ]
+    },
+    {
+      "image_id": "v10_dump",
+      "canonical_name": "mercs2_unpacked.exe (v1.0 live memory dump)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "unpacked_from_dump",
+      "runnable": false,
+      "sha256": "8c179a99d7fad88bab288826db19a579b53512801d8e0d1c1a761bbc30ebc7ba",
+      "size_bytes": 53485568,
+      "primary_path": "output/_ghidra/securom_dump/mercs2_unpacked.exe",
+      "aliases": [],
+      "lineage": "v1.0",
+      "provenance": "Live memory dump of a running v1.0 process post-OEP, reconstructed to a flat PE. All 13 sections: RVA == raw pointer offset. Ghidra-friendly.",
+      "pe_timestamp": "0x48a370c7",
+      "base_va": "0x00400000",
+      "decomp": {
+        "state": "complete",
+        "path": "output/_ghidra/mercs2_unpacked.exe_decomp.txt",
+        "backup_path": "output/_ghidra/decomp_backups/2026-07-06/v1.0_mercs2_unpacked_decomp.txt",
+        "backup_sha256": "51402430fa3802670489759223ca9db6ae89447264d2ea1182616c1981ab5b68",
+        "function_count": 27104,
+        "fnsig_path": "output/_ghidra/decomp_backups/2026-07-06/fnsig_v1.0.json"
+      },
+      "ghidra_project": "output/_ghidra/proj/mercs2.rep",
+      "corpus_indexed": true,
+      "atlas_role": "PRIMARY current reference — every FUN_XXX in existing docs is this image unless stated otherwise",
+      "caveats": [
+        "pmc_bb.dll hot-patch splices at 0x005E9DE0, 0x005E9F40, 0x006D5640 — dump captured RUNTIME patches at those bytes, NOT retail bytes.",
+        "For byte-clean v1.0 code at those addresses, use v10_nodrm_v2 or v10_nodrm_v3.",
+        "Some SecuROM section bodies decompile as 'binding-only' or split-thunks — see memory/binding-only-is-not-a-wall-disassemble.md."
+      ]
+    },
+    {
+      "image_id": "v10_nodrm_v1",
+      "canonical_name": "mercs2_nodrm_v1.exe (deprecated)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "drm_stripped",
+      "runnable": true,
+      "sha256": "5e6011b0f2efbc4bac5c1a59e844d5464d4341018f1252ddaa76fc7bdeeef43c",
+      "size_bytes": 53485568,
+      "primary_path": "output/_ghidra/securom_dump/mercs2_nodrm_v1.exe",
+      "aliases": [],
+      "lineage": "v1.0",
+      "provenance": "Built FROM the memory dump (v10_dump) by securom_unwrap. Inherits the same 3 hot-patch splices as v10_dump. DEPRECATED — use v2/v3 for byte-clean code.",
+      "decomp": {"state": "none"},
+      "corpus_indexed": false,
+      "atlas_role": "deprecated — do not add new work; kept for historical trace"
+    },
+    {
+      "image_id": "v10_nodrm_v2",
+      "canonical_name": "mercs2_nodrm_v2.exe (clean v1.0 lineage)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "drm_stripped_clean",
+      "runnable": true,
+      "sha256": "bb119233c5fca9a7b81556c0da80005e094d6b2e005e36d0d1d8531cdea880ae",
+      "size_bytes": 53482288,
+      "primary_path": "output/_ghidra/securom_dump/mercs2_nodrm_v2.exe",
+      "aliases": [],
+      "lineage": "v1.0",
+      "provenance": "Built from the on-disk decrypted v1.0 exe (NOT from the live dump). Retail-clean bytes at every address — no runtime patches.",
+      "decomp": {"state": "none"},
+      "corpus_indexed": false,
+      "atlas_role": "byte-clean v1.0 control image — use to disambiguate v10_dump hot-patch artefacts",
+      "caveats": [
+        "Same size as v11_cracked (53,482,288 B) but completely different lineage. Do not confuse."
+      ]
+    },
+    {
+      "image_id": "v10_nodrm_v3",
+      "canonical_name": "mercs2_nodrm_v3.exe (clean v1.0 lineage, v2 successor)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "drm_stripped_clean",
+      "runnable": true,
+      "sha256": "2ae4a2e06ce5408fa32eed9e85e1419ecfd5c173fabcb770b76b21578d08b9b9",
+      "size_bytes": 53482288,
+      "primary_path": "output/_ghidra/securom_dump/mercs2_nodrm_v3.exe",
+      "aliases": [],
+      "lineage": "v1.0",
+      "provenance": "Successor to v10_nodrm_v2 — same clean-lineage recipe with fixes. Preferred byte-clean v1.0 reference.",
+      "decomp": {"state": "none"},
+      "corpus_indexed": false,
+      "atlas_role": "PREFERRED byte-clean v1.0 image"
+    },
+    {
+      "image_id": "xenon_devkit_profile_raw",
+      "canonical_name": "Mercs2_Xenon_P.exe (Jul 11 2008 Profile devkit, raw)",
+      "platform": "xbox360",
+      "arch": "ppc32be_xenon",
+      "endian": "big",
+      "kind": "engine_exe",
+      "crypto_state": "unpacked_from_xex_devkit_kek",
+      "runnable": false,
+      "sha256": "d6f68a60a68cb549f3620f1c2df7d52a2ad07733e92099ed11555db9c2c6df8b",
+      "size_bytes": 32374784,
+      "primary_path": "output/jul08_prototype/mercs2_xenon_p.pe.bin",
+      "aliases": [
+        "output/jul08_prototype/mercs2_xenon_p.pe_full.bin"
+      ],
+      "lineage": "jul08_devkit_profile",
+      "provenance": "Xbox 360 devkit 'Profile' build, ~6-8 weeks pre-ship. XEX unpacked with all-zero devkit KEK. Retains 324 RTTI class names, 48 source paths, PDB path. PE link timestamp 2008-07-12 01:37:13 UTC.",
+      "base_va": "0x82000000",
+      "decomp": {
+        "state": "complete",
+        "path": "output/_ghidra_x360/xenon_decomp_named.c",
+        "function_count": 38581,
+        "named_count": 863,
+        "named_via_strings": 458,
+        "named_via_rtti_ctors": 325,
+        "rtti_classes": "output/jul08_prototype/mercs2_xenon_p.rtti_classes.txt",
+        "source_paths": "output/jul08_prototype/mercs2_xenon_p.source_paths.txt",
+        "strings": "output/jul08_prototype/mercs2_xenon_p.pe_full_strings.txt"
+      },
+      "ghidra_project": "output/_ghidra_x360/proj/mercs2xenon.rep",
+      "corpus_indexed": false,
+      "atlas_role": "PRIMARY NAME ORACLE — RTTI + string anchors for cross-arch atlas matching",
+      "caveats": [
+        "Devkit is pre-ship; drift from retail is REAL. Do not use as an address-parity oracle vs PC/PS3 retail.",
+        "Expect ~5.8k VMX128 decode warnings in 0x829d5xxx region — Xenon-specific instructions not in stock Ghidra."
+      ]
+    },
+    {
+      "image_id": "xenon_devkit_profile_ghidra",
+      "canonical_name": "Mercs2_Xenon_P.exe (Ghidra-loader-fixed)",
+      "platform": "xbox360",
+      "arch": "ppc32be_xenon",
+      "endian": "big",
+      "kind": "engine_exe",
+      "crypto_state": "unpacked_ghidra_ready",
+      "runnable": false,
+      "sha256": "fbfa6a325438bf6e47b52ed4bea66bfb053ec20dc9c18c9994ec9151549b9cf3",
+      "size_bytes": 32374784,
+      "primary_path": "output/jul08_prototype/mercs2_xenon_p.pe_ghidra.bin",
+      "aliases": [],
+      "lineage": "jul08_devkit_profile",
+      "provenance": "xenon_devkit_profile_raw + tools/fix_xbox_pe_for_ghidra.py (rewrites PointerToRawData → VA for Ghidra 12 loader).",
+      "decomp": {"state": "complete", "shared_with": "xenon_devkit_profile_raw"},
+      "corpus_indexed": false,
+      "atlas_role": "Ghidra-usable variant; content-identical semantics to xenon_devkit_profile_raw"
+    },
+    {
+      "image_id": "xenon_devkit_final",
+      "canonical_name": "Mercs2_Xenon_F.exe (Jul 11 2008 Final devkit)",
+      "platform": "xbox360",
+      "arch": "ppc32be_xenon",
+      "endian": "big",
+      "kind": "engine_exe",
+      "crypto_state": "unpacked_from_xex_devkit_kek",
+      "runnable": false,
+      "sha256": "205d621cdfaeb74b802d64d65851ec2caac8062ce3cccbb503b76e8b093282ce",
+      "size_bytes": 26476544,
+      "primary_path": "output/jul08_prototype/default_xex.pe.bin",
+      "aliases": [],
+      "lineage": "jul08_devkit_final",
+      "provenance": "Boot exe from the same Jul 11 2008 preview disc as the Profile build. Built ~105s later. PDB path 'Final'. Stripped/lighter than Profile.",
+      "base_va": "0x82000000",
+      "fixed_pe_path": "output/jul08_prototype/default_xex.pe_ghidra.bin",
+      "decomp": {
+        "state": "complete",
+        "path_raw": "output/_ghidra_x360_final/xenon_final_decomp.c",
+        "path_named": "output/_ghidra_x360_final/xenon_final_decomp_named.c",
+        "run_log": "output/_ghidra_x360_final/run.log",
+        "function_count": 63261,
+        "decompile_failures": 2,
+        "wall_time_minutes_approx": 24,
+        "pipeline": "same as xenon_retail_jtag_pe (fix_xbox_pe -> CreateFunctions -> analyze -> DecompileExport -> NameFromStrings -> DecompileExport)"
+      },
+      "ghidra_project": "output/_ghidra_x360_final/proj/mercs2xenon_final.rep",
+      "corpus_indexed": false,
+      "atlas_role": "second-source Final-config name oracle; cross-check for retail Final shape",
+      "notes": "63,261 fns vs devkit Profile's published 38,581 — much closer to retail's 63,607. Profile build had a smaller reported fn count possibly due to different function-seeding coverage in the earlier run."
+    },
+    {
+      "image_id": "xenon_retail_jtag_pe",
+      "canonical_name": "Xbox 360 retail default.xex (JTAG rip, unpacked)",
+      "platform": "xbox360",
+      "arch": "ppc32be_xenon",
+      "endian": "big",
+      "kind": "engine_exe",
+      "crypto_state": "unpacked",
+      "runnable": false,
+      "sha256": "51564f302393db639614921d5dc99c17646de4935bef8282e82a22f2ee646e82",
+      "size_bytes": 26607616,
+      "primary_path": "output/_scratch/x360_retail/default.pe.bin",
+      "aliases": [],
+      "lineage": "xbox360_retail",
+      "provenance": "tools/xex_unpack.py against the JTAG rip default.xex (see container jtag_rip below). Retail Final config, ~2 months post-devkit — this is the actual shipped Xbox engine.",
+      "base_va": "0x82000000",
+      "fixed_pe_path": "output/_scratch/x360_retail/default.pe_ghidra.bin",
+      "fixed_pe_sha256": "83d30100092c59d99de8ce018b938982cd2596ba4bf24aa3bdc4d42b58cd899f",
+      "sections": ["_.rdata", ".pdata", "BINKBSS", ".text", "BINK", ".data", ".XBMOVIE", ".tls", "BINKDATA", ".edata", ".idata", ".XBLD", ".reloc"],
+      "text_section_va": "0x00150000",
+      "text_section_size": "0x8eddb4",
+      "pdata_section_va": "0x00100c00",
+      "decomp": {
+        "state": "complete",
+        "path_raw": "output/_ghidra_x360_retail/xenon_retail_decomp.c",
+        "path_named": "output/_ghidra_x360_retail/xenon_retail_decomp_named.c",
+        "run_log": "output/_ghidra_x360_retail/run.log",
+        "function_count": 63607,
+        "decompile_failures": 1,
+        "wall_time_minutes_approx": 27,
+        "pipeline": "fix_xbox_pe_for_ghidra.py -> CreateFunctions.java (preScript) -> auto-analyze -> DecompileExport.java (raw) -> NameFromStrings.java -> DecompileExport.java (named)",
+        "rtti_naming": "not yet applied — needs per-image rtti_vtables.txt (follow-up)"
+      },
+      "ghidra_project": "output/_ghidra_x360_retail/proj/mercs2xenon_retail.rep",
+      "corpus_indexed": false,
+      "atlas_role": "TIER-A retail parity oracle — the shipped Xbox equivalent of PC v1.0/v1.1 retail. NOW DECOMPILED.",
+      "caveats": [
+        "63,607 functions vs devkit Profile's 38,581 — retail has ~65% more entry points on a smaller image. Plausibly more inlining or a fatter .pdata; verify before assuming devkit-vs-retail atlas rows will be 1:1.",
+        "VMX128 pcode-decode gaps in ~0x82b21xxx-0x82b23xxx (vector code) — same class of Ghidra limitation as devkit Profile. Not blocking; functions decompile with warnings, not failures."
+      ]
+    },
+    {
+      "image_id": "xenon_retail_jtag_xex",
+      "canonical_name": "Xbox 360 retail default.xex (JTAG rip, packed)",
+      "platform": "xbox360",
+      "arch": "ppc32be_xenon",
+      "endian": "big",
+      "kind": "engine_xex_packed",
+      "crypto_state": "xex_packed",
+      "runnable": true,
+      "sha256": "d5b646e72bd4e6ca1e20aafacb6388d9419cc5e724e04f096ec1636d2df44a02",
+      "size_bytes": 4665344,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/default.xex",
+      "aliases": [],
+      "lineage": "xbox360_retail",
+      "provenance": "Retail JTAG rip — the disc's default.xex packed with the XEX2 header. Runs on JTAG-modded Xbox 360.",
+      "decomp": {"state": "none", "reason": "packed; unpack via tools/xex_unpack.py to obtain xenon_retail_jtag_pe"},
+      "corpus_indexed": false,
+      "atlas_role": "container for the unpacked xenon_retail_jtag_pe"
+    },
+    {
+      "image_id": "ps3_engine_elf",
+      "canonical_name": "PS3 EBOOT.elf (decrypted PPU ELF)",
+      "platform": "ps3",
+      "arch": "ppc64be_ppu",
+      "endian": "big",
+      "kind": "engine_elf",
+      "crypto_state": "decrypted_from_self",
+      "runnable": false,
+      "sha256": "dfb5b1c5a670bfc8b971be681ec68aba59c1d4e84d9360d186de9355b89f992e",
+      "size_bytes": 18205720,
+      "primary_path": "output/analysis/cross_platform/ps3_eboot/EBOOT.elf",
+      "aliases": [],
+      "lineage": "ps3_retail",
+      "provenance": "Decrypted from BLUS30056 EBOOT.BIN via ps3_dlc_crypt unself. PS3 SDK 3.15 / FW 02.41, keyrev 0001. AltiVec, no VMX128.",
+      "base_va": "0x00000000",
+      "title_id": "BLUS30056",
+      "build_paths_leaked": [
+        "..\\..\\..\\..\\Branches\\Snapshot\\Data\\Munged\\PC\\WAD\\ (@0xDC5701)"
+      ],
+      "decomp": {
+        "state": "partial_incomplete",
+        "path_raw": "output/_ghidra_ps3_retail/ps3_retail_decomp.c",
+        "path_named": "output/_ghidra_ps3_retail/ps3_retail_decomp_named.c",
+        "run_log": "output/_ghidra_ps3_retail/run.log",
+        "function_count": 999,
+        "decompile_failures": 0,
+        "wall_time_minutes_approx": 60,
+        "coverage_gap": "SEVERE — 999 fns of an expected 30-60k+. Ghidra's ElfLoader did not seed from .opd; only fns reachable via call-graph from entry-point were discovered. NameFromStrings found 3,667 Class::Method strings but named 0 fns because target fns weren't discovered.",
+        "known_anchors_confirmed_this_session_2026_09_07": {
+          "opd_va": "0x00ff93b8",
+          "opd_size": "0x0004d7e0",
+          "opd_entry_count": 39676,
+          "opd_entry_format": "8 B (u32 code, u32 toc) BE — PS3 PPU 32-bit ABI variant, NOT the 24-byte generic PPC64 form",
+          "toc_r2_canonical": "0x0104eb98 (single value across process)",
+          "verified_by": "python byte-peek + readelf section table"
+        },
+        "attempted_unblock_2026_09_07_08": {
+          "approach": "SeedOpdFunctions.java preScript with opd_va + opd_size (+ tocR2)",
+          "attempts": 6,
+          "outcome": "all failed — attempts 1-2 unrelated (nested-analysis + pause-deadlock), attempts 3/4/5 crashed with ghidra.util.exception.ClosedException in RegisterValueStore during bulk DisassembleCommand when tocR2 painted, attempt 6 dropped tocR2 and ran for 6h 12m with 100% single-core CPU, flat working set 937 MB, no log output past initial 'opd code entries=39676 needing disasm=39676' — killed as unproductive.",
+          "diagnosis": "SeedOpdFunctions.java author's own header warned: 'disassemble() is super-linear... takes hours on ~40k entries.' Their bulk-DisassembleCommand mitigation did not scale on our 39,676-entry .opd. The engine is single-threaded internally (shared register-context AddressRangeMapDB), so adding cores does not help this specific loop."
+        },
+        "unblock_action": "Rework: (a) write a variant SeedOpd that walks .opd and calls createFunction() but SKIPS the bulk pre-disassemble — let Ghidra's downstream auto-analyzer handle disassembly across its parallel worker pool. (b) Bump MAX_CPU_CORES in tools/ghidra_12.1_PUBLIC/support/launch.properties so the decompilation-based analyzers actually use multiple cores. (c) Consider splitting into two headless runs (import + skeleton seeds with -noanalysis, then -process with analyze) so we can checkpoint.",
+        "existing_projects": [
+          {"path": "output/_ghidra_ps3/proj/mercs2cell.rep", "state": "small (~904 fns), stale/incomplete"},
+          {"path": "output/analysis/cross_platform/ghidra_projects/Mercenaries2_PS3_EBOOT.rep", "state": "hand-curated with VZ.WAD RE targets; ~38 KB projectState — PRESERVED as reference"},
+          {"path": "output/_ghidra_ps3_retail/proj/mercs2cell_retail.rep", "state": "fresh full-decomp attempt; 999 fns, needs .opd seeder"}
+        ],
+        "known_anchors": {
+          "VZ.WAD_string_va": "0x00DDAB78",
+          "filename_pointer_table_va": "0x00FC6380",
+          "FxArchiveStoreFile_vtable_va": "0x00FB4D60",
+          "FxArchiveStoreFile_vmethod0_va": "0x00DB2A30",
+          "IsDLC_va": "0x00DF0530",
+          "SetMasterScriptName_va": "0x00DE16F8"
+        }
+      },
+      "ghidra_project_preferred": "output/analysis/cross_platform/ghidra_projects/Mercenaries2_PS3_EBOOT.rep",
+      "corpus_indexed": false,
+      "atlas_role": "TIER-A retail parity oracle — third independent shipped implementation of the engine (PPC64 BE PPU)",
+      "caveats": [
+        "TWO Ghidra projects exist — reconcile before Phase 2 fills in decomp; the analysis/ one is preferred (more state).",
+        "Full DecompileAllFunctions has not been run — existing ~904 fn decomp is a fraction of the 18 MB image.",
+        "PPU only — SPU code (if any) is not exposed as separate .spe.elf; if present, embedded in the SELF. Deferred to Phase 6."
+      ]
+    },
+    {
+      "image_id": "ps3_engine_self",
+      "canonical_name": "PS3 EBOOT.BIN (encrypted APP SELF)",
+      "platform": "ps3",
+      "arch": "ppc64be_ppu",
+      "endian": "big",
+      "kind": "engine_self_packed",
+      "crypto_state": "encrypted_self",
+      "runnable": true,
+      "sha256": "73ff3fab9dbd97e518a0f8d55b8e482ea3d3cc66c482fcbf9b0eecbe97dfd428",
+      "size_bytes": 18208152,
+      "primary_path": "game-files/ps3-version/EBOOT.BIN",
+      "aliases": [],
+      "lineage": "ps3_retail",
+      "provenance": "PS3 disc EBOOT.BIN as shipped. Decrypts to ps3_engine_elf via ps3_dlc_crypt unself. Also has a v1.03 patch variant on disc (not tracked yet — see gap).",
+      "decomp": {"state": "none", "reason": "packed; unpack for statics"},
+      "corpus_indexed": false,
+      "atlas_role": "container for the decrypted ps3_engine_elf"
+    }
+  ],
+  "asset_wads": [
+    {
+      "wad_id": "pc_retail_vz",
+      "platform": "pc",
+      "endian": "little",
+      "format": "FFCS",
+      "sha256": "a67ada8bb1ef4255d3067475d6bc579cc1421fab262e9383a9eed74c8c59c011",
+      "size_bytes": 2565537792,
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/data/vz.wad",
+      "block_count": 11370,
+      "aset_entries": 30645,
+      "content_kind": "world_world_placements_scripts",
+      "atlas_role": "PC retail asset ground-truth"
+    },
+    {
+      "wad_id": "pc_retail_english",
+      "platform": "pc",
+      "endian": "little",
+      "format": "FFCS",
+      "sha256": "298bb943cea0416d697b1f47421f27afcdcf40b2d4a8dc1991036b81469d480e",
+      "size_bytes": 483426304,
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/data/English.wad",
+      "content_kind": "localized_text_and_audio_english"
+    },
+    {
+      "wad_id": "pc_retail_shell",
+      "platform": "pc",
+      "endian": "little",
+      "format": "FFCS",
+      "sha256": "7b01ff39900c6d9430f97f2037cb814f77331fa23ab5838be32e9b04abad766f",
+      "size_bytes": 29622272,
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/data/shell.wad",
+      "content_kind": "frontend_menu_ui"
+    },
+    {
+      "wad_id": "pc_retail_loading",
+      "platform": "pc",
+      "endian": "little",
+      "format": "FFCS",
+      "sha256": "cd6a734fff58c3bef8022b664cb5fa6f1aacea01e9f3157c64afcb64fd6c635e",
+      "size_bytes": 2490368,
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/data/Loading.wad",
+      "content_kind": "boot_loading_screen"
+    },
+    {
+      "wad_id": "xbox360_retail_vz",
+      "platform": "xbox360",
+      "endian": "big",
+      "format": "SCFF",
+      "sha256": "ad322914018dd06a89b3d4a656e5123c44efae5c3e4f5ab582c56478c99e14fe",
+      "size_bytes": 2000486400,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/vz.wad",
+      "block_count": 11087,
+      "aset_entries": 30553,
+      "content_kind": "world_world_placements_scripts",
+      "atlas_role": "Xbox 360 retail asset ground-truth; parity oracle for PC retail vz",
+      "notes": "283 FEWER blocks than PC retail (crunch cuts + platform-specific budgets)."
+    },
+    {
+      "wad_id": "xbox360_retail_english",
+      "platform": "xbox360",
+      "endian": "big",
+      "format": "SCFF",
+      "sha256": "261a2aa44097a0b3267c7e0fa71044c498815caa63d854843e2599618c72bb2b",
+      "size_bytes": 79233024,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/english.wad",
+      "content_kind": "localized_text_and_audio_english"
+    },
+    {
+      "wad_id": "xbox360_retail_french",
+      "platform": "xbox360",
+      "endian": "big",
+      "format": "SCFF",
+      "sha256": "9dba1a3c5ecc18c63384dd7156a08c371693b409339b8a406e02f807c3c22ce2",
+      "size_bytes": 67469312,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/french.wad",
+      "content_kind": "localized_text_and_audio_french",
+      "notes": "Not present on PC retail install — Xbox-only French localization here."
+    },
+    {
+      "wad_id": "xbox360_retail_loading",
+      "platform": "xbox360",
+      "endian": "big",
+      "format": "SCFF",
+      "sha256": "b5581fc1651abb789619fe49ef1160b3132f55f50c0f60c0e1c3491b5807aad8",
+      "size_bytes": 2490368,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/loading.wad",
+      "content_kind": "boot_loading_screen",
+      "notes": "SAME size as PC retail Loading.wad (2,490,368 B) — different content by SHA-256 though. Curious coincidence."
+    },
+    {
+      "wad_id": "xbox360_retail_shell",
+      "platform": "xbox360",
+      "endian": "big",
+      "format": "SCFF",
+      "sha256": "62bafeb067e5b0b30e6362bb7d4b668bde35a549d38e73228c5c0ff76c6464c1",
+      "size_bytes": 11894784,
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/shell.wad",
+      "content_kind": "frontend_menu_ui"
+    },
+    {
+      "wad_id": "ps3_retail_vz",
+      "platform": "ps3",
+      "endian": "big",
+      "format": "envelope_plus_segs",
+      "sha256": "e8406d64fbf4adac0d99b8a620d7854528b34f62a656165bc090501b9e481191",
+      "size_bytes": 1073739776,
+      "primary_path": "output/analysis/cross_platform/wads/ps3/VZ.WAD",
+      "envelope_bytes": 524288,
+      "envelope_first_4_bytes": "9fed8bc6",
+      "envelope_cipher_status": "stream_cipher_partial_keystream_recovered",
+      "envelope_keystream_prefix_hex": "ccaecd80e9a11ebc3f18a221",
+      "inner_segs_count": 5462,
+      "content_kind": "world_world_placements_scripts",
+      "atlas_role": "PS3 retail asset ground-truth; parity oracle for PC/Xbox retail vz once cipher cracked",
+      "unlock_path": {
+        "target": "FxArchiveStoreFile::vmethod0",
+        "image": "ps3_engine_elf",
+        "va": "0x00DB2A30",
+        "vtable_va": "0x00FB4D60",
+        "typeinfo_va": "0x00DF06A8",
+        "recipe": "Follow vmethod0 → cellFsOpen; find the stream-cipher key derivation loop; extract."
+      },
+      "caveats": [
+        "As of 2026-05-21: 18-byte keystream prefix identified against an SCFF template, but header keystream ≠ INDX@0x8000 keystream. It's a stream cipher, not single-key XOR.",
+        "5,462 inner segs blocks unreachable until the cipher is broken. Cracking it enables byte-level PS3-vs-Xbox asset comparison."
+      ]
+    }
+  ],
+  "containers": [
+    {
+      "container_id": "jtag_rip",
+      "platform": "xbox360",
+      "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/",
+      "kind": "jtag_ripped_disc_layout",
+      "contents": {
+        "engine_packed": "xenon_retail_jtag_xex",
+        "engine_unpacked": "xenon_retail_jtag_pe",
+        "asset_wads": ["xbox360_retail_vz", "xbox360_retail_english", "xbox360_retail_french", "xbox360_retail_loading", "xbox360_retail_shell"],
+        "audio_pws": ["audios/ambience.pws", "audios/music.pws", "audios/vo_stream.english.pws", "audios/vo_stream.french.pws"],
+        "movies_dir": "movies/",
+        "system_update": "$systemupdate/su20076000_00000000"
+      }
+    },
+    {
+      "container_id": "jul08_preview_iso",
+      "platform": "xbox360",
+      "primary_path": "game-files/Mercenaries 2 World in Flames (Jul 11, 2008 prototype)/Mercenaries 2 Preview X360 (Jul 11 2008).iso",
+      "kind": "xbox360_preview_iso",
+      "size_bytes": 6344605696,
+      "contents": {
+        "engine_binaries": ["xenon_devkit_profile_raw", "xenon_devkit_final"],
+        "provenance": "devkit_preview_disc_all_zero_kek"
+      }
+    },
+    {
+      "container_id": "ps3_disc_zip",
+      "platform": "ps3",
+      "primary_path": "game-files/Mercenaries 2 World in Flames PS3.zip",
+      "kind": "ps3_disc_dump_zip",
+      "contents": {
+        "engine_encrypted": "ps3_engine_self",
+        "engine_decrypted_elf": "ps3_engine_elf",
+        "asset_wad_encrypted_envelope": "ps3_retail_vz"
+      }
+    }
+  ],
+  "known_gaps": [
+    {
+      "gap_id": "pc_demo_wad_missing_on_disk",
+      "kind": "missing_asset",
+      "description": "output/analysis/cross_platform/wads/pc_demo/Mercenaries 2 World in Flames DEMO/data/ is empty on disk. Analysis referenced 4,204-block PC Demo WAD (1,015,414,784 B, sha256 82ad1bedb04e5ede...) but the extracted file is not present in this working tree.",
+      "unblock": "Re-extract from Mercenaries 2 PC Demo installer; add row pc_demo_vz to asset_wads."
+    },
+    {
+      "gap_id": "vz_patch_wad_mod_artifact",
+      "kind": "excluded_by_design",
+      "description": "vz-patch.wad (DLC port build output) is NOT a manifest image — it's a mod artifact whose SHA-256 changes per rebuild. Not tracked here.",
+      "unblock": "N/A; deployed vz-patch.wad content-hashes belong to the deploy audit trail, not the atlas."
+    },
+    {
+      "gap_id": "spu_code_deferred",
+      "kind": "deferred_scope",
+      "description": "PS3 SPU (.spe.elf) code — if any is embedded in ps3_engine_self — is Phase 6 scope. No .spe.elf files were found free-standing in the tree.",
+      "unblock": "Phase 6 investigation post PS3 EBOOT full decomp."
+    }
+  ]
+}

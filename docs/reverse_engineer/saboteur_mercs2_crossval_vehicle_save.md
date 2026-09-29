@@ -24,9 +24,11 @@ Reference decompiles: `output/_ghidra_saboteur/wildstar_vehicle_save_decomp.txt`
 **Cross-validation to Mercs2:** Mercs2 save = 13404-B LE header + zlib@0x468 carrying a
 `return{}` Lua-source blob ([[rows-26-29-weapons-save-code-maps]]). Same *pattern* (magic + version +
 typed value stream) but Mercs2 wraps it in zlib and adds `ProfileHash`. WildStar's serializer gives
-the primitive shape; the Mercs2 `ProfileHash` constant/algorithm still needs the Mercs2 body (BSim
-match on the prototype). **No checksum seen in the `SaveGame` prologue** — if WildStar hashes, it's
-later in the (truncated) body; re-pull the full function to confirm.
+the primitive shape; the Mercs2 `ProfileHash` algorithm is **DERIVED 2026-08-07 — CRC-32/BZIP2
+(non-reflected) over `[4:]`** ([[profile-hash-is-crc32-bzip2]]), shipped in
+`mercs2_formats::save_write::profile_hash`. **No checksum seen in the WildStar `SaveGame`
+prologue** — if WildStar hashes, it's later in the (truncated) body; re-pull the full function to
+confirm.
 
 ## Vehicle drive model — vs Mercs2's custom-raycast solver
 Named: `WSCar::Update` 0x825c86e8, `WSCar::SteerAssist` 0x825c8dd0, `WSCar::AutoDrive` 0x825c8de0,
