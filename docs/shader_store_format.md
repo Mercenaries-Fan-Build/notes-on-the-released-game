@@ -20,11 +20,19 @@ names. Decoding the function's first 0x77 bytes gives the order (**PROVEN**, x86
 |---|---|---|
 | 1 | `shader3.bin` | always |
 | 2 | `shader3Low.bin` | always |
-| 3–4 | `shaderVT.bin`, `shaderVTLow.bin` | caps word `DAT_01176288+0x5e4` bit 2 set |
-| 3–4 | `shaderR2VB.bin`, `shaderR2VBLow.bin` | bit 2 clear and bit 3 set |
+| 3–4 | `shaderVT.bin`, `shaderVTLow.bin` | caps word `DAT_01176288+0x5e4` bit 2 (`0x4`) set |
+| 3–4 | `shaderR2VB.bin`, `shaderR2VBLow.bin` | bit 2 clear and bit 3 (`0x8`) set |
 
 So two or four stores are resident at once, and the high and Low sets are **both** loaded. The VT and
 R2VB pairs are alternatives: they share one record id, and never load together.
+
+The caps bits come from the device probe (`0x00754ffb`–`0x0075514b`). Bit 3 is set when the
+`R2VB` FOURCC format is supported (**PROVEN**). Bit 2 is set when
+`CheckDeviceFormat(D3DUSAGE_QUERY_VERTEXTEXTURE (0x100000), texture, format 0x74)` succeeds: the
+vertex-texture capability (**INFERRED**: the argument reading depends on stack accounting through
+the probe). The AmbientWind vertex shaders load their wind `.sho` only with the VT pair resident
+(`shader3*`'s `PgMesh*AmbientWind*` registrations take the non-wind `.sho` otherwise); the
+`PgSkin1*AmbientWind*` registrations load their AmbientWind `.sho` in every configuration.
 
 | Store | Records | VS | PS | Bytes |
 |---|---|---|---|---|
@@ -101,7 +109,8 @@ id = pandemic_hash_m2(stem + "_3l.sho")   // shader3Low.bin, shaderVTLow.bin, sh
 `stem` is the `.sho` file name a shader is registered with, minus `.sho`. `pandemic_hash_m2` is the
 Mercenaries 2 FNV-1a variant (case-folded; `mercs2_formats::hash`).
 
-The mechanism is **PROVEN** from `FUN_0085b6f0`, the lookup that `FUN_0085af00` and `FUN_0085b1a0` use.
+The mechanism is **PROVEN** from `FUN_0085b6f0`, the only id lookup; its two callers are the load
+handlers `FUN_0085af00` (vertex) and `FUN_0085b1a0` (pixel), which pass it a registered `.sho` name.
 It copies the registered `.sho` name and cuts its last four characters. If the global flag
 `DAT_00dfc345` is 0 it appends `DAT_00be87e8` = `"_3l.sho"`, otherwise `DAT_00be87f0` = `"_3.sho"`.
 It then hashes the result with `FUN_00824270`, whose body `FUN_0082427f` is `pandemic_hash_m2`. It
@@ -117,7 +126,21 @@ Examples:
 
 **Coverage (PROVEN):** hashing the 543 distinct `*.sho` strings in the exe names 515/556 `shader3.bin`
 ids, 372/411 `shader3Low.bin`, 13/15 of each VT store and 13/13 of each R2VB store. No id matches with
-the other store's suffix. The unmatched records have no `.sho` string in the exe.
+the other store's suffix.
+
+- **Matched and never registered:** the 145 `_li` records (one of them in `shader3Low.bin`), whose
+  registrations run only when the plain record is missing (§9), and `PgCompositeFP`, whose record is
+  only in `shader3Low.bin` (`0x0bc29233`; its `shader3.bin` id `0xc2a01365` is absent).
+- **Unmatched** (41 in `shader3.bin`, 39 in `shader3Low.bin`): no `.sho` string in the exe names them.
+  The names recovered by hashing candidates are `PgDiffRefractFP_{pl,sl,pl_sl}`,
+  `PgDiffRefractNormFP_{pl,sl,pl_sl}` and their `_li` records (only class 0 of the refract shaders is
+  registered), `PgRibbonVP` (the ribbon registration loads `Pg3DVP.sho`), `PgMeshVPInst`,
+  `PgMeshVPMorphInst` and `PgLtiSkin1AmbientWindVPFast`; in `shader3Low.bin` also
+  `PgMeshCombinerNoColor` and `PgMeshCombinerNoTangent`. One unrecovered pixel shader carries the debug
+  path `...\shaders.src\PgWaterFP.hlsl`.
+
+`FUN_0085b6f0` derives ids only from registered `.sho` names, so the load creates D3D shaders for these
+records and nothing looks them up.
 
 The logical name and the file stem differ in places. For example, `PgMeshNoTangentVP` is registered
 with `PgMeshVPNoTangent.sho`. Materials use the logical name (§6); stores use the file stem.
@@ -229,13 +252,38 @@ constructor (`FUN_0085ace0` for a pixel shader, `this` in `ECX`; `FUN_0085ade0` 
 stores the family vtable. Emulating every initializer that builds a record the registry names
 reproduces the vtables the runtime image holds for all 374 of them (**PROVEN**).
 
-Several registrations sit in SecuROM islands that the decompiler renders as empty (`FUN_02475bc0`,
+Several registrations sit in islands that the decompiler renders as empty (`FUN_02475bc0`,
 `FUN_005726e0`, `FUN_006188b0`, `FUN_02485980`, reached from `FUN_0084f130` through `jmp [stub]`
-thunks); they call `FUN_0085ac90` through `push <continuation>; push FUN_0085ac90; ret`. The committed
-table `crates/mercs2_quartermaster/data/registered_shaders.tsv` is written by executing the registry
-under each configuration (`tools/extract_shader_registry.py`): 411 registrations, of which each
-configuration makes 227 (ShaderLevel off) or 371 (ShaderLevel on). The ShaderLevel-on count, 242
-pixel and 129 vertex names, is the live count of the registry in a runtime image of the game.
+thunks). The islands are plaintext relocated into `.securom`, their blocks joined by
+`push <continuation>; push <target>; ret`, and they call `FUN_0085ac90` the same way; disassembly
+reads them. The committed table `crates/mercs2_quartermaster/data/registered_shaders.tsv` is written
+by executing the registry under each configuration (`tools/extract_shader_registry.py`), because a
+row's `.sho` depends on the caps bits, the ShaderLevel byte and the `_li` handle tests, and some call
+sites take the `.sho` from two or three branches.
+
+**The 412 rows (PROVEN).** The exe has 549 `FUN_0085ac90` sites: 524 `call`, 8 `jmp` and 17
+`push FUN_0085ac90; ret`. 145 of them register a `_li`/`_LI` `.sho`, which leaves 404: 339 in
+`FUN_0084f130`, 43 in the water registrar `FUN_00484380`, 21 in the islands (FX 4 at `0x005726e0`,
+billboard trees 6, Scaleform 6 at `0x02485980`, decals 5 at `0x02475bc0`) and 1 for `PgCompositeFP`.
+Six sites in `FUN_0084f130` (`0x0084f31d`, `0x0084f3e3`, `0x0084f6fa`, `0x0084f843`, `0x0084f8f3`,
+`0x00851d9f`) take the `.sho` from two branches, one row more each, and the water site `0x004846b4`
+(record `0x012872a0`: `PgWaterZFullVP5`, `_NVT`, `_R2VB`) joins three branches, two rows more:
+404 + 6 + 2 = 412. The game-gated test `every_registration_site_is_a_registered_row` disassembles every
+site (iced-x86) and checks each against the table.
+
+`PgCompositeFP` registers outside `FUN_0084f130`: the composite pass constructor (vtable
+`0x00baae9c`, body relocated at `0x0246a383`) registers it once per process behind the byte
+`0x011759c0`, at `0x0246a443`. Its `.sho` pointer is XOR-decoded (`[0x0245a8c4] ^ [0x007295b6]` =
+`0x00baaeac`, `"PgCompositeFP.sho"`), and its class argument is the result of a SecuROM call
+(`push 0x024581ee; call eax`, `eax = 0xe842355f ^ [0x02460160]`, at `0x0246a40e`) whose target the
+dump does not hold, so the row's class is `-`.
+
+Each configuration makes 227 (ShaderLevel off) or 371 (ShaderLevel on) of `FUN_0084f130`'s
+registrations. The ShaderLevel-on count, 242 pixel and 129 vertex names, is the live count of the
+registry in a runtime image of the game, dumped before the composite pass registered
+`PgCompositeFP` (its record at `0x0127cb58` holds key 0 and the run-once byte is 0). The table's
+pixel/vertex split is 243/169 rows; `shader3Low.bin`'s is 255/156 records, and its record count
+matching the 411 registrations of the registry is a coincidence.
 
 ### Families
 
@@ -280,10 +328,13 @@ registrations in a row — base, `_pl` (1), `_sl` (2), `_pl_sl` (3) — and the 
 1–3 only when `DAT_00dfc345 != 0`.
 
 A registration of a `_li` `.sho` follows some `_pl`/`_sl`/`_pl_sl` registrations:
-`if (record+0xf8 == 0) FUN_0085ac90(record_li, name, name_li.sho, class)`. It runs only when the
-plain record has no D3D handle — its stem has no store record — and it has the same name, so it gets
-the plain registration's index. In retail every plain `_pl`/`_sl`/`_pl_sl` stem has a record, so no
-`_li` registration is made.
+`if (record+0xf8 == 0) FUN_0085ac90(record, name, name_li.sho, class)` on the **same record**
+(`0x0084fb21` and `0x0084fb40` both load `ecx = 0x01970934` with the name `PgFastFP_pl`; the second is
+gated on `cmp [0x01970a2c], 0`, the record's `+0xf8` handle). The `.sho` at `+0x0b` and the handle
+change; the name, class and index do not (the load handler assigns an index only while it is
+negative, `FUN_0085b1a0`). It runs only when the plain record has no D3D handle — its stem has no
+store record. In retail every registered plain `_pl`/`_sl`/`_pl_sl` stem has a record, so no `_li`
+registration is made.
 
 `DAT_00dfc345` is written by the settings load (`FUN_00753280`, `[Render] ShaderLevel`, default 1)
 and by the settings apply `FUN_0074c7ac`, which copies the whole settings block `0x00dfc320` and
