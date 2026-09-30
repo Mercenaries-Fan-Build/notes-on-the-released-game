@@ -138,8 +138,8 @@ SpecNormAmbOcc}RimFP`, … .
 | Gate | Address | Role |
 |---|---|---|
 | per-pixel-light master ("ShaderLevel") | `DAT_00dfc345` (bool) | `!=0` → register the whole `_pl`/`_sl`/`_pl_sl` family per FP; `==0` → base only (no dynamic per-pixel lights). Mercs2.ini `ShaderLevel` (render map §9). |
-| `_li` alternate selector | the D3D handle (`+0xf8`) of the record just registered (`DAT_01970a2c` = `0x01970934+0xf8`, the `PgFastFP_pl` record) | `==0` (the plain stem has no store record) → also register the `_li` `.sho` under the **same** name and light class; it gets the plain registration's index, and the index table keeps the plain record. Retail's plain stems all have records, so no `_li` registration is made |
-| AmbientWind / veg VP quality (orthogonal) | `(DAT_01176288+0x5e4 >> 2 & 1)`, bit 3 | selects `*AmbientWind*.sho` VP variants — a VP-side axis, independent of light class |
+| `_li` alternate selector | the D3D handle (`+0xf8`) of the record just registered (`DAT_01970a2c` = `0x01970934+0xf8`, the `PgFastFP_pl` record) | `==0` (the plain stem has no store record) → `FUN_0085ac90` again on the **same record** (`0x0084fb21` and `0x0084fb40` both load `ecx = 0x01970934`) with the `_li` `.sho`: the `.sho` at `+0x0b` and the handle change; the name, light class and index do not. Retail's registered plain stems all have records, so no `_li` registration is made |
+| AmbientWind VP selector (orthogonal) | caps word `DAT_01176288+0x5e4` bit 2 (`>> 2 & 1`): the vertex-texture capability, set when `CheckDeviceFormat(D3DUSAGE_QUERY_VERTEXTEXTURE, …)` succeeds (**INFERRED**, `0x00754ffb`–`0x0075514b`); bit 3 is the R2VB FOURCC and does not gate these | set → the `PgMesh*AmbientWind*` registrations load their `*AmbientWind*.sho`; clear → the same names load the non-wind `.sho`. The `PgSkin1*AmbientWind*` registrations are ungated and load their AmbientWind `.sho` in every configuration — a VP-side axis, independent of light class |
 
 | Shader / permutation | Register site | Gate | Conf |
 |---|---|---|---|
@@ -199,7 +199,7 @@ handle-resolved/vtable-gated. The engine's current stand-in is one fixed directi
 | master per-frame `Rt*` Update | `FUN_00675e50` | observe which `Rt*` pools are non-empty + `dt` |
 | RtLightAnimation apply (light-math) | `FUN_004a80d0` / `FUN_004a7c70` (via lookup `FUN_006654b0`) | inspect the 0x2c record + the resolved LightObject to pin the light-math |
 | RtScale / RtAlpha apply | `FUN_00469140` / `FUN_00469200` | confirm which record floats drive scale vs alpha |
-| per-draw light-class shader select | material resolve `FUN_0085abd0` | on a lit interior draw read the resolved u16 at `rec+2` + requested name → which of base/`_pl`/`_sl`/`_pl_sl` |
+| per-draw light-class shader select | the draw `FUN_00855420`: `index_table[material+0x182 + light]` (`0x0197ba40`; `material+0x182` is the u16 index at `+0x08` of the registration `Mtrl_Parse` resolved) | on a lit interior draw read `material+0x182` and the light class `item_light+0x2a0` → which of base/`_pl`/`_sl`/`_pl_sl` |
 | light-constant bind / "RenderLights" body | HW-watch the light-list buffer built after `FUN_006622e0` records load | find the color-pass reader that loads D3D light constants — the PC `RenderLights` analog |
 | sun → mesh | atmosphere struct `[[PTR_PTR_00e7adfc]+0x104]+0xe0/+0x124` on a paused lit-mesh draw | check whether LightIntensity/Modifier appear in the mesh FP constant registers (vs only sky/cloud CBs @`DAT_00ff46c8`) |
 | RtAmbience | per-frame reader of `AmbientCube*` @0x003c9a8 | walk callers to locate the ambient-gather |
