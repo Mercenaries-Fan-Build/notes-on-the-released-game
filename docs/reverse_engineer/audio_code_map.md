@@ -314,9 +314,12 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    > (The eight `0x0083xxxx` engine-vtable entries were not individually re-checked.)
 2. **Message-bus & singleton constructors** (`DAT_015386xx`, 14-slot factory fill) are in
    SecuROM-relocated code — break on first write to `DAT_015386b0` to catch construction live.
-3. **SecuROM-thunked hot paths** — confirm-live: `LoadBank`
-   `*_DAT_0244fb2c`, `OpenStreamFile` `thunk_FUN_035f0000`, `VO.Cue` `thunk_FUN_028da000`, ambience
-   update `thunk_FUN_024f2850`, audio-enabled gate `thunk_FUN_024e67b0`.
+3. **Hot paths behind `.securom`:** `OpenStreamFile` `thunk_FUN_035f0000` and `VO.Cue`
+   `thunk_FUN_028da000` are plaintext relocated into `.securom` (blocks joined by
+   `push <ret>; push <target>; ret`), read by disassembly. The ambience update `thunk_FUN_024f2850`
+   (`push 0x024f285a; call 0x01aaff10`) and the audio-enabled gate `thunk_FUN_024e67b0` (a push/ret
+   into `0x01aaff10`) are VM stubs — confirm-live. `LoadBank` goes through `*_DAT_0244fb2c`
+   (→ `0x024ba5c0`) — confirm-live.
 4. **8 uncracked m2 hashes** (§7) — add to the rainbow table (candidates: interior, underwater,
    danger, camera-distance).
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
@@ -457,7 +460,8 @@ cue lookup `FUN_0082e820`; group lookup `FUN_0082e7d0`):
 A bank is loaded through the Pg bank manager `[0x01175F9C]` (65 slots). `LoadSoundBank(name)`
 requests exactly `(name, 0x9F8BCA10)` and `(name, 0xE5273C14)` — the soundbank and the sounddb of
 the same name (`0x00602768`–`0x006027A1`, PROVEN); `LoadWaveBank(name)` requests only the wavebank.
-The sounddb reaches FindCue through its type handler (`FUN_00602ff0` → `0x006024E0`, relocated to
+The sounddb reaches FindCue through its type handler (`FUN_00602ff0` → `0x006024E0`, a VM stub:
+`0x006024E0` `jmp [0x0245ED74]` → `0x024EA900`, which enters `0x01AAFF10`; emulating it continues at
 `0x005FE100`), which appends it to `[0x01175FAC]+0x190`, the list `FUN_00607c50` passes to
 `FUN_00835b80`. Loading a bank that is loaded (slot state 3, flag 1) only registers the callback:
 no second request, no second Pal node, no error; the callback fires on the next update (PROVEN by
@@ -1346,9 +1350,10 @@ sounddb entry of `vz.wad` (measured with a one-off scan of this run, not a commi
 `FUN_005FF230` (`0x005FF4ED`–`0x005FF505`) each look the entity's `SoundEffect` up
 (`mov ecx, 0x17BDFD8`; `call 0x005857E0`), read word 4 (`mov eax, [eax+0x10]`), and, when it is
 non-zero, call `0x006022B0` with it and the Pg bank manager `[0x01175F9C]` (§11.2). `0x006022B0` is
-relocated into the protected image; its body there calls `0x00602060(bank, 0x9F8BCA10)` (`push
-0x9F8BCA10` at `0x02481B03`) and `0x00602060(bank, 0xF753F6D0)` (`68 D0 F6 53 F7`, the bytes
-before `0x02481B26`): the soundbank and the wavebank of that name. The sounddb, which
+relocated into `.securom` (`0x006022B0` `jmp [0x0245DBC4]` → plaintext `0x028BF000`); its body there
+calls `0x00602060(bank, 0x9F8BCA10)` (`push 0x9F8BCA10` at `0x028BF020`) and
+`0x00602060(bank, 0xF753F6D0)` (`push 0xF753F6D0` at `0x028BF03F`), between an
+`EnterCriticalSection` and a `LeaveCriticalSection`: the soundbank and the wavebank of that name. The sounddb, which
 `LoadSoundBank` also requests (§11.2), is not among them, so these banks' cues are not routed by
 name through FindCue from this load. `FUN_005FE880` calls both functions (`0x005FE909`, `0x005FEBCA`,
 `0x005FEC28`), and `FUN_005FF230` calls `FUN_005FF140` (`0x005FF51E`).
