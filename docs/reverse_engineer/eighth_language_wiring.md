@@ -76,15 +76,14 @@ Two globals are in play; do not conflate them:
   language index is `*DAT_01176018` (struct offset 0)** — this is what the mount, the stringdb
   hash, and the font code all read.
 
-**Static-visibility gap (open question, §9):** in the entire static decomp, struct offset 0 is only
-ever *written to 0* (`FUN_004c2190`:288604). Yet retail plainly mounts `German.wad` etc., so a
-non-English value must reach `*DAT_01176018` at runtime. The write is **not statically reachable** —
-almost certainly it lives behind a SecuROM splice thunk (the same class of invisibility documented
-for the `"vz"` basename setter in `wad_duplicate_inventory.md §B.5`, whose only reference is thunk
-`0x02477DF0` with no static callers). Confirmation that the spliced/high region *does* touch this
-table: decomp:2059617 (`0x0247…` range) reads `(&PTR_s_english_00cf281c)[*unaff_EDI]`. Practical
-consequence for the hook: **target `*DAT_01176018` (and `DAT_00cf255c`) directly**; do not rely on
-finding a clean C setter.
+**The setter (§10.1):** in the static decomp, struct offset 0 is only ever *written to 0*
+(`FUN_004c2190`:288604). The non-English value reaches `*DAT_01176018` through the setter at
+`0x00630B70`, called at `0x004C3930`: a relocated setter (`0x00630B70` `jmp [0x0245981C]` →
+plaintext `0x02481F90`, joined back to `.text` at `0x00630D40`), which the decomp does not render
+and disassembly reads. It stores `DAT_00CF255C` (emulated from the runtime image). The relocated
+region reads the table too: decomp:2059617 (`0x0247…` range) reads
+`(&PTR_s_english_00cf281c)[*unaff_EDI]`. Practical consequence for the hook: **target
+`*DAT_01176018` (and `DAT_00cf255c`) directly**.
 
 ---
 
@@ -287,12 +286,10 @@ are all in writable `.data`, patchable live).
 
 ## 9. Open questions / unverified
 
-1. **The non-English index write path.** Static decomp only ever writes `*DAT_01176018 = 0`. The
-   real write that applies a German/French/Russian selection is not statically reachable — inferred
-   to live in SecuROM-spliced code (cf. the `"vz"` basename setter, `§B.5`). **Not yet pinned.** The
-   recipe sidesteps it by writing the globals from the ASI, but the exact *frame/order* at which to
-   write (relative to `FUN_004c2190` struct alloc and `FUN_004bfaf0` step 10) should be confirmed
-   live (read-only) before trusting it. **Unverified.**
+1. **The frame for the ASI's write.** The non-English index write is the relocated setter at
+   `0x00630B70` (§10.1). The recipe writes the globals from the ASI; the exact *frame/order* at
+   which to write (relative to `FUN_004c2190` struct alloc, the setter call at `0x004C3930` and
+   `FUN_004bfaf0` step 10) should be confirmed live (read-only) before trusting it. **Unverified.**
 2. **`GetLanguageNum` / `GetLanguageName` implementations** (VAs `0x007B5750` / `0x007B5740`) were
    not isolated as discrete decomp entries — confirm they return `*DAT_01176018` / the table string
    (assumed from Lua behavior, not read). Whether either is a viable native re-point for a setter is
@@ -325,8 +322,9 @@ PROVEN unless marked.
 - **The table.** `0x00CF281C`, nine entries, bounded by `8 < i` in `FUN_00826a10`: 0 `english`,
   1 `spanish`, 2 `italian`, 3 `french`, 4 `german`, 5 `japanese`, 6 `english_uk`, 7 `allcaps`,
   8 `russian` (§1).
-- **The runtime index.** `*DAT_01176018` is written by the SecuROM-stolen setter at `0x00630B70`,
-  called at `0x004C3930`, from `DAT_00CF255C` (emulated from the runtime image).
+- **The runtime index.** `*DAT_01176018` is written by the relocated setter at `0x00630B70`
+  (`0x00630B70` `jmp [0x0245981C]` → plaintext `0x02481F90`, joined back to `.text` at
+  `0x00630D40`), called at `0x004C3930`, from `DAT_00CF255C` (emulated from the runtime image).
 - **The detected index.** `DAT_00CF255C` is set from the command-line option whose hash is
   `0xC13F3DE2`, through `FUN_00826a10` (a case-insensitive compare against the table); otherwise from
   the OS locale through `FUN_00826a90`: primary LANGID `0x07` → 4 german, `0x0A` → 1 spanish,
