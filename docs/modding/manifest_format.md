@@ -505,25 +505,34 @@ skinned path, for every host group), resolved by the convention retail follows:
 |---|---|---|
 | pixel | the material's texture count and which slots are non-zero | `3:011` → `PgDiffRefractNormFP` |
 | vertex | the group's sub-object kind (`MESH`, `SKIN`, `TINY`), its vertex declaration's `usage.index` elements in order, and its materials' one pixel shader | `MESH`, `0.0+5.0+3.0+6.0`, `PgDiffSpecNormFP` → `PgMeshNoColorVP` |
-| shadow | the kind, the main vertex shader, and whether the materials' flags carry `0x08` (`alpha`) or none do (`opaque`) | `MESH`, `PgMeshNoColorVP`, alpha → `PgMeshTexShadowVP` |
+| shadow | the kind, the main vertex shader, and whether any of the group's materials has an on-disk flag in `0x0B` (`alpha`) or none has (`opaque`) | `MESH`, `PgMeshNoColorVP`, alpha → `PgMeshTexShadowVP` |
 
 The convention is the census of every retail model (`crates/mercs2_quartermaster/data/shader_import_rules.tsv`,
-recomputed from `vz.wad` by the game-gated test `shader_import_census`). An input retail gives one
-shader resolves to it. Where retail uses several shaders for one input, nothing in the model says
-which, and `qm` stops and names the choices. The census finds this for most inputs:
+recomputed from `vz.wad` by the game-gated test `shader_import_census`): 4,407 model containers,
+the 1,400 finer LOD rungs among them read against their resident container's materials, giving
+125,841 observations. An input retail gives one shader resolves to it. Where retail uses several
+shaders for one input, nothing in the model says which, and `qm` stops and names the choices:
 
 - **pixel** — only `3:011` has one choice. A material with a diffuse map alone has six
-  (`PgDiffFP`, `PgFastFP`, `PgDiffAmbOccFP`, …), and one with diffuse, specular and normal maps has
-  fifteen (the `Refl`, `Metal`, `SSS`, `AmbOcc` and `Rim` variants of `PgDiffSpecNormFP`). The
-  material flags, its float preamble and the vertex colour do not separate them.
-- **vertex** — 43 of 51 inputs have one choice. The rest differ by `AmbientWind` (`MESH` / `SKIN`
-  with vertex colour) or `_Ruin` (`TINY`).
-- **shadow** — 31 of 39 inputs have one choice. Flag `0x08` always selects the `Tex` shadow shader;
-  without it retail uses both.
+  (`PgDiffFP`, `PgFastFP`, `PgDiffAmbOccFP`, …), one with diffuse and a second map eleven, and one
+  with diffuse, specular and normal maps fifteen (the `Refl`, `Metal`, `SSS`, `AmbOcc` and `Rim`
+  variants of `PgDiffSpecNormFP`). The rest of the model narrows them without deciding: `AmbOcc`
+  tracks the group's vertex colour (usage 10.0) for every non-`Fast` shader (7,224 of 7,224
+  groups), and the best deterministic rule over the texture set, the vertex colour, the flags and the
+  whole float preamble still names the wrong shader for 598 of 4,907 `1:1` materials (1,457 by the
+  texture set alone), 4 of 500 `2:11` (81) and 129 of 2,377 `3:111` (1,113). What stays open is Rim
+  or not, `Fast` or `Diff`, and `Metal` or `Refl`. So a material whose input has several choices
+  **must** declare its pixel shader; the build error names the host material, its input and the
+  candidates. The host's own key is never kept.
+- **vertex** — 48 of 58 inputs have one choice. The rest differ by `AmbientWind` (`MESH` / `SKIN`
+  with vertex colour) or `_Ruin` (`TINY`); both are kept from the host (below).
+- **shadow** — 42 of 42 inputs have one choice: a flag in `0x0B` on any of the group's materials
+  selects the `Tex` shadow shader (57,083 of 57,083 groups).
 
 Declare a shader in the glTF's `extras`, by registration name: `pixel_shader` on a material,
 `vertex_shader` and `shadow_vertex_shader` on a mesh or a primitive. One declaration applies to
-every host material or group; two different declarations of one key are an error.
+every host material or group; two different declarations of one key are an error. A declaration
+takes precedence over the convention.
 
 ```json
 "materials": [{ "extras": { "pixel_shader": "PgDiffSpecNormFP" } }],
@@ -537,6 +546,40 @@ inputs the group's vertex declaration supplies (**M0238**): each `dcl` input's u
 every store that holds the shader, must be an element of the declaration. The host's vertex
 declaration is kept, so a vertex shader that reads vertex colour (usage 10) cannot draw a group
 without one.
+
+##### `POSITION.w`: AmbientWind and TINY hosts
+
+Two kinds of vertex shader read `POSITION.w`, and `add_model` writes it for every vertex it injects:
+
+| host group's vertex shader | what `POSITION.w` holds | where it comes from |
+|---|---|---|
+| **AmbientWind** — its `CTAB` declares `WindMatrix` (`PgMesh*AmbientWind*`, `PgSkin*AmbientWind*`, `PgMeshVPFastAmbientWind`, …) | the vertex's sway weight: the shader scales its `WindMatrix` sway by it (`mad r0, v0.w, r0, r2` in `PgMeshVPAmbientWind_3.sho`); 0 is still, 1 is full sway | the glTF vertex attribute `_SWAY_WEIGHT` |
+| **TINY** (`PgMeshTinyVP` intact, `PgMeshTinyVP_Ruin` ruined) | the slot of the world object the vertex belongs to: an index into the container's top-level `TINY` id list (`u32 N`, then `N` GUIDs) and into `ObjectIDScaleArray`, whose entry is the object's state | the glTF vertex attribute `_TINY_SLOT` |
+| any other | `1` | — |
+
+- **AmbientWind.** A host group drawn by an AmbientWind shader keeps it (the census cannot choose
+  between the wind and plain shader). Every primitive must carry `_SWAY_WEIGHT`; a mesh without it
+  under an AmbientWind shader is **M0238**, naming the attribute. A declared non-wind
+  `vertex_shader` on such a host draws it with that shader and writes `POSITION.w = 1`. The wind
+  `.sho` loads when caps bit 2 (the vertex-texture capability) is set; otherwise the same name loads
+  a plain `.sho`, which ignores `POSITION.w`.
+- **TINY.** A `TINY` far-LOD host group keeps its vertex shader, so it keeps its role: the intact
+  shader draws a vertex while its object's state is 1 (intact, drawn), the `_Ruin` shader while it is
+  3 (ruined, drawn). A declared `vertex_shader` other than the host's is **M0236**. Every primitive
+  must carry `_TINY_SLOT`, each value a slot of the host container's id list (`0` to `N−1`) and the
+  same on a triangle's three vertices (retail holds this on every triangle); a mesh without it is
+  **M0238**, naming the attribute and the host's slots.
+
+The attributes follow glTF's rule for application-specific attributes (a leading underscore):
+
+| attribute | accessor | values |
+|---|---|---|
+| `_SWAY_WEIGHT` | `SCALAR`, `FLOAT` | 0 to 1 |
+| `_TINY_SLOT` | `SCALAR`, `UNSIGNED_BYTE`, `UNSIGNED_SHORT` or `UNSIGNED_INT`, not normalized | a slot of the host's `TINY` id list |
+
+Every triangle primitive carries an attribute or none does. When a dense rigid mesh is decimated to
+fit the u16 strip, a merged vertex takes the mean `_SWAY_WEIGHT` of the vertices it merges, and only
+vertices sharing a `_TINY_SLOT` merge.
 
 ### `retarget:` — the SKINNED path (`add_model`, `add_outfit`)
 
@@ -1482,17 +1525,32 @@ separator or a non-printable character, or makes `<stem>.sho` longer than 128 ch
 
 ### M0235
 
-**A material's pixel-shader key is not registered in every configuration** (HANG). `Mtrl_Parse`
-(`FUN_00858790`) looks the key up in the pixel registry and, on a miss, reads the null entry at
-`0x00858DB8` ([`shader_store_format.md` §7](../shader_store_format.md#7-the-0x00858db8-crash)). The key
-must be a retail pixel registration made in every configuration, or light class 0 of an
-`add_shader` of the Shipment (at `qm link`, of it or a Shipment it requires).
+**A material's pixel-shader key is not registered in every configuration** (crash). `Mtrl_Parse`
+(`FUN_00858790`) looks the key up in the pixel registry and, on a miss, takes the registry's null
+entry (`DAT_01977a3c`, 0); the read through it at `0x00858DB8` is an access violation (crash at
+`0x00858DB8`, a null registry entry read at `+8`;
+[`shader_store_format.md` §7](../shader_store_format.md#7-the-0x00858db8-crash)). The key must be a
+retail pixel registration made in every configuration, or light class 0 of an `add_shader` of the
+Shipment (at `qm link`, of it or a Shipment it requires).
 
 ### M0236
 
-**A primitive group's vertex-shader key is not a registered vertex shader** (HANG). The group
-loaders (`FUN_00478270`, `FUN_004796f0`) look the `INFO` words `+0x0C` and `+0x10` up in the vertex
-registry.
+**A primitive group's vertex-shader key is not a registered vertex shader** (crash when drawn).
+The group loaders (`FUN_00478270` for `MESH` and `TINY`, `FUN_004796f0` for `SKIN`) look the `INFO`
+words `+0x0C` and `+0x10` up in the vertex registry and, on a miss, store its null entry
+(`DAT_0197da44`, 0) as the group's main (`+0`) or shadow (`+4`) vertex-shader record. Every pass that
+draws the group reads the record with no null test, an access violation:
+
+| pass | `MESH` / `TINY` mesh path | `SKIN` | `TINY` instance path |
+|---|---|---|---|
+| main (`+0`) | `0x00478906` (`0x004788b4` with blend shapes) | `0x00479a14` | `0x0047a6fb` / `0x0047a764` |
+| shadow (`+4`; the mesh path reads `+0` first, at `0x00478d48`) | `0x00478dd3` (`0x00478cf5` with blend shapes, `0x00478d6a` on another branch) | `0x00479dc5` | `0x0047a89c` / `0x0047a902` |
+| Z (`+4`) | `0x004790a8` (`0x00479055` with blend shapes) | `0x0047a178` | `0x0047aa5c` / `0x0047aac6` |
+
+A pass reaches the read only when it draws the group (the LOD and node gates, the mesh main pass's
+cull, the Z pass's material flag test, `EnableShadows` for the shadow pass), so a model that is
+loaded and never drawn does not crash. Every dereference is **PROVEN** by disassembly; that the
+access violation ends the process, with no handler absorbing it, is **INFERRED**.
 
 ### M0237
 
@@ -1509,12 +1567,16 @@ checked.
 
 **A vertex shader reads an input the group's vertex declaration does not supply.** The resolved main
 vertex shader's `dcl` inputs, in every store holding it, must all be elements of the group's
-declaration.
+declaration. It also fires when the shader reads `POSITION.w` and the glTF does not supply it: an
+AmbientWind shader without `_SWAY_WEIGHT`, a `TINY` group without `_TINY_SLOT` (or with a slot the
+host's id list lacks, or a triangle spanning two slots), or a `POSITION` element with no `w`
+([`POSITION.w`](#positionw-ambientwind-and-tiny-hosts)).
 
 ### M0239
 
 **The shader registry's capacity is exceeded** (HANG). A configuration registers more than 0x800
-pixel names or 0x100 vertex names, counting retail's (242 pixel and 129 vertex with ShaderLevel on).
+pixel names or 0x100 vertex names, counting retail's (243 pixel, `PgCompositeFP` included, and 129
+vertex with ShaderLevel on).
 The registry inserts (`FUN_0085b7c0`, `FUN_00632250`) never give up on a full table.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
