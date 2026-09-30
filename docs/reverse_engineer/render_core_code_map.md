@@ -104,7 +104,7 @@ device). Siblings: `DAT_01176284` = IDirect3D9, `DAT_01176280` = adapter count, 
 | +0x5b8 | present-immediate flag (`==0x80000000`) |
 | **+0x5bc** | IDirect3DDevice9 (every RT creator dereferences this) |
 | +0x5e0 | adapter-mode list |
-| **+0x5e4** | caps/feature bitfield — **bit2** (`>>2&1`) AmbientWind veg quality · **bit3** extra base-`.sho` set · **bit4** (`>>4`) tree-shadow/veg quality · **bit6** (`&0x40`) ShaderLevel capability (clear ⇒ ShaderLevel forced 0) |
+| **+0x5e4** | caps/feature bitfield, set by the device probe (`0x00754ffb`–`0x0075521c`) — **bit2** (`0x4`, `>>2&1`) the vertex-texture capability (`CheckDeviceFormat(D3DUSAGE_QUERY_VERTEXTEXTURE, …)`, **INFERRED** from the stack accounting): loads the `shaderVT` store pair and the `PgMesh*AmbientWind*` wind `.sho` · **bit3** (`0x8`) the `R2VB` FOURCC format: loads the `shaderR2VB` pair when bit2 is clear · **bit4** (`0x10`, read `>>4`: tree-shadow/veg quality) set from the GPU vendor: vendor id `+0x430` = `0x10de`, or `0x1002` when `FUN_0074c150` returns 0 (decomp of the probe) · **bit6** (`&0x40`) ShaderLevel capability (clear ⇒ ShaderLevel forced 0) |
 | +0x5e8 | shadow depth-format flag (DF24 vs D24S8; shadow map §1) |
 
 ## 3. Device / render-target lifecycle
@@ -147,7 +147,10 @@ registry: one long run of register calls into pool `DAT_01977a38`.
    the `mov eax, <path>` operands). `shader3.bin` and `shader3Low.bin` always load. Then
    `shaderVT.bin` + `shaderVTLow.bin` load if `DAT_01176288+0x5e4` bit2 is set; otherwise
    `shaderR2VB.bin` + `shaderR2VBLow.bin` load if bit3 is set.
-2. **~700 name registrations** via **`FUN_0085ac90(logical_name, name.sho, variant)`**. Families in
+2. **The name registrations** via **`FUN_0085ac90(logical_name, name.sho, variant)`**: 339 sites in
+   `FUN_0084f130` itself and 43 in the water registrar, 21 in the islands below, and 145 `_li`
+   alternates; the registry makes 411 distinct registrations across the configurations
+   ([`shader_store_format.md` §9](../shader_store_format.md#9-registration)). Families in
    order: PgBlurH/V FP, PgAntiAliasingFP, `PgMesh*VP` (NoTangent/NoColor/Morph/Refract/AmbientWind/Fast),
    `PgSkin1*VP`, `PgSkin*VP`, PgDiffRefract FP, all shadow caster VPs, then (further in) the lit material
    FP family, terrain/road/blob/decal/water/sky/post.
@@ -159,8 +162,11 @@ the family's load handler, which resolves the store record and assigns the regis
 vtable is its family (45 of them); see
 [`shader_store_format.md` §9](../shader_store_format.md#9-registration). The variant arg is **the LOD index on Xbox terrain (0–3)** and the
 **light-class on PC lit material FPs (0=base / 1=`_pl` / 2=`_sl` / 3=`_pl_sl`)** — see
-[lighting_code_map.md](lighting_code_map.md) §4. Draw-time bind resolves name→u16 (`FUN_0085abd0`, u16
-at `rec+2`), never offset dispatch — why grep finds no render-side references to the VP name strings.
+[lighting_code_map.md](lighting_code_map.md) §4. The load handler assigns each record a u16 index at
+`rec+0x08` (`FUN_0085ab70` pixel, `FUN_0085abd0` vertex); the draw picks a material's pixel shader as
+`index_table[material+0x182 + light]` (`FUN_00855420`), and a group holds its vertex-shader records
+from load — never offset dispatch, which is why grep finds no render-side references to the VP name
+strings.
 
 **`.sho` blob loader `FUN_0085b3f0`** (five call sites, two or four loads): builds the path into
 `+0x6c10`, opens (`FUN_00827660`/`GetFileSizeEx`) and reads the whole store. It copies each record's
@@ -174,13 +180,15 @@ under the record id in a 0x1200-slot table (`FUN_0085b810`). The id is
 `FUN_0085b6f0`. The records of all loaded stores must stay below 0x1200, and on a duplicate id the
 first loaded record wins. Full spec: [shader_store_format.md](../shader_store_format.md).
 
-**Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, and the SecuROM
-islands reached through `jmp [stub]` thunks — decal `FUN_02475bc0` (via `0x0049c8b0`), `FUN_005726e0`
-(via `0x00494390`), `FUN_006188b0` (via `0x004a0bb0`), `FUN_02485980` (via `0x004ae3b0`). The decompiler
-renders the islands as one call or as `return;`; executing them shows each chains several
-`FUN_0085ac90` calls through `push <continuation>; push FUN_0085ac90; ret` (**PROVEN**, emulation;
-`tools/extract_shader_registry.py`). Then the shader-table helper `FUN_00852730` builds the
-`OcclusionMaterial` default template.
+**Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, and islands reached
+through `jmp [stub]` thunks — decal `FUN_02475bc0` (via `0x0049c8b0`), FX `FUN_005726e0` (via
+`0x00494390`), billboard trees `FUN_006188b0` (via `0x004a0bb0`), Scaleform `FUN_02485980` (via
+`0x004ae3b0`). The islands are plaintext relocated into `.securom`, their blocks joined by
+`push <continuation>; push <target>; ret`; the decompiler renders them as one call or as `return;`,
+and disassembly reads them: each chains several `FUN_0085ac90` calls through
+`push <continuation>; push FUN_0085ac90; ret` (**PROVEN**, disassembly: `0x004a0bb0`
+`jmp [0x0245f024]` = `0x006188b0`, push/ret chain; `tools/extract_shader_registry.py` executes them).
+Then the shader-table helper `FUN_00852730` builds the `OcclusionMaterial` default template.
 
 **PC vs Xbox:** PC ships **precompiled `.sho` blobs** loaded straight into CreateVertex/PixelShader —
 there is **no runtime shader compilation** in the PC cluster. The Xbox `SSM*`/`Compile*` micro-code
