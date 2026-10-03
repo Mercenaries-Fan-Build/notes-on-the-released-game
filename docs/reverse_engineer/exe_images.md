@@ -70,14 +70,26 @@ an address belongs to instead of the current implicit "probably v10_dump."
 |---|---:|---|---|---|
 | `pc_retail_vz` | 2,565,537,792 | LE | FFCS | 11,370 blocks, 30,645 ASET |
 | `pc_retail_english` | 483,426,304 | LE | FFCS | English localization |
+| `pc_retail_french` | 413,990,912 | LE | FFCS | French localization |
+| `pc_retail_german` | 503,775,232 | LE | FFCS | German localization |
+| `pc_retail_italian` | 474,972,160 | LE | FFCS | Italian localization |
+| `pc_retail_spanish` | 476,807,168 | LE | FFCS | Spanish localization |
 | `pc_retail_shell` | 29,622,272 | LE | FFCS | frontend menu |
 | `pc_retail_loading` | 2,490,368 | LE | FFCS | boot loading screen |
 | `xbox360_retail_vz` | 2,000,486,400 | BE | SCFF | 11,087 blocks, 30,553 ASET (283 fewer than PC) |
-| `xbox360_retail_english` | 79,233,024 | BE | SCFF | |
-| `xbox360_retail_french` | 67,469,312 | BE | SCFF | **Xbox-only** — French localization not shipped on PC |
+| `xbox360_retail_english` | 79,233,024 | BE | SCFF | English localization |
+| `xbox360_retail_french` | 67,469,312 | BE | SCFF | French localization |
 | `xbox360_retail_loading` | 2,490,368 | BE | SCFF | same size as PC but different SHA-256 |
-| `xbox360_retail_shell` | 11,894,784 | BE | SCFF | |
-| `ps3_retail_vz` | 1,073,739,776 | BE | envelope+segs | **envelope encrypted — 18-byte keystream prefix known, full cipher not cracked** |
+| `xbox360_retail_shell` | 11,894,784 | BE | SCFF | frontend menu |
+| `ps3_retail_vz` | 2,201,354,240 | BE | segs | concatenation of 3 ISO fragments (`VZ.WAD` + `VZ~01.WAD` + `VZ~02.WAD`) |
+| `ps3_retail_english` | 69,042,176 | BE | segs | English localization |
+| `ps3_retail_french` | 60,293,120 | BE | segs | French localization |
+| `ps3_retail_german` | 73,924,608 | BE | segs | German localization |
+| `ps3_retail_italian` | 67,665,920 | BE | segs | Italian localization |
+| `ps3_retail_russian` | 69,599,232 | BE | segs | Russian localization — PS3-only |
+| `ps3_retail_spanish` | 66,519,040 | BE | segs | Spanish localization |
+| `ps3_retail_loading` | 2,490,368 | BE | segs | boot loading screen |
+| `ps3_retail_shell` | 18,579,456 | BE | segs | frontend menu |
 
 ---
 

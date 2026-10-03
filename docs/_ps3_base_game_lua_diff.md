@@ -145,27 +145,26 @@ or Xbox before firing certain subobjective completions or `_HQHealthBar` reveals
 - `scratchpad/sv51.diff` — 253-line structural diff, dominated by `line_defined` shifts.
 - `scratchpad/scripts_vz-struct.log` — the full 114-pair verdict.
 
-## 5. Impact on the parity reference
+## 5. Three-platform summary
 
-[`docs/cross_platform_parity_reference.md`](cross_platform_parity_reference.md) should be
-updated as follows:
-
-- §7 totals extend to include PS3: **643/643 chunks across 107/107 blocks** structurally
-  identical PC↔Xbox / Xbox↔PS3 **except** `chicon002.lua`. The PC↔Xbox 457-identical /
-  125-debug-strip / 89-real-divergence breakdown is **not** valid for Xbox↔PS3 (where the
-  real-divergence count collapses from 89 to **1**).
-- §7b gains an item: **`chicon002.lua` is the only base-game Lua script that semantically
-  differs between PC/Xbox and PS3**.
-- §14 "PS3 base-game VZ.WAD diff vs Xbox" moves from the *parked* list to the *closed*
-  list, with this document as the receipt.
-
-## 6. What this does NOT answer
-
-- **Shell / Loading / English / French WADs on PS3.** This pass only touched `ps3-VZ.WAD`.
-  The PS3 shell + per-language WADs still need the same scan to confirm the Xbox-only
-  `french.luac` and the full shell set carry over (expected equivalent, not measured).
-- **The 2 chunks where PS3 ships ~2.6 KB LESS than Xbox** (idx 119 and 237 in resident).
-  Both are structurally identical in the current pass — the direction is simply the PS3
-  stripping *more* than usual. No semantic difference recorded.
-- **PS3-DLC vs Xbox-DLC**: covered by [`docs/mercs2-dlc-luacd/_ps3_xbox_structural_diff.md`](mercs2-dlc-luacd/_ps3_xbox_structural_diff.md)
+- **PS3↔Xbox base-game Lua: 643/643 chunks across 107/107 blocks are structurally
+  identical** — one real divergence (`scripts_vz/chicon002.lua`, Chinese Contract 002 ships
+  an older build on PS3 missing the `_GetFlag` destruction-event checks that PC and Xbox
+  retail carry). The PC↔Xbox 457-identical / 125-debug-strip / 89-real-divergence
+  breakdown does not apply to Xbox↔PS3; across consoles the real-divergence count is **1**.
+- **Chicon002 is the only base-game Lua script that semantically differs between PS3 and
+  the other two platforms.** PC and Xbox ship the newer build; PS3 ships the older build.
+- **PS3 strips debug info more aggressively than Xbox** across the resident block
+  (−2.04 MB over 238 chunks). No structural difference — the extra Xbox bytes are
+  line-info arrays and local-variable name tables.
+- **PS3 full WAD set** (shell, loading, and 6 language WADs) is characterised in
+  [`_ps3_full_wad_set_lua_diff.md`](_ps3_full_wad_set_lua_diff.md).
+- **PS3↔Xbox DLC Lua**: covered by
+  [`docs/mercs2-dlc-luacd/_ps3_xbox_structural_diff.md`](mercs2-dlc-luacd/_ps3_xbox_structural_diff.md)
   (36/36 structurally identical).
+
+## 6. Residual observations
+
+- **2 chunks where PS3 ships ~2.6 KB LESS than Xbox** (resident indices 119 and 237). Both
+  are structurally identical to their Xbox counterparts; the direction is simply PS3
+  stripping *more* than usual. No semantic difference.

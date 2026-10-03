@@ -141,20 +141,17 @@ Spot check: nothing in this category drops or adds a non-`print` global, drops a
 or shifts the branch structure. The classification is **"behaviorally equivalent, measurably
 smaller"**.
 
-## 6. Impact on the parity reference
+## 6. Behaviour-divergence summary
 
-[`docs/cross_platform_parity_reference.md`](cross_platform_parity_reference.md) §7 should be
-corrected as follows:
-
-- The current §7 split "457 identical / 125 debug-strip / 89 real-divergence" counts
-  byte-level differences and is accurate as reported, but **it does not represent behavior
-  divergence**.
-- Behavior-equivalent fraction after discounting debug-print and ASSERT strip:
+- The byte-level split "457 identical / 125 debug-strip / 89 real-divergence" in
+  [`docs/cross_platform_parity_reference.md`](cross_platform_parity_reference.md) §7 counts
+  byte differences; it does not represent behaviour divergence.
+- Behaviour-equivalent fraction after discounting debug-print and ASSERT strip:
   **231/240 = 96.25%** of PC resident chunks ≡ Xbox resident chunks.
-- The "9 real divergences" are:
+- The 9 real divergences are:
   - 2 PC-only chunks (LTI subsystem).
   - 7 shell/HUD chunks with 1–29 KBM-UI nested functions removed on Xbox.
-- **No chunk** adds functionality on Xbox that PC doesn't have.
+- No chunk adds functionality on Xbox that PC doesn't have.
 
 ## 7. Follow-ups outside this scope
 

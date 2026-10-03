@@ -530,7 +530,7 @@
       "size_bytes": 67469312,
       "primary_path": "game-files/Mercenaries 2 World in Flames (NTSCU)[NTSCJ) (JTAGRip)/french.wad",
       "content_kind": "localized_text_and_audio_french",
-      "notes": "Not present on PC retail install — Xbox-only French localization here."
+      "notes": "French localization. PC retail install at ~/Documents/Mercenaries 2 World in Flames/data/French.wad ships French (414 MB, same Lua stub template, LE); PS3 BLUS30056 ships French.wad too."
     },
     {
       "wad_id": "xbox360_retail_loading",

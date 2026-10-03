@@ -567,12 +567,12 @@ the log line is gone. Row reclassified to DEBUG-SOURCE-STRIPPED; the summary cou
 
 ## Phase 2 — gap-closure corpus (newly-added categories)
 
-A follow-up extraction landed **293 common PC/Xbox pairs** across six categories that Phase 1 did
+A follow-up extraction landed **294 common PC/Xbox pairs** across seven categories that Phase 1 did
 not touch — mission dialogue spiels, vehicle-hijack sequences, mission subtitles, UI layout tables,
-and the top-level `loading.luac` + `english.luac` bootstraps — plus one Xbox-only chunk (`french`).
-Classification was run with the same tool (`lua_structural_dump`) and the same classifier
-(`scratchpad/classify.py`, unchanged — the Phase 1 debug-strip signature is sufficient for every
-new category; a thin wrapper in `scratchpad/classify_phase2.py` only swaps the directory list).
+and the top-level `loading.luac` + `english.luac` + `french.luac` bootstraps. Classification was
+run with the same tool (`lua_structural_dump`) and the same classifier (`scratchpad/classify.py`,
+unchanged — the Phase 1 debug-strip signature is sufficient for every new category; a thin wrapper
+in `scratchpad/classify_phase2.py` only swaps the directory list).
 
 ### Phase 2 classification table
 
@@ -584,9 +584,10 @@ new category; a thin wrapper in `scratchpad/classify_phase2.py` only swaps the d
 | guilayouts | 3   | 0  | 1 | 0 | 4 |
 | loading    | 1   | 0  | 0 | 0 | 1 |
 | english    | 1   | 0  | 0 | 0 | 1 |
-| **TOTAL**  | **265** | **27** | **1** | **0** | **293** |
+| french     | 1   | 0  | 0 | 0 | 1 |
+| **TOTAL**  | **266** | **27** | **1** | **0** | **294** |
 | PC-only    | — | — | — | — | 0 |
-| Xbox-only  | — | — | — | — | 1 (`french/french.luac`) |
+| Xbox-only  | — | — | — | — | 0 |
 
 (Counts shown are **after** the single Phase 2 regrade below: raw classifier output was 26 DEBUG-STRIP
 + 2 REAL in hijacks; the second REAL — `hijack_mi35_solano.luac` — is reclassified to DEBUG-STRIP on
@@ -663,12 +664,17 @@ These are not divergences, but they are the big "wait, really 100%?" results wor
 
 ### Platform-only names
 
-**Xbox-only:** `scripts_french_comparison/Xbox 360/bytecode/french.luac` (4,030 B, big-endian,
-`source_name = null`, 4 protos, 553 main instructions, 80 main constants). The file is the Xbox
-locale pack for French — PC ships French strings via the stringdb route rather than a Lua chunk,
-so no PC counterpart exists. Parses cleanly on the Xbox side with the stripped-debug reader.
+**PC-only in Phase 2 scope:** none. Every PC file in the seven common categories has an Xbox pair.
+**Xbox-only in Phase 2 scope:** none.
 
-**PC-only:** none in Phase 2 (every PC file in the six common categories has an Xbox pair).
+Language-WAD footprint across SKUs is per-release:
+- PC retail ships 5 language WADs (English, French, German, Italian, Spanish).
+- PS3 BLUS30056 ships 6 (adds Russian).
+- Xbox 360 NTSC-US JTAGRip ships 2 (English, French).
+
+Each `<lang>.wad` carries one 4-proto / 562-insn Lua chunk — the same template with only the
+`.<lang>` suffix constant differing. Full breakdown:
+[`docs/_ps3_full_wad_set_lua_diff.md`](../_ps3_full_wad_set_lua_diff.md).
 
 ### Classifier reuse — no extension needed
 
@@ -677,8 +683,8 @@ restricted to `{Debug, ASSERT, assert, Printf, Print, Echo, Trace, Log, Dprintf,
 plus co-removed helpers `{tostring, print, string, io, type, pairs, ipairs, tonumber, Dprintf}` once
 a proto has already shown a `Debug` strip) correctly handled every Phase 2 category, including the
 26 hijack scripts with heavy `Debug.Printf` density. The only wrapper
-(`scratchpad/classify_phase2.py`) swaps the GROUPS list for the six new comparison roots and adds a
-`xb_only` collection path for the French-only chunk; no classifier logic was changed.
+(`scratchpad/classify_phase2.py`) swaps the GROUPS list for the seven new comparison roots; no
+classifier logic was changed.
 
 
 ### Caveats (Phase 2)

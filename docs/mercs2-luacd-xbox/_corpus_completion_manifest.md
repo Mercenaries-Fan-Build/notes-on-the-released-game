@@ -17,8 +17,12 @@ decompiles them into sibling `src/` subtrees next to the existing
 | GUI layouts block | `vz_guilayouts/` | 4 / 4 | 4 / 4 | 0 | 0 | 0 |
 | `Loading.wad` loader | `loading/` | 1 / 1 | 1 / 1 | 0 | 0 | 1 (PC `loading.lua` 22 B) |
 | `English.wad` loader | `english/` | 1 / 1 | 1 / 1 | 0 | 0 | 0 |
-| **Xbox-only** `french.wad` loader | `french/` | n/a | 1 / 1 | 0 | 0 | 0 |
-| **Totals** |  | **293 / 293** | **294 / 294** | **0** | **0** | **2** |
+| `French.wad` loader | `french/` | 1 / 1 | 1 / 1 | 0 | 0 | 0 |
+| `German.wad` loader (PC + PS3) | `german/` | 1 / 1 | n/a | 0 | 0 | 0 |
+| `Italian.wad` loader (PC + PS3) | `italian/` | 1 / 1 | n/a | 0 | 0 | 0 |
+| `Spanish.wad` loader (PC + PS3) | `spanish/` | 1 / 1 | n/a | 0 | 0 | 0 |
+| `Russian.wad` loader (PS3-only) | `russian/` | n/a | n/a | — | — | — |
+| **Totals (PC vs Xbox NTSC-US)** |  | **297 / 297** | **294 / 294** | **0** | **0** | **2** |
 
 All 587 chunks decompiled with `unluac.jar` returning exit 0; no partial
 output, no stderr messages, no empty files. The two "tiny" (<50 B)
@@ -34,13 +38,17 @@ slot" pattern from Phase C'/A' doesn't appear in this gap set — unlike
 
 ## Parity
 
-Every category has identical chunk-name sets on PC and Xbox except:
+Every non-language category (mission spiel, vehicle hijacks, subtitles,
+GUI layouts, loading) has identical chunk-name sets on PC and Xbox.
 
-- `french/french.lua` — **Xbox-only**. PC ships no `French.wad`, so there
-  is no PC counterpart.
+The language-WAD footprint is per-SKU:
 
-PC-only vs. Xbox-only beyond that: none in any of the seven new
-categories.
+- PC retail ships 5 language WADs (English, French, German, Italian,
+  Spanish); PS3 BLUS30056 ships 6 (adds Russian); Xbox 360 NTSC-US ships 2
+  (English, French only). Each language WAD carries exactly one Lua chunk —
+  the same 4-proto / 562-insn template with only the lang-suffix string
+  constant differing. Full details:
+  [`docs/_ps3_full_wad_set_lua_diff.md`](../_ps3_full_wad_set_lua_diff.md).
 
 ## Random sample heads (5 lines each)
 
@@ -99,8 +107,12 @@ new category:
 - `output/analysis/cross_platform/scripts_subtitles_comparison/{PC Retail, Xbox 360}/bytecode/`
 - `output/analysis/cross_platform/scripts_guilayouts_comparison/{PC Retail, Xbox 360}/bytecode/`
 - `output/analysis/cross_platform/scripts_loading_comparison/{PC Retail, Xbox 360}/bytecode/`
-- `output/analysis/cross_platform/scripts_english_comparison/{PC Retail, Xbox 360}/bytecode/`
-- `output/analysis/cross_platform/scripts_french_comparison/Xbox 360/bytecode/` (Xbox-only)
+- `output/analysis/cross_platform/scripts_english_comparison/{PC Retail, PS3, Xbox 360}/bytecode/`
+- `output/analysis/cross_platform/scripts_french_comparison/{PC Retail, PS3, Xbox 360}/bytecode/`
+- `output/analysis/cross_platform/scripts_german_comparison/{PC Retail, PS3}/bytecode/`
+- `output/analysis/cross_platform/scripts_italian_comparison/{PC Retail, PS3}/bytecode/`
+- `output/analysis/cross_platform/scripts_spanish_comparison/{PC Retail, PS3}/bytecode/`
+- `output/analysis/cross_platform/scripts_russian_comparison/PS3/bytecode/` (PS3-only)
 
 Each pairs with a `<cat>_inventory.json` holding per-chunk
 `block_index`, `in_block_offset`, size, and sha256.

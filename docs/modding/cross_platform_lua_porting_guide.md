@@ -14,20 +14,20 @@ shipped Lua on both PC and Xbox (378 base-game pairs + 36 DLC pairs), plus
 engine-reference signature evidence for PS3. Every claim here is tool-produced,
 not inferred from authority. See **Reference** at the end for the raw reports.
 
-> **★ Complete-corpus coverage (verified 2026-10-02)**
+> **★ Complete-corpus coverage**
 >
-> This guide is grounded in **671 common PC↔Xbox pairs** spanning all shipped
-> base-game Lua blocks (675 PC chunks, 672 Xbox chunks total). Earlier drafts
-> covered only 378 pairs (the three big host blocks: `resident_P000_Q3` ×
-> {vz, shell}, `scripts_vz_P000_Q3`); a 2026-10-02 corpus audit found and
-> closed a 293-pair gap across 7 new categories: mission "spiel" (222),
-> vehicle hijacks (29), subtitles (36), GUI layouts (4), loading (1), english
-> (1), and an Xbox-only `french` loader chunk (1).
+> This guide is grounded in every shipped base-game Lua chunk on three platforms:
+> **679 PC + 676 PS3 + 672 Xbox NTSC-US**. PC retail is measured from the complete install
+> at `~/Documents/Mercenaries 2 World in Flames/data/` (English/French/German/Italian/
+> Spanish WADs); PS3 is measured from the BLUS30056 BLU-RAY ISO (adds Russian); Xbox is
+> measured from the NTSC-US JTAGRip.
 >
-> Both passes used the same `lua_structural_dump` + classifier. Full breakdowns:
-> [`docs/_lua_corpus_coverage_audit.md`](../_lua_corpus_coverage_audit.md),
-> [`docs/mercs2-luacd-xbox/_structural_diff_report.md`](../mercs2-luacd-xbox/_structural_diff_report.md),
-> [`docs/mercs2-luacd-xbox/_corpus_completion_manifest.md`](../mercs2-luacd-xbox/_corpus_completion_manifest.md).
+> Full breakdowns: [`_lua_corpus_coverage_audit.md`](../_lua_corpus_coverage_audit.md),
+> [`mercs2-luacd-xbox/_structural_diff_report.md`](../mercs2-luacd-xbox/_structural_diff_report.md),
+> [`mercs2-luacd-xbox/_corpus_completion_manifest.md`](../mercs2-luacd-xbox/_corpus_completion_manifest.md),
+> [`_ps3_base_game_lua_diff.md`](../_ps3_base_game_lua_diff.md),
+> [`_ps3_full_wad_set_lua_diff.md`](../_ps3_full_wad_set_lua_diff.md),
+> [`_pc_xbox_resident_divergence_characterization.md`](../_pc_xbox_resident_divergence_characterization.md).
 
 ## The three-sentence summary
 
@@ -81,7 +81,8 @@ The full base-game diff ran `lua_structural_dump` across all 671 common PC↔Xbo
 | **DEBUG-SOURCE-STRIPPED** | **125** | **18.6%** | Behaviour identical. Xbox was compiled with `Debug.Printf`/`ASSERT` preprocessor-removed. If your mod doesn't rely on Debug being present at runtime (and on PC retail the `Debug.Printf` cfunc is a return-0 stub anyway), the single-source approach is still fine. |
 | **REAL-DIVERGENCE** | **89** | **13.3%** | Per-platform builds required. See §4 for which scripts and what differs. |
 | PC-only pairs | 4 | — | `mrxguiltiprecache` + `mrxguiltiprecachelayout` in both resident+shell. See §4.2. |
-| Xbox-only pairs | 1 | — | `french.luac` (loader for the French-WAD, which PC doesn't ship). See §4.6. |
+| PS3-only pairs | 1 | — | `russian.luac` — Russian language stub, not shipped on PC or Xbox NTSC-US. See §4.6. |
+| Xbox-NTSC-US-only pairs | 0 | — | — |
 | PARSE-FAIL | 0 | 0% | Tool proven on all 1342 chunks. |
 
 **Phase 2 insight**: data-only tables (mission dialogue "spiel" chunks, subtitles, loader stubs) are the portability extreme — **mission spiel and subtitles classified 100% IDENTICAL**, no debug-strip even, since they contain only literal data structures with no `Debug.Printf` calls to strip. Vehicle hijack files are the opposite — **93% debug-strip** because they're `Debug.Printf`-dense. Everything that isn't GUI or hijack-logic is highly portable.
@@ -176,11 +177,26 @@ The vehicle-hijack minigame has 4,134-line raw diff. On PC: extensive `Debug.Pri
 
 8× `Object`-related, 5× `LTILibName`, 4× `table`-related, 2× `TimeLeft`/`Gui`/`_nGlobalFadeCountNew`/`_AllRequiredModulesLoaded`/`_fActionInterval`/`_GetLocalizedName`, plus ~45 singletons. Most are PC-side references that Xbox doesn't have; a few are the opposite. Full list in the structural diff report.
 
-### 4.6 Xbox-only — the `french.wad` loader chunk
+### 4.6 Language-loader WADs — per-SKU
 
-Xbox ships a tiny loader Lua chunk (`french.luac`, 4,030 B, 4 protos) that loads the French-language WAD. PC doesn't ship a French WAD and doesn't have this chunk. Mirror of the §4.2 pattern pointing in the opposite direction — a feature on Xbox that PC lacks, rather than a feature on PC that console lacks.
+Language-WAD shipping is a per-SKU decision, not a cross-platform divergence:
 
-**Modder actionable**: trivial for most mods. If you're building a localization overlay that depends on the French-WAD loader being present, your mod is Xbox+PS3-only.
+| SKU | Language WADs shipped |
+|---|---|
+| PC retail (complete install) | 5: English, French, German, Italian, Spanish |
+| PS3 BLUS30056 | 6: English, French, German, Italian, Russian, Spanish |
+| Xbox 360 NTSC-US (JTAGRip) | 2: English, French |
+
+Each `<lang>.wad` ships **exactly one Lua chunk** — the same 4-proto / 562-insn template with a 179-entry `vo_asset_table` and a single `AddLocalizedAsset(".<lang>")` call. All 13 shipped chunks (5 PC + 6 PS3 + 2 Xbox) have the same normalised string-pool SHA-12 (`b6eef55f5c79`), differing only in endian, debug retention, and the single lang-suffix string constant.
+
+**Platform-exclusive language chunks:**
+- **PS3-only:** `russian.luac` — not shipped by PC retail or Xbox NTSC-US.
+- **PC+PS3 but not Xbox NTSC-US:** German, Italian, Spanish. Likely present on PAL Xbox variants; only NTSC-US JTAGRip measured here.
+- **Xbox NTSC-US-only:** none.
+
+**Modder actionable**: adding Russian to PC is trivial at the Lua layer — clone any PC lang chunk, swap the suffix constant to `.russian`, recompile LE. The real work is the VO wave assets (the WAD body carries hundreds of MB of localised audio); the Lua stub is a 15-line template.
+
+Full measurement: [`docs/_ps3_full_wad_set_lua_diff.md`](../_ps3_full_wad_set_lua_diff.md).
 
 ### 4.7 ★ `mrxguisatellitelayout` — a legit PC bug Xbox got fixed (fix-pack candidate)
 

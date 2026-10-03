@@ -1,20 +1,24 @@
 # Base-game Lua corpus coverage audit
 
-**Status:** current · **Evidence:** proven · **Date:** 2026-10-02
+**Status:** current · **Evidence:** proven
 
-Scope: every shipped base-game WAD on PC and Xbox 360, scanned block-by-block for the Lua 5.1
+Scope: every shipped base-game WAD on PC, PS3, and Xbox 360, scanned block-by-block for the Lua 5.1
 chunk header (`\x1bLua` + version 0x51), with per-block chunk count and (for debug-info-bearing
 PC chunks) the source-name string. Tool: `cargo run -p mercs2_probe --bin lua_chunk_scan --
 --wad <path> --out <tsv>` — a new one-off probe that handles PC (`sges`, LE) **and** console
 (`segs`, BE) decompression inline (the format crate's `decompress_sges` is LE-only and silently
 returns raw bytes for a console block, which looks like "zero Lua chunks" to the scanner).
 
-Raw TSVs: scratchpad `pc-vz.tsv`, `xbox-vz.tsv`, `pc-shell.tsv`, `xbox-shell.tsv`,
-`pc-loading.tsv`, `xbox-loading.tsv`, `pc-english.tsv`, `xbox-english.tsv`, `xbox-french.tsv`.
+Raw TSVs: scratchpad `pc-vz.tsv`, `xbox-vz.tsv`, `ps3-vz.tsv`, `pc-shell.tsv`,
+`xbox-shell.tsv`, `ps3-SHELL.tsv`, per-language TSVs under `scratchpad/ps3-<LANG>.tsv` and
+`scratchpad/pc-full-<Lang>.tsv`.
 
 ## 1. Per-WAD inventory (blocks that carry Lua chunks)
 
 ### PC base game (FFCS / little-endian)
+
+Measured from the complete retail install at
+`C:\Users\Shadow\Documents\Mercenaries 2 World in Flames\data`.
 
 | WAD | Block idx | Path | Chunks | In corpora? |
 |---|---|---|---|---|
@@ -28,8 +32,12 @@ Raw TSVs: scratchpad `pc-vz.tsv`, `xbox-vz.tsv`, `pc-shell.tsv`, `xbox-shell.tsv
 | `shell.wad` | 17 | `blocks\Shell\resident_P000_Q3.block` | 28 | **Y** (`src/shell/`) |
 | `Loading.wad` | 4 | `blocks\Loading\resident_P000_Q3.block` | **1** (`loading`) | **N** |
 | `English.wad` | 19 | `blocks\English\resident_P000_Q3.block` | **1** (`english`) | **N** |
+| `French.wad` | 20 | `blocks\French\resident_P000_Q3.block` | **1** (`french`) | **N** |
+| `German.wad` | 21 | `blocks\German\resident_P000_Q3.block` | **1** (`german`) | **N** |
+| `Italian.wad` | 24 | `blocks\Italian\resident_P000_Q3.block` | **1** (`italian`) | **N** |
+| `Spanish.wad` | 16 | `blocks\Spanish\resident_P000_Q3.block` | **1** (`spanish`) | **N** |
 
-### Xbox 360 base game (SCFF / big-endian)
+### Xbox 360 base game — NTSC-US JTAGRip (SCFF / big-endian)
 
 | WAD | Block idx | Path | Chunks | In corpora? |
 |---|---|---|---|---|
@@ -43,19 +51,41 @@ Raw TSVs: scratchpad `pc-vz.tsv`, `xbox-vz.tsv`, `pc-shell.tsv`, `xbox-shell.tsv
 | `shell.wad` | 15 | `blocks\shell\resident_P000_Q3.block` | **26** | **Y** (`src/shell/`) |
 | `loading.wad` | 4 | `blocks\loading\resident_P000_Q3.block` | **1** | **N** |
 | `english.wad` | 19 | `blocks\english\resident_P000_Q3.block` | **1** | **N** |
-| `french.wad` | 20 | `blocks\french\resident_P000_Q3.block` | **1** (`french`) | **N** (no French corpus) |
+| `french.wad` | 20 | `blocks\french\resident_P000_Q3.block` | **1** (`french`) | **N** |
+
+### PS3 base game — BLUS30056 retail (SCFF `segs` / big-endian)
+
+Extracted from `game-files/Mercenaries 2 World in Flames [BLUS30056].iso`.
+
+| WAD | Block idx | Path | Chunks | In corpora? |
+|---|---|---|---|---|
+| `VZ.WAD` | 3527 | `blocks\vz\resident_P000_Q3.block` | 238 | — |
+| `VZ.WAD` | 3587 | `blocks\vz\scripts_vz_P000_Q3.block` | 114 | — |
+| `VZ.WAD` | 4730 | `blocks\vz\subtitles_P000_Q3.block` | **36** | — |
+| `VZ.WAD` | 5014 | `blocks\vz\guilayouts_P000_Q3.block` | **4** | — |
+| `VZ.WAD` | 29 hijack blocks | | **29** (1 each) | — |
+| `VZ.WAD` | 74 blocks | mission `_con_` / `_job_` | **222** | — |
+| `SHELL.WAD` | 15 | `blocks\shell\resident_P000_Q3.block` | **26** | — |
+| `LOADING.WAD` | 4 | `blocks\loading\resident_P000_Q3.block` | **1** | — |
+| `ENGLISH.WAD` | 19 | `blocks\english\resident_P000_Q3.block` | **1** | — |
+| `FRENCH.WAD` | 20 | `blocks\french\resident_P000_Q3.block` | **1** | — |
+| `GERMAN.WAD` | 21 | `blocks\german\resident_P000_Q3.block` | **1** | — |
+| `ITALIAN.WAD` | 24 | `blocks\italian\resident_P000_Q3.block` | **1** | — |
+| `RUSSIAN.WAD` | 21 | `blocks\russian\resident_P000_Q3.block` | **1** | — |
+| `SPANISH.WAD` | 16 | `blocks\spanish\resident_P000_Q3.block` | **1** | — |
 
 ## 2. Summary
 
-| Platform | Total chunks shipped | Already in corpora | **Newly discovered** |
+| Platform | Total chunks shipped | In Phase-1 corpora | **Phase-2 extensions** |
 |---|---:|---:|---:|
-| PC base game | **675** | 382 | **293** |
-| Xbox 360 base game | **672** | 378 | **294** |
+| PC retail (complete install) | **679** | 382 | **297** |
+| PS3 BLUS30056 retail | **676** | — | 676 (full new) |
+| Xbox 360 NTSC-US retail | **672** | 378 | **294** |
 
-The "all PC + Xbox Lua characterized" claim as it stood held only for the three big host blocks
-(`resident_P000_Q3` in `vz`+`shell`, and `scripts_vz_P000_Q3` in `vz`). It missed **77%** of
-the Lua chunks shipped per platform, concentrated in mission `con`/`job` blocks, vehicle
-`hijack_*` blocks, and the specialty `subtitles_P000_Q3`/`guilayouts_P000_Q3` blocks.
+Phase-1 corpora cover only the three big host blocks (`resident_P000_Q3` in `vz`+`shell` and
+`scripts_vz_P000_Q3` in `vz`) — 56% of the total per platform. The remaining 44% lives in
+mission `con`/`job` blocks, vehicle `hijack_*` blocks, the specialty
+`subtitles_P000_Q3`/`guilayouts_P000_Q3` blocks, and the per-language WADs.
 
 ## 3. Newly-discovered Lua chunks — breakdown
 
@@ -65,24 +95,28 @@ the Lua chunks shipped per platform, concentrated in mission `con`/`job` blocks,
 - **Vehicle-hijack mini-game scripts** (27 per platform): one `hijack_<vehicle>` chunk per
   hijackable vehicle (`hijack_ah1z`, `hijack_m1a2`, `hijack_alouette3`, etc.) in its own
   `hijack_<vehicle>_P000_Q3.block`. Two generic peers: `helicopterhijack`, `tankhijack`.
-- **`subtitles_P000_Q3.block`** (36 chunks, both platforms): subtitle-timing tables as Lua
+- **`subtitles_P000_Q3.block`** (36 chunks, all platforms): subtitle-timing tables as Lua
   (`subtitles_01_aoa_c`, `subtitles_13_avi_m`, …; one `technov`), keyed `<cutscene>_<char>`.
-- **`guilayouts_P000_Q3.block`** (4 chunks, both platforms): `mrxguihudlayout2`,
+- **`guilayouts_P000_Q3.block`** (4 chunks, all platforms): `mrxguihudlayout2`,
   `mrxguibinocularslayout`, `mrxguisatellitelayout`, `mrxguipdalayout` — HUD/scope layouts
   distinct from the shell GUI already extracted.
-- **One-chunk loader scripts** (`loading`, `english`, `french`): tiny stringdb-loader hooks in
-  the per-language WADs. The French one is Xbox-only (PC has no French WAD).
+- **Per-language loader stubs** — one 4-proto / 562-insn Lua chunk per `<Lang>.wad`,
+  shipping a 179-entry `vo_asset_table` and a single `AddLocalizedAsset(".<lang>")` call. PC
+  ships 5 (en/fr/de/it/es), PS3 ships 6 (en/fr/de/it/ru/es), Xbox NTSC-US ships 2 (en/fr).
+  All 13 shipped language chunks share the same normalised string-pool SHA-12
+  (`b6eef55f5c79`) — one template across three endians and six languages.
 
 ## 4. Platform parity
 
-- Structurally identical: PC and Xbox each ship **107 Lua-bearing blocks in `vz.wad`**, with
-  the same block names and chunk counts across every non-resident block (hijack, mission
+- Structurally identical: PC, PS3, and Xbox each ship **107 Lua-bearing blocks in `vz.wad`**,
+  with the same block names and chunk counts across every non-resident block (hijack, mission
   `con`/`job`, subtitles, guilayouts).
-- The known 2-chunk gap repeats: PC `vz/resident` 240 vs Xbox 238; PC `shell/resident` 28 vs
-  Xbox 26 — same pattern as the earlier `mrxguiltiprecache` finding (`mrxguiltiprecache` +
-  `mrxguiltiprecachelayout` are present in the PC shell chunk-name list, absent on Xbox).
-- Xbox `french.wad` adds a `french` loader chunk that has no PC counterpart (PC ships no
-  French WAD).
+- Resident counts: PC `vz/resident` 240 vs PS3/Xbox 238; PC `shell/resident` 28 vs PS3/Xbox 26.
+  Both deltas are the same two scripts — `mrxguiltiprecache` + `mrxguiltiprecachelayout` —
+  shipped on PC in both resident and shell blocks, absent on both consoles.
+- Language-WAD parity is per-SKU: PS3 ships `russian.wad`, PC and Xbox NTSC-US don't; PC and
+  PS3 ship `german.wad`/`italian.wad`/`spanish.wad`, Xbox NTSC-US doesn't. Full breakdown:
+  [`_ps3_full_wad_set_lua_diff.md`](_ps3_full_wad_set_lua_diff.md).
 
 ## 5. Mod-maker implication
 

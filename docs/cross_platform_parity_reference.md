@@ -383,18 +383,19 @@ different. Treat the envelope as "solved for our purposes" — see
 
 | | PC chunks | Xbox chunks | Classification |
 |---|---:|---:|---|
-| Phase 1 — three big host blocks (vz, resident, shell) | 382 | 378 | 192 identical / 98 debug-stripped / 88 real-divergence |
-| Phase 2 — gap-closure corpus (missions, hijacks, subtitles, guilayouts, loaders) | 293 | 294 | 265 identical / 27 debug-stripped / 1 real-divergence |
-| **Combined base-game total** | **675** | **672** | **457 (68.1%) identical / 125 (18.6%) debug-strip / 89 (13.3%) real** |
+| Three big host blocks (vz, resident, shell) | 382 | 378 | 192 identical / 98 debug-stripped / 88 real-divergence |
+| Gap-closure corpus (missions, hijacks, subtitles, guilayouts, loaders) | 293 | 294 | 265 identical / 27 debug-stripped / 1 real-divergence |
+| **Combined base-game totals (all WADs)** | **679** | **672** | 457 identical / 125 debug-strip / 89 raw-divergent; the 89 reduce to **9 real behaviour drops** once ASSERT + print debug-trace strip are discounted (231/240 PC resident chunks ≡ Xbox at 96.25%) |
+| PS3 BLUS30056 base-game | — | **676** | 642/643 `vz` chunks ≡ Xbox (one real divergence: `chicon002.lua`); 26/26 shell ≡ Xbox; +4 non-Xbox-NTSC language stubs (de/it/ru/es). See [`_ps3_full_wad_set_lua_diff.md`](_ps3_full_wad_set_lua_diff.md). |
 | Xbox↔PS3 DLC pairs | 36 | 36 | 36/36 structurally identical (13 also byte-identical; 23 differ only in Havok filler cohabiting the block) |
 
 **Headline cross-platform-content facts, byte-level proven:**
 
-- **~87% of all shipped base-game Lua is either pure-identical or debug-source-strip** across PC and Xbox. Compile two bytecode outputs (LE for PC, BE for consoles) and the content runs on both.
-- **Mission dialogue "spiel" chunks (222) and subtitles (36) are 100% IDENTICAL** — they're data-only tables, no logic, no debug. Portable without any per-platform build.
+- **~96% of PC resident chunks are behaviourally equivalent to Xbox** once ASSERT + print debug-trace strip are discounted. Only 9 chunks of 240 are real behaviour divergence — the 7 KBM/UI shell-GUI scripts (`mrxguishell`, `mrxguipausescreen`, `mrxguinumericbox`, `mrxguidialogbox`, `mrxguipda`, `mrxguibase`, `mrxguishellbootstrap`) that drop 1–29 KBM-specific protos on Xbox, plus the 2 PC-only LTI scripts. See [`_pc_xbox_resident_divergence_characterization.md`](_pc_xbox_resident_divergence_characterization.md).
+- **Mission dialogue "spiel" chunks (222) and subtitles (36) are 100% IDENTICAL** across PC and Xbox — data-only tables, no logic, no debug. Portable without any per-platform build.
 - **Hijack scripts are 93% debug-strip** — `Debug.Printf`-dense, but no actual logic divergence.
 - **PS3 DLC Lua ≡ Xbox DLC Lua** — same compiler output, 13/36 byte-identical in the raw block.
-- **The 13.3% real-divergence** (89 scripts out of 671) is overwhelmingly GUI/menu-layer code, plus one single-constant placeholder bug Xbox got fixed (§7b.4).
+- **PS3 base-game Lua ≡ Xbox base-game Lua** except one chunk (`scripts_vz/chicon002.lua`, Chinese Contract 002 — PS3 ships an older build missing the `_GetFlag` destruction-event checks that PC and Xbox retail carry). PS3 strips debug info more aggressively than Xbox (resident block is 2.04 MB smaller on PS3; all 238/238 chunks structurally identical).
 
 **Bottom line for modders:** any community claim that "mission X plays differently on PS3/Xbox" is not backed by the Lua bytecode on any extracted platform. If a divergence exists, it lives in the C engine (spawn budgets, physics constants, population caps), not in the Lua.
 
@@ -425,9 +426,24 @@ The PC KBM menu-interaction layer that consoles don't need. Pause-screen alone d
 
 Related Lua: `mrxguiltiprecache` + `mrxguiltiprecachelayout` ship on PC only (in both resident and shell blocks); `mrxbriefing` and `wifpmcinterior` on PC reference an `LTILibName` global Xbox lacks. See [`docs/modding/cross_platform_lua_porting_guide.md#42-the-lti-subsystem--pcs-entire-frontendoptions-ui-backbone--is-pc-only`](./modding/cross_platform_lua_porting_guide.md).
 
-### 7b.3 ★ NEW — Xbox-only `french.luac` loader chunk
+### 7b.3 Language-loader WADs — per-SKU
 
-Xbox ships a tiny Lua chunk (`french.luac`, 4,030 B, 4 protos) that loads the French-language WAD. PC doesn't ship a French WAD and doesn't have this chunk. Mirror of the §7b.2 pattern pointing in the opposite direction — a shipped feature on Xbox that PC lacks.
+Language-WAD shipping is a per-SKU decision, not a cross-platform divergence. The three measured SKUs ship:
+
+| SKU | Language WADs shipped |
+|---|---|
+| PC retail (complete install) | 5: English, French, German, Italian, Spanish |
+| PS3 BLUS30056 | 6: English, French, German, Italian, Russian, Spanish |
+| Xbox 360 NTSC-US (JTAGRip) | 2: English, French |
+
+Each `<lang>.wad` ships **exactly one Lua chunk** — the same 4-proto / 562-insn template with a 179-entry `vo_asset_table` and a single `AddLocalizedAsset(".<lang>")` call. All 13 shipped chunks (5 PC + 6 PS3 + 2 Xbox) have the same normalised string-pool SHA-12 (`b6eef55f5c79`), differing only in endian, debug retention, and the single lang-suffix string constant.
+
+**Platform-exclusive language chunks:**
+- **PS3-only:** `russian.luac` (1 chunk) — not shipped by PC retail or Xbox NTSC-US.
+- **PC+PS3 but not Xbox NTSC-US:** German, Italian, Spanish stubs. Likely present on PAL Xbox variants; only NTSC-US JTAGRip measured here.
+- **Xbox-NTSC-US-only:** none.
+
+Full measurement: [`docs/_ps3_full_wad_set_lua_diff.md`](_ps3_full_wad_set_lua_diff.md).
 
 ### 7b.4 ★ NEW — `mrxguisatellitelayout` placeholder bug (fix-pack candidate)
 
@@ -611,12 +627,17 @@ invention.
 - ~~PC 8-slot vs Xbox 64-slot population ring, framed as a "smaller ambient
   cache"~~ — reframed in §3. The density system is understood and scalable;
   the ring label is a small interpretation detail moved to item 5 above.
-- ~~Full base-game Lua cross-platform divergence survey~~ (closed 2026-10-02).
-  All 675 PC + 672 Xbox base-game Lua chunks extracted, decompiled, and
-  structurally diffed. 86.7% portable, 13.3% real-divergence concentrated in
-  GUI/menu. One concrete PC placeholder bug Xbox got fixed (`mrxguisatellitelayout`,
-  §7b.4) now a fix-pack candidate. One new Xbox-only chunk documented
-  (`french.luac`, §7b.3). See §7 and §7b.
+- **Full base-game Lua cross-platform divergence survey** (CLOSED).
+  All **679 PC + 676 PS3 + 672 Xbox NTSC-US** base-game Lua chunks extracted, decompiled,
+  and structurally diffed across all three platforms. **231/240 = 96.25%** of PC resident
+  chunks are behaviourally ≡ Xbox once ASSERT + print debug-trace strip are discounted;
+  only 9 real behaviour divergences (7 KBM-UI drops + 2 PC-only LTI chunks). PS3 ≡ Xbox for
+  642/643 vz chunks and 26/26 shell chunks; one real divergence (`scripts_vz/chicon002.lua`
+  ships an older build on PS3). One PC placeholder bug Xbox got fixed in
+  `mrxguisatellitelayout` (§7b.4) — fix-pack candidate. Language-WAD footprint is per-SKU
+  (§7b.3). See §7, §7b, [`docs/_pc_xbox_resident_divergence_characterization.md`](_pc_xbox_resident_divergence_characterization.md),
+  [`docs/_ps3_base_game_lua_diff.md`](_ps3_base_game_lua_diff.md), and
+  [`docs/_ps3_full_wad_set_lua_diff.md`](_ps3_full_wad_set_lua_diff.md).
 
 ---
 

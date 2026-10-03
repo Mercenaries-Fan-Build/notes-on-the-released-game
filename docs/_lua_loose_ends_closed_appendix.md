@@ -11,30 +11,42 @@ This file collects the five smaller loose ends that didn't need their own doc.
 
 ---
 
-## A. `french.luac` boot trace (Xbox-only Lua chunk)
+## A. Language-loader chunks across platforms (`<lang>.luac`)
 
-**Question:** what loads `french.luac` on Xbox, and why doesn't PC ship it?
+**Retail language-WAD footprint:**
 
-**Finding:** `french.luac` is a **pure data script** — identical structure to
-`english.luac` (both ship `vo_asset_table` of 179 `{name, type}` entries covering every VO
-soundbank, sounddb and wavebank), differing only in a single line:
+| Platform | Shipped language WADs |
+|---|---|
+| PC retail (`C:\Users\Shadow\Documents\Mercenaries 2 World in Flames\data`) | 5: English, French, German, Italian, Spanish |
+| PS3 BLUS30056 | 6: English, French, German, Italian, Russian, Spanish |
+| Xbox 360 NTSC-US (`JTAGRip`) | 2: English, French |
 
-```lua
-AddLocalizedAsset(".english")  -- in english.luac
-AddLocalizedAsset(".french")   -- in french.luac
-```
+**Each `<lang>.wad` ships exactly one Lua chunk** — a pure data script with a 179-entry
+`vo_asset_table` covering every VO soundbank/sounddb/wavebank, ending with
+`AddLocalizedAsset(".<lang>")`. `AddLocalizedAsset` is an **engine-side Lua binding** (not
+script-defined); the chunk's loader is **native language-mount code**, not Lua. At mount
+time the chunk registers the 179 VO assets under the lang-suffix the engine then uses for
+lookup when system language is set to that language.
 
-`AddLocalizedAsset` is an **engine-side Lua binding** (not script-defined); the chunk's
-loader is **native language-mount code**, not Lua. On Xbox, when system language = French,
-the engine mounts `French.wad`; its `resident_P000_Q3` block contains `french.luac`, which
-runs at mount and registers 179 VO assets under the `.french` suffix. On PC, Pandemic shipped
-no `French.wad` — French is unavailable at the engine level and there is no Lua chunk to
-run.
+**All 13 language chunks** (5 PC + 6 PS3 + 2 Xbox) are **structurally identical** modulo:
+- Endian (PC LE sges, PS3/Xbox BE segs).
+- Debug info retention (PC retains line + local names; PS3 and Xbox strip).
+- The single `.<lang>` suffix constant.
 
-**Fix-pack implication:** adding French to PC = ship a `French.wad` whose
-`resident_P000_Q3` carries a compiled `french.luac` with 179 soundbank entries + the
-`.french` AddLocalizedAsset call, plus the matching VO wave assets. The Lua side is trivial;
-the asset side is the work.
+Normalised string-pool SHA-12 after stripping the lang-suffix is **`b6eef55f5c79`** for
+every one of the 13 chunks across all three platforms. One template, three endians, six
+language suffixes.
+
+**Set differences:**
+- **PS3 ships Russian; PC and Xbox NTSC-US do not.** `Russian.wad` with 1 chunk, 70 MB on
+  PS3; no PC or Xbox NTSC-US counterpart.
+- **PC and PS3 ship German/Italian/Spanish; Xbox NTSC-US does not.** Likely present on PAL
+  Xbox variants; only NTSC-US JTAGRip measured here.
+- Nothing is Xbox-NTSC-US-only at the language-WAD layer.
+
+**Fix-pack / mod implication for adding a NEW language to any platform:** clone any shipped
+`<lang>.luac` chunk, swap the lang-suffix constant for the new lang, recompile. The real
+work is the VO wave assets (the WAD body), not the Lua script.
 
 ---
 
