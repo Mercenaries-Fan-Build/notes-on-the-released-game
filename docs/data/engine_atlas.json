@@ -1,0 +1,1378 @@
+{
+  "generated": "2026-10-02",
+  "schema": {
+    "resolution": "unique name -> single address per image; names appearing at multiple addresses on an image are dropped from that image",
+    "confidence": "high = resolved on all 4 images; medium = 3/4; low = 2/4; names resolved on only 1 image are dropped",
+    "image_bases": "image base addresses \u2014 subtract to get RVA; add to RVA for VA"
+  },
+  "images": {
+    "pc_v1_1": {
+      "base": "0x00400000",
+      "path": "output/engine_reassembled/MANIFEST.csv"
+    },
+    "x360_profile": {
+      "base": "0x82000000",
+      "path": "output/_ghidra_x360/xenon_decomp_named.c"
+    },
+    "x360_final": {
+      "base": "0x82000000",
+      "path": "output/_ghidra_x360_final/xenon_final_decomp_named.c"
+    },
+    "x360_retail": {
+      "base": "0x82000000",
+      "path": "output/_ghidra_x360_retail/xenon_retail_decomp_named.c"
+    }
+  },
+  "function_count": 184,
+  "resolution_histogram": {
+    "1_of_4_dropped": 1895,
+    "2_of_4_low": 148,
+    "3_of_4_medium": 35,
+    "4_of_4_high": 1
+  },
+  "per_image_source_counts": {
+    "pc_v1_1": {
+      "total_names": 1438,
+      "unique_resolvable": 899
+    },
+    "x360_profile": {
+      "total_names": 784,
+      "unique_resolvable": 783
+    },
+    "x360_final": {
+      "total_names": 301,
+      "unique_resolvable": 300
+    },
+    "x360_retail": {
+      "total_names": 321,
+      "unique_resolvable": 318
+    }
+  },
+  "functions": [
+    {
+      "name": "AchievementAddCount",
+      "resolution": "string-anchor",
+      "pc_v1_1": "0x005d8410",
+      "x360_profile": "0x82570448",
+      "confidence": "low"
+    },
+    {
+      "name": "ActionAnimationTable",
+      "resolution": "string-anchor",
+      "x360_final": "0x823eb568",
+      "x360_retail": "0x823ecfc8",
+      "confidence": "low"
+    },
+    {
+      "name": "AddAssociations",
+      "resolution": "string-anchor",
+      "x360_final": "0x824d0e20",
+      "x360_retail": "0x824d6dc0",
+      "confidence": "low"
+    },
+    {
+      "name": "AddBlip",
+      "resolution": "string-anchor",
+      "x360_final": "0x82323358",
+      "x360_retail": "0x82324208",
+      "confidence": "low"
+    },
+    {
+      "name": "AddOptimatchResult",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8258c948",
+      "x360_retail": "0x82464f18",
+      "confidence": "low"
+    },
+    {
+      "name": "AiHintEnum",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250d6d0",
+      "x360_final": "0x823db078",
+      "confidence": "low"
+    },
+    {
+      "name": "AimMovementNodes",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8289d330",
+      "x360_final": "0x827fc928",
+      "confidence": "low"
+    },
+    {
+      "name": "AmbienceCue",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f24e8",
+      "x360_retail": "0x823f3f40",
+      "confidence": "low"
+    },
+    {
+      "name": "BashRange",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f2980",
+      "x360_retail": "0x823f43f0",
+      "confidence": "low"
+    },
+    {
+      "name": "BoneCtrlStrapOn",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8251c0c0",
+      "x360_final": "0x82405358",
+      "confidence": "low"
+    },
+    {
+      "name": "BoxShape",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82690ad8",
+      "x360_final": "0x825f2ba8",
+      "x360_retail": "0x825f8ad0",
+      "confidence": "medium"
+    },
+    {
+      "name": "BuildingBrick",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ddbd8",
+      "x360_retail": "0x823df630",
+      "confidence": "low"
+    },
+    {
+      "name": "ButtonReleased",
+      "resolution": "string-anchor",
+      "x360_final": "0x8220e270",
+      "x360_retail": "0x82212a80",
+      "confidence": "low"
+    },
+    {
+      "name": "BvShape",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829bb868",
+      "x360_final": "0x828d2808",
+      "x360_retail": "0x828d89c0",
+      "confidence": "medium"
+    },
+    {
+      "name": "CapsuleShape",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82691858",
+      "x360_final": "0x825f2290",
+      "x360_retail": "0x825f81b8",
+      "confidence": "medium"
+    },
+    {
+      "name": "CashValue",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f05b0",
+      "x360_retail": "0x823b4d20",
+      "confidence": "low"
+    },
+    {
+      "name": "ChatterSet",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829eff20",
+      "x360_final": "0x823ec598",
+      "x360_retail": "0x823edff8",
+      "confidence": "medium"
+    },
+    {
+      "name": "ChildAgent",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826a0780",
+      "x360_retail": "0x82606980",
+      "confidence": "low"
+    },
+    {
+      "name": "CollAgents",
+      "resolution": "string-anchor",
+      "x360_final": "0x82633c58",
+      "x360_retail": "0x82639a40",
+      "confidence": "low"
+    },
+    {
+      "name": "CollectVisibleObjects",
+      "resolution": "string-anchor",
+      "x360_final": "0x821b6b90",
+      "x360_retail": "0x821b6b90",
+      "confidence": "low"
+    },
+    {
+      "name": "ColorBufferCopy",
+      "resolution": "string-anchor",
+      "x360_final": "0x825606c8",
+      "x360_retail": "0x825665b8",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileGetBorderColorR",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287ab50",
+      "x360_retail": "0x82880d10",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileGetFogScale",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287b018",
+      "x360_retail": "0x82881118",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileGetHOSMode",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287a5a4",
+      "x360_retail": "0x828806d8",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileGetWincoordOffsetForPolyStippleY",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287a890",
+      "x360_retail": "0x82880a60",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileWithFogBlendInRB",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82961038",
+      "x360_retail": "0x8287e1a0",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileWithHOSMode",
+      "resolution": "string-anchor",
+      "x360_final": "0x82879f90",
+      "x360_retail": "0x82880160",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileWithPointSpriteReplaceModeZero",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287bd80",
+      "x360_retail": "0x82881e10",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileWithTexProjectedW",
+      "resolution": "string-anchor",
+      "x360_final": "0x828791d0",
+      "x360_retail": "0x8287f370",
+      "confidence": "low"
+    },
+    {
+      "name": "CompileWithTransformedVertices",
+      "resolution": "string-anchor",
+      "x360_final": "0x8287a3a8",
+      "x360_retail": "0x828805c0",
+      "confidence": "low"
+    },
+    {
+      "name": "ContactIds",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826b83a0",
+      "x360_retail": "0x82621148",
+      "confidence": "low"
+    },
+    {
+      "name": "ControllerInput",
+      "resolution": "string-anchor",
+      "x360_profile": "0x822f9ee8",
+      "x360_retail": "0x8220e7c0",
+      "confidence": "low"
+    },
+    {
+      "name": "CvxTranslate",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826b1000",
+      "x360_final": "0x8260f558",
+      "confidence": "low"
+    },
+    {
+      "name": "DamageThresh",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f28a8",
+      "x360_retail": "0x823f4300",
+      "confidence": "low"
+    },
+    {
+      "name": "DebrisCrushingS",
+      "resolution": "string-anchor",
+      "x360_final": "0x823dd9e8",
+      "x360_retail": "0x823df430",
+      "confidence": "low"
+    },
+    {
+      "name": "DoorTypeEnum",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82510448",
+      "x360_final": "0x823eafb8",
+      "confidence": "low"
+    },
+    {
+      "name": "DvdCache",
+      "resolution": "string-anchor",
+      "x360_final": "0x8257cf50",
+      "x360_retail": "0x825817f8",
+      "confidence": "low"
+    },
+    {
+      "name": "EffectName",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250fc80",
+      "x360_final": "0x823f5be8",
+      "x360_retail": "0x823f7640",
+      "confidence": "medium"
+    },
+    {
+      "name": "EmitterName",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250eb30",
+      "x360_retail": "0x823f5f90",
+      "confidence": "low"
+    },
+    {
+      "name": "EquipmentLink",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8251b838",
+      "x360_final": "0x823adb50",
+      "confidence": "low"
+    },
+    {
+      "name": "ExpireAllChunks",
+      "resolution": "string-anchor",
+      "x360_profile": "0x821779b8",
+      "x360_final": "0x824e43f0",
+      "confidence": "low"
+    },
+    {
+      "name": "FlowControlTypeEnum",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f19b0",
+      "x360_retail": "0x823f3400",
+      "confidence": "low"
+    },
+    {
+      "name": "FxBone",
+      "resolution": "string-anchor",
+      "x360_profile": "0x828c3f38",
+      "x360_final": "0x828259e8",
+      "x360_retail": "0x8282bdc0",
+      "confidence": "medium"
+    },
+    {
+      "name": "FxFaceGraphNodeUserProperty",
+      "resolution": "string-anchor",
+      "x360_profile": "0x828b8438",
+      "x360_final": "0x82818118",
+      "confidence": "low"
+    },
+    {
+      "name": "FxLinearLinkFn",
+      "resolution": "string-anchor",
+      "x360_profile": "0x828c53c0",
+      "x360_final": "0x82821ea0",
+      "confidence": "low"
+    },
+    {
+      "name": "FxLinkFn",
+      "resolution": "string-anchor",
+      "x360_profile": "0x828c51f8",
+      "x360_final": "0x82821ce0",
+      "confidence": "low"
+    },
+    {
+      "name": "FxNullLinkFn",
+      "resolution": "string-anchor",
+      "x360_profile": "0x828c5338",
+      "x360_retail": "0x82828220",
+      "confidence": "low"
+    },
+    {
+      "name": "GetEntitlementByBundle",
+      "resolution": "string-anchor",
+      "x360_profile": "0x821828b8",
+      "x360_final": "0x824ddd98",
+      "confidence": "low"
+    },
+    {
+      "name": "GetEventListTable",
+      "resolution": "string-anchor",
+      "x360_final": "0x82373c58",
+      "x360_retail": "0x82374d00",
+      "confidence": "low"
+    },
+    {
+      "name": "GetGameEvents",
+      "resolution": "string-anchor",
+      "x360_final": "0x824d5e00",
+      "x360_retail": "0x824dbdd0",
+      "confidence": "low"
+    },
+    {
+      "name": "GetPayingStatus",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82182a48",
+      "x360_final": "0x824ddf28",
+      "x360_retail": "0x824e3ef8",
+      "confidence": "medium"
+    },
+    {
+      "name": "GuiSetDialogBoxMode",
+      "resolution": "string-anchor",
+      "x360_final": "0x823739f8",
+      "x360_retail": "0x82374aa0",
+      "confidence": "low"
+    },
+    {
+      "name": "HideMessage",
+      "resolution": "string-anchor",
+      "x360_final": "0x824a3aa0",
+      "x360_retail": "0x824aa0d8",
+      "confidence": "low"
+    },
+    {
+      "name": "HomingTypeEnum",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ee1d8",
+      "x360_retail": "0x823efc38",
+      "confidence": "low"
+    },
+    {
+      "name": "InteriorCue",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f25c0",
+      "x360_retail": "0x823f4018",
+      "confidence": "low"
+    },
+    {
+      "name": "InvestigationDistance",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ecb78",
+      "x360_retail": "0x823ee5d0",
+      "confidence": "low"
+    },
+    {
+      "name": "LabelString",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250d768",
+      "x360_final": "0x823ece18",
+      "x360_retail": "0x823ee878",
+      "confidence": "medium"
+    },
+    {
+      "name": "LeftAnalogX",
+      "resolution": "string-anchor",
+      "x360_final": "0x82442bd0",
+      "x360_retail": "0x82444e50",
+      "confidence": "low"
+    },
+    {
+      "name": "LinearVelocity",
+      "resolution": "string-anchor",
+      "x360_final": "0x823e88b8",
+      "x360_retail": "0x823ea300",
+      "confidence": "low"
+    },
+    {
+      "name": "ListnrPntr",
+      "resolution": "string-anchor",
+      "x360_final": "0x82689568",
+      "x360_retail": "0x8268f4b8",
+      "confidence": "low"
+    },
+    {
+      "name": "LowResTerrainAsset",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f2de0",
+      "x360_retail": "0x823f4838",
+      "confidence": "low"
+    },
+    {
+      "name": "LthkpWorld__getPenetrations",
+      "resolution": "string-anchor",
+      "x360_final": "0x82621708",
+      "x360_retail": "0x82627618",
+      "confidence": "low"
+    },
+    {
+      "name": "MarkerTextureName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ec908",
+      "x360_retail": "0x823ee368",
+      "confidence": "low"
+    },
+    {
+      "name": "MassiveThread",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82783c88",
+      "x360_final": "0x826e4070",
+      "x360_retail": "0x826e9fa0",
+      "confidence": "medium"
+    },
+    {
+      "name": "MaterialIds",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b8288",
+      "x360_retail": "0x828d53e0",
+      "confidence": "low"
+    },
+    {
+      "name": "MaterialMapping",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250e118",
+      "x360_final": "0x823f1ec0",
+      "confidence": "low"
+    },
+    {
+      "name": "MaxAngle",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ee2e0",
+      "x360_retail": "0x823efd40",
+      "confidence": "low"
+    },
+    {
+      "name": "MemCheck",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82178d68",
+      "x360_retail": "0x824d9168",
+      "confidence": "low"
+    },
+    {
+      "name": "MiNumConstraints",
+      "resolution": "string-anchor",
+      "x360_final": "0x826465e0",
+      "x360_retail": "0x8264c238",
+      "confidence": "low"
+    },
+    {
+      "name": "MiNumHits",
+      "resolution": "string-anchor",
+      "x360_final": "0x82652490",
+      "x360_retail": "0x82658330",
+      "confidence": "low"
+    },
+    {
+      "name": "MinFalloffScale",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f3bb0",
+      "x360_retail": "0x823f5608",
+      "confidence": "low"
+    },
+    {
+      "name": "MinVelocity",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ee0e0",
+      "x360_retail": "0x823efb30",
+      "confidence": "low"
+    },
+    {
+      "name": "ModifierKey",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250e1a0",
+      "x360_final": "0x823b75a8",
+      "confidence": "low"
+    },
+    {
+      "name": "MoveDistance",
+      "resolution": "string-anchor",
+      "x360_final": "0x8230e960",
+      "x360_retail": "0x8230f7c0",
+      "confidence": "low"
+    },
+    {
+      "name": "MultiRay",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b8538",
+      "x360_final": "0x828cf4f0",
+      "confidence": "low"
+    },
+    {
+      "name": "MultiSphere",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b9ca0",
+      "x360_final": "0x828d0c40",
+      "x360_retail": "0x828d6df8",
+      "confidence": "medium"
+    },
+    {
+      "name": "MusicCue",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f2670",
+      "x360_retail": "0x823f40c8",
+      "confidence": "low"
+    },
+    {
+      "name": "NetEventCallback",
+      "resolution": "string-anchor",
+      "x360_profile": "0x825d3ce8",
+      "x360_retail": "0x824a8f20",
+      "confidence": "low"
+    },
+    {
+      "name": "NetSafeAreBriefingAssetsLoaded",
+      "resolution": "string-anchor",
+      "x360_profile": "0x825ce830",
+      "x360_final": "0x824a35f0",
+      "confidence": "low"
+    },
+    {
+      "name": "NetSafeSetStarter",
+      "resolution": "string-anchor",
+      "x360_final": "0x824a2fb0",
+      "x360_retail": "0x8249c780",
+      "confidence": "low"
+    },
+    {
+      "name": "NextIntersectionGuid0",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f10a8",
+      "x360_retail": "0x823f2b00",
+      "confidence": "low"
+    },
+    {
+      "name": "NoHeightRestriction",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82425ab8",
+      "x360_final": "0x82311850",
+      "confidence": "low"
+    },
+    {
+      "name": "OpQueue",
+      "resolution": "string-anchor",
+      "x360_final": "0x8261e318",
+      "x360_retail": "0x826242c8",
+      "confidence": "low"
+    },
+    {
+      "name": "OverlapPtr",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826cff50",
+      "x360_final": "0x826313c8",
+      "x360_retail": "0x826372e0",
+      "confidence": "medium"
+    },
+    {
+      "name": "OvrlpCollPtr",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826c54c8",
+      "x360_retail": "0x8262c8b0",
+      "confidence": "low"
+    },
+    {
+      "name": "PgBillboardTreeVP",
+      "resolution": "string-anchor",
+      "x360_final": "0x821ee0e0",
+      "x360_retail": "0x821ee248",
+      "confidence": "low"
+    },
+    {
+      "name": "PgBlobShadowVP",
+      "resolution": "string-anchor",
+      "x360_final": "0x821c6fc8",
+      "x360_retail": "0x821c70b8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgCloudRenderVP1",
+      "resolution": "string-anchor",
+      "x360_final": "0x821ce3b8",
+      "x360_retail": "0x821ce548",
+      "confidence": "low"
+    },
+    {
+      "name": "PgDebrisManager",
+      "resolution": "string-anchor",
+      "x360_final": "0x82208438",
+      "x360_retail": "0x822085a8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgFXVP",
+      "resolution": "string-anchor",
+      "x360_final": "0x821e3aa8",
+      "x360_retail": "0x821e3c08",
+      "confidence": "low"
+    },
+    {
+      "name": "PgLowResTerrainVP",
+      "resolution": "string-anchor",
+      "x360_profile": "0x822d9f48",
+      "x360_final": "0x821f2b70",
+      "x360_retail": "0x821f2cf8",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgMeshShadowVP",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829e7a08",
+      "x360_final": "0x828fb970",
+      "x360_retail": "0x82901d40",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgModelStateMachine",
+      "resolution": "string-anchor",
+      "x360_profile": "0x823174f8",
+      "x360_final": "0x8222c310",
+      "x360_retail": "0x8222c930",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgPlayerEnterSeatMode",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82566cb0",
+      "x360_final": "0x82441a78",
+      "x360_retail": "0x82443d00",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgPlayerHumanMode",
+      "resolution": "string-anchor",
+      "x360_final": "0x824415f0",
+      "x360_retail": "0x824438b0",
+      "confidence": "low"
+    },
+    {
+      "name": "PgPlayerModeMinigame",
+      "resolution": "string-anchor",
+      "x360_final": "0x822a3668",
+      "x360_retail": "0x822a3bf0",
+      "confidence": "low"
+    },
+    {
+      "name": "PgPlayerPDAMapMode",
+      "resolution": "string-anchor",
+      "x360_profile": "0x825666a8",
+      "x360_final": "0x8243f7c8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSkyVP",
+      "resolution": "string-anchor",
+      "x360_final": "0x821d0460",
+      "x360_retail": "0x821d0578",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSoundMessageHandler",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82484e48",
+      "x360_final": "0x8235dc90",
+      "confidence": "low"
+    },
+    {
+      "name": "PgStimulus",
+      "resolution": "string-anchor",
+      "x360_final": "0x822f2e20",
+      "x360_retail": "0x822f3ce8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysAi",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8240b548",
+      "x360_final": "0x822f8c98",
+      "x360_retail": "0x822f9b48",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgSysChatter",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8234a240",
+      "x360_retail": "0x822533f0",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysDisposer",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8234f810",
+      "x360_final": "0x822569e8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysHumanStateMachine",
+      "resolution": "string-anchor",
+      "x360_final": "0x8225b200",
+      "x360_retail": "0x8225b958",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysNetDynamicObjects",
+      "resolution": "string-anchor",
+      "x360_final": "0x82449f78",
+      "x360_retail": "0x8244bbc0",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysNetPlayer",
+      "resolution": "string-anchor",
+      "x360_profile": "0x825902d8",
+      "x360_final": "0x824638a8",
+      "x360_retail": "0x82466d98",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgSysNetSupport",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82592018",
+      "x360_final": "0x824650b0",
+      "x360_retail": "0x824685e0",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgSysPopulation",
+      "resolution": "string-anchor",
+      "x360_profile": "0x823641f0",
+      "x360_final": "0x822617c8",
+      "x360_retail": "0x82262308",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgSysRider",
+      "resolution": "string-anchor",
+      "x360_final": "0x82298850",
+      "x360_retail": "0x82299688",
+      "confidence": "low"
+    },
+    {
+      "name": "PgSysVehicle",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82373600",
+      "x360_retail": "0x822763d8",
+      "confidence": "low"
+    },
+    {
+      "name": "PgWeaponSystem",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8237cf88",
+      "x360_final": "0x82281490",
+      "x360_retail": "0x822820d0",
+      "confidence": "medium"
+    },
+    {
+      "name": "PgXmvPlayerFP",
+      "resolution": "string-anchor",
+      "x360_profile": "0x825e3968",
+      "x360_final": "0x824affd8",
+      "x360_retail": "0x824b6560",
+      "confidence": "medium"
+    },
+    {
+      "name": "PhantmLisPtr",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826de8e8",
+      "x360_final": "0x826407b8",
+      "x360_retail": "0x826466c8",
+      "confidence": "medium"
+    },
+    {
+      "name": "PhysicsActor",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f5370",
+      "x360_retail": "0x823d9510",
+      "confidence": "low"
+    },
+    {
+      "name": "PhysicsActorRagdoll",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f5490",
+      "x360_final": "0x823c43f0",
+      "confidence": "low"
+    },
+    {
+      "name": "PrimaryTurretName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823efa80",
+      "x360_retail": "0x823f14d8",
+      "confidence": "low"
+    },
+    {
+      "name": "PrimaryWeaponGuid",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f1d70",
+      "x360_retail": "0x823f37c8",
+      "confidence": "low"
+    },
+    {
+      "name": "PstColLisPtr",
+      "resolution": "string-anchor",
+      "x360_final": "0x8261e878",
+      "x360_retail": "0x82624760",
+      "confidence": "low"
+    },
+    {
+      "name": "PstSimLisPtr",
+      "resolution": "string-anchor",
+      "x360_final": "0x8261e7b8",
+      "x360_retail": "0x82624710",
+      "confidence": "low"
+    },
+    {
+      "name": "RequestHeartbeat",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82787640",
+      "x360_retail": "0x826ed950",
+      "confidence": "low"
+    },
+    {
+      "name": "RequestLocateService",
+      "resolution": "string-anchor",
+      "x360_profile": "0x827825c8",
+      "x360_final": "0x826e29b0",
+      "x360_retail": "0x826e88e0",
+      "confidence": "medium"
+    },
+    {
+      "name": "RequestQueue",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8277f038",
+      "x360_retail": "0x826e5380",
+      "confidence": "low"
+    },
+    {
+      "name": "RiderStateEnum",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82510e10",
+      "x360_final": "0x823f0678",
+      "confidence": "low"
+    },
+    {
+      "name": "RtLightAnimation__Update",
+      "resolution": "string-anchor",
+      "x360_final": "0x8240a2f0",
+      "x360_retail": "0x8240bb20",
+      "confidence": "low"
+    },
+    {
+      "name": "RuntimeExplosion",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f3f50",
+      "x360_retail": "0x823c1d98",
+      "confidence": "low"
+    },
+    {
+      "name": "RuntimeScriptCallback",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f4580",
+      "x360_retail": "0x823c2cd0",
+      "confidence": "low"
+    },
+    {
+      "name": "SavedMotion",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826c3348",
+      "x360_final": "0x82619308",
+      "x360_retail": "0x8261f198",
+      "confidence": "medium"
+    },
+    {
+      "name": "ScriptName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823efc70",
+      "x360_retail": "0x823f16c8",
+      "confidence": "low"
+    },
+    {
+      "name": "SeatName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823eed00",
+      "x360_retail": "0x823f0c28",
+      "confidence": "low"
+    },
+    {
+      "name": "SectorPtrs",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826929a0",
+      "x360_final": "0x825fdcf8",
+      "x360_retail": "0x82603c10",
+      "confidence": "medium"
+    },
+    {
+      "name": "SetAttractModeEnable",
+      "resolution": "string-anchor",
+      "x360_profile": "0x824a3210",
+      "x360_final": "0x8237d118",
+      "confidence": "low"
+    },
+    {
+      "name": "SetBoundaryEffect",
+      "resolution": "string-anchor",
+      "pc_v1_1": "0x005b2b20",
+      "x360_profile": "0x825eb1d8",
+      "confidence": "low"
+    },
+    {
+      "name": "ShapeSubParts",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b5910",
+      "x360_final": "0x828cc918",
+      "x360_retail": "0x828d2ac8",
+      "confidence": "medium"
+    },
+    {
+      "name": "SnapshotSave",
+      "resolution": "string-anchor",
+      "x360_final": "0x82680e18",
+      "x360_retail": "0x82686d38",
+      "confidence": "low"
+    },
+    {
+      "name": "SoundSet",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f23e0",
+      "x360_retail": "0x823f3e38",
+      "confidence": "low"
+    },
+    {
+      "name": "SpawnAlign",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250d890",
+      "x360_retail": "0x823f0240",
+      "confidence": "low"
+    },
+    {
+      "name": "SpawnGuid",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ee868",
+      "x360_retail": "0x823f02c8",
+      "confidence": "low"
+    },
+    {
+      "name": "SpawnerWeightTypeEnum",
+      "resolution": "string-anchor",
+      "x360_final": "0x823dc670",
+      "x360_retail": "0x823de0c0",
+      "confidence": "low"
+    },
+    {
+      "name": "St3AxisSweep",
+      "resolution": "string-anchor",
+      "x360_final": "0x82639ea8",
+      "x360_retail": "0x8266f1e0",
+      "confidence": "low"
+    },
+    {
+      "name": "StAddAgt",
+      "resolution": "string-anchor",
+      "x360_final": "0x82639f30",
+      "x360_retail": "0x8266f310",
+      "confidence": "low"
+    },
+    {
+      "name": "StAddedCb",
+      "resolution": "string-anchor",
+      "x360_final": "0x826221d8",
+      "x360_retail": "0x826281d8",
+      "confidence": "low"
+    },
+    {
+      "name": "StQueryTree",
+      "resolution": "string-anchor",
+      "x360_final": "0x825fc490",
+      "x360_retail": "0x826023d8",
+      "confidence": "low"
+    },
+    {
+      "name": "StRecomposeD",
+      "resolution": "string-anchor",
+      "x360_final": "0x828b0ab0",
+      "x360_retail": "0x828b6d20",
+      "confidence": "low"
+    },
+    {
+      "name": "StRecomposeDChunk",
+      "resolution": "string-anchor",
+      "x360_final": "0x828b00a0",
+      "x360_retail": "0x828b6250",
+      "confidence": "low"
+    },
+    {
+      "name": "StRecomposeW",
+      "resolution": "string-anchor",
+      "x360_final": "0x828aa7c8",
+      "x360_retail": "0x828b0568",
+      "confidence": "low"
+    },
+    {
+      "name": "StRecomposeWChunk",
+      "resolution": "string-anchor",
+      "x360_final": "0x828a9b48",
+      "x360_retail": "0x828afe80",
+      "confidence": "low"
+    },
+    {
+      "name": "StResetTime",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826def00",
+      "x360_final": "0x82640d00",
+      "x360_retail": "0x82646c10",
+      "confidence": "medium"
+    },
+    {
+      "name": "StSlexMove",
+      "resolution": "string-anchor",
+      "x360_final": "0x8217ed50",
+      "x360_retail": "0x8217ed50",
+      "confidence": "low"
+    },
+    {
+      "name": "StUpdateOverlaps",
+      "resolution": "string-anchor",
+      "x360_final": "0x82620878",
+      "x360_retail": "0x82626760",
+      "confidence": "low"
+    },
+    {
+      "name": "StaddAgts",
+      "resolution": "string-anchor",
+      "x360_final": "0x82620e38",
+      "x360_retail": "0x82626d50",
+      "confidence": "low"
+    },
+    {
+      "name": "StcheckAgts",
+      "resolution": "string-anchor",
+      "x360_final": "0x82620d18",
+      "x360_retail": "0x82626c20",
+      "confidence": "low"
+    },
+    {
+      "name": "SubParts",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b3df0",
+      "x360_final": "0x828cade8",
+      "x360_retail": "0x828d0f48",
+      "confidence": "medium"
+    },
+    {
+      "name": "TerrainKey",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829f1aa0",
+      "x360_final": "0x823f2350",
+      "x360_retail": "0x823f3da8",
+      "confidence": "medium"
+    },
+    {
+      "name": "TestFloat",
+      "resolution": "string-anchor",
+      "x360_final": "0x823e74d0",
+      "x360_retail": "0x823e8f18",
+      "confidence": "low"
+    },
+    {
+      "name": "TimeForAimState",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ef638",
+      "x360_retail": "0x823f1090",
+      "confidence": "low"
+    },
+    {
+      "name": "TreeFoliage",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8251fa78",
+      "x360_final": "0x82405a18",
+      "confidence": "low"
+    },
+    {
+      "name": "TresspasserCallback",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8245ae50",
+      "x360_final": "0x8233fc50",
+      "confidence": "low"
+    },
+    {
+      "name": "TriangleShp",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826aa4b0",
+      "x360_final": "0x825f3600",
+      "x360_retail": "0x825f9528",
+      "confidence": "medium"
+    },
+    {
+      "name": "TriggerName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823edce0",
+      "x360_retail": "0x823ef740",
+      "confidence": "low"
+    },
+    {
+      "name": "TtClrSurfVel",
+      "resolution": "string-anchor",
+      "x360_final": "0x82629450",
+      "x360_retail": "0x8262f398",
+      "confidence": "low"
+    },
+    {
+      "name": "TtConflicts",
+      "resolution": "string-anchor",
+      "x360_final": "0x82654960",
+      "x360_retail": "0x8265a8c0",
+      "confidence": "low"
+    },
+    {
+      "name": "TtDsblConstr",
+      "resolution": "string-anchor",
+      "x360_final": "0x82629660",
+      "x360_retail": "0x8262f560",
+      "confidence": "low"
+    },
+    {
+      "name": "TtRayCast",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826922a8",
+      "x360_final": "0x825f4370",
+      "x360_retail": "0x825fa298",
+      "confidence": "medium"
+    },
+    {
+      "name": "TtRayCastSimpl",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829adfc8",
+      "x360_final": "0x828c4f68",
+      "x360_retail": "0x828cb120",
+      "confidence": "medium"
+    },
+    {
+      "name": "TtRayCstCchSim",
+      "resolution": "string-anchor",
+      "x360_final": "0x828c50b8",
+      "x360_retail": "0x828cb250",
+      "confidence": "low"
+    },
+    {
+      "name": "TtSetSoftContact",
+      "resolution": "string-anchor",
+      "x360_final": "0x82629158",
+      "x360_retail": "0x8262f080",
+      "confidence": "low"
+    },
+    {
+      "name": "TtSimulate",
+      "resolution": "string-anchor",
+      "x360_profile": "0x826dc4b0",
+      "x360_retail": "0x826442a8",
+      "confidence": "low"
+    },
+    {
+      "name": "TtTOIs",
+      "resolution": "string-anchor",
+      "x360_final": "0x826674e0",
+      "x360_retail": "0x8266d530",
+      "confidence": "low"
+    },
+    {
+      "name": "TtUpdateFilterOnWorld",
+      "resolution": "string-anchor",
+      "x360_final": "0x82621980",
+      "x360_retail": "0x82627888",
+      "confidence": "low"
+    },
+    {
+      "name": "TtdecompressBlockCacheD",
+      "resolution": "string-anchor",
+      "x360_profile": "0x82998a08",
+      "x360_final": "0x828af9a8",
+      "confidence": "low"
+    },
+    {
+      "name": "TtrcBvShape",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829bbae8",
+      "x360_final": "0x828d2a88",
+      "x360_retail": "0x828d8c40",
+      "confidence": "medium"
+    },
+    {
+      "name": "TtrcMopp",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829b7c58",
+      "x360_final": "0x828ceb00",
+      "confidence": "low"
+    },
+    {
+      "name": "TurretAttack",
+      "resolution": "string-anchor",
+      "x360_final": "0x822b47b0",
+      "x360_retail": "0x822b56a8",
+      "confidence": "low"
+    },
+    {
+      "name": "TurretCouplingTypeEnum",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250dbd0",
+      "x360_retail": "0x823f1510",
+      "confidence": "low"
+    },
+    {
+      "name": "TurretName",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ef910",
+      "x360_retail": "0x823f1368",
+      "confidence": "low"
+    },
+    {
+      "name": "UseDistance",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f0248",
+      "x360_retail": "0x823f1ca0",
+      "confidence": "low"
+    },
+    {
+      "name": "VehiclesOnScreen",
+      "resolution": "string-anchor",
+      "x360_final": "0x823f1460",
+      "x360_retail": "0x823f2eb8",
+      "confidence": "low"
+    },
+    {
+      "name": "ViewEATerms",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8258cd90",
+      "x360_retail": "0x82465b18",
+      "confidence": "low"
+    },
+    {
+      "name": "WalkTheSidewalks",
+      "resolution": "string-anchor",
+      "x360_profile": "0x824141b0",
+      "x360_final": "0x823027b8",
+      "x360_retail": "0x82303660",
+      "confidence": "medium"
+    },
+    {
+      "name": "WeaponCouplingTypeEnum",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250db38",
+      "x360_final": "0x823db650",
+      "confidence": "low"
+    },
+    {
+      "name": "WeaponName",
+      "resolution": "string-anchor",
+      "x360_profile": "0x8250dc68",
+      "x360_final": "0x823efb40",
+      "x360_retail": "0x823f1598",
+      "confidence": "medium"
+    },
+    {
+      "name": "WeaponProjectileTypeEnum",
+      "resolution": "string-anchor",
+      "x360_final": "0x823ed2d8",
+      "x360_retail": "0x823eed38",
+      "confidence": "low"
+    },
+    {
+      "name": "_CollapsePhysics",
+      "resolution": "string-anchor",
+      "x360_profile": "0x829eda50",
+      "x360_final": "0x823a9388",
+      "confidence": "low"
+    },
+    {
+      "name": "entry",
+      "resolution": "string-anchor",
+      "pc_v1_1": "0x00b04c2e",
+      "x360_profile": "0x82610c50",
+      "x360_final": "0x8257eb20",
+      "x360_retail": "0x82584a40",
+      "confidence": "high"
+    }
+  ]
+}

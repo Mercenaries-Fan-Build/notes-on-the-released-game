@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Verbose Log4j2 configuration for headless Ghidra analyze runs.
+
+  Why this exists:
+    Default headless logging emits one `ANALYZING all memory and code` banner at
+    auto-analyze start and nothing again until completion — a dozen+ hours of
+    radio silence on a large image. This config promotes a hand-picked set of
+    Ghidra loggers to DEBUG so the silent stretch becomes an audit trail of
+    which analyzer phase is running, when it started, and when it finished.
+
+  How to use (opt-in — default launches are unaffected):
+    GHIDRA_LOG_CONFIG=tools/ghidra_x360/log4j2-verbose.xml \
+      bash scripts/ghidra_analyze_ps3_retail.sh
+
+    The analyze shell scripts route GHIDRA_LOG_CONFIG into
+    JAVA_TOOL_OPTIONS=-Dlog4j.configurationFile=..., which the JVM picks up
+    before Ghidra bootstraps its own logging.
+
+  Caveats:
+    * Promoting a logger to DEBUG only surfaces lines Ghidra's own code actually
+      LOGS at DEBUG. Not every method emits. The loggers below are the ones
+      documented or observed to carry per-phase breadcrumbs; a few in this list
+      may stay quiet on a given run — that's not a config error.
+    * The appender writes to SYSTEM_OUT so the script's `tee $RUN_LOG` captures
+      everything.
+    * This is a FULL log4j2 config, not a fragment — it defines the root
+      logger too, so Ghidra's default config isn't layered under it. Baseline
+      output (HeadlessAnalyzer INFO lines, script lines, errors) stays visible.
+
+  If this still isn't noisy enough, add a heartbeat post-script that emits a
+  timestamp line every 30s regardless of what the analyzers log — the complement
+  of this approach, not a replacement.
+-->
+<Configuration status="WARN">
+
+  <Appenders>
+    <Console name="ConsoleAppender" target="SYSTEM_OUT">
+      <!-- Compact timestamp + level + short logger + message. Matches the
+           Ghidra-default style closely enough that `tee` output stays grep-able. -->
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5p %-24c{1} %m%n"/>
+    </Console>
+  </Appenders>
+
+  <Loggers>
+
+    <!-- Auto-analysis orchestrator. The one we most want chatty: analyzer
+         start/finish, phase transitions, scheduling events. -->
+    <Logger name="ghidra.app.plugin.core.analysis.AutoAnalysisManager" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+    <Logger name="ghidra.app.plugin.core.analysis.AnalysisScheduler" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- EntryPointAnalyzer: this is the pass we were stuck in on the PS3 run,
+         with 39,676 pre-seeded entry points. Any DEBUG progress line here is
+         the one that would've broken the 16h silence. -->
+    <Logger name="ghidra.app.plugin.core.disassembler.EntryPointAnalyzer" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Other analyzers that may emit at DEBUG. Add more here as discovered. -->
+    <Logger name="ghidra.app.plugin.core.disassembler" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+    <Logger name="ghidra.app.plugin.core.function" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Function-manager mutations — surfaces function create/update events,
+         which gives a running count during the heavy phases. -->
+    <Logger name="ghidra.program.database.function" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Task framework — background job start/finish; occasionally useful. -->
+    <Logger name="ghidra.framework.task" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Decompiler — mostly WARN territory, but keep INFO so we see summary
+         timing. DEBUG here is extremely noisy; promote only if investigating. -->
+    <Logger name="ghidra.app.decompiler" level="INFO" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Script invocations (SeedOpd*, DecompileExport, NameFromStrings…). The
+         pre/post-scripts talk to this logger via GhidraScript.println. -->
+    <Logger name="ghidra.app.script" level="DEBUG" additivity="false">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Logger>
+
+    <!-- Everything else: INFO is the Ghidra default; keep it. WARN hides
+         legitimate HeadlessAnalyzer bookkeeping. -->
+    <Root level="INFO">
+      <AppenderRef ref="ConsoleAppender"/>
+    </Root>
+
+  </Loggers>
+
+</Configuration>

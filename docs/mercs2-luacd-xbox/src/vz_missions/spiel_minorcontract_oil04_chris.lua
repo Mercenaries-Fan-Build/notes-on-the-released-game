@@ -1,0 +1,12 @@
+local L0_1, L1_1
+L0_1 = "Player1"
+sParticipant1 = L0_1
+L0_1 = "Starter"
+sParticipant2 = L0_1
+L0_1 = {}
+L1_1 = {}
+L1_1.sSpeaker = "Starter"
+L1_1.sCue = "Kresge-Briefing-MinorContract-Oil04-01"
+L1_1.sAnim = ""
+L0_1[1] = L1_1
+tSequence = L0_1

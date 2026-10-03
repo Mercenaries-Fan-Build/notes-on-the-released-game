@@ -1,0 +1,22 @@
+local L0_1, L1_1, L2_1, L3_1
+L0_1 = "Player1"
+sParticipant1 = L0_1
+L0_1 = "Starter"
+sParticipant2 = L0_1
+L0_1 = {}
+L1_1 = {}
+L1_1.sSpeaker = "Starter"
+L1_1.sCue = "Sun-Briefing-Job-Chi06-01"
+L1_1.sAnim = ""
+L2_1 = {}
+L2_1.sSpeaker = "Player1"
+L2_1.sCue = "Mattias-Briefing-Job-Chi06-02"
+L2_1.sAnim = ""
+L3_1 = {}
+L3_1.sSpeaker = "Starter"
+L3_1.sCue = "Sun-Briefing-Job-Chi06-05"
+L3_1.sAnim = ""
+L0_1[1] = L1_1
+L0_1[2] = L2_1
+L0_1[3] = L3_1
+tSequence = L0_1

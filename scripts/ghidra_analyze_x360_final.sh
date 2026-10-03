@@ -41,6 +41,9 @@ SCRIPT_PATH="${REPO_ROOT}/tools/ghidra_x360"
 export MAXMEM="${MAXMEM:-8G}"
 ANALYSIS_TIMEOUT="${GHIDRA_ANALYSIS_TIMEOUT:-21600}"
 SKIP_FIX_PE="${SKIP_FIX_PE:-0}"
+# Opt-in verbose logging. Set GHIDRA_LOG_CONFIG=<path/to/log4j2.xml> to promote
+# selected Ghidra loggers to DEBUG. See tools/ghidra_x360/log4j2-verbose.xml.
+GHIDRA_LOG_CONFIG="${GHIDRA_LOG_CONFIG:-}"
 
 # --- Preflight ------------------------------------------------------------
 _die() { echo "error: $*" >&2; exit 1; }
@@ -53,6 +56,10 @@ _die() { echo "error: $*" >&2; exit 1; }
 for js in CreateFunctions.java DecompileExport.java NameFromStrings.java; do
   [[ -f "${SCRIPT_PATH}/${js}" ]] || _die "Ghidra script missing: ${SCRIPT_PATH}/${js}"
 done
+if [[ -n "$GHIDRA_LOG_CONFIG" ]]; then
+  [[ -f "$GHIDRA_LOG_CONFIG" ]] || _die "GHIDRA_LOG_CONFIG points at missing file: $GHIDRA_LOG_CONFIG"
+  export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Dlog4j.configurationFile=${GHIDRA_LOG_CONFIG}"
+fi
 
 mkdir -p "$OUT_DIR" "$PROJECT_DIR"
 cat <<EOF
@@ -70,6 +77,7 @@ cat <<EOF
   JAVA_HOME:       $JAVA_HOME
   MAXMEM:          $MAXMEM
   Analysis timeout: ${ANALYSIS_TIMEOUT}s
+  Log config:      ${GHIDRA_LOG_CONFIG:-(default — INFO)}
   Processor:       PowerPC:BE:64:A2ALT-32addr
   Image base:      0x82000000
 ================================================================
