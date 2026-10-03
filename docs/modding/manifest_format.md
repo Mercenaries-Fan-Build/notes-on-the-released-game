@@ -354,9 +354,10 @@ TINY model carries, bit 111 alone. The `Transform` record's 6-byte tail is writt
 TINY placements carry a small value there whose meaning is open. The overlay carries the whole
 layer block; a Shipment's stand-ins in one layer go into one overlay of it.
 
-**The key** is the author's. Retail's stand-in keys are the world editor's: one pass allocated every
-stand-in a GUID from its counter, layer by layer, above all but four of the world's other GUIDs, and
-nothing in a layer or a model derives them. `extract-tiny` keeps the retail key.
+**The key** is the author's. Retail's stand-in keys are the world editor's: one pass allocated the
+1,208 stand-ins GUIDs from its counter, layer by layer (`0x0014399B` to `0x00144F24`, above every
+other placement key below `0x10000000`), and nothing in a layer or a model derives them.
+`extract-tiny` keeps the retail key.
 
 **Limits.** The engine registers at most 1,400 slot lists (`0x0050F1BE`), and drops one past that
 (`0x0050F26C`); M0246 counts every stand-in the game places and the Shipment's. A layer has one
