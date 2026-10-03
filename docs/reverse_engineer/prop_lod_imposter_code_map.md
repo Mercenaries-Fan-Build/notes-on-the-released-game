@@ -2,8 +2,8 @@
 
 **Scope:** scoreboard **row 10 (Prop LOD / imposters)** — the *distance-driven* level-of-detail and
 imposter surface: the runtime generic-LOD proxy system (`RtGenericLOD`/`RtGenericLODProxy`), the
-per-model `MESH`/`TINY` imposter chunk dispatchers, the whole-region `_tiny` satellite/far-LOD
-layers, and the `SEGM` state/LOD mask on prop sub-objects. This marries the **Xbox 360 devkit
+per-model `MESH`/`TINY` chunk dispatchers, the TINY stand-ins (one far-distance model per 200 m
+cell of a layer), and the `SEGM` state/LOD mask on prop sub-objects. This marries the **Xbox 360 devkit
 (Jul-08 Profile build)** symbol/PDB ground truth to the **PC retail decompilation**
 (`Mercenaries2.exe`, unpacked image, base `0x00400000`).
 
@@ -44,7 +44,10 @@ proxy}** layout, its tick site (the layer-4 `Rt*` updater `FUN_00675e50` ← `FU
 `MESH`/`TINY`/`SEGM` chunk surface are all recovered. The decisive retail fact stands and is
 **confirmed by both the data and the pools**: distance-LOD is a **~128-object special case**
 (`GenericLOD 128`, `RtGenericLOD/Proxy 32/32`) — the world's geometry residency is per-object
-hibernation (14080), and the real "imposter" mechanism is the **whole-region `_tiny` static layers**,
+hibernation (14080), and the real "imposter" mechanism is the **TINY stand-ins**: one model per
+200 m cell of a layer, placed by a `TinyGeometryObject` placement in the `vz_*_tiny` static layers
+or a `vz_state` layer, drawing each object of the cell while it is intact or while it is ruined
+([`world_streaming_code_map.md` §4.5](world_streaming_code_map.md#45-tiny-stand-ins-one-far-distance-model-per-200-m-cell-of-a-layer)),
 not per-prop mesh swapping. The Xbox LOD runtime bodies stay **unlocated by name** (string-stripped +
 runtime-generated).
 
@@ -67,12 +70,12 @@ unlocated (no string / runtime-generated) and the marriage is **PC-anchored**.
 | LOD-proxy **keep-alive** (in-band, exists) | — | `FUN_006658b0` | read in `FUN_00490220` | M |
 | Authored **`GenericLOD`** component (design input) | `GenericLOD` (pool 128) | descriptor **unlocated this pass** (`0x0064xxxx` cluster) | pool `cdbsizes.ini` 128/64; it is the spatial-hash source the generator reads | M/open |
 | **`MESH` imposter dispatcher** | renderable lifecycle `PgRenderableInitializer::Activate` `0x0041138` | **`0x00471900`** (entry `0x00471923`) | tag-registry RE: fixed **0x10-B** renderable / descriptor, **u16-indexed**, no body read | M |
-| **`TINY` (low-LOD) dispatcher** | (same renderable lifecycle) | **`0x00471a01`** | tag-registry RE: fixed **0x18-B** renderable / descriptor, index-driven like MESH, no body read | M |
+| **`TINY` chunk dispatcher** | (same renderable lifecycle) | **`0x00471a01`** | tag-registry RE: fixed **0x18-B** record / descriptor, index-driven like MESH. The chunk is a stand-in's slot list (top level) and its sub-objects (under `GEOM`); the stand-in's renderable is 0x1F0 B, built by `FUN_00477D10` when a placement is realised (§6) | M |
 | `SKIN` / `INDX` sibling dispatchers | — | `0x0047192a` / `0x004719f3` | same jump-table cluster as MESH/TINY | M |
 | **Mesh chunk assembler** (PRMG/INFO/…) | `Model::Render` family `0x0014ef8` | `FUN_00478120` → **`FUN_00478270`** | read PC bodies: PRMG/INFO/STRM/PRMT/IBUF/BSHI/BSHP/AREA walk | H |
 | **`SEGM` state/LOD-mask consumer** (draw gate) | — (SEGM SecuROM-packed) | draw-setup **`FUN_00477e20`** + draw loop `~0x477Exx` | read: record `{u16 bone@0, u8 seg_id@2, u8 state_mask@3}`; byte-3 gates draw vs state @model+0x352 | H |
-| **`_tiny` region satellite layers** (real imposter) | (static-layer load) | `Pg.LoadingStaticLayers` path (Lua-driven) | `xQ!L.lua` static list: `vz_*_tiny` per region; `TinyGeometryObject` ECS `0x06468e56` | M |
-| `TinyGeometryObject` descriptor | `TinyGeometryObject` (pool 32) | `FUN_0063ed20` (deser `FUN_00639270`, 4-B handle) | ECS-doc 08; string-anchored | H |
+| **TINY stand-ins** (real imposter) | (static-layer load; `vz_state` layers) | realise `FUN_006696A0` → `FUN_00477D10`; registry `0x01535A68` | one model per 200 m cell of a layer; 1,208 placements in 340 layers ([streaming map §4.5](world_streaming_code_map.md#45-tiny-stand-ins-one-far-distance-model-per-200-m-cell-of-a-layer)) | H |
+| `TinyGeometryObject` descriptor | `TinyGeometryObject` (pool 32) | `FUN_0063ed20` (deser `FUN_00639270`, 4-B handle) | ECS-doc 08; string-anchored. Retail layers hold no `TinyGeometryObject` COMP: every placement of a TINY model carries `flgs` bit 111 | H |
 | Renderable lifecycle (Activate/Deactivate/CanActivate) | `PgRenderableInitializer::{Activate,Deactivate,CanActivate}` `0x0041138`/`0x0041114`/`0x00410ec` | vtable slots in `&PTR_FUN_00bc5ff8` cluster | reference (rendering-shaders.md); confirm-live | L |
 
 ---
@@ -202,14 +205,14 @@ body was **not read as a discrete `FUN_`**; the description is from the **valida
 
 - **`MESH`** — allocates a **fixed 0x10-byte renderable** per descriptor, **indexed by a u16**; *no
   body read, no count-driven array* ("engine-safe; no self-contained body invariant").
-- **`TINY`** — allocates a **fixed 0x18-byte renderable** per descriptor, **index-driven like MESH**;
-  no body read. `TINY` = the low-LOD imposter renderable variant (larger struct = it also carries the
-  distance/fade state MESH doesn't).
+- **`TINY`** — allocates a **fixed 0x18-byte record** per descriptor, **index-driven like MESH**. A
+  `TINY` container is not a coarser rung of another model: it is a stand-in for the objects of a
+  cell, its top-level `TINY` chunk their GUIDs, each vertex's `POSITION.w` the slot of its object,
+  and its `GEOM` sub-objects (`TINY` rows) one intact and one ruined (§6).
 
-So on retail data a model's LOD/imposter wiring is **a table of small renderable records keyed by
-index**, not an inline geometry payload — the actual geometry comes from the shared mesh assembler
-(§4.2) via the referenced handle. The distance switch that selects MESH-vs-TINY is the
-`RtGenericLOD`/`Proxy` band test (§3), *not* logic inside these readers.
+The geometry of a MESH or TINY group comes from the shared mesh assembler (§4.2). A stand-in is not
+chosen by distance against the objects' own models: its placement loads it with its layer, and its
+shaders keep each object's vertices while the object's state is the role's.
 
 ### 4.2 Mesh chunk assembler — `FUN_00478120` → `FUN_00478270` (H — read)
 
@@ -262,13 +265,13 @@ mainly for destruction-state variants, not LOD).
 
 ---
 
-## 6. The real imposter mechanism: whole-region `_tiny` static layers (M)
+## 6. The real imposter mechanism: TINY stand-ins (H)
 
-Per-prop LOD being near-absent (§5) and the `RtGenericLOD` pools being tiny (§3.3), the actual
-far/imposter representation of the world is **per-region single "tiny" meshes loaded as static
-layers**. The master static-layer list (`docs/mercs2-luacd/src/vz/xQ!L.lua`, the
-`_tDefaultStaticLayers` array) enumerates them alongside `vz_LowResTerrain` / `VZ_terrain` /
-`vz_*_billboard`:
+Per-prop LOD being near-absent (§5) and the `RtGenericLOD` pools being tiny (§3.3), the far
+representation of the world is the **TINY stand-ins**: one model per 200 m cell of a layer, drawn
+in place of the cell's objects. The master static-layer list (`docs/mercs2-luacd/src/vz/xQ!L.lua`,
+the `_tDefaultStaticLayers` array) loads the `vz_*_tiny` layers alongside `vz_LowResTerrain` /
+`VZ_terrain` / `vz_*_billboard`:
 
 ```
 vz_caracas_tiny, vz_maracaibo_tiny, vz_amazon_tiny, vz_angel_falls_tiny,
@@ -276,21 +279,26 @@ vz_jungle_mountain_tiny, vz_merida_tiny, vz_guanare_tiny, vz_cumana_tiny,
 vz_pirate_isles_tiny, vz_pmc_tiny
 ```
 
-- These are **one satellite/far-LOD mesh per geographic region** (Caracas, Maracaibo, Amazon, …),
-  loaded through the ordinary `Pg.LoadingStaticLayers` static-layer path (same mechanism as the
-  low-res terrain and billboard layers), **not** per-prop.
-- The chunk-level carrier is the **`TINY` renderable** (§4.1) + the **`TinyGeometryObject`** ECS class
-  (m2 `0x06468e56`, descriptor `FUN_0063ed20`, deser `FUN_00639270` = a 4-byte handle/id; pool **32**,
-  ECS-doc 08) — a lightweight object that just references a shared region geometry by id.
-- **Satellite/overview view:** the string set `satellite` / `satelliteview` exists in the reversed
-  identifier corpus (`docs/data/bone_name_candidates.txt`), consistent with a `Sys.RequestGameState`
-  satellite/map view that toggles these whole-region `_tiny` layers on to render the zoomed-out world.
-  The exact Object-switch / game-state binding is **inferred, not read** → confirm-live.
+- Each of those layers holds **one `TinyGeometryObject` placement per cell** (`vz_merida_tiny` holds
+  33), each at its cell's centre and loading the model
+  `<layer>_tinygeometry_tgr<row>_tgc<col>_0x<key>`; the `vz_state` layers carry their own. Retail
+  places 1,208 in 340 layers.
+- A stand-in's model lists the GUIDs of the objects it draws; its intact part is drawn by
+  `PgMeshTinyVP` while an object is intact and its ruined part by `PgMeshTinyVP_Ruin` while it is
+  ruined, from per-object states the engine keeps in a registry (`0x01535A68`) and updates when an
+  object is destroyed (`FUN_005234F0` at `0x0052373A`).
+- The `vz_*_tiny` stand-ins draw the objects of other layers (the static world); a `vz_state`
+  layer's draw its own.
 
-This is the honest answer to "per-prop vs region imposters": **the region `_tiny` layers are the
-imposter system that actually ships content**; the `RtGenericLOD`/`Proxy` runtime is a real but
-small-scale (32-object) system for specific proxy/vegetation-style objects; per-prop intra-model LOD
-(`SEGM` byte-3) is essentially unused for LOD on retail data.
+The mechanism, the registry, the draw and the shaders are in
+[`world_streaming_code_map.md` §4.5](world_streaming_code_map.md#45-tiny-stand-ins-one-far-distance-model-per-200-m-cell-of-a-layer);
+the container format is `mercs2_formats::tiny_model`; a Shipment adds one with
+[`add_tiny_geometry`](../modding/manifest_format.md#add_tiny_geometry). Whether a satellite or map
+view swaps any of this in is not established (§8).
+
+The `RtGenericLOD`/`Proxy` runtime is a real but small-scale (32-object) system for specific
+proxy/vegetation-style objects; per-prop intra-model LOD (`SEGM` byte-3) is essentially unused for
+LOD on retail data.
 
 ---
 
@@ -310,7 +318,7 @@ small-scale (32-object) system for specific proxy/vegetation-style objects; per-
   `&PTR_FUN_00bc5ff8` component vtable cluster implements (structural; confirm-live to bind the exact
   PC vtable slots).
 - **`RenderFadingTrees` (`0x0016a2c`) + `PgBillboardTree*` shaders** are the Xbox analog of the
-  vegetation/billboard far-LOD path — the tree-specific cousin of the `_tiny` imposters.
+  vegetation/billboard far-LOD path — the tree-specific cousin of the TINY stand-ins.
 
 ---
 
@@ -329,8 +337,8 @@ small-scale (32-object) system for specific proxy/vegetation-style objects; per-
 5. **`GenericLOD` authored descriptor** — locate the `0x0064xxxx` registrar for the authored
    `GenericLOD` (pool 128) that feeds the `FUN_0066ee80` generator's spatial-hash source; unlocated
    this pass.
-6. **`_tiny` / satellite toggle** — break the static-layer load and `Sys.RequestGameState` to confirm
-   the `vz_*_tiny` region meshes are the satellite/overview imposters and how the view swaps them in.
+6. **Satellite / map view** — break the static-layer load and `Sys.RequestGameState` to learn
+   whether a satellite or map view draws the `vz_*_tiny` stand-ins differently.
 7. **MESH/TINY dispatcher body** — the entry points `0x471923`/`0x471a01` are jump-table targets;
    break there to read the enclosing renderable-consumer function proper (0x10-B vs 0x18-B alloc
    confirmed statically from the tag-registry RE, not from a discrete decomp body).
@@ -340,7 +348,7 @@ small-scale (32-object) system for specific proxy/vegetation-style objects; per-
 ## 9. Reconciliation with `mercs2_engine` (scoreboard row 10 = 🟡)
 
 **Status: 🟡 — a 4-tier LOD is *computed* but informational; the terrain swap is the only real LOD
-in-engine; per-prop imposter swap and the region `_tiny` imposters are not implemented.**
+in-engine; per-prop imposter swap and the TINY stand-ins are not implemented.**
 
 - **What matches:** the engine reads real `HibernationControl` distances for props and uses the real
   c3 spatial index for proximity (binary wake/hibernate) — the residency behaviour is faithful
@@ -354,10 +362,9 @@ in-engine; per-prop imposter swap and the region `_tiny` imposters are not imple
   1. **`RtGenericLOD`/`Proxy` runtime** — a 32-cap pool of 4-tier band records + the per-frame
      spawn/despawn shell test (§3), ticked from the engine's fixed schedule slot (mirrors
      `FUN_00675e50` ← `FUN_004c9740`). Applies to the ≤32 proxy/vegetation objects only.
-  2. **`MESH`/`TINY` imposter renderables** — index-keyed 0x10/0x18-B renderable records that select a
-     lower-detail handle; the geometry still assembles through the existing `FUN_00478270` path.
-  3. **Region `_tiny` satellite layers** — load the `vz_*_tiny` meshes as static layers and swap them
-     in for the satellite/overview view (the *actual* imposter system that ships content, §6).
+  2. **TINY stand-ins** — load each `TinyGeometryObject` placement's model, keep the per-object
+     states (intact/ruined, drawn/hidden) and draw each stand-in's intact and ruined parts by them
+     (§6); the geometry assembles through the existing `FUN_00478270` path.
 - **Do NOT** gate draw groups on the destruction/variant state machine (`STAT`/`SWIT`/`CHDR` →
   `FUN_004cf340`) as if it were LOD — it is a gameplay state machine (buildings collapse), orthogonal
   to distance-LOD (`rendering_fx_lighting_gap.md` §J).
