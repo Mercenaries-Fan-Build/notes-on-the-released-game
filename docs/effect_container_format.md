@@ -29,6 +29,14 @@ A world template names its effect with the placement / template name minus `part
 against the 314. For the C4 template the world-entity data agrees: the `RedEffectComponent` record
 of entity `0x80008028` carries `0x41B4326E` in its `name` field (`0x1DE5C824`).
 
+**The field that carries a template's effect** is `RedEffectComponent`'s `name` (`0x1DE5C824`, schm
+code 6, offset 0): in 524 of the 538 retail `RedEffectComponent` records it is the name hash of one
+of the 314 effects (PROVEN by the data, [`worldentity_container_format.md`](worldentity_container_format.md)
+§4). `ObjectState.StartEmitter` passes a **template** name hash, not an effect hash:
+`FUN_004D28C0` resolves it through the template lookup `FUN_00672F60` and spawns that template with
+`FUN_006746D0`. That the spawned template's `RedEffectComponent` `name` is what starts the effect
+is INFERRED; the code from it to PgFX was not read.
+
 The container is a UCFX tree — see [`ucfx_tree_container.md`](ucfx_tree_container.md) for rows,
 `x2`/`x3`, marker rows, contiguous bodies and `CSUM`.
 
