@@ -82,11 +82,11 @@ of the retail engine that any hardening plan must fit inside.
 
 ## The seam today (what modders trip on)
 
-The failure modes divide into two groups: F1–F7 + F11 for mission-shaped mods (add_script,
+The failure modes divide into two groups: F1–F7 + F11–F12 for mission-shaped mods (add_script,
 patch_lua into `mrxmissionflow`), F8–F10 for the other Shipment kinds (wardrobe outfits, store
 items, localisation). Each is either directly seen in this project or directly implied by the Ess
-codebase's own defensive design. (F11 was documented later than F1–F10, hence the ordering; it is
-still mission-shaped.)
+codebase's own defensive design. (F11 and F12 were documented later than F1–F10, hence the ordering;
+both are still mission-shaped.)
 
 ### F1–F7 — mission-shaped mods
 
@@ -237,6 +237,76 @@ each guard their own faction-HQ portal state via the same `RefreshBriefingRoomDi
 
 Confirmed live: v0.9.4 armed the portal on new-game boot; the register append gated `UnlockMission`
 on `HasKey("PmcCon001")` in v0.9.5.
+
+### F12 — Briefing-dialog format crash from unparseable mission name
+
+Mission-shaped, discovered 2026-10-01 against retail PC with
+`mercs2-mission-ab-test` v0.2.0 installed. A custom row in
+`WifMissionData.tMissionData` whose key does **not** match the shipped
+`<Faction><Con|Job><NN>` naming shape (`PmcCon031`, `OilJob004`, …) wedges the
+briefing-dialog teardown the instant the player selects it from a starter's
+"Select an option" root menu.
+
+The cascade from select-click to black-screen:
+
+1. Starter dialog's root menu stores the clicked briefing as
+   `_sSelectedMission` in `mrxbriefing` and begins the selection → confirmation
+   → `_End` flow.
+2. `_End` at
+   [`mrxbriefing.lua:1263`](../../tools/wad_simulator/workshop_data/lua/resident/mrxbriefing.lua#L1263)
+   calls `_UnloadSpiel(true)` early in its cleanup.
+3. `_UnloadSpiel` at
+   [`mrxbriefing.lua:1568-1572`](../../tools/wad_simulator/workshop_data/lua/resident/mrxbriefing.lua#L1568-L1572)
+   calls `GetSpielFileName(_sSelectedMission)` to resolve the briefing
+   cinematic's filename for unload.
+4. `GetSpielFileName` at
+   [`mrxbriefing.lua:2835-2850`](../../tools/wad_simulator/workshop_data/lua/resident/mrxbriefing.lua#L2835-L2850)
+   calls `MrxUtil.ExplodeMissionName(sMissionName)` to split the id into
+   `(sFaction, bContract, nNumber)`. For a non-matching name (e.g.
+   `AbTest_E5_JetPmcBossJob`) it returns `nNumber=nil`.
+5. [`mrxbriefing.lua:2849`](../../tools/wad_simulator/workshop_data/lua/resident/mrxbriefing.lua#L2849):
+   **`string.format("%02d", nNumber=nil)` throws
+   `bad argument #2 to 'format' (number expected, got nil)`**. The error
+   propagates out of the dialog-selection handler before `_End` reaches
+   `_Fade(false, _EndBegin)` at line 1286.
+6. The briefing dialog's visual tears down (menu closes) but `_ClientMenuBox`
+   stays `true`, `_sCurrentStarterId` stays set, `_bInside` stays `true`, and
+   the briefing camera stays locked. Player sees "black screen then camera
+   restored but no menu, no interaction" and the engine is stranded in the
+   briefing's intermediate camera state with no path to re-enter the game loop.
+   `WifPmcInterior.Exit` is never called; `MrxState.STATE_WAITFORGAME` may or
+   may not be held — a desynced UI is the real problem, not a locked state.
+
+Vanilla never hits this because every shipped mission id matches the parseable
+shape (verified across all 69 `tMissionData` rows).
+
+**Live recovery via Lua REPL.** The engine already contains the escape hatch:
+`_UnloadSpiel` has an early return on `_sSelectedMission == nil` at
+[`mrxbriefing.lua:1569`](../../tools/wad_simulator/workshop_data/lua/resident/mrxbriefing.lua#L1569).
+Clearing the selection first lets `_End`'s normal cascade run end-to-end:
+
+```lua
+local mb = _MODULES['mrxbriefing']
+mb._sSelectedMission = nil
+mb._End()
+-- fade → _EndBegin → _oStarter:End({}, nil) → BriefingComplete(false)
+-- → MrxState.Exit(STATE_WAITFORGAME).  Player regains control, stays in PMC.
+```
+
+Confirmed live 2026-10-01: the recovery restored interaction cleanly;
+`_ClientMenuBox=nil`, `_sCurrentStarterId=nil`, `WFG nRefCount=0` all cleared
+by the engine's own teardown.
+
+**Fix for mod authors**: either (a) name custom test/dev missions with a
+parseable shape (`AbCon05`, `AbJob01`, …) so `ExplodeMissionName` returns a
+real `nNumber` and `GetSpielFileName` builds a well-formed name whose asset
+simply doesn't resolve — the shipped missing-asset path is well-tested; or
+(b) `patch_lua` into `mrxbriefing` and wrap `GetSpielFileName` to recognise
+the mod's naming prefix with a safe fallback. Option (a) is lower-risk.
+
+**Fix for `qm`**: a lint check on `WifMissionData.tMissionData` row keys
+contributed via `patch_lua` could reject names that `ExplodeMissionName` can't
+parse — this failure mode is detectable statically.
 
 ## Per-tool responsibility split
 
