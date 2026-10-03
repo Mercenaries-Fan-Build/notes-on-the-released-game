@@ -152,6 +152,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
+| `add_tiny_geometry` | Data | `layer`, `cell`, `key`, `objects`, `model` |
 | `activate_layer` | Script | `layer` (`replaces:` optional) |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
 | `place_file` | Code | `file`, `dest` |
@@ -258,6 +259,108 @@ too.
 
 Scope and the step-0/1/2 proof are in
 [`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
+
+### `add_tiny_geometry`
+
+Adds a **TINY stand-in**: the far-distance model the game draws, from far away, in place of the
+world objects of one 200 m grid cell of a layer, and the `TinyGeometryObject` placement that loads
+it. Each object's part of the stand-in is drawn while the object is intact, or while it is ruined,
+so a destroyed building shows its ruin from a distance too.
+
+```yaml
+  - kind: add_tiny_geometry
+    layer: vz_state_mar_city_pristine
+    cell: { row: 28, col: 32 }
+    key: 1327103
+    objects: ["0x00097FF3", mar_city_tower]
+    model: src/tiny/tgr28_tgc32.glb
+```
+
+| field | what it is |
+|---|---|
+| `layer` | the layer the placement goes into, by name: its sub-block entry is `m2(layer)` |
+| `cell` | the cell, `row` from z and `col` from x, each 0 to 39: `col = floor((x + 4000) / 200)`, `row = floor((z + 4000) / 200)` |
+| `key` | the placement's entity key (GUID); no layer of the game may already use it (M0250) |
+| `objects` | the world objects the stand-in draws, each a bare `"0xGUID"` or the name of a placement in `layer` |
+| `model` | the stand-in's `.glb` / `.gltf` |
+
+**Extract, then edit.** Any retail stand-in takes apart into this contribution and its model:
+
+```sh
+qm extract-tiny vz_merida_tiny_tinygeometry_tgr12_tgc29_0x00144ece --out <shipment> --game <dir>
+```
+
+It writes `src/<model>.glb` under `--out` and prints the contribution. Each retail stand-in, taken
+apart and built back, is its own container but for its bounds and, where its slot list holds a slot
+`≡ 3 (mod 4)`, its slots (both below); its layer is its own layer but for the placement's
+`Transform` tail.
+
+**The model.** Every primitive declares `extras.tiny_role`: `intact` (drawn by `PgMeshTinyVP` while
+the object is intact) or `ruined` (`PgMeshTinyVP_Ruin`, while it is ruined); a primitive without one
+is M0244. Every vertex carries `_TINY_SLOT` (an unsigned integer scalar), the index of its object
+in `objects`; a slot past the list is M0242, and a triangle whose vertices name two slots M0243.
+Every primitive has a `NORMAL`, a `TEXCOORD_0` and a material, and is `TRIANGLES` or
+`TRIANGLE_STRIP` (a strip is kept as it is; triangles are stitched into one). A node transform must
+be a rotation and a translation: positions move with it and normals turn with it, unscaled.
+
+Every material declares its diffuse texture in `extras.texture` (a name, or a bare `0xHASH`; it is
+in the game or is an `add_texture` of the Shipment) and its pixel shader in `extras.pixel_shader`:
+retail uses several pixel shaders for a material with one texture ([the shader
+import](#the-shader-import)), and `PgDiffFP` on every stand-in. `alphaMode` is `OPAQUE` or `MASK`
+(alpha-tested); `BLEND` has no stand-in material. Every material is drawn by a primitive. A model
+that does not read this way is M0251.
+
+**What the build writes.** The model is `<layer>_tinygeometry_tgr<row>_tgc<col>_0x<key>`, two digits
+for the row and column and eight hex digits for the key. Its container is the shape every one of
+retail's 1,208 stand-ins has (`mercs2_formats::tiny_model`):
+
+- one sub-object per role present, intact first, each with a `HIER` node named `m2("pristine")` or
+  `m2("ruin")` and a `SEGM` record `{k, k, 1}`;
+- one primitive group per primitive, in the file's order: the role's vertex shader, the shadow
+  shader the role and the material's alpha flag pick (`PgMeshTinyShadowVP`, `…TexVP`, `…VP_Ruin`,
+  `…TexVP_Ruin`), and two identical `PRMT` records drawing the whole strip;
+- each vertex as half floats: position, texture coordinate, normal, `POSITION.w` its object's slot
+  and `NORMAL.w` 1;
+- each material named `m2("tinygeometry_tgr<row>_tgc<col>_opaque")` or `…_alphatest`, flags `0x80`
+  or `0x88`, one texture, the pixel shader, and `m2("ANY")` after it;
+- the bounds of each group, node and the model computed from the half-float positions. Retail's come
+  from the positions before they were halved, within half an f16 step of these.
+
+**The slots.** The container's top-level `TINY` chunk lists the objects' GUIDs ascending: a
+vertex's slot indexes that list and `ObjectIDScaleArray`, whose entry is its object's state (1
+intact and drawn, 2 intact and hidden, 3 ruined and drawn, 4 ruined and hidden). The TINY vertex
+shaders read slot `w` as component `w mod 4` of register `w / 4`, and compute component 3 as
+`2·.w − .y`: a vertex at a slot `≡ 3 (mod 4)` shows only while its object's state and that of the
+slot two below agree. So no object takes such a slot. Each skipped slot holds a filler GUID between
+its neighbours that no object of the stand-in has (the first that no placement of the game has,
+where there is one). The engine finds an object's slot by binary search over the list, so the list
+stays ascending: a run of consecutive GUIDs starts after enough fillers to keep the skipped slots out
+of it, and where a run cannot (one of more than three consecutive GUIDs), a filler repeats the
+neighbour the search reaches first, so the search still finds every object at its own slot. The list
+holds at most 255 GUIDs, so a stand-in draws at most 192 objects (M0240). Of retail's stand-ins, 436
+hold an object at a slot `≡ 3`; built back, those objects move, and 122 of those lists repeat a GUID.
+
+**The objects.** A name resolves among the placements of `layer`; a bare GUID among every layer's.
+Each object is placed in the stand-in's cell (M0245): the engine finds the stand-ins of an object
+whose state changes through the cell of the object's position (`FUN_0050F730`, `FUN_0050F7E0`). An
+object of another layer counts by its own placement there; retail's `vz_*_tiny` stand-ins draw the
+objects of other layers.
+
+**The placement** is added to the layer's own sub-block, at its key's place in the ascending key
+order every retail layer keeps: a `Name` record `tinygeometry_tgr<row>_tgc<col> 0x<key>`, a
+`ModelName` record naming the model, a `Transform` at the cell's centre
+`(−3900 + 200·col, 0, −3900 + 200·row)`, unrotated, and the `flgs` state every retail placement of a
+TINY model carries, bit 111 alone. The `Transform` record's 6-byte tail is written as zero; retail's
+TINY placements carry a small value there whose meaning is open. The overlay carries the whole
+layer block; a Shipment's stand-ins in one layer go into one overlay of it.
+
+**The key** is the author's. Retail's stand-in keys are the world editor's: one pass allocated every
+stand-in a GUID from its counter, layer by layer, above all but four of the world's other GUIDs, and
+nothing in a layer or a model derives them. `extract-tiny` keeps the retail key.
+
+**Limits.** The engine registers at most 1,400 slot lists (`0x0050F1BE`), and drops one past that
+(`0x0050F26C`); M0246 counts every stand-in the game places and the Shipment's. A layer has one
+stand-in per cell (M0247).
 
 ### `activate_layer`
 
@@ -568,7 +671,8 @@ Two kinds of vertex shader read `POSITION.w`, and `add_model` writes it for ever
   3 (ruined, drawn). A declared `vertex_shader` other than the host's is **M0236**. Every primitive
   must carry `_TINY_SLOT`, each value a slot of the host container's id list (`0` to `N−1`) and the
   same on a triangle's three vertices (retail holds this on every triangle); a mesh without it is
-  **M0238**, naming the attribute and the host's slots.
+  **M0238**, naming the attribute and the host's slots. A slot `≡ 3 (mod 4)` is **M0248**: the
+  shaders read it as `2·.w − .y` of its register ([`add_tiny_geometry`](#add_tiny_geometry)).
 
 The attributes follow glTF's rule for application-specific attributes (a leading underscore):
 
@@ -1128,6 +1232,7 @@ they claim one target in a class that cannot be shared:
 | `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
 | `native_hook`, `place_file`, `add_runtime_dll` file names | `Exclusive` per game-folder path, **compared lowercased** (Windows file names are case-insensitive) |
 | `native_hook` `touches` | `Exclusive` per hooked address or symbol, exactly as spelled (see the Code layer) |
+| `add_tiny_geometry` | `KeyedSet` on the model; `Exclusive` on the layer's cell; `KeyedSet` on the layer, claimed by the first stand-in of each layer in a Shipment — another Shipment's stand-in, `add_placement` or `edit_world` on the layer conflicts, and one Shipment's stand-ins in several cells of a layer compose |
 | `raw` | `Exclusive` on every declared target |
 
 Within **one** Shipment, two contributions claiming one target in any class but an append are
@@ -1578,5 +1683,105 @@ host's id list lacks, or a triangle spanning two slots), or a `POSITION` element
 pixel names or 0x100 vertex names, counting retail's (243 pixel, `PgCompositeFP` included, and 129
 vertex with ShaderLevel on).
 The registry inserts (`FUN_0085b7c0`, `FUN_00632250`) never give up on a full table.
+
+
+The stand-in rules below cover [`add_tiny_geometry`](#add_tiny_geometry) and a TINY host of
+[the shader import](#positionw-ambientwind-and-tiny-hosts). They are errors. M0240, M0241, M0249 need
+no game, and M0242–M0244 and M0251 need the Shipment's files; M0241 (for two spellings of one object),
+M0245–M0247 and M0250 need the game stack and run in `qm lint --with-game` and `qm build`; M0248 runs
+in the `add_model` lowering.
+
+### M0240
+
+**An `add_tiny_geometry` lists more than 192 objects, or none.** The slot list's count is a byte
+(`0x0050F42B`), so it holds 255 GUIDs, and no object takes a slot `≡ 3 (mod 4)`: 192 slots are left.
+
+Fix: split the cell's objects between two layers' stand-ins, or draw fewer.
+
+### M0241
+
+**An `add_tiny_geometry` names one object twice**, as one spelling twice or as a name and the GUID it
+resolves to. The list is searched by GUID, so a second slot for one object is never reached.
+
+Fix: name each object once.
+
+### M0242
+
+**A stand-in vertex has no `_TINY_SLOT`, or a slot past `objects`.** The shader reads the state of a
+slot no object of the stand-in sets.
+
+Fix: give every vertex the index of its object in `objects`.
+
+### M0243
+
+**A stand-in triangle spans two slots.** The shader keeps or drops each vertex by its own object's
+state, so the triangle tears when the two states differ.
+
+Fix: give a triangle's three vertices one slot; split shared vertices.
+
+### M0244
+
+**A stand-in primitive declares no `extras.tiny_role`**, or one that is not `intact` or `ruined`.
+Nothing then says which shader draws it.
+
+Fix: set `extras.tiny_role` on the primitive.
+
+### M0245
+
+**A stand-in object does not resolve, or is not placed in the stand-in's cell.** A name must be one
+placement of the layer, a GUID a placement of some layer of the game, and the object's position (in
+the layer, or else where it is placed) in the cell. The engine finds the stand-ins of an object whose
+state changes through the cell of the object's position (`FUN_0050F730`, `FUN_0050F7E0`), so an
+object elsewhere never updates its slot. Also fires for a `layer` the game lacks.
+
+Fix: list the objects of the cell; name an object by its GUID when its name is shared.
+
+### M0246
+
+**The stand-ins exceed the 1,400 slot lists the registry holds.** The registry takes 1,400
+(`0x0050F1BE`) and drops a list past that (`0x0050F26C`): the stand-in's renderable then finds no
+list, uploads no states, and its shaders read whatever the previous draw left in the registers. The
+count is every stand-in the game places (1,208) and the Shipment's.
+
+Fix: add fewer stand-ins.
+
+### M0247
+
+**The layer already has a stand-in for the cell.** Two would draw the cell's objects twice.
+
+Fix: pick the cell's stand-in in another layer, or another cell.
+
+### M0248
+
+**A TINY vertex slot is `≡ 3 (mod 4)`.** Fires in `add_model` on a TINY host. The TINY vertex shaders
+(all six, in both stores) read slot `w` as component `w mod 4` of `ObjectIDScaleArray[w / 4]` and
+compute component 3 as `2·.w − .y`, so the vertex shows only while its object's state equals that of
+the slot two below: an intact object beside a hidden one disappears.
+
+Fix: host the geometry on another slot, or build the stand-in with
+[`add_tiny_geometry`](#add_tiny_geometry), which keeps every object off those slots.
+
+### M0249
+
+**An `add_tiny_geometry` cell is outside the 40 × 40 grid.** `row` and `col` are 0 to 39.
+
+Fix: pick a cell of the grid.
+
+### M0250
+
+**An `add_tiny_geometry` key is already a placement**, of the game or of another stand-in of the
+Shipment. Placements are found by key.
+
+Fix: pick a key no layer uses.
+
+### M0251
+
+**A stand-in's model does not read as one.** A primitive without a material, `NORMAL` or
+`TEXCOORD_0`, or with more than 65,535 vertices; a material no primitive draws, one with
+`alphaMode: BLEND`, one without `extras.texture`, or one whose pixel shader the convention cannot
+name and the file does not declare; or a file that does not read (a mode other than triangles or
+strips, a scaled node).
+
+Fix: what the message names.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
