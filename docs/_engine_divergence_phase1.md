@@ -552,7 +552,7 @@ because streaming audio takes proportionally less space than video — and PC au
 
 ### 3.7 Xbox audio container — PROVEN
 
-Full byte-level investigation at [`docs/_xbox_wavebank_container.md`](_xbox_wavebank_container.md).
+Full byte-level investigation at [`docs/_wavebank_container.md`](_wavebank_container.md).
 
 **Multi-UCFX pack structure** (verified against `scratchpad/xbox-wb/block_03187_raw.bin`,
 10,058,248 B):

@@ -1,12 +1,25 @@
-# Xbox 360 UCFX wavebank container — byte-level layout
+# Console UCFX wavebank container — byte-level layout
 
-**Status:** current · **Evidence:** proven (byte-level) + inferred (codec id)
+**Status:** current · **Evidence:** proven (byte-level) on Xbox 360 and PS3
 
-This document covers the on-disk structure of a Mercenaries 2 Xbox 360 audio-resident
-WAD block as it ships in `vz.wad`: the outer multi-UCFX "pack" wrapper, each sub-chunk's
-UCFX container, the wavebank body it holds, and the per-clip record layout. All offsets
-below reference the already-extracted raw block **`scratchpad/xbox-wb/block_03187_raw.bin`**
-(block 3187 `sound_resident_P000_Q3`, 10,058,248 bytes = 0x997A08).
+This document covers the on-disk structure of a Mercenaries 2 **console** audio-resident
+WAD block (Xbox 360 and PS3 share the same container, wavebank body and record stride;
+only the per-record codec byte differs — `0x05` XMA2 on Xbox, `0x0C` MP3 on PS3). The
+Xbox walk-through uses the already-extracted raw block
+**`scratchpad/xbox-wb/block_03187_raw.bin`** (block 3187 `sound_resident_P000_Q3`,
+10,058,248 bytes = 0x997A08). The PS3 variations and a second cross-platform fixture
+(the `0x9996B5A6` `wpn_designator_flare` bank, present in both consoles at different
+block indices) are called out in §11.
+
+### Codec byte at record `+0x06`
+
+| Byte | Codec              | Platform | Decoder                                                 |
+|------|--------------------|----------|---------------------------------------------------------|
+| 0x00 | PCM16 BE           | both     | BE->LE byte swap (`swap_pcm16_be_to_le`)                |
+| 0x01 | XMA (raw)          | Xbox     | ffmpeg `xma` on the raw blob                            |
+| 0x05 | XMA2 (raw packets) | Xbox     | ffmpeg `xma2` after `wrap_xma2_raw_as_riff`             |
+| 0x0C | MP3 (raw frames)   | PS3      | ffmpeg `mp3float` on the raw blob (no wrapper, see 11)  |
+
 
 ## TL;DR (what we proved)
 
@@ -344,6 +357,101 @@ Rust XMA2 decoder choice (vgmstream vs. xenia-based crate vs. port of libav
   `0x1800`-aligned. All inter-blob transitions are 2048-aligned (each `data_size`
   is a multiple of 2048).
 
+## §11. PS3 variations
+
+**Scope.** PS3 uses the SAME wavebank body layout as Xbox 360 — version byte at
+`+0x00` is still `0x1D`, `bank_hash` is still big-endian at `+0x04` and `+0x0C`,
+`count` is still a BE u16 at `+0x08`, `records_off` is still BE at `+0x10`, and
+the 36-byte record stride is identical, including the record-relative
+`data_offset` at `+0x20`. Only two things change:
+
+1. **Codec byte at record `+0x06` is `0x0C` (MP3)**, not `0x05` (XMA2). The clip
+   blob is a raw MPEG Layer-III bitstream with no RIFF/WAVE wrapper — frame 0
+   begins at `rec_abs + data_offset` and the first four bytes are a valid 32-bit
+   MP3 header (11-bit sync `0x7FF`, Layer III, protection present, mono channel
+   mode). Both MPEG-1 and MPEG-2.5 Layer III have been observed; both decode
+   with ffmpeg's native `mp3float` decoder with no extra flags.
+
+2. **Blob alignment is 4 bytes, not 2048 bytes.** PS3 does not pack MP3 into
+   XMA2 packets, so the pre-blob padding is small (just enough to put the first
+   blob on a 4-byte boundary — e.g. 0x20 bytes in the `0x9996B5A6` bank below)
+   and the inter-blob gap is 0 to a few dozen bytes. The engine still writes
+   zeros into any gap.
+
+### Proven on two retail PS3 wavebanks
+
+| Bank | PS3 block | Xbox block (same bank) | Records | Codec byte | Decoder sync | `n_frames * 1152 == decoded_samples` |
+|------|-----------|------------------------|--------:|------------|--------------|--------------------------------------|
+| `0x9996B5A6` (`wpn_designator_flare`) | 4243 | 3322 | 2 | `0x0C` for both | `0x7FF` Layer III | 49/49 ok and 46/46 ok |
+| `wpn_sniperrifle` | 2561 | — | 12 | `0x0C` for all 12 | `0x7FF` Layer III (11 MPEG-1, 1 MPEG-2.5) | all 12 match within 1 frame |
+
+### Walk-through: the `0x9996B5A6` bank on PS3 (block 4243)
+
+Extracted via `lua_chunk_scan --wad game-files/ps3-VZ.WAD --extract-block 4243
+--extract-dir scratchpad/ps3-wb --dump-raw` (28,972 B decompressed block).
+
+```
++0x0000  u32 BE  count = 3                     (PS3 pack TOC: sounddb, wavebank, soundbank)
++0x0004  TOC entries (3 x 16 B); wavebank entry: name_hash=0x9996B5A6,
+         type_hash=0xF753F6D0, size=0x6FB0
++0x0034  sub-chunk 0 (sounddb, 0x58 B)
++0x008C  sub-chunk 1 (wavebank, 0x6FB0 B):
+         +0x00  "XFCU"             (= BE of 'UCFX')
+         +0x04  u32 BE  data_area_off = 0x28
+         +0x14  row 0 "atad": body size = 0x6F80
+         +0x28  wavebank BODY (0x6F80 B) — see below
++0x703C  sub-chunk 2 (soundbank)
+```
+
+**Body @ 0xB4** (SHA-256 `e9d8967c91c953700a327d9e307eacf7b994cc5f093ebd6b7937cae075fc66a1`,
+28,544 B total):
+
+```
++0x0000  u8      version = 0x1D
++0x0004  u32 BE  bank_hash = 0x9996B5A6
++0x0008  u16 BE  count = 2
++0x000A  u8      kind = 0 (embedded)
++0x000C  u32 BE  bank_hash = 0x9996B5A6
++0x0010  u32 BE  records_off = 0x18
++0x0014  u32 BE  0
+
++0x0018  rec 0: clip_hash=0x8E164121, [0,ch=1,codec=0x0C,0], sr=44100,
+                data_size=0x373D (14,141 B), decoded_samples=56,448,
+                word_1c=0, data_offset=0x68  (-> blob @ body +0x80)
++0x003C  rec 1: clip_hash=0x0C0EB8B6, [0,ch=1,codec=0x0C,0], sr=44100,
+                data_size=0x3706 (14,086 B), decoded_samples=52,992,
+                word_1c=0, data_offset=0x37C4 (-> blob @ body +0x3800)
+
++0x0080..+0x37BD  rec 0 MP3 blob (14,141 B)
++0x37BE..+0x37FF  zero padding (0x42 bytes to the next 4-byte-aligned slot
+                                that satisfies rec 1's declared offset)
++0x3800..+0x6F05  rec 1 MP3 blob (14,086 B)
++0x6F06..+0x6F7F  trailing zeros (body end)
+```
+
+**MP3 frame-count verification (both records):**
+
+- Rec 0: 49 frames x 1152 samples/frame = 56,448 = `decoded_samples` ok. First
+  frame header `0xFFFA70C0` = MPEG-1 Layer III, 96 kbps, 44100 Hz, protection on,
+  mono.
+- Rec 1: 46 frames x 1152 samples/frame = 52,992 = `decoded_samples` ok. Mixed
+  bitrates (96 kbps for frames 0..44, 80 kbps for frame 45 — standard VBR).
+
+**ffmpeg end-to-end:** `ffmpeg -i rec0.mp3 -ac 1 -f wav -acodec pcm_s16le out.wav`
+decodes the raw blob to 56,298 PCM16 samples (undershoots `decoded_samples` by
+150 samples at the LAME delay/pad boundary). The transcoder trims/pads to the
+exact `frames x channels x 2` size via `pad_or_trim_pcm16`, which the PC parser
+then accepts.
+
+### Why no RIFF wrapper on the PS3 path
+
+Each MP3 frame carries its sample rate, bitrate, channel mode and padding bit in
+its 32-bit header, so ffmpeg auto-detects the stream from the raw blob. There is
+no analogue to the XMA2 case (where the raw packet stream carries no outer
+sample-rate / channel-count metadata and ffmpeg must be told via a
+`WAVEFORMATEX`/`XMA2WAVEFORMATEX` header). `transcode_mp3_raw_to_pcm16` therefore
+calls `ffmpeg_decode_to_pcm16` directly on the blob with `in_name = "input.mp3"`.
+
 ## §10. Files
 
 - Source raw block (10,058,248 B):
@@ -351,5 +459,8 @@ Rust XMA2 decoder choice (vgmstream vs. xenia-based crate vs. port of libav
 - Extracted raw XMA2 blob of record 0 (8192 B):
   `scratchpad/xbox-wb/clip0_raw.bin`
   (`sha256=f79f0b5b53143359c560424e9db938bd63bb0f997705e2dc4c28a803692e35a7`)
+- PS3 cross-platform fixture (28,544 B body):
+  `tools/wad_simulator/crates/mercs2_formats/tests/fixtures/ps3_wavebank_emb_block4243_be.bin`
+  (`sha256=e9d8967c91c953700a327d9e307eacf7b994cc5f093ebd6b7937cae075fc66a1`)
 - Interpretation logs: `/tmp/toc_sizes.log`, `/tmp/wb_full_parse.log`,
   `/tmp/xma_verify.log`, `/tmp/mismatch_examine.log`, `/tmp/final_dump.log`.
