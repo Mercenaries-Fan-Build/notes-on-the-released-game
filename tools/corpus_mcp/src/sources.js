@@ -8,6 +8,7 @@ import {
 } from './config.js';
 import { chunkMarkdown, chunkText, chunkCode, sha256, extractAddrs, normAddr } from './chunk.js';
 import { knowledgeMeta } from './knowledge.js';
+import { analyzeFile as luaAnalyzeFile } from './lua_analyzer.js';
 
 /** A document = one ingestion unit: { source, path, title, mtime, fileHash, chunks: [text] , fnAddr?, meta? } */
 
@@ -60,6 +61,14 @@ export function sourceFreshness(cutoffByName = {}) {
       try {
         files = fs.readdirSync(MEMORY_DIR).filter((n) => n.endsWith('.md')).map((n) => path.join(MEMORY_DIR, n));
       } catch { files = []; }
+    } else if (spec.special === 'lua_api') {
+      // Walk the Lua corpus roots the generator consumes. Keeps freshness honest even though
+      // the generator itself runs the AST analyzer — the stat sweep only cares about mtime.
+      for (const relRoot of ['tools/wad_simulator/workshop_data/lua', 'tools/wad_simulator/workshop_data/shipments']) {
+        const abs = path.join(REPO_ROOT, relRoot);
+        if (!fs.existsSync(abs)) continue;
+        for (const f of walk(abs)) if (f.endsWith('.lua')) files.push(f);
+      }
     } else {
       out[name] = { known: false };
       continue;
@@ -338,6 +347,101 @@ export async function* ghidraDocs() {
   if (doc) yield doc;
 }
 
+// Roots the Lua analyzer walks. Shipped game Lua + mod Lua. These are the only trees whose Lua
+// files are structurally meaningful; everything else is prose/examples where parsing adds nothing.
+const LUA_ROOTS = [
+  'tools/wad_simulator/workshop_data/lua',
+  'tools/wad_simulator/workshop_data/shipments',
+];
+
+/**
+ * Lua static-analysis facts. One ingestion doc per class/module (chunk 0 carries the full
+ * ClassAPI/DataAPI in `meta`), plus one row per high-cardinality data record so individual
+ * registry entries (tMissionData["PmcCon001"], _tStarters[...], …) are addressable by key.
+ *
+ * fileHash mixes in the file's own text so unchanged files skip on re-ingest. The analyzer runs
+ * at ingest time; search queries hit the LanceDB cache.
+ */
+export async function* luaApiDocs() {
+  for (const relRoot of LUA_ROOTS) {
+    const absRoot = path.join(REPO_ROOT, relRoot);
+    if (!fs.existsSync(absRoot)) continue;
+    for (const abs of walk(absRoot)) {
+      if (!abs.endsWith('.lua')) continue;
+      let text;
+      try { text = fs.readFileSync(abs, 'utf8'); } catch { continue; }
+      if (text.length > MAX_FILE_BYTES) continue;
+      let api;
+      try { api = luaAnalyzeFile(abs); } catch (e) {
+        api = { kind: 'parse_error', error: e.message };
+      }
+      if (!api || api.kind === 'parse_error' || api.kind === 'walk_error') continue;
+
+      const relPath = rel(abs);
+      const title = api.kind === 'class' ? (api.class ?? path.basename(abs, '.lua')) : (api.module ?? path.basename(abs, '.lua'));
+      const stat = fs.statSync(abs);
+
+      // Chunk-0 doc: full ClassAPI/DataAPI in meta, short textual summary for FTS. Summary
+      // includes method names + table-record keys so FTS surfaces the file for "PmcCon001" or
+      // "GetMissionId" queries without a dedicated per-record row having to carry those terms.
+      const methodNames = (api.methods_defined ?? []).map((m) => m.name);
+      const tableKeys = [];
+      for (const t of api.tables ?? []) {
+        if (t.records) for (const r of t.records) if (r.key) tableKeys.push(r.key);
+      }
+      const summary = [
+        `${api.kind}: ${title}`,
+        api.inherit_chain?.length ? `inherits: ${api.inherit_chain.join(' <- ')}` : null,
+        api.imports?.length ? `imports: ${api.imports.join(', ')}` : null,
+        methodNames.length ? `methods: ${methodNames.join(', ')}` : null,
+        tableKeys.length ? `records: ${tableKeys.slice(0, 100).join(', ')}` : null,
+      ].filter(Boolean).join('\n');
+
+      yield {
+        source: 'lua_api',
+        path: relPath,
+        title,
+        mtime: stat.mtimeMs,
+        fileHash: sha256(text),
+        meta: JSON.stringify(api),
+        chunks: [summary],
+      };
+
+      // Per-record rows for record_map tables: one doc per record so a query like
+      // "lua_records WifMissionData tMissionData sStarter=PmcBoss" can filter by scalar field.
+      // Only emit for record_map shape — ordered lists and scalars are small enough to live in
+      // the chunk-0 meta.
+      for (const t of api.tables ?? []) {
+        if (t.shape !== 'record_map' || !t.records?.length) continue;
+        for (const rec of t.records) {
+          if (!rec.key) continue;
+          const recPath = `${relPath}#${t.name}.${rec.key}`;
+          const recMeta = {
+            kind: 'data_record',
+            module: title,
+            table: t.name,
+            key: rec.key,
+            line: rec.line ?? null,
+            fields: rec.fields ?? {},
+          };
+          const recSummary = `${title}.${t.name}["${rec.key}"]: ${Object.entries(rec.fields ?? {})
+            .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+            .join(' ')}`;
+          yield {
+            source: 'lua_api',
+            path: recPath,
+            title: rec.key,
+            mtime: stat.mtimeMs,
+            fileHash: sha256(text + '::' + rec.key),
+            meta: JSON.stringify(recMeta),
+            chunks: [recSummary],
+          };
+        }
+      }
+    }
+  }
+}
+
 /** Unified async iterator over requested source names. */
 export async function* allDocs(names) {
   for (const name of names) {
@@ -345,6 +449,7 @@ export async function* allDocs(names) {
     else if (name === 'conversation') yield* conversationDocs();
     else if (name === 'commit') yield* commitDocs();
     else if (name === 'ghidra') yield* ghidraDocs();
+    else if (name === 'lua_api') yield* luaApiDocs();
     else yield* fileDocs(name);
   }
 }

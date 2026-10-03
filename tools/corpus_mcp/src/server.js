@@ -3,9 +3,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { search, xref, getDoc, coverage, callgraph, stats, status, clearCaches } from './search.js';
+import { search, xref, getDoc, coverage, callgraph, luaApi, luaXref, luaCallgraph, luaRecords, stats, status, clearCaches } from './search.js';
 import { ingest } from './ingest.js';
 import { SOURCES } from './config.js';
+import { emitAll as emitLuaStubs, writeLuarc } from './emmylua_emit.js';
 
 const SOURCE_NAMES = Object.keys(SOURCES);
 
@@ -124,6 +125,106 @@ server.registerTool('corpus_callgraph', {
   },
 }, async ({ ref, direction, depth, max_nodes }) => {
   try { return json(await callgraph({ ref, direction, depth, maxNodes: max_nodes })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_lua_api', {
+  title: 'Lua class / data-module API surface',
+  description:
+    'Static Lua analysis for one class, data module, or table that acts as a class via ' +
+    '`function T.M(self)` definitions. For a class (`inherit`-rooted module like ' +
+    '`MrxTaskObjective`): returns inherit chain, imports, methods defined, calls on `self` / ' +
+    '`super` / `self:GetMissionAncestor()` / `self:GetParent()`, config fields read from ' +
+    '`self:GetConfig()`, and imported data-table references. For a data module ' +
+    '(`WifMissionData`, `WifStarterData`, …): returns every top-level table with its inferred ' +
+    'shape (`record_map` / `ordered_list` / `scalar` / `nested`), union record schema with ' +
+    'Hungarian-prefix-inferred types, and the records themselves (literal fields only; nested ' +
+    'tables summarised). A table that declares methods via `function T.M(self)` form (common in ' +
+    'mod shims that parent engine primitives) has those defs collected under `methods_defined` ' +
+    'keyed by receiver — making `calls_on_mission_ancestor` ∖ `methods_defined` the ' +
+    'duck-typed-contract gap query.',
+  inputSchema: {
+    name: z.string().describe('class name, data module, file basename, or table-as-class name'),
+    resolve_chain: z.boolean().default(true)
+      .describe('for classes: also walk `inherit()` ancestors and attach their `methods_defined` as `inherited_methods`'),
+  },
+}, async ({ name, resolve_chain }) => {
+  try { return json(await luaApi({ name, resolve_chain })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_lua_xref', {
+  title: 'Cross-reference a Lua symbol',
+  description:
+    'Find every call site, super-call, imported-module-field read, or data-record field value ' +
+    'that references a Lua symbol anywhere in the shipped+mod Lua corpus. Accepts qualified ' +
+    '("MrxTask.CreateChild") or bare ("CreateChild") symbol forms, plus string-literal values ' +
+    '("PmcBoss" finds every mission with sStarter=PmcBoss AND every _AddIntro("PmcBoss",...) ' +
+    'call site). Backed by the same AST index as corpus_lua_api.',
+  inputSchema: {
+    symbol: z.string().describe('qualified "Module.Method", bare "Method", or literal value'),
+    limit: z.number().int().min(1).max(500).default(100),
+  },
+}, async ({ symbol, limit }) => {
+  try { return json(await luaXref({ symbol, limit })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_lua_callgraph', {
+  title: 'Walk the Lua class graph',
+  description:
+    'BFS over the shipped Lua class hierarchy from a root class, following inherit() edges. ' +
+    '`direction` picks parents / children / both. Returns nodes with their method count + ' +
+    'edges labelled by kind. Mirrors corpus_callgraph for the Lua side of the project.',
+  inputSchema: {
+    root: z.string().describe('class name (`MrxTaskContract`, `mrxtaskobjective`, …)'),
+    direction: z.enum(['parents', 'children', 'both']).default('both'),
+    depth: z.number().int().min(1).max(6).default(2),
+    max_nodes: z.number().int().min(10).max(500).default(150),
+  },
+}, async ({ root, direction, depth, max_nodes }) => {
+  try { return json(await luaCallgraph({ root, direction, depth, maxNodes: max_nodes })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_lua_records', {
+  title: 'Filter records in a Lua data table',
+  description:
+    'Query a shipped Lua data registry (`WifMissionData.tMissionData`, `WifStarterData.*`, …) ' +
+    'with a flat scalar-field predicate: `{sStarter: "PmcBoss"}` returns every record whose ' +
+    'sStarter is literally that string. Equality only; nested-table fields are not filterable. ' +
+    'Use corpus_lua_api <module> first to see available tables and their record schemas.',
+  inputSchema: {
+    module: z.string().describe('module name as reported by corpus_lua_api (e.g. `wifmissiondata`)'),
+    table: z.string().describe('top-level table within the module (e.g. `tMissionData`)'),
+    where: z.record(z.union([z.string(), z.number(), z.boolean()])).default({})
+      .describe('{field: value} predicate; all must match'),
+  },
+}, async ({ module, table, where }) => {
+  try { return json(await luaRecords({ module, table, where })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_lua_emit_stubs', {
+  title: 'Emit EmmyLua stubs for shipped Lua classes + data modules',
+  description:
+    'Writes one `---@class` stub per shipped Lua class (with inherit chain, config fields and ' +
+    'methods), one per data module (with record-shape classes for each record_map table), and ' +
+    'a `.luarc.json` at the repo root that wires sumneko.lua at the stub libraries. Idempotent; ' +
+    'safe to re-run after `corpus_ingest --sources lua_api`. Stubs are Hungarian-prefix typed ' +
+    '(b*/n*/s*/t*/v*/f*/u*/o*).',
+  inputSchema: {
+    out_dir: z.string().optional()
+      .describe('override output directory (default: tools/emmylua_stubs/mercs2)'),
+    write_luarc: z.boolean().default(true)
+      .describe('also write .luarc.json at the repo root pointing sumneko at the stub libraries'),
+    globals: z.array(z.string()).optional()
+      .describe('global names to add to .luarc.json diagnostics.globals; defaults to the binding_map namespaces'),
+  },
+}, async ({ out_dir, write_luarc: wl, globals }) => {
+  try {
+    const emit = emitLuaStubs({ outDir: out_dir });
+    let luarc;
+    if (wl) {
+      luarc = writeLuarc({ stubRoot: emit.outDir, globals: globals ?? emit.globals });
+    }
+    return json({ emit, luarc });
+  } catch (e) { return err(e); }
 });
 
 server.registerTool('corpus_stats', {

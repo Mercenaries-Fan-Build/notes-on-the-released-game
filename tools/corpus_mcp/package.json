@@ -8,6 +8,7 @@
     "ingest": "node src/ingest.js",
     "query": "node src/query.js",
     "server": "node src/server.js",
+    "lsp": "node src/lsp_server.js",
     "test": "node --test",
     "test:unit": "node --test test/env.test.js test/chunk.test.js test/db.test.js test/config.test.js test/sources.test.js test/sources_empty.test.js"
   },
@@ -15,6 +16,9 @@
     "@huggingface/transformers": "^3.5.0",
     "@lancedb/lancedb": "^0.21.0",
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "luaparse": "^0.3.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.15",
     "zod": "^3.24.0"
   }
 }

@@ -1,8 +1,10 @@
+import path from 'node:path';
 import { openTable, esc } from './db.js';
 import { embedQuery } from './embed.js';
 import { normAddr } from './chunk.js';
 import { sourceFreshness } from './sources.js';
 import { readMeta, standingWeight, STATUS } from './knowledge.js';
+import { allArtifacts, resolveInheritChain, analyzeFile } from './lua_analyzer.js';
 
 function sourceFilter(sources, pathPrefix) {
   const parts = [];
@@ -35,6 +37,7 @@ export const SOURCE_AUTHORITY = {
   memory: 1.0,     // curated one-fact-per-file
   project: 1.0,    // AGENTS.md / repo config
   ghidra: 1.0,     // the decompilation is ground truth
+  lua_api: 1.0,    // AST facts over shipped game Lua — structural, not opinion
   tool: 0.9,       // source + READMEs: real, but incidental prose
   commit: 0.9,     // terse, and the diff is the real record
   mod: 0.9,
@@ -197,10 +200,24 @@ export async function getDoc({ path, chunk, context = 1 }) {
 // In-process caches for the graph/coverage scans (cleared after ingest).
 let fnCache = null;       // fn_addr -> {name, size, callers[], callees[]}
 let mentionCache = null;  // fn_addr -> Set(source)
+// Lua static-analysis caches. The chunk-0 artifact rows go into luaClassCache / luaDataCache
+// keyed by title; the per-record rows go into luaRecordCache keyed by `${module}.${table}`.
+// All three load lazily on first query, from the LanceDB corpus if the lua_api source has been
+// ingested, else from a fresh filesystem walk as a fallback.
+let luaClassCache = null;   // Map<name, ClassAPI>
+let luaDataCache = null;    // Map<name, DataAPI> — same shape as class rows but kind:"data"
+let luaRecordCache = null;  // Map<"module.table", Map<key, {fields, line, module, table}>>
+const LUA_ROOTS = [
+  'tools/wad_simulator/workshop_data/lua',
+  'tools/wad_simulator/workshop_data/shipments',
+];
 
 export function clearCaches() {
   fnCache = null;
   mentionCache = null;
+  luaClassCache = null;
+  luaDataCache = null;
+  luaRecordCache = null;
   clearFreshness(); // an in-session ingest changes what "stale" means
 }
 
@@ -348,4 +365,271 @@ export async function stats() {
       Object.entries(bySource).map(([k, v]) => [k, { chunks: v.chunks, docs: v.docs.size }]),
     ),
   };
+}
+
+/**
+ * Lazy-load the Lua artifact caches. Prefers the LanceDB corpus (fast, no filesystem touch) if
+ * the lua_api source has been ingested; falls back to a fresh filesystem walk otherwise, so
+ * tools/corpus_mcp works end-to-end on a brand-new checkout before the first `npm run ingest`.
+ *
+ * Returns {classes, data, records}:
+ *   classes: Map<name, ClassAPI>      — primary (file-basename) + alias (import()-style)
+ *   data:    Map<name, DataAPI>
+ *   records: Map<"module.table", Map<key, record>>
+ */
+async function loadLua() {
+  if (luaClassCache && luaDataCache && luaRecordCache) {
+    return { classes: luaClassCache, data: luaDataCache, records: luaRecordCache };
+  }
+  luaClassCache = new Map();
+  luaDataCache = new Map();
+  luaRecordCache = new Map();
+
+  const table = await openTable();
+  let rows = [];
+  if (table) {
+    try {
+      rows = await table.query()
+        .where(`source = 'lua_api' AND chunk = 0`)
+        .select(['path', 'title', 'meta'])
+        .toArray();
+    } catch { rows = []; }
+  }
+
+  if (rows.length > 0) {
+    for (const r of rows) {
+      let meta = {};
+      try { meta = JSON.parse(r.meta || '{}'); } catch { continue; }
+      if (meta.kind === 'class') {
+        luaClassCache.set(r.title, meta);
+      } else if (meta.kind === 'data') {
+        luaDataCache.set(r.title, meta);
+      } else if (meta.kind === 'data_record') {
+        const key = `${meta.module}.${meta.table}`;
+        if (!luaRecordCache.has(key)) luaRecordCache.set(key, new Map());
+        luaRecordCache.get(key).set(meta.key, {
+          module: meta.module,
+          table: meta.table,
+          key: meta.key,
+          line: meta.line,
+          fields: meta.fields || {},
+        });
+      }
+    }
+    return { classes: luaClassCache, data: luaDataCache, records: luaRecordCache };
+  }
+
+  // Filesystem fallback. Walks the Lua roots, runs the AST analyzer, builds the same maps.
+  const repoRoot = process.env.CORPUS_REPO_ROOT
+    ? path.resolve(process.env.CORPUS_REPO_ROOT)
+    : path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([a-zA-Z]:)/, '$1')), '..', '..', '..');
+  for (const rel of LUA_ROOTS) {
+    const abs = path.resolve(repoRoot, rel);
+    try {
+      const batch = allArtifacts(abs);
+      for (const [key, api] of batch) {
+        if (api.kind === 'class') {
+          if (!luaClassCache.has(key)) luaClassCache.set(key, api);
+        } else if (api.kind === 'data') {
+          if (!luaDataCache.has(key)) luaDataCache.set(key, api);
+        }
+        // Build per-record cache from tables facet (works for both kinds).
+        for (const t of api.tables ?? []) {
+          if (t.shape !== 'record_map' || !t.records?.length) continue;
+          const mkey = `${key}.${t.name}`;
+          if (!luaRecordCache.has(mkey)) luaRecordCache.set(mkey, new Map());
+          for (const rec of t.records) {
+            if (!rec.key) continue;
+            luaRecordCache.get(mkey).set(rec.key, {
+              module: key, table: t.name, key: rec.key, line: rec.line, fields: rec.fields || {},
+            });
+          }
+        }
+      }
+    } catch (_) { /* missing root is fine */ }
+  }
+  return { classes: luaClassCache, data: luaDataCache, records: luaRecordCache };
+}
+
+/**
+ * Resolve a Lua artifact by name. Accepts the file-basename form (lowercase) OR the
+ * import()-style name as used by other scripts (`MrxTaskObjective`, `WifMissionData`). Case-
+ * insensitive fallback keeps the surface forgiving.
+ */
+export async function luaApi({ name, resolve_chain = true } = {}) {
+  if (!name) throw new Error('luaApi: `name` is required');
+  const { classes, data } = await loadLua();
+  // Try class caches first (both exact and lowercase), then data.
+  const tryGet = (map, k) => map.get(k) ?? map.get(k.toLowerCase());
+  let art = tryGet(classes, name) ?? tryGet(data, name);
+  if (!art) {
+    const keys = [...classes.keys(), ...data.keys()];
+    const lower = name.toLowerCase();
+    const near = keys.filter((k) => k.toLowerCase().includes(lower)).slice(0, 10);
+    return { error: `no Lua artifact "${name}" found`, nearest: near };
+  }
+  if (art.kind === 'class' && resolve_chain) {
+    return resolveInheritChain(art, (parent) => tryGet(classes, parent) ?? null);
+  }
+  return art;
+}
+
+/**
+ * Cross-reference a Lua symbol. Walks every class's `imports`, `calls_on_super`,
+ * `calls_on_self`, `calls_on_mission_ancestor`, `calls_on_parent`, `data_tables_read`, and
+ * also inspects every data record's scalar field values. Returns the call sites + record
+ * matches, grouped by source location.
+ *
+ *   luaXref("MrxTask.CreateChild") → every class that calls CreateChild on a MrxTask ancestor
+ *   luaXref("PmcBoss")             → every record with a scalar PmcBoss AND every call site
+ *   luaXref("CreateChild")         → class/method matches ignoring the module prefix
+ */
+export async function luaXref({ symbol, limit = 100 } = {}) {
+  if (!symbol) throw new Error('luaXref: `symbol` is required');
+  const { classes, data, records } = await loadLua();
+  const hits = [];
+  const push = (hit) => { if (hits.length < limit) hits.push(hit); };
+
+  // Split "Module.Method" if given; otherwise match the whole thing against any name token.
+  const [maybeModule, maybeMethod] = symbol.includes('.') ? symbol.split('.', 2) : [null, symbol];
+
+  const matchSuper = (c) => (maybeModule ? c.module === maybeModule && c.method === maybeMethod : c.method === maybeMethod);
+  const matchGeneric = (name) => (maybeModule === null ? name === maybeMethod : name === maybeMethod);
+
+  for (const [className, cls] of classes) {
+    for (const c of cls.calls_on_super ?? []) {
+      if (matchSuper(c)) push({ in_class: className, where: 'calls_on_super', module: c.module, method: c.method, line: c.line, source_path: cls.source_path });
+    }
+    for (const c of cls.calls_on_self ?? []) {
+      if (matchGeneric(c.method)) push({ in_class: className, where: 'calls_on_self', method: c.method, line: c.line, source_path: cls.source_path });
+    }
+    for (const c of cls.calls_on_mission_ancestor ?? []) {
+      if (matchGeneric(c.method)) push({ in_class: className, where: 'calls_on_mission_ancestor', method: c.method, line: c.line, source_path: cls.source_path });
+    }
+    for (const c of cls.calls_on_parent ?? []) {
+      if (matchGeneric(c.method)) push({ in_class: className, where: 'calls_on_parent', method: c.method, line: c.line, source_path: cls.source_path });
+    }
+    for (const d of cls.data_tables_read ?? []) {
+      if (maybeModule ? (d.module === maybeModule && d.field === maybeMethod) : d.field === maybeMethod) {
+        push({ in_class: className, where: 'data_tables_read', module: d.module, field: d.field, line: d.line, source_path: cls.source_path });
+      }
+    }
+    if (cls.imports?.includes(symbol)) push({ in_class: className, where: 'imports', module: symbol, source_path: cls.source_path });
+  }
+
+  // Scan every data record's scalar field values for a match on the symbol.
+  for (const [mkey, recMap] of records) {
+    for (const rec of recMap.values()) {
+      for (const [field, val] of Object.entries(rec.fields ?? {})) {
+        if (val === symbol) push({ where: 'data_record_value', module: rec.module, table: rec.table, key: rec.key, field, value: val, line: rec.line });
+      }
+    }
+  }
+
+  return { symbol, hits, hitCount: hits.length, truncated: hits.length >= limit };
+}
+
+/**
+ * Walk the Lua class graph outward from `root`. `direction` controls which edges are followed:
+ *   - "parents"   — only inherit_chain upward
+ *   - "children"  — only `calls_on_super` into this class from other classes (inverse edge)
+ *   - "both"      — both directions
+ *
+ * Follows at most `depth` hops, bounded by `maxNodes`. Returns nodes + edges, matching the
+ * shape of `callgraph()` for Ghidra fns.
+ */
+export async function luaCallgraph({ root, direction = 'both', depth = 2, maxNodes = 150 } = {}) {
+  if (!root) throw new Error('luaCallgraph: `root` is required');
+  const { classes } = await loadLua();
+  const tryGet = (k) => classes.get(k) ?? classes.get(k.toLowerCase());
+  const start = tryGet(root);
+  if (!start) return { root, error: 'not a known class', nearest: [...classes.keys()].filter((k) => k.toLowerCase().includes(root.toLowerCase())).slice(0, 10) };
+
+  // Pre-build the inverse "who calls me as super" edge map.
+  const invSuper = new Map(); // Map<className, Set<childClassName>>
+  for (const [cName, cls] of classes) {
+    for (const c of cls.calls_on_super ?? []) {
+      const parent = c.module.toLowerCase();
+      if (!invSuper.has(parent)) invSuper.set(parent, new Set());
+      invSuper.get(parent).add(cName);
+    }
+  }
+
+  const seen = new Map();  // name -> {dist, methodsCount}
+  const edges = [];
+  const q = [{ name: start.class, art: start, dist: 0 }];
+  seen.set(start.class, { dist: 0, methodsCount: (start.methods_defined ?? []).length });
+  let truncated = false;
+  while (q.length) {
+    const { name, art, dist } = q.shift();
+    if (dist >= depth) continue;
+    if (seen.size >= maxNodes) { truncated = true; break; }
+
+    if (direction === 'parents' || direction === 'both') {
+      // inherit_chain[0] is self; rest are ancestors
+      const parents = (art.inherit_chain ?? []).slice(1);
+      for (const p of parents) {
+        edges.push({ from: name, to: p, kind: 'inherits' });
+        if (!seen.has(p)) {
+          const parentArt = tryGet(p);
+          seen.set(p, { dist: dist + 1, methodsCount: (parentArt?.methods_defined ?? []).length });
+          if (parentArt) q.push({ name: p, art: parentArt, dist: dist + 1 });
+        }
+      }
+    }
+    if (direction === 'children' || direction === 'both') {
+      const kids = invSuper.get(name.toLowerCase()) ?? new Set();
+      for (const k of kids) {
+        edges.push({ from: k, to: name, kind: 'inherits' });
+        if (!seen.has(k)) {
+          const kidArt = tryGet(k);
+          seen.set(k, { dist: dist + 1, methodsCount: (kidArt?.methods_defined ?? []).length });
+          if (kidArt) q.push({ name: k, art: kidArt, dist: dist + 1 });
+        }
+      }
+    }
+  }
+
+  const nodes = [...seen.entries()].map(([name, meta]) => ({ name, ...meta })).sort((a, b) => a.dist - b.dist);
+  return { root: start.class, direction, depth, truncated, nodes, edges };
+}
+
+/**
+ * Filter a data table's records by a scalar field predicate.
+ *
+ *   luaRecords({module: "WifMissionData", table: "tMissionData", where: {sStarter: "PmcBoss"}})
+ *   → every mission whose sStarter is literally the string "PmcBoss".
+ *
+ * `where` is a flat object of {field: value}; all must match. Supports string / number / boolean
+ * equality only. Nested-table fields (preview "<nested table>") are not filterable.
+ */
+export async function luaRecords({ module, table: tableName, where = {} } = {}) {
+  if (!module || !tableName) throw new Error('luaRecords: `module` and `table` are required');
+  const { records, data, classes } = await loadLua();
+  // The record cache keys combine the resolver-normalized module name + table name. The caller
+  // may pass either the file-basename ("wifmissiondata") or the import()-style name
+  // ("WifMissionData"); the record cache key uses whatever the artifact's own `title` was,
+  // which is file-basename.
+  const tryKeys = [
+    `${module}.${tableName}`,
+    `${module.toLowerCase()}.${tableName}`,
+  ];
+  let bucket = null;
+  for (const k of tryKeys) {
+    if (records.has(k)) { bucket = records.get(k); break; }
+  }
+  if (!bucket) {
+    return { module, table: tableName, error: 'no such data table in index', hint: 'try `corpus_lua_api <module>` first to see available tables' };
+  }
+
+  const whereEntries = Object.entries(where);
+  const matches = [];
+  for (const rec of bucket.values()) {
+    let ok = true;
+    for (const [field, want] of whereEntries) {
+      if (rec.fields?.[field] !== want) { ok = false; break; }
+    }
+    if (ok) matches.push({ key: rec.key, line: rec.line, fields: rec.fields });
+  }
+  return { module, table: tableName, where, matches, matchCount: matches.length, totalInTable: bucket.size };
 }

@@ -104,6 +104,11 @@ export const SOURCES = {
   // keyed by address, with callers/callees extracted for cross-referencing
   // against the docs corpora (pdb-analysis coverage work).
   ghidra: { special: 'ghidra' },
+  // Static Lua API facts. One doc per class/module (chunk 0 carries the full ClassAPI/DataAPI
+  // in `meta`), plus one doc per high-cardinality data-record so individual registry entries
+  // (tMissionData["PmcCon001"], tStarters["PmcBoss"], …) are query-addressable. Generator walks
+  // the shipped Lua tree + the mod corpus and feeds the AST analyzer.
+  lua_api: { special: 'lua_api' },
 };
 
 /** Authoritative full-decompilation dump (unpacked exe, 27k functions). */

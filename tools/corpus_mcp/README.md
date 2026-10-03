@@ -18,6 +18,7 @@ Claude Code.
 | `project` | AGENTS.md, README, `.claude/skills` | repo root, `.claude/**` |
 | `commit` | git commit messages, all branches | `git log --all` |
 | `ghidra` | **one row per decompiled function** (27k) with size + caller/callee edge lists | `output/_ghidra/mercs2_unpacked.exe_decomp.txt` |
+| `lua_api` | **one row per Lua class/data module** with inherit chain, imports, methods, call sites, config fields read, and the data-table shape + records; plus one row per record_map record | `tools/wad_simulator/workshop_data/lua/**`, `tools/wad_simulator/workshop_data/shipments/**` |
 
 Deliberately **not** indexed: binary assets (`output/`, `game-files/`,
 WAD/block dumps), generated logs, `backups/`, vendored toolchains
@@ -60,6 +61,7 @@ node src/query.js search "buffer too small" --sources conversation
 node src/query.js xref FUN_00478120
 node src/query.js callgraph 0x478120 --dir callees --depth 2
 node src/query.js coverage --top 40 --sort callers
+node src/query.js emit_stubs                                     # (re)generate EmmyLua stubs + .luarc.json
 node src/query.js stats
 ```
 
@@ -72,7 +74,21 @@ node src/query.js stats
 | `corpus_get` | pull full chunks of one doc by corpus path |
 | `corpus_callgraph` | BFS callers/callees of a function, nodes annotated with where the corpus documents them |
 | `corpus_coverage` | which of the 27k functions are documented anywhere vs unnamed — the naming work queue |
+| `corpus_lua_api` | one class/data-module's inherit chain, imports, methods, call sites, config-field reads, table shapes + records |
+| `corpus_lua_xref` | every call site / data-record match for a Lua symbol (`MrxTask.CreateChild`, `PmcBoss`, …) |
+| `corpus_lua_callgraph` | BFS up/down the Lua class hierarchy from a root class |
+| `corpus_lua_records` | filter a data-registry table by a flat `{field: value}` predicate |
+| `corpus_lua_emit_stubs` | write EmmyLua `---@class` stubs for every shipped Lua class + data module into `tools/emmylua_stubs/mercs2/` and a `.luarc.json` at the repo root pointing sumneko at them |
 | `corpus_stats` | chunk/doc counts per source |
+
+The index also speaks **LSP** over stdio: `npm run lsp` serves hover / goto-definition /
+find-references / workspace-symbol / publishDiagnostics for the shipped Lua corpus, including
+cross-file inherit-chain walks and the "which methods is my shim missing?" warning for
+table-acts-as-class patterns. Wire it from VSCode via an extension that lets you register a
+custom LSP binary (Neovim/Zed accept it natively); the LSP complements sumneko rather than
+replacing it, so run both.
+
+
 | `corpus_ingest` | incremental re-index from inside a session |
 
 ## The naming workflow this enables
