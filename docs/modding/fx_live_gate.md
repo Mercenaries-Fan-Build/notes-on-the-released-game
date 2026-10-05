@@ -1,7 +1,7 @@
 # FX live gate: effects and templates through `qm link`
 
-Two parts: what the live runs of 2026-10-04 showed (§1), and the retest of `add_fx` and `replace_fx`
-as `qm` ships them (§2). The container formats are in
+Three parts: what the live runs of 2026-10-04 showed (§1), the retest of `add_fx` and `replace_fx`
+as `qm` ships them (§2), and the sprites the fixtures add and draw (§3). The container formats are in
 [`../effect_container_format.md`](../effect_container_format.md) and
 [`../worldentity_container_format.md`](../worldentity_container_format.md); the kinds are in
 [`manifest_format.md`](manifest_format.md#add_fx).
@@ -65,13 +65,14 @@ The two Shipments are fixtures of the qm workspace, `crates/mercs2_quartermaster
 
 | Shipment | Contributions |
 |---|---|
-| `qm-fx-a` | `add_fx` `qm_fx_cyan_burst` (a cyan one-emitter burst) with template `qm_cyan_burst`; `replace_fx` of `global_explosion_c4`, every emitter magenta |
-| `qm-fx-b` | `add_fx` `qm_fx_green_burst` (a green one-emitter burst) with template `qm_green_burst`; `replace_fx` of the effect the template `global_particle_fire_carhood` starts, every emitter yellow |
+| `qm-fx-a` | `add_fx_sprite` `qm_fx_a_ring`; `add_fx` `qm_fx_cyan_burst` (a cyan one-emitter burst drawing the ring) with template `qm_cyan_burst`; `replace_fx` of `global_explosion_c4`, every emitter magenta |
+| `qm-fx-b` | `add_fx_sprite` `qm_fx_b_star`; `add_fx` `qm_fx_green_burst` (a green one-emitter burst drawing the star) with template `qm_green_burst`; `replace_fx` of the effect the template `global_particle_fire_carhood` starts, every emitter yellow |
 
 Each template carries the retail C4 template's components (`EffectTemplate`, `HibernationControl`,
 `RedEffectComponent`, `SoundEffect`), its `RedEffectComponent` naming the Shipment's own effect, so a
-spawn of it plays the C4 sound with the Shipment's burst. The bursts draw the C4 effect's own frames,
-which are records of the game's `fxdict`.
+spawn of it plays the C4 sound with the Shipment's burst. Each burst is authored: one emitter
+drawing the Shipment's sprite (§3), with `size` 0.6, `life` 1.5, `rate` 30, `speed` 4 and `spread`
+30, 100 colour keys whose fourth byte fades from 255 to 0, and one gravity force.
 
 | Template | Derived key |
 |---|---|
@@ -152,4 +153,57 @@ snapshot.
 ### 2.5 Reporting
 
 For each command, the printed result; for each colour, what was seen; for any crash, the last
+command. Record each install's outcomes and the sha256 of the final `vz-patch.wad`.
+
+---
+
+## 3. Sprites: `qm-fx-a` and `qm-fx-b` draw their own
+
+Each fixture adds a sprite and its burst draws it:
+
+| Shipment | Sprite | Burst |
+|---|---|---|
+| `qm-fx-a` | `qm_fx_a_ring`, a 64² white ring (alpha `clamp(1 − abs(r − 24) / 4)`, `r` the distance from the centre) | `qm_fx_cyan_burst`, template `qm_cyan_burst` |
+| `qm-fx-b` | `qm_fx_b_star`, a 64² white five-pointed star (alpha `clamp(R(t) − r)`, `R(t) = 10 + 18·abs(cos(5t/2))`) | `qm_fx_green_burst`, template `qm_green_burst` |
+
+`qm link` draws both into the free square of the `vfx` atlas, the 512² at (1536, 0): the ring at
+(1536, 0) and the star at (1600, 0), both 64², whatever the load order. The fxdict carries 632
+records, the game's 630 and the two sprites'
+([`manifest_format.md`](manifest_format.md#sprites-and-the-vfx-atlas-are-merged)).
+
+### 3.1 Install
+
+As §2.1, with the game, its Wine prefix and the Modkit app closed: `snapshot`, then `install` of
+`qm-fx-a`, then `install` of `qm-fx-b` with `qm-fx-a` in the rows. Every outcome is **Applied**, with
+no claim conflict. The final `vz-patch.wad` carries one `blocks\VZ\resident_P000_Q3.block`, from the
+link group, with the fxdict and the atlas in it.
+
+### 3.2 In the game
+
+The user launches the game, loads the save in the open world and stands in the open. Each command is
+`python tools/lua_repl.py --code '<code>'` from the Ess repo.
+
+```lua
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_cyan_burst", x+15, y, z))
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_green_burst", x+15, y, z))
+```
+
+| Seen | Meaning |
+|---|---|
+| cyan rings; green stars | the sprites work: the fxdict and the atlas are link's |
+| particles each showing a mosaic of the whole atlas | the fxdict was not loaded: a frame the lookup misses draws `(0, 0, 1, 1)`, the whole atlas |
+| the burst's sound and nothing else | the atlas body was not loaded: the frames' rectangles lie in the game's free square, whose texels have alpha 0 |
+
+Then spawn `global_particle_explosion_c4` and `global_particle_fire_carhood` as in §2.2, and place and
+detonate a C4 charge: the C4 explosion is magenta and the car-hood fire yellow, each with **its
+retail shapes**. The game's 630 rectangles and the atlas outside the free square are the game's.
+
+### 3.3 Uninstall
+
+As §2.4: `uninstall` with the rows of the set before the fixtures, then `verify` against the
+snapshot: the game folder matches it.
+
+### 3.4 Reporting
+
+For each spawn, what was seen and which row of the table it matches; for any crash, the last
 command. Record each install's outcomes and the sha256 of the final `vz-patch.wad`.
