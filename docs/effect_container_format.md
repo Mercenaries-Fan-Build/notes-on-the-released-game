@@ -113,14 +113,23 @@ There is no `POFF` in any retail effect.
 | `PTYP` | u32 flags: bit 0 → emitter `+0x205`, bit 1 → `+0x206`; no other bit is read; retail uses 0–3 | decomp `FUN_00491920` |
 | `TEXT` | u32 n, then n frames; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
 
-**A frame is the key of an `fxdict` record.** `FUN_00492af0` hands the frames to
-`FUN_004911a0`, which looks each one up with `FUN_00491510` — a binary search over the record keys of
-the `fxdict` (`0x86BF6C5B`, type `0xFA46D8A8`, in the resident block) that returns the record's four
-values — and packs the four values as binary16 into the stream table. A key the search misses gets a
-static default record. PROVEN by the decomp; the four values read as a rectangle in a particle
-texture atlas (`0.78125, 0.623535, 0.03125, 0.0298…` in the first record), which is INFERRED. Of the
-566 distinct frames in the 314 retail effects, 546 are records of the 630-record `fxdict` and none is
-a texture asset (`mercs2_quartermaster/tests/fx_retail.rs`).
+**A frame is the key of an `fxdict` record, and the record is the frame's rectangle of the `vfx`
+atlas.** `FUN_00492af0` hands the frames to `FUN_004911a0`, which looks each one up with
+`FUN_00491510` — a binary search over the record keys of the `fxdict` (`0x86BF6C5B`, type
+`0xFA46D8A8`, in the resident block) — and packs the record's four values, `(u, 1 − v − h, w, h)`, as
+binary16 into the stream table. The values are the frame's rectangle in the one texture every
+particle samples, the `vfx` atlas `0x89E211AF` (2048² DXT5 in the resident block): the vertex shader
+`PgFXVP` computes the texel coordinate as `rect.xy + corner × rect.zw`. A key the search misses gets
+the static record `(0, 0, 1, 1)`, the whole atlas. PROVEN by the decomp, the shader and the retail
+atlas ([`fxdict_format.md`](fxdict_format.md) §3.2, §3.4). Of the 566 distinct frames in the 314
+retail effects, 546 are records of the 630-record `fxdict` and none is a texture asset
+(`mercs2_quartermaster/tests/fx_retail.rs`).
+
+**Several frames.** With `PTYP` bit 1 clear, `FUN_004911a0` writes 100 rectangles: the frame index
+starts at 0 and advances by `n × 0.01` (`DAT_00B97EEC`) per rectangle, wrapping to 0 at `n`, so each
+of the `n` frames fills about `100 / n` consecutive slots of the 100. With bit 1 set, it writes the `n`
+rectangles once, in order (and the loader reserves `2·n` stream words, §3). PROVEN by the decomp;
+how the renderer indexes the slots over a particle's life was not read.
 
 ---
 
