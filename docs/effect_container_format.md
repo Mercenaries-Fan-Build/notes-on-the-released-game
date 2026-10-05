@@ -113,7 +113,7 @@ There is no `POFF` in any retail effect.
 | `PTYP` | u32 flags: bit 0 → emitter `+0x205`, bit 1 → `+0x206`; no other bit is read; retail uses 0–3 | decomp `FUN_00491920` |
 | `TEXT` | u32 n, then n frames; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
 
-**A frame is the key of an `fxdict` record**, not a texture. `FUN_00492af0` hands the frames to
+**A frame is the key of an `fxdict` record.** `FUN_00492af0` hands the frames to
 `FUN_004911a0`, which looks each one up with `FUN_00491510` — a binary search over the record keys of
 the `fxdict` (`0x86BF6C5B`, type `0xFA46D8A8`, in the resident block) that returns the record's four
 values — and packs the four values as binary16 into the stream table. A key the search misses gets a
