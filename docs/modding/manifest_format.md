@@ -145,6 +145,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_shader` | Data + Code | `family`, `classes` ([`add_shader`](#add_shader)) |
 | `replace_shader` | Data | `target`, `shader` (`shader_low` when the stem has a low record) |
 | `replace_animation` | Data | `target`, `clip`, `trnm` (`events` optional) |
+| `add_fx` | Data | `name`, `effect`, `template` ([`add_fx`](#add_fx)) |
+| `replace_fx` | Data | `target`, `edits` ([`replace_fx`](#replace_fx)) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
@@ -904,6 +906,95 @@ plus the R2VB pair — and each set must stay below the engine's 0x1200-slot id 
   shader kind, and each item's `data_files` lists the files that Shipment edits: a deploy step drops
   the per-Shipment `data_file` placements of the files `link_file_paths` lists and deploys link's.
 
+### `add_fx`
+
+Adds a new particle effect and the world template that starts it.
+
+```yaml
+  - kind: add_fx
+    name: qm_fx_cyan_burst               # the effect's name; its asset hash is m2 of it
+    effect: src/qm_fx_cyan_burst.yaml    # the effect form (YAML, JSON or TOML)
+    template:                            # the template form, inline
+      name: qm_cyan_burst                # what Pg.Spawn and ObjectState.StartEmitter look up
+      name_flag: 1
+      components:
+        EffectTemplate:     { "0xB9D95A23": "0x00000000" }
+        RedEffectComponent: { name: qm_fx_cyan_burst, "0x4D7D459B": 1.0, ... }
+        ...
+```
+
+- **The effect** is declared whole in the effect form (`mercs2_quartermaster::effect`): the `EMTR`
+  shape tables, every emitter (its `TRFM` 4×4, all nine channels, its `GEOM` or `none`, the `PTYP`
+  flags, all 32 attributes, exactly 100 colour keys and at least one frame) and every force (its kind
+  and parameters, and its seven common attributes plus the kind's own). Every attribute is given by
+  name or `0xHHHHHHHH`, each with `value`, `curve` (`none` or `[time, value]` keys) and `options` (a
+  list of `bit7`, `resample`, `bit9`). Nothing has a default. The writer's rules are
+  [`effect_container_format.md`](../effect_container_format.md) §8.
+- **A frame** is the key of a record in the game's `fxdict`: the loader looks each one up there and
+  draws the record's rectangle ([`effect_container_format.md`](../effect_container_format.md) §2). A
+  frame the fxdict does not have is **M0259**.
+- **The template** is declared field by field in the template form
+  ([`worldentity_container_format.md`](../worldentity_container_format.md) §6): every component the
+  template carries, each with every field of its class, and no `Name` (that is `name` and
+  `name_flag`). It has exactly one `RedEffectComponent` (**M0255**), whose `name` field names the
+  effect it starts: this Shipment's or one the game ships (**M0259**).
+
+The effect is appended to the game's effects block under `m2(name)`; a name the game already has is
+**M0258**. The template is appended to the game's `worldentity` under the key its name derives —
+`0x8` in the top nibble, the low 28 bits of `m2(template.name)` below it — and a name or key the
+game or another added template already has is **M0257**. Both blocks are emitted at the game's own
+paths and merged across the installed set by `qm link` ([below](#effects-and-templates-are-merged)).
+
+### `replace_fx`
+
+Edits an effect the game ships, in place.
+
+```yaml
+  - kind: replace_fx
+    target: { template: global_particle_fire_carhood }   # or { effect: global_explosion_c4 }
+    edits: src/carhood.edits.yaml
+```
+
+```yaml
+# src/carhood.edits.yaml
+edits:
+  - { op: colour_rgb, emitter: 0, rgb: [255, 255, 0] }
+  - { op: attribute, emitter: 0, attribute: size, value: 2.0, curve: none }
+```
+
+- **`target`** is `{effect: <name or 0xHHHHHHHH>}`, or `{template: <name>}` for the effect a template
+  starts: the template's one `RedEffectComponent` names it. A target that resolves to no effect is
+  **M0260**: no such effect or template, or a template with no `RedEffectComponent` or more than one.
+- **An effect or template another Shipment's `add_fx` adds** is a target only when this Shipment
+  lists that Shipment in `load.requires`; it is applied after that Shipment. Anything else is
+  **M0260**. Built on its own, a Shipment that requires another leaves a target it cannot find in the
+  game to `qm link`, which resolves it against the Shipments it requires.
+- **`edits`** is an ordered list of operations, each tagged by `op`:
+
+| `op` | fields | what it does |
+|---|---|---|
+| `attribute` | `emitter`, `attribute`, any of `value`, `curve`, `options` | edits one `PTYP` attribute |
+| `channel` | `emitter`, `channel`, any of `value`, `curve`, `options` | edits one `TRFM` channel |
+| `colour_rgb` | `emitter`, `rgb` | sets the first three bytes of all 100 colour keys; each key keeps its fourth byte and its `half` |
+| `colour_keys` | `emitter`, `keys` (100 `{rgba, half}`) | replaces the colour keys |
+| `frames` | `emitter`, `frames` | replaces the frames |
+| `transform` | `emitter`, `transform` | replaces the `TRFM` 4×4 |
+| `flags` | `emitter`, `flags` | replaces the `PTYP` flags |
+| `geom` | `emitter`, `geom` (`{shape, word}` or `none`) | replaces the emitter's `GEOM` |
+| `force_params` | `force`, `params` | replaces a force's parameters; the kind keeps its attributes |
+| `force_attribute` | `force`, `attribute`, any of `value`, `curve`, `options` | edits one `FRCE` attribute |
+| `shape` | `shape`, `records` | replaces one shape table |
+| `add_emitter` | `at`, `emitter` (as the effect form writes one) | inserts an emitter before index `at`; `at` equal to the count appends |
+| `remove_emitter` | `emitter` | removes an emitter |
+| `add_force` | `at`, `force` | inserts a force |
+| `remove_force` | `force` | removes a force |
+| `add_shape` | `at`, `records` | inserts a shape table; every `GEOM` naming a shape at or after `at` moves up one |
+| `remove_shape` | `shape` | removes a shape table no `GEOM` names; every `GEOM` naming a later shape moves down one |
+
+In an attribute edit an absent `value`, `curve` or `options` keeps the attribute's own, and `curve:
+none` removes its curve. An edit that names a node the effect does not have, or that leaves the
+effect breaking a rule of the effect writer, is **M0261**. An empty list is **M0254**.
+
 ### `add_sound`
 
 Adds a new sound bank. `Sound.CueSound("<cue name>")` plays one of its cues once the bank is
@@ -1222,7 +1313,9 @@ they claim one target in a class that cannot be shared:
 | kind(s) | what two Shipments on one target do |
 |---|---|
 | `replace_texture` | `LastWins` — load order picks; never a conflict |
-| `replace_fx`, `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
+| `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
+| `add_fx` | `KeyedSet` on the effect name, on the template name and on the template's derived key; the worldentity they are appended to merges ([below](#effects-and-templates-are-merged)). A `raw` claiming the worldentity `0x50075B3B` conflicts |
+| `replace_fx` | `Exclusive` on the effect it resolves to, whether named or reached through a template: two Shipments editing one effect conflict. A template target is resolved by `qm link` against the game's worldentity and the set's additions, and a collision refuses the link as **M0207**. A `replace_fx` of an effect another Shipment adds composes with that `add_fx` when it requires that Shipment |
 | `replace_shader`, `add_shader` | `Exclusive` on each store stem (`m2` of the stem, so case does not matter) and on each registration name: a replace and an add of one stem, two adds of one stem, and two adds of one name all conflict. The classes of one `add_shader` may share a stem |
 | `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
@@ -1316,6 +1409,30 @@ The link also bakes one loader per session over the set: `qm_modloader` in `scri
 `zz-quartermaster-link.shell-patch.wad` with the merged banks. `link_block_paths` always lists
 `blocks\Shell\resident_P000_Q3.block` after the `vz.wad` scripts blocks, so a deploy step drops each
 Shipment's own copy of the front end's scripts block and keeps the link's.
+
+### Effects and templates are merged
+
+The game ships every effect in one block, `blocks\VZ\effects_P000_Q3.block` (314 effects and the
+46 models they draw), and every template in one container, the `worldentity` `0x50075B3B` in
+`blocks\VZ\resident_P000_Q3.block`. A Shipment's own build applies its `replace_fx` and `add_fx` to
+the game's copies and emits both blocks at those paths, every row copied from the game:
+
+1. the effects block: the game's entries in block order, each `replace_fx` applied to its effect in
+   place in contribution order, then each `add_fx` effect appended with a primary row of type id 29
+   and sentinel rungs;
+2. the resident block, when the Shipment has an `add_fx`: the game's, with each template appended to
+   the `worldentity`, in the same block the Shipment's linked scripts go in.
+
+Installed together, the last mounted copy of each block would drop the others' effects and
+templates. `qm link` runs the same merge over every Shipment in load order — a Shipment's
+replacements, then its additions, Shipment by Shipment — and emits one effects block and one
+resident block, the latter carrying every linked script too. The load plan's `link_block_paths`
+lists the effects block whenever a Shipment in the set has an `add_fx` or a `replace_fx`, and always
+lists the resident block, so a deploy step drops each Shipment's copies and keeps link's. The two
+blocks share nine asset hashes (models in the effects block, textures in the resident block); both
+are link's, so they are one claim group.
+
+A `raw` payload that carries an effect or the worldentity is **M0262**.
 
 ### Write-sets and read-sets
 
@@ -1491,6 +1608,10 @@ still cannot ship a broken Shipment.
 `qm rules` lists every rule, including the ones that are known but **not yet implemented**. Those are
 listed on purpose: a linter that silently omits its most dangerous checks reads as a clean bill of
 health.
+
+The fx rules M0252–M0262 are errors. M0252–M0255 and M0262 need no game; M0256–M0261 need the
+game stack and run in `qm lint --with-game` and in `qm build`, and `qm link` applies the same rules
+to the installed set.
 
 The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
 need the game stack and run in `qm lint --with-game` and in `qm build`.
@@ -1784,5 +1905,92 @@ name and the file does not declare; or a file that does not read (a mode other t
 strips, a scaled node).
 
 Fix: what the message names.
+
+### M0252
+
+**An `add_fx` effect form does not read as an effect.** The file is missing, its extension names no
+form format, it does not parse, or it does not lower: an attribute not declared or declared twice,
+an unknown key, a value its position cannot take, a curve at a position the loader takes none at, a
+`GEOM` naming a shape the effect does not have, or another rule of the effect writer
+([`effect_container_format.md`](../effect_container_format.md) §8).
+
+Fix: what the message names.
+
+### M0253
+
+**An `add_fx` template name is empty, longer than 0x7F bytes, or carries a NUL.** The engine reads a
+name into a 0x80-byte buffer, and a NUL ends it.
+
+Fix: a non-empty name of at most 127 bytes.
+
+### M0254
+
+**A `replace_fx` edits form does not read, or is empty.** The file does not parse (an unknown `op`,
+an unknown field, a missing one), or `edits` is empty and the replacement would change nothing.
+
+Fix: what the message names.
+
+### M0255
+
+**An `add_fx` template does not declare exactly one `RedEffectComponent`.** Its `name` field names the
+effect the template starts.
+
+Fix: declare one `RedEffectComponent`.
+
+### M0256
+
+**An `add_fx` template does not lower against the game's component schemas.** A class the
+`worldentity` has no component group for, a field of the class not declared, a key that is not one of
+its fields, or a value its field cannot hold.
+
+Fix: what the message names; `TemplateForm::express` writes any retail template as a form to start
+from.
+
+### M0257
+
+**An `add_fx` template's name or derived key is already taken**: by a template the game has, or by
+another added template, which the message names with its Shipment. The registry answers a name with
+one key, and two templates under one key overwrite each other's records.
+
+Fix: rename the template.
+
+### M0258
+
+**An `add_fx` name is an effect the game already has**, or one another `add_fx` adds.
+
+Fix: give the effect a new name; to change the game's effect, use `replace_fx`.
+
+### M0259
+
+**An effect's frame or a template's effect names nothing.** A `TEXT` frame the Shipment gives an
+effect that is not a record of the game's `fxdict`, where the loader looks each frame up (a frame it
+does not find draws the dictionary's default rectangle); or an `add_fx` template whose
+`RedEffectComponent` names an effect that neither the game ships nor the Shipment adds.
+
+Fix: name fxdict records as frames, and the effect the Shipment adds in the template.
+
+### M0260
+
+**A `replace_fx` target resolves to no effect**: no effect or template of that name, a template with
+no `RedEffectComponent` or more than one, or an effect or template another Shipment adds when this
+Shipment does not require that Shipment.
+
+Fix: name an effect, or a template that starts one; to edit another Shipment's addition, require it.
+
+### M0261
+
+**A `replace_fx` edit addresses a node the effect does not have, or breaks a writer rule**: an
+emitter, force or shape index past the effect's, an attribute the node does not have, a value its
+position cannot take, a shape removed while a `GEOM` names it, or an effect left breaking a rule of
+the effect writer.
+
+Fix: what the message names; the effect's own form (`EffectForm::express`) shows its nodes.
+
+### M0262
+
+**A `raw` payload carries an effect or the worldentity.** Effects and templates ship through
+`add_fx` and `replace_fx`, which `qm link` merges into the game's effects block and worldentity.
+
+Fix: use `add_fx` or `replace_fx`.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
