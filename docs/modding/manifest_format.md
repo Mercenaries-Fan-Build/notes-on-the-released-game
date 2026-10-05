@@ -147,6 +147,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `replace_animation` | Data | `target`, `clip`, `trnm` (`events` optional) |
 | `add_fx` | Data | `name`, `effect`, `template` ([`add_fx`](#add_fx)) |
 | `replace_fx` | Data | `target`, `edits` ([`replace_fx`](#replace_fx)) |
+| `add_fx_sprite` | Data | `name`, `image` ([`add_fx_sprite`](#add_fx_sprite)) |
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
@@ -774,6 +775,10 @@ Two warnings are worth understanding before you pick a target:
 
 Neither blocks a build. Both change what your mod affects.
 
+**A `target` of `vfx`** (`0x89E211AF`), the atlas every particle samples, repaints it: the repaint is
+the base the set's `add_fx_sprite` images are drawn on, written into the resident block with them,
+and one Shipment of a set repaints it ([`add_fx_sprite`](#add_fx_sprite)).
+
 ### `add_animation`
 
 Adds a new Havok animation clip, as an `animation` asset (ASET type 16) under `name`.
@@ -930,9 +935,10 @@ Adds a new particle effect and the world template that starts it.
   name or `0xHHHHHHHH`, each with `value`, `curve` (`none` or `[time, value]` keys) and `options` (a
   list of `bit7`, `resample`, `bit9`). Nothing has a default. The writer's rules are
   [`effect_container_format.md`](../effect_container_format.md) §8.
-- **A frame** is the key of a record in the game's `fxdict`: the loader looks each one up there and
-  draws the record's rectangle ([`effect_container_format.md`](../effect_container_format.md) §2). A
-  frame the fxdict does not have is **M0259**.
+- **A frame** is the key of a record in the game's `fxdict`, or a sprite of this Shipment or of one
+  it requires ([`add_fx_sprite`](#add_fx_sprite)): the loader looks each one up in the `fxdict` and
+  draws the record's rectangle of the `vfx` atlas
+  ([`effect_container_format.md`](../effect_container_format.md) §2). Any other frame is **M0259**.
 - **The template** is declared field by field in the template form
   ([`worldentity_container_format.md`](../worldentity_container_format.md) §6): every component the
   template carries, each with every field of its class, and no `Name` (that is `name` and
@@ -994,6 +1000,49 @@ edits:
 In an attribute edit an absent `value`, `curve` or `options` keeps the attribute's own, and `curve:
 none` removes its curve. An edit that names a node the effect does not have, or that leaves the
 effect breaking a rule of the effect writer, is **M0261**. An empty list is **M0254**.
+
+### `add_fx_sprite`
+
+Adds a sprite frame effects draw: an image drawn into the `vfx` atlas, and the `fxdict` record that
+names its rectangle.
+
+```yaml
+  - kind: add_fx_sprite
+    name: qm_fx_a_ring                   # the frame key is m2(name); an effect's frames name it
+    image: src/qm_fx_a_ring.png          # a PNG; width and height each a power of two, 4 to 512
+```
+
+- Every particle samples one texture, the `vfx` atlas `0x89E211AF` (2048² DXT5, 10 mips, in the
+  resident block), inside the rectangle the `fxdict` record of its frame gives
+  ([`fxdict_format.md`](../fxdict_format.md) §3.2, §3.4). A sprite is texels in the atlas and a
+  record.
+- **The image** is a PNG with straight (unpremultiplied) alpha: the effect pixel shader multiplies
+  the texel by the particle's colour and writes `rgb × a`. Its width and height are each a power of
+  two from 4 to 512 (**M0304**).
+- **`name`** is hashed into the frame key, and an effect's `frames` name the sprite by it. A name that
+  is empty or written as `0xHHHHHHHH` is **M0305**; a key the game's `fxdict` already has, or another
+  Shipment's sprite has, is **M0306**.
+- **Who may draw it.** An effect draws its own Shipment's sprites and those of the Shipments it lists
+  in `load.requires`; another Shipment's sprite is **M0259**. Built on its own, a Shipment that
+  requires another leaves a frame it cannot find to `qm link`, which has the Shipments it requires.
+
+**Where a sprite goes.** The sprites are drawn into the free square of the base atlas: the largest
+square, aligned to its own side, that no `fxdict` record lies over and whose every texel has alpha 0;
+the first in row-major order among squares of that side. On the game's atlas it is the 512² square at
+(1536, 0). Each sprite is allocated the square of its larger side, and the set's sprites are placed
+largest allocation first, then by key, each into the smallest free quarter-split cell that holds it,
+at the cell's top-left: a sprite's x is a multiple of its width and its y of its height. The
+placement depends on the set alone, not on its load order. Sprites that need more than the square
+holds are **M0307**, which lists every sprite and the space left. A sprite's record is
+`u = x / 2048`, `v = 1 − (y + h) / 2048` (`v` is measured from the atlas's bottom), `w / 2048`,
+`h / 2048`.
+
+**Repainting the atlas.** A `replace_texture` of `vfx` (or `"0x89E211AF"`) repaints the whole atlas,
+so its image is 2048²; the repaint is the base the set's sprites are drawn on. The free square is
+found on the repaint, so a repaint that leaves no transparent square free of records leaves every
+sprite **M0307**. One Shipment of a set repaints the atlas: two are **M0207** (within one Shipment,
+**M0120**). The repaint is written into the resident block with the sprites
+([below](#sprites-and-the-vfx-atlas-are-merged)), not as a block of its own.
 
 ### `add_sound`
 
@@ -1301,6 +1350,9 @@ Every claim a Shipment makes carries a class:
   trusting.
 - **`LastWins`** — later wins and load order is genuinely the answer. Texture replacement.
 
+**Claimants of one target that disagree about its class take the strictest** — `Exclusive`, then
+`KeyedSet`, then `LastWins`, then `OrderedList` — whatever order they come in.
+
 **Unrecognized targets are `Exclusive`.** The Quartermaster knows the wardrobe list is append-only
 because somebody reversed it and wrote it down; it cannot infer that for something nobody has
 studied. Failing closed keeps an unknown edit *expressible* — it just cannot silently co-install.
@@ -1312,9 +1364,10 @@ they claim one target in a class that cannot be shared:
 
 | kind(s) | what two Shipments on one target do |
 |---|---|
-| `replace_texture` | `LastWins` — load order picks; never a conflict |
+| `replace_texture` | `LastWins` — load order picks; never a conflict. Of `vfx`: the atlas merges with every sprite, and the repaint is `Exclusive` — two Shipments repainting it conflict |
 | `replace_animation`, `replace_phy2`, `replace_terrain_cell`, `edit_state_machine`, `edit_world` | `Exclusive` — conflict. An `edit_world` and an `add_placement` on one layer conflict too |
 | `add_fx` | `KeyedSet` on the effect name, on the template name and on the template's derived key; the worldentity they are appended to merges ([below](#effects-and-templates-are-merged)). A `raw` claiming the worldentity `0x50075B3B` conflicts |
+| `add_fx_sprite` | `KeyedSet` on the frame key (`m2(name)`); the `fxdict` and the `vfx` atlas merge ([below](#sprites-and-the-vfx-atlas-are-merged)). A `raw` claiming either conflicts, and so does an `add_texture` named `vfx` |
 | `replace_fx` | `Exclusive` on the effect it resolves to, whether named or reached through a template: two Shipments editing one effect conflict. A template target is resolved by `qm link` against the game's worldentity and the set's additions, and a collision refuses the link as **M0207**. A `replace_fx` of an effect another Shipment adds composes with that `add_fx` when it requires that Shipment |
 | `replace_shader`, `add_shader` | `Exclusive` on each store stem (`m2` of the stem, so case does not matter) and on each registration name: a replace and an add of one stem, two adds of one stem, and two adds of one name all conflict. The classes of one `add_shader` may share a stem |
 | `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
@@ -1433,6 +1486,30 @@ blocks share nine asset hashes (models in the effects block, textures in the res
 are link's, so they are one claim group.
 
 A `raw` payload that carries an effect or the worldentity is **M0262**.
+
+### Sprites and the `vfx` atlas are merged
+
+The `fxdict` `0x86BF6C5B` and the `vfx` atlas `0x89E211AF` are both in
+`blocks\VZ\resident_P000_Q3.block`. A Shipment's own build draws its sprites into its base atlas —
+its repaint, else the game's — and writes the `fxdict`, with the game's records and its sprites', and
+the atlas into the resident block, the same block its scripts and templates go in, every row copied
+from the game.
+
+Installed together, the last mounted resident block would drop the others' sprites. `qm link` packs
+every installed Shipment's sprites together on the set's base atlas, by the rule in
+[`add_fx_sprite`](#add_fx_sprite) — the same bytes in any load order — and writes one `fxdict` and
+one atlas into its one resident block:
+
+- the free square's mips are box-filtered from the square alone, BC3-encoded and written over the
+  base at the square's blocks; where the square at a mip is narrower than a 4×4 block, the block is
+  decoded, the square's texels written, and the block encoded again; where it is narrower than a
+  texel, that texel is the mean of the four texels above it;
+- the records are the base's and the sprites', sorted by key as a signed 32-bit integer, the order
+  the lookup searches.
+
+A set with no sprite and no repaint leaves both untouched. A set whose only fx contributions are
+sprites or a repaint lists no effects block in `link_block_paths`; the resident block is always
+listed. A `raw` payload that carries the `fxdict` or the atlas is **M0308**.
 
 ### Write-sets and read-sets
 
@@ -1609,9 +1686,9 @@ still cannot ship a broken Shipment.
 listed on purpose: a linter that silently omits its most dangerous checks reads as a clean bill of
 health.
 
-The fx rules M0252–M0262 are errors. M0252–M0255 and M0262 need no game; M0256–M0261 need the
-game stack and run in `qm lint --with-game` and in `qm build`, and `qm link` applies the same rules
-to the installed set.
+The fx rules M0252–M0262 and the sprite rules M0304–M0308 are errors. M0252–M0255, M0262, M0304,
+M0305 and M0308 need no game; M0256–M0261, M0306 and M0307 need the game stack and run in
+`qm lint --with-game` and in `qm build`, and `qm link` applies the same rules to the installed set.
 
 The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
 need the game stack and run in `qm lint --with-game` and in `qm build`.
@@ -1963,11 +2040,14 @@ Fix: give the effect a new name; to change the game's effect, use `replace_fx`.
 ### M0259
 
 **An effect's frame or a template's effect names nothing.** A `TEXT` frame the Shipment gives an
-effect that is not a record of the game's `fxdict`, where the loader looks each frame up (a frame it
-does not find draws the dictionary's default rectangle); or an `add_fx` template whose
-`RedEffectComponent` names an effect that neither the game ships nor the Shipment adds.
+effect that is neither a record of the game's `fxdict`, where the loader looks each frame up (a frame
+it does not find draws the whole `vfx` atlas), nor an `add_fx_sprite` of the Shipment or of a
+Shipment it requires; or an `add_fx` template whose `RedEffectComponent` names an effect that neither
+the game ships nor the Shipment adds. Built on its own, a Shipment that requires another leaves a
+frame it finds in none of these to `qm link`, which checks it against the Shipments it requires.
 
-Fix: name fxdict records as frames, and the effect the Shipment adds in the template.
+Fix: name `fxdict` records or sprites as frames — to draw another Shipment's sprite, require that
+Shipment — and the effect the Shipment adds in the template.
 
 ### M0260
 
@@ -1992,5 +2072,43 @@ Fix: what the message names; the effect's own form (`EffectForm::express`) shows
 `add_fx` and `replace_fx`, which `qm link` merges into the game's effects block and worldentity.
 
 Fix: use `add_fx` or `replace_fx`.
+
+### M0304
+
+**An `add_fx_sprite` image does not read as a sprite.** The file is not a PNG, does not decode, or
+its width or height is not a power of two from 4 to 512.
+
+Fix: a PNG of 4, 8, 16, 32, 64, 128, 256 or 512 texels on each side.
+
+### M0305
+
+**An `add_fx_sprite` name is empty or written as `0xHHHHHHHH`.** The frame key is the name's hash,
+and an effect frame written as a hash names that hash itself.
+
+Fix: give the sprite a name.
+
+### M0306
+
+**An `add_fx_sprite` key is already an `fxdict` record**: one the game's `fxdict` has, or another
+Shipment's sprite, which the message names. The lookup finds one record per key.
+
+Fix: rename the sprite.
+
+### M0307
+
+**The sprites do not fit the free square of the base atlas**: together they need more texels than
+the square holds — the message lists every sprite, its allocation and the space left — or the base
+atlas has no free square, every square of it lying under a record or carrying alpha. The base is the
+set's repaint of `vfx`, else the game's atlas, whose free square is 512² at (1536, 0).
+
+Fix: smaller or fewer sprites; a repaint that leaves a transparent square free of records.
+
+### M0308
+
+**A `raw` payload carries the `fxdict` or the `vfx` atlas.** Sprites ship through `add_fx_sprite`
+and the atlas through `replace_texture` of `vfx`, which `qm link` merges into the game's `fxdict` and
+atlas.
+
+Fix: use `add_fx_sprite` or `replace_texture`.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
