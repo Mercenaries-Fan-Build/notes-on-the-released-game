@@ -1,165 +1,155 @@
-# FX live test: new world templates and effect placement
+# FX live gate: effects and templates through `qm link`
 
-This is what to run on Windows to settle the questions the static reading of the game cannot:
-
-1. Is a `worldentity` container shipped in a patch block processed at all, and does a template
-   appended to it become spawnable by name?
-2. Does the engine accept a template key derived from its name, or only one next to the existing
-   keys?
-3. Does an effect replacement take effect when the patch ships the whole effects block, or when it
-   ships the one effect as its own block?
-
-The archives are built by `fx_livegate` (`mercs2_quartermaster/examples/fx_livegate.rs`, in the qm
-workspace), which reads the game only through `.mercs2-local.toml`. The container format and every
-static finding these tests start from are in
-[`../worldentity_container_format.md`](../worldentity_container_format.md).
+Two parts: what the live runs of 2026-10-04 showed (§1), and the retest of `add_fx` and `replace_fx`
+as `qm` ships them (§2). The container formats are in
+[`../effect_container_format.md`](../effect_container_format.md) and
+[`../worldentity_container_format.md`](../worldentity_container_format.md); the kinds are in
+[`manifest_format.md`](manifest_format.md#add_fx).
 
 ---
 
-## 1. The archives
+## 1. Outcomes, 2026-10-04
 
-Each is a Shipment directory (`manifest.yaml` + `src/`) that Modkit installs. The `build/` folder
-inside each is the overlay `fx_livegate` built and checked with qm; Modkit builds its own.
+The game ran under Wine on macOS, installed through Modkit, driven over the Lua bridge
+(`tools/lua_repl.py` in the Ess repo). Four archives were used, each a `raw` Shipment:
 
-| Archive | What it ships | Claims |
-|---|---|---|
-| `g0` | the retail `worldentity` `0x50075B3B`, re-written by the codec (identical bytes), as a one-entry `raw` block | `0x50075B3B` |
-| `g1` | the same container with template `qm_gate_c4` appended under `0x8D9E11CB` (`0x8` + the low 28 bits of the name hash `0xAD9E11CB`) | `0x50075B3B` |
-| `g2` | the same template under `0x8000B3C5`, the highest existing `0x8` key + 1 | `0x50075B3B` |
-| `fx_a` | the whole effects block (314 effects, 46 meshes), `global_explosion_c4` recoloured magenta with its frames on the texture `qm_gate_magenta_disc`, plus that texture | 360 assets + the texture |
-| `fx_b` | only the magenta `global_explosion_c4`, as a one-entry block, plus the texture | `0x41B4326E` + the texture |
-
-`qm_gate_c4` is declared field by field through the template author form, with the values the
-retail C4 template `global_particle_explosion_c4` (`0x80008028`) holds: `EffectTemplate`,
-`HibernationControl`, `RedEffectComponent` (effect `global_explosion_c4`), `SoundEffect`. A working
-spawn of it looks and sounds like a C4 explosion.
-
-The magenta effect keeps every attribute; only each `COLR` key's first three bytes become
-`FF 00 FF` (the fourth is kept) and every `TEXT` frame becomes the 64×64 magenta disc.
-
-**Why each worldentity archive is a one-entry block, not the resident block at its own path.** No
-Shipment can carry an edited `blocks\VZ\resident_P000_Q3.block` into the installed patch:
-
-* `raw` ships a block at `blocks\VZ\mod_<first entry hash>.block`, never at a base path
-  (`mercs2_quartermaster/src/build.rs`, the `Contribution::Raw` lowering).
-* Modkit drops every per-Shipment copy of the blocks the load plan lists as link-owned. That list
-  always includes the resident block (`build::link_block_paths` chains `link::SCRIPT_BLOCKS`
-  unconditionally; Modkit `commands/shipment.rs` `collapse` / `is_link_owned`).
-* `qm link` rebuilds the resident block from the game's own copy plus Lua edits, never from a
-  Shipment (`build.rs`, `load_script_blocks(game, link::SCRIPT_BLOCKS, …)`).
-
-**When a `g` archive reaches `vz-patch.wad`.** Modkit keeps the `mod_50075b3b` block (it is not
-link-owned) and resolves claims by asset hash (`models/claim.rs` `resolve`). `qm link` emits the
-resident block only when some installed Shipment patches a script that lives in it (`add_script`,
-`add_ui` and the mod loader land in `scripts_vz`). When it does, it copies every base ASET row,
-including the by-hash row for `0x50075B3B`, and as the last group it overrides the `g` archive
-completely. **So install no Shipment that patches a resident script during these runs**, and check
-the next step.
-
-## 2. Before the runs
-
-1. Back up the game folder's `data/vz-patch.wad` and the save you will load.
-2. In Modkit, the installed set for each run is: the Shipments `tools/lua_repl.py` needs (the Lua
-   bridge), plus the archives the run names below. Nothing else.
-3. After Modkit builds, open its build report. The archive's outcome must be **Applied**. If it says
-   **Overridden**, a link-owned block took its claim; record that and stop.
-4. Start the game, load the save in the open world, stand in an open area.
-5. Check the bridge: `python tools/lua_repl.py --probe`.
-
-Every command below is `python tools/lua_repl.py --code '<code>'` from the Ess repo. Record each
-printed result exactly.
-
-## 3. The runs
-
-Run them in order. Each is: install in Modkit, build, check the outcome (§2.3), launch, run the
-commands, quit.
-
-### Run 1: `g0` + `fx_a`
-
-```lua
--- R1.1 position
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return x..","..y..","..z
--- R1.2 the name lookup, for the retail template and for the new name
-return tostring(Pg.GetGuidByName("global_particle_explosion_c4")) .. " | " .. tostring(Pg.GetGuidByName("qm_gate_c4"))
--- R1.3 spawn the retail C4 template 15 m away: look for MAGENTA (fx_a)
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("global_particle_explosion_c4", x+15, y, z))
-```
-
-Then detonate a real C4 charge and watch its explosion colour.
-
-### Run 2: `g1` + `fx_b`
-
-```lua
--- R2.1 the name lookup
-return tostring(Pg.GetGuidByName("global_particle_explosion_c4")) .. " | " .. tostring(Pg.GetGuidByName("qm_gate_c4"))
--- R2.2 the retail C4 template: look for MAGENTA (fx_b)
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("global_particle_explosion_c4", x+15, y, z))
--- R2.3 the new template
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_gate_c4", x+15, y, z))
--- R2.4 a Humvee to emit from
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); qmHumvee = Pg.Spawn("Humvee (Cargo)", x+12, y, z); return tostring(qmHumvee)
--- R2.5 (wait 1 s: a fresh spawn's hardpoints read nil for ~0.3 s) the hardpoint
-return tostring(Object.GetHardpointPosition(qmHumvee, String.GetHash("hp_fx_exhaust_a")))
--- R2.6 StartEmitter with the retail template
-ObjectState.StartEmitter(qmHumvee, String.GetHash("hp_fx_exhaust_a"), String.GetHash("global_particle_explosion_c4")); return "sent"
--- R2.7 StartEmitter with the new template
-ObjectState.StartEmitter(qmHumvee, String.GetHash("hp_fx_exhaust_a"), String.GetHash("qm_gate_c4")); return "sent"
-```
-
-Then detonate a real C4 charge and watch its explosion colour.
-
-### Run 3: `g2`
-
-R2.1, R2.3, R2.4, R2.5 and R2.7 again.
-
-### The control, last in each run
-
-`Pg.Spawn` of a name no template has. It is last because its outcome is not recorded anywhere: an
-empty name hard-crashes the engine with a null asset (Ess `src/49_ui_menu.lua:79`), and a missing
-name may do the same. Save first.
-
-```lua
-local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_gate_no_such_template", x+15, y, z))
-```
-
-Its result (a value, `nil`, an error, or a crash) is the miss signature to compare R2.3 and R2.7
-with.
-
-## 4. Verdicts
-
-| Observation | Verdict |
+| Archive | What it shipped |
 |---|---|
-| Run 1: the game loads and R1.3 spawns a normal C4 explosion | A `worldentity` re-shipped in a patch block is harmless. |
-| Run 1: the game fails to load or crashes with `g0` installed | Re-shipping the container is not safe as packaged; stop and report the point of failure. |
-| R2.1 / R2.3 resolve `qm_gate_c4` and R2.3 shows a C4 explosion | The patch block's container is processed and an appended template is spawnable under a name-derived key. The one-entry block is the shipping shape. |
-| R2.3 gives the control's miss signature, Run 3's R2.3 a C4 explosion | Processed, but the name-derived key is refused; keys must continue the existing range. |
-| R2.3 and Run 3's R2.3 both give the miss signature | The patch block's container is not processed (the "inert" packaging); confirm with §5. |
-| R2.7 shows the explosion at the exhaust | `StartEmitter` resolves a new template like a retail one. |
-| R2.6 works and R2.7 does not, while R2.3 works | `StartEmitter`'s lookup differs from `Pg.Spawn`'s; record both results. |
-| Magenta in Run 1 and not in Run 2 | Effects ship as the whole composed effects block. |
-| Magenta in Run 2 and not in Run 1 | Effects ship one per block. |
-| Magenta in both | Either works; the per-effect block is smaller. |
-| Magenta in neither, normal colour | The effect replacement is not picked up as packaged. |
-| Magenta tint with a square or missing sprite | The colour change works and the disc texture is not resolved. |
+| G0 | the retail `worldentity` `0x50075B3B`, re-written by the codec (identical bytes), as a one-entry block |
+| G1 | the same container with the template `qm_gate_c4` appended under its derived key `0x8D9E11CB` (`0x8` + the low 28 bits of `pandemic_hash_m2("qm_gate_c4")` = `0xAD9E11CB`) |
+| FX-A | the whole effects block (314 effects, 46 models), `global_explosion_c4` recoloured magenta |
+| FX-B | the magenta `global_explosion_c4` alone, as a one-entry block |
 
-## 5. x32dbg: is the shipped container processed?
+`qm_gate_c4` was declared field by field through the template form with the values of the retail C4
+template `global_particle_explosion_c4` (`0x80008028`), so a working spawn of it is a C4 explosion.
 
-For the unpacked image (base `0x00400000`). Log, don't break, unless a step says so.
+### Run 1: G0 + FX-A
 
-| Address | What | Condition / log |
-|---|---|---|
-| `0x004646B0` | block dispatch, calls `FUN_00654940` per block | count hits while loading |
-| `0x00654940` | the `worldentity` loader | count hits: two when both the resident block's and the patch block's containers are processed |
-| `0x006569B0` | `Name` deserializer, entry | `[esp+4] == 0x8D9E11CB` (Run 2) or `0x8000B3C5` (Run 3): the new template's name is being registered |
-| `0x00649180` | container insert, entry | `[esp+4] == 0xDF6B88 && [esp+8] == <key>`: the `Name` record is inserted |
-| `0x00672F60` | template lookup by name hash | log `eax`, which `FUN_00672F70` copies into its cursor as the key (that it is the name hash at this entry is inferred); `pandemic_hash_m2("qm_gate_c4") = 0xAD9E11CB` |
-| `0x0067306E` / `0x0067303E` | its two returns: found (`eax` = key) / not found (`eax` = 0) | log `eax` |
+- A placed C4 charge exploded magenta.
+- `Pg.Spawn("global_particle_explosion_c4")` exploded magenta.
+- `ObjectState.StartEmitter` on a Monster Truck's `hp_fx_exhaust_a` with the C4 template fired it.
+- "Humvee (Cargo)" spawned as a prop without physics.
+- `Pg.GetGuidByName`: the retail C4 template returned `80008028`; a name no template has returned
+  `nil`.
 
-A hit at `0x006569B0` with the new key means the patch block's container is processed. A lookup of
-`0xAD9E11CB` that returns 0 after that means the record did not make it into the name index.
+### Run 2: G1 + FX-B
 
-## 6. Reporting
+- `Pg.GetGuidByName("qm_gate_c4")` returned `8D9E11CB`.
+- Spawned templates, `qm_gate_c4` and the retail C4 alike, played their sound with no visual.
+- A placed C4 charge exploded with the retail look, not magenta.
 
-For each command: the run, the code, the printed result. For each colour check: what was seen. For
-any crash: the address and the last command. The archives' sha256 are in
-`fx_livegate_report.txt` beside them.
+### Run 3: G1 + FX-A
+
+- `Pg.Spawn("qm_gate_c4")` showed the C4 explosion.
+- `ObjectState.StartEmitter` on the Monster Truck's `hp_fx_exhaust_a` with `qm_gate_c4` fired it.
+
+### What the runs settle
+
+| Question | Answer |
+|---|---|
+| Is a `worldentity` shipped in a patch block processed? | Yes: G1's appended template resolved by name (Run 2) and spawned (Run 3). |
+| Does a template key derived from its name work? | Yes: `0x8D9E11CB` resolved, spawned, and fired from `StartEmitter`. |
+| Does `StartEmitter` resolve a new template like a retail one? | Yes (Run 3). |
+| Does an effect ship as the whole effects block? | Yes: the whole block recoloured the C4 explosion (Run 1, Run 3). |
+| Does an effect ship as its own one-entry block? | No: with FX-B, spawned effects lost their visuals and the charge kept the retail look (Run 2). That the lone-effect block caused it is SPECULATIVE; the cause was not traced. |
+
+`qm` ships effects only as the whole effects block at its own path, and templates only inside the
+resident block's `worldentity`, both merged across the installed set by `qm link`
+([`manifest_format.md`](manifest_format.md#effects-and-templates-are-merged)).
+
+---
+
+## 2. Retest: `qm-fx-a` and `qm-fx-b`
+
+The two Shipments are fixtures of the qm workspace, `crates/mercs2_quartermaster/tests/fixtures/fx/`:
+
+| Shipment | Contributions |
+|---|---|
+| `qm-fx-a` | `add_fx` `qm_fx_cyan_burst` (a cyan one-emitter burst) with template `qm_cyan_burst`; `replace_fx` of `global_explosion_c4`, every emitter magenta |
+| `qm-fx-b` | `add_fx` `qm_fx_green_burst` (a green one-emitter burst) with template `qm_green_burst`; `replace_fx` of the effect the template `global_particle_fire_carhood` starts, every emitter yellow |
+
+Each template carries the retail C4 template's components (`EffectTemplate`, `HibernationControl`,
+`RedEffectComponent`, `SoundEffect`), its `RedEffectComponent` naming the Shipment's own effect, so a
+spawn of it plays the C4 sound with the Shipment's burst. The bursts draw the C4 effect's own frames,
+which are records of the game's `fxdict`.
+
+| Template | Derived key |
+|---|---|
+| `qm_cyan_burst` | `0x899E7D78` |
+| `qm_green_burst` | `0x8E53AD44` |
+
+### 2.1 Install
+
+With Modkit's `headless_deploy` (`src-tauri/examples/headless_deploy.rs`), while the game, its Wine
+prefix and the Modkit app are closed:
+
+1. `snapshot --real --game-root <R> --out <S>.json`, where `<R>` is the game folder.
+2. `install --real --game-root <R> --qm <qm> --rows <rows>.json --shipment <fixtures>/qm-fx-a`,
+   where `<rows>.json` is the installed set to keep (the Lua bridge Shipments the session needs) and
+   `<fixtures>` is `crates/mercs2_quartermaster/tests/fixtures/fx`.
+3. `install` again with `--shipment <fixtures>/qm-fx-b` and the rows of step 2 plus `qm-fx-a`.
+
+Each install's report lists every Shipment's outcome. All must be **Applied**, with no claim
+conflict. The final `vz-patch.wad` carries one `blocks\VZ\effects_P000_Q3.block` and one
+`blocks\VZ\resident_P000_Q3.block`, both from the link group.
+
+### 2.2 In the game
+
+The user launches the game, loads the save in the open world and stands in the open. Each command is
+`python tools/lua_repl.py --code '<code>'` from the Ess repo; record each printed result.
+
+```lua
+-- names: each new template resolves under its derived key; a missing name is nil
+return tostring(Pg.GetGuidByName("qm_cyan_burst")) .. " | " .. tostring(Pg.GetGuidByName("qm_green_burst")) .. " | " .. tostring(Pg.GetGuidByName("qm_fx_no_such_template"))
+-- expect: 899E7D78 | 8E53AD44 | nil
+
+-- spawns, 15 m from the player: cyan, green, magenta, yellow
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_cyan_burst", x+15, y, z))
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("qm_green_burst", x+15, y, z))
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("global_particle_explosion_c4", x+15, y, z))
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); return tostring(Pg.Spawn("global_particle_fire_carhood", x+15, y, z))
+```
+
+`Pg.Spawn` takes only names `GetGuidByName` resolved: what a spawn of a name no template has does
+is not recorded, and an empty name crashes the engine (Ess `src/49_ui_menu.lua:79`).
+
+Then place and detonate a C4 charge: it explodes **magenta**.
+
+Then the emitter:
+
+```lua
+-- a Monster Truck (template "Monster Truck", 0x80006C99) to emit from
+local x,y,z = Object.GetPosition(Player.GetLocalCharacter()); qmTruck = Pg.Spawn("Monster Truck", x+12, y, z); return tostring(qmTruck)
+-- (wait a second: a fresh spawn's hardpoints read nil for ~0.3 s)
+return tostring(Object.GetHardpointPosition(qmTruck, String.GetHash("hp_fx_exhaust_a")))
+ObjectState.StartEmitter(qmTruck, String.GetHash("hp_fx_exhaust_a"), String.GetHash("qm_cyan_burst")); return "sent"
+```
+
+The cyan burst plays at the exhaust.
+
+| Observation | Meaning |
+|---|---|
+| both names resolve to their keys, the missing one is `nil` | `qm link`'s resident block carries both Shipments' templates |
+| cyan and green bursts | each added effect is in the effects block and its template starts it |
+| magenta C4, spawned and placed | `qm-fx-a`'s edit of a game effect, named directly |
+| yellow car-hood fire | `qm-fx-b`'s edit, reached through a template |
+| cyan burst at the exhaust | `StartEmitter` resolves an added template |
+
+### 2.3 With a script Shipment
+
+Uninstall both (§2.4), then repeat §2.1 with `/Volumes/Projects/mercs2-unofficial-patch` in the rows
+and `qm-fx-a`, `qm-fx-b` installed after it. Every outcome is **Applied**. The resident block in the
+final `vz-patch.wad` is link's and carries the unofficial patch's linked `mrxplayer` and both
+templates; `headless_deploy blocks --wad <R>/data/vz-patch.wad --overlay <link WAD>` reports each of
+the link WAD's blocks as byte-identical in the final WAD. Then run §2.2 again.
+
+### 2.4 Uninstall
+
+`uninstall --real --game-root <R> --qm <qm> --rows <rows>.json` with the rows of the set before the
+fixtures, then `verify --real --game-root <R> --snapshot <S>.json`: the game folder matches the
+snapshot.
+
+### 2.5 Reporting
+
+For each command, the printed result; for each colour, what was seen; for any crash, the last
+command. Record each install's outcomes and the sha256 of the final `vz-patch.wad`.
