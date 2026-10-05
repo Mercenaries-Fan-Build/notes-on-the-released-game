@@ -22,6 +22,38 @@ meaning not established.
 | ASET type id | 29 |
 | Retail count | 314, all in `blocks\VZ\effects_P000_Q3` |
 | Asset name | `pandemic_hash_m2(<effect name>)`, e.g. `global_explosion_c4` = `0x41B4326E` |
+| Entry `field_c` | 0 in all 314 |
+
+### 1.1 The effects block and its rows
+
+`blocks\VZ\effects_P000_Q3.block` (block 3459) holds the 314 effects and 46 models (type
+`0x5B724250`, ASET type id 19), 360 entries. Every one of its 360 ASET rows is a sentinel by-hash
+row: `secondary_ref = 0xFFFFFFFF`, `packed_block_ref = 0x0D83FFFF` (block 3459, low 16 bits
+`0xFFFF`). PROVEN by the retail ASET table.
+
+**Nine of the 46 models share their asset hash with a texture** (type id 27) in the resident block
+(block 3185), each hash with one row per type:
+
+`0x196896DC`, `0xB1EC0672`, `0x663C3B0C`, `0xF84AEB3C`, `0x5B9DE759`, `0xD8382CD5`, `0x40FF196A`,
+`0x3630720A`, `0x2EB74539`.
+
+PROVEN; to list a hash's rows:
+
+```text
+cargo run -p mercs2_probe --bin aset_decode -- --wad <vz.wad> 0x196896DC
+```
+
+The engine keys an asset by type and hash, so the pairs do not collide in the game. A tool that
+claims assets by hash alone sees the effects block and the resident block claim the same nine.
+
+**The block ships whole.** In the live test (2026-10-04, the game under Wine on macOS) a patch block
+carrying the whole effects block — 360 entries, the C4 effect recoloured — played the recoloured C4
+explosion, both from a placed charge and from `Pg.Spawn("global_particle_explosion_c4")`. A patch
+block carrying the one recoloured effect alone left the C4 explosion's look retail and spawned
+effects played their sound with no visual. That the lone-effect block is what broke the visuals is
+SPECULATIVE: the cause was not traced. `qm` ships effects only as the whole block at its own path,
+the game's entries first and added effects after them, each added effect with a sentinel by-hash
+row of type id 29 (`mercs2_quartermaster::fx`).
 
 A world template names its effect with the placement / template name minus `particle_`:
 `global_particle_env_godray2` → `global_env_godray2` (`0xDB331999`),
@@ -56,7 +88,7 @@ EFCT                          18 B    nine u16, computed (§3)
 │  ├─ ATRB × 19                       │ (§5.2, fixed order)
 │  ├─ COLR                   800 B    │ (§6)
 │  ├─ ATRB × 13                       │ (§5.2, fixed order)
-│  └─ TEXT                            ┘ u32 n, n × u32 texture hash
+│  └─ TEXT                            ┘ u32 n, n × u32 frame (fxdict key)
 └─ FRCE × k                           u32 kind hash + kind parameters (§7)
    └─ ATRB × (7 + kind extras)
 ```
@@ -79,7 +111,16 @@ There is no `POFF` in any retail effect.
 | `EMIT` | marker; children `TRFM` then optional `GEOM` (811 of 820 have one) | PROVEN |
 | `EMIT/GEOM` | u16 shape index into the EMTR table (`shapes[u16]`), then a u16 stored at `+0x00` of the EMIT record (UNKNOWN meaning) | decomp `FUN_0048cc30` |
 | `PTYP` | u32 flags: bit 0 → emitter `+0x205`, bit 1 → `+0x206`; no other bit is read; retail uses 0–3 | decomp `FUN_00491920` |
-| `TEXT` | u32 n, then n texture hashes; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
+| `TEXT` | u32 n, then n frames; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
+
+**A frame is the key of an `fxdict` record**, not a texture. `FUN_00492af0` hands the frames to
+`FUN_004911a0`, which looks each one up with `FUN_00491510` — a binary search over the record keys of
+the `fxdict` (`0x86BF6C5B`, type `0xFA46D8A8`, in the resident block) that returns the record's four
+values — and packs the four values as binary16 into the stream table. A key the search misses gets a
+static default record. PROVEN by the decomp; the four values read as a rectangle in a particle
+texture atlas (`0.78125, 0.623535, 0.03125, 0.0298…` in the first record), which is INFERRED. Of the
+566 distinct frames in the 314 retail effects, 546 are records of the 630-record `fxdict` and none is
+a texture asset (`mercs2_quartermaster/tests/fx_retail.rs`).
 
 ---
 
@@ -271,7 +312,7 @@ loader reads nothing for one.
 ## 8. Writing an effect
 
 1. Build shapes (≥ 1), emitters (≥ 1; each with 9 TRFM channels and 32 PTYP attributes in the
-   order above, a `COLR`, a `TEXT` with ≥ 1 frame), and forces.
+   order above, a `COLR`, a `TEXT` with ≥ 1 frame, each an `fxdict` key), and forces.
 2. Derive each ATRB's bits 0 and 10; set only bits 7/8/9 by hand.
 3. Compute `EFCT` (§3).
 4. Flatten per [`ucfx_tree_container.md`](ucfx_tree_container.md) and append `CSUM`.
