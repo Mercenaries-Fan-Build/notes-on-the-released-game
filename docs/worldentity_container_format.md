@@ -217,6 +217,13 @@ The codec gives a new template `0x8` in the top nibble and the low 28 bits of
 `pandemic_hash_m2(name)` (`worldentity::derived_template_key`), and refuses a key or a name hash
 already present.
 
+**A derived `0x8` key is spawnable** (live, 2026-10-04, the game under Wine on macOS). With the
+container re-shipped in a patch block and `qm_gate_c4` appended under its derived key `0x8D9E11CB`,
+`Pg.GetGuidByName("qm_gate_c4")` returned `8D9E11CB`, `Pg.Spawn("qm_gate_c4")` played the C4
+explosion its `RedEffectComponent` names, and `ObjectState.StartEmitter` on a Monster Truck's
+`hp_fx_exhaust_a` with `qm_gate_c4` fired it. The retail name resolved as before
+(`global_particle_explosion_c4` → `80008028`) and a name no template has returned `nil`.
+
 **The C4 template** `global_particle_explosion_c4` is `0x80008028` (PROVEN): `EffectTemplate`
 (shared record of 438 keys, value 0), `HibernationControl` (shared, 293 keys), `RedEffectComponent`
 (own record, `name` field `0x1DE5C824` = `0x41B4326E` = `global_explosion_c4`), `SoundEffect` (own
@@ -242,8 +249,10 @@ Every per-record insert is an upsert (PROVEN):
 * `FUN_00649180` (the `Name` and `Flags` insert) overwrites in place on a hit.
 
 So processing a `worldentity` a second time rewrites the records of keys it shares with the first
-and adds the keys it alone carries. Whether an overlay's copy of the container is processed at all
-is not established statically.
+and adds the keys it alone carries.
+
+**A patch copy is processed** (live, 2026-10-04): a patch block carrying the container with one
+template appended made that template's name resolve and spawn (§4).
 
 **guidmap** (`0x385EA82C`, type `0x140E8728`, same block): its keys are the 6,126 template keys plus
 one zero slot. Neither the template lookup (`FUN_00672F70`) nor `FUN_00654940` reads it, so a new
@@ -268,3 +277,18 @@ declares (no record is copied from another template):
    when there is at least one.
 
 The template author form is specified in `mercs2_quartermaster::template`.
+
+### 6.1 The set's templates
+
+`add_fx` templates ship in the container of the resident block, at the block's own path. A Shipment's build writes the game's container with its own templates appended,
+in contribution order; `qm link` writes the game's container with every installed Shipment's
+templates appended, Shipment by Shipment in load order, into the one resident block that also
+carries the linked scripts (`mercs2_quartermaster::fx::merge`). The merge refuses:
+
+1. a template whose name hash or derived key the game's container already holds;
+2. a template whose name hash or derived key another added template holds, naming both Shipments;
+3. a template that does not lower against the container's schemas, or that declares other than one
+   `RedEffectComponent`.
+
+Every other record of the container is the game's, byte for byte, and every row of the resident
+block is copied from the game's.
