@@ -31,9 +31,11 @@ rather than guessing a caller. This mirrors how the GFx map handled SecuROM-relo
 
 ## 1. Bootstrap & memory
 
-`FUN_0048a170` (**PgFX subsystem init**) fires two async ASET requests via `thunk_FUN_0248d520`:
-the **fxdict** singleton (`asset 0x86BF6C5B`, type `0xFA46D8A8`) and the **effect** table
-(`asset 0xD2E54786`, type `0x5608BD5A`) — the two assets documented in fxdict_format.md. It also
+`FUN_0048a170` (**PgFX subsystem init**) fires async ASET requests via `thunk_FUN_0248d520`: the
+**`vfx` atlas** (`asset 0x89E211AF`) and **`particle_mask`** (`asset 0x07B71436`), both texture type
+`0xF011157A`, and the **fxdict** singleton (`asset 0x86BF6C5B`, type `0xFA46D8A8`); after the pools,
+the fxdict again and the **effect** table (`asset 0xD2E54786`, type `0x5608BD5A`). PROVEN by the
+decomp. The atlas and the fxdict are documented in fxdict_format.md §3.2, §3.4. It also
 allocates 3× the FX runtime pool via `FUN_004937d0` (0x1DD90 bytes: 40000/15000-entry particle
 arrays + two 720000-byte double buffers). Both binary loaders have `callers=[]` because they are
 the **type-registered load callbacks** invoked through the asset-system vtable.
@@ -83,11 +85,13 @@ carry no authored schema and are what the render pass iterates.
 ## 3. Binary-format loaders
 
 **fxdict → `FUN_00491320`** parses two UCFX chunks: `INFO` (`u32 entry_count` → obj+0x1c; allocates
-`count*0x20`), then `DICT` per-record reads 5 dwords (**20 B disk stride**, confirming the doc) and
-expands to a **32 B runtime record**: `+0x00 name_hash, +0x10 value0, +0x14 = (1.0 - b - c), +0x18
-value2, +0x1c value3`. **Refinement to fxdict_format.md:** the doc's `value_b`/`flags` fields are both
-consumed as *floats* and combined into a `1 − b − c` complement — a 3-way weight/split, not
-"min/max/flags". Lookup is `FUN_00491510` (binary search on `+0x00`, returns `rec+0x10`).
+`count*0x20`), then `DICT`, reading 5 dwords per record (**20 B disk stride**) and expanding each to a
+**32 B runtime record**: `+0x00 key, +0x10 u, +0x14 = (1.0 − v − h), +0x18 w, +0x1c h` (the `1.0`
+is `DAT_00B9B664`). The record `{key, u, v, w, h}` is a sprite rectangle of the `vfx` atlas, `v`
+measured from the bottom, and `+0x14` is its top edge measured from the top
+([fxdict_format.md](../fxdict_format.md) §3.2). Lookup is `FUN_00491510`: a binary search on
+`+0x00` with a signed compare, returning `rec+0x10`, and a static `(0, 0, 1, 1)` — the whole atlas —
+for a key it misses. PROVEN by the decomp.
 
 **effect → `FUN_00491920` (block driver) → `FUN_00492af0` (per-emitter)**. The driver reads the
 `EFCT` header (u16 counts; sub-count gates a `count*0x140` alloc at effect+0x8c; emitter pool
@@ -128,13 +132,27 @@ u16 lands at `rec+2` and is the draw-time binding). `light_class` ∈ {0 base, 1
 3 `_pl_sl`}. At draw time a material resolves a shader by `FUN_0085aff0 → FUN_0085abd0` (~120+ call
 sites = the material bind points).
 
-**Key finding — PgFX shaders are NOT in this registry.** `PgFXVP/FP/VPR/FPR` and the
-`PgBillboardTree*` family have **zero references** in the whole decomp; their strings sit at
-`0xbac264` with duplicate copies at `0x0143xxxx` — a **data-driven shader-descriptor table** (the
-material/fxdict shader path), not the hardcoded registry. `PgRibbonVP`/`PgRibbonFP` **are** in the
-registry but alias generic shaders: `PgRibbonVP → Pg3DVP.sho`, `PgRibbonFP → PgDiffuseFP.sho`. So
-PC particle/ribbon FX reuse the generic 3D/diffuse/material shaders; the dedicated `PgFX*` shaders
-are Xbox-only. *(Where the `0x0143xxxx` descriptor table is walked is unlocated — confirm-live.)*
+**The PgFX shaders are not in this registry.** `PgFXVP/FP/VPR/FPR` and the `PgBillboardTree*` family
+have **zero references** from code in the decomp; their strings sit at `0xbac264`, with copies at
+`0x0143xxxx` in material descriptors (below). `PgRibbonVP`/`PgRibbonFP` **are** in the registry but
+alias generic shaders: `PgRibbonVP → Pg3DVP.sho`, `PgRibbonFP → PgDiffuseFP.sho`.
+
+**The PgFX shaders exist on PC**, as records 343–346 of `shader3.bin`. PROVEN by the store and the
+disassembly:
+
+- **`PgFXFP`, record 344** (`ps_3_0`, `diffuseMap` at `s0`): `texld r0, v0, s0`, `mul r0, r0, v1`
+  (× the vertex colour), then `mul oC0.xyz, r0.w, r0` and `mul oC0.w, r0.w, v0.w`. The texture is
+  sampled with straight alpha and the shader writes `rgb × a`.
+- **`PgFXVP`, record 346** (`vs_3_0`): `mova a0.x, v1.x` (`BLENDINDICES`) and
+  `mad o1.xy, c21[a0.x], v3.zwzw, v3` — the texel coordinate is `rect.xy + corner × rect.zw`, the
+  rectangle in `TEXCOORD0` (`v3`) and the corner one of `c21..c24` = (0, 0), (0, 1), (1, 1), (1, 0).
+
+**Four materials draw particles.** Three bind the `vfx` atlas (`0x89E211AF`) at texture slot 0 with
+`PgFXFP.sho` (handle `0xBF`; the descriptor bytes at `0x0143A1A0` carry both); one, the refraction material,
+binds `particle_mask` (`0x07B71436`) with `PgFXFPR`. The atlas is the one texture particles sample:
+no effect field names a texture, and no `MTRL` in `vz.wad` names `0x89E211AF`
+(`mercs2_formats/tests/fxdict_atlas_retail.rs`). PROVEN by the 2026-10 analysis of the descriptors
+and the retail data.
 
 ## 5. Ribbon / tracer runtime
 
@@ -153,9 +171,17 @@ These have no PC string anchor and are vtable-gated. Recorded with the exact vta
 | Xbox PDB name | reached via | confirm-live break |
 |---|---|---|
 | ParticleEmitter EmitParticles / integrate (pos/vel/gravity/drag) | `PTR_CopyFromStream_00bc0730` (ParticleEmitter) | HW-bp the vtable render/update slot after a save loads |
-| Render3DParticles draw + billboard build + blend/depth | RtRedEffect vtable `0xbc34e8`, RtVFX vtable `0xbc3538` | break the RtRedEffect/RtVFX Render slot during a live effect |
+| Render3DParticles draw + blend/depth | RtRedEffect vtable `0xbc34e8`, RtVFX vtable `0xbc3538` | break the RtRedEffect/RtVFX Render slot during a live effect |
 | RtRibbon segment-emit + ribbon draw | RtRibbon vtable `0xbc45a8` | break the RtRibbon render slot; observe segment feed |
 | FxSpuParticleGen / FxShaderTask / FxVisibility (job-parallel split) | no PC string | unverifiable statically; check for a job dispatch at the emit site |
+
+**The billboard builder is `FUN_00494740`** (called from `FUN_00494130`). It writes one particle as
+four `0x24`-byte vertices (`0x90` bytes) and adds 6 to the u16 at `[+0x1D70C] + 2`. Each vertex starts with the
+8 bytes `thunk_FUN_024EEBB0` returns for the emitter's stream at an index from the particle's age byte
+(`+0x21`) — the frame's rectangle as four binary16 (INFERRED: the stream entry `FUN_004911a0` wrote,
+[effect_container_format.md](../effect_container_format.md) §2) — and carries the corner index 0–3
+in byte `+0x20`, which `PgFXVP` reads as `BLENDINDICES` to pick the corner (§4). PROVEN by the
+decomp for the layout and the corner byte.
 
 `FUN_00661190` (the candidate "ParticleEmitter update") is confirmed to be the **schema-builder**
 callback (defines reflected fields), *not* the runtime integrator.
