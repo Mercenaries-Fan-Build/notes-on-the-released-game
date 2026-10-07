@@ -1,7 +1,8 @@
 # FX live gate: effects and templates through `qm link`
 
 Three parts: what the live runs of 2026-10-04 showed (§1), the retest of `add_fx` and `replace_fx`
-as `qm` ships them (§2), and the sprites the fixtures add and draw (§3). The container formats are in
+as `qm` ships them (§2), and the sprites the fixtures add and draw (§3), with the outcome of its
+first run (§3.5). The container formats are in
 [`../effect_container_format.md`](../effect_container_format.md) and
 [`../worldentity_container_format.md`](../worldentity_container_format.md); the kinds are in
 [`manifest_format.md`](manifest_format.md#add_fx).
@@ -207,3 +208,34 @@ snapshot: the game folder matches it.
 
 For each spawn, what was seen and which row of the table it matches; for any crash, the last
 command. Record each install's outcomes and the sha256 of the final `vz-patch.wad`.
+
+### 3.5 Outcome, 2026-10-06
+
+The game ran under Wine on macOS. `qm-fx-a` and `qm-fx-b` were installed through `headless_deploy`,
+with `qm` built at `99994025`, whose fixtures gave each burst's one emitter `geom: none` (with `rate`
+30) and one shape of a single record of 13 zeros.
+
+- `Pg.GetGuidByName("qm_cyan_burst")` returned `899E7D78` and `Pg.GetGuidByName("qm_green_burst")`
+  returned `8E53AD44`: both templates registered.
+- `Pg.Spawn("qm_cyan_burst", x, y + 1, z + 15)` crashed the game. `pmc_blackbox.log`:
+
+  ```text
+  VEH EXCEPTION C0000094 INT_DIVIDE_BY_ZERO @ EIP=0048AFF6
+  EAX=7EC00771 ECX=00000771 EDX=00000000 EBX=03C09968 ESP=03C039C0 EBP=03C03BA0 ESI=00000000 EDI=1F5C63F0
+  stk+060 = 0048FE0D
+  [EDI=1F5C63F0] 00000000 00000000 00000000 00000000 3F800000 ...
+  ```
+
+The sprite rows of §3.2 were not reached.
+
+**Cause.** `EDI` is the emitter's runtime record, whose `+0x00` is the `GEOM` count and `+0x04` the
+shape's records; without a `GEOM` both are 0, and the spawn picks each particle's record as
+`random % count` with `div esi` at `0x0048AFF6`; `0x0048FE0D` is the return into `FUN_0048f900`.
+PROVEN by the disassembly and the dump
+([`../effect_container_format.md`](../effect_container_format.md) §2.1).
+
+**The next run.** `qm` refuses an emitter the engine cannot spawn from as **M0309**
+([`manifest_format.md`](manifest_format.md#m0309)). The fixtures' emitters spawn on shapes of their
+own: `qm_fx_cyan_burst` on the eight faces of an octahedron of radius 0.25 about the effect's origin
+(`geom: { shape: 0, word: 8 }`), `qm_fx_green_burst` on a 0.5 × 0.5 square in the `y = 0` plane, two
+triangles (`geom: { shape: 0, word: 2 }`). The next run repeats §3.1–§3.4 with them.
