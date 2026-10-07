@@ -146,7 +146,8 @@ Summary:
 - `PTYP` (u32 flags; bits 0/1 read) → 19 `ATRB`, `COLR`, 13 `ATRB`, `TEXT`, in a fixed order.
 - `ATRB` (12 B `{u32 hash, u32 flags, u32|f32 value}`) may own `ANIM` (u32 key count) → `AKEY`
   × n (8 B `{f32 time, f32 value}`). `ANIM` and `AKEY` exist; 1,880 retail curves.
-- `COLR` is **800 bytes** = 100 × `{u8×4 colour, binary16, u16 0}`. (The 200 the loader stores is
+- `COLR` is **800 bytes** = 100 × `{u8 blue, u8 green, u8 red, u8 alpha, binary16, u16 0}`; the
+  colour order is PROVEN live, 2026-10-07 ([`effect_container_format.md`](effect_container_format.md) §6). (The 200 the loader stores is
   the stream-word reservation, not the byte size.)
 - `TEXT` = u32 n + n frame keys, each an fxdict record (§3.2) (`4 + 4n` bytes in every retail TEXT).
 - `FRCE` = u32 kind (`gravity`, `drag`, `wind`, `attractor`, `vortex` — all `pandemic_hash_m2`
@@ -178,7 +179,7 @@ See [`audio_ue5_path.md`](audio_ue5_path.md) §2.
 | effect tree, sizes and EFCT rule | **High** — 314/314 byte-identical re-encode ([`effect_container_format.md`](effect_container_format.md)) |
 | Emitter `GEOM` = shape index + sampled record count; count 0 or a missing `GEOM` divides by zero on spawn | **PROVEN** (disassembly of `FUN_0048ae80`, decomp `FUN_0048cc30`, 811/811 retail counts, live crash 2026-10-06) |
 | Shape record = `\|A × B\|`, unit `±(A × B)`, vertex `P`, edges `A`, `B`; spawn at `P + u·A + v·B` | **PROVEN** for `P`, `A`, `B` (`FUN_00488770`) and the retail layout (13,148/13,148); float 0's reader **unknown** |
-| COLR key structure (100 × 8 B) | **High** for the layout; colour channel order and the binary16's role unknown |
+| COLR key structure (100 × 8 B) | **High** for the layout; colour stored blue, green, red, alpha **PROVEN** live 2026-10-07 for blue, green, red (`qm_fx_cyan_burst` stored `00 FF FF` drew gold, the car-hood fire stored `FF FF 00` drew cyan), alpha **INFERRED**; the binary16's role unknown |
 
 ---
 
@@ -202,7 +203,7 @@ orders records by `key as i32` and refuses a repeated key. The container is two 
 | `Emitter` | TRFM matrix, 9 channel `Atrb`s, optional `EmitterGeom`, `ParticleType` |
 | `ParticleType` | PTYP flags, 32 `Atrb`s, `Colr`, `Text` |
 | `Atrb` | `hash`, `flags`, `value` (`AtrbValue::F32`/`U32`), `curve` (`Option<Vec<AnimKey>>`) |
-| `Colr` | 100 `ColrKey { colour: [u8; 4], half_bits: u16 }` |
+| `Colr` | 100 `ColrKey { rgba: [u8; 4], half_bits: u16 }`: red, green, blue, alpha, which `Colr::to_bytes` / `Colr::from_bytes` write and read blue, green, red, alpha |
 | `Force` | `ForceKind` (typed per kind) + its `Atrb`s |
 
 - `EFCT` is computed (`EffectContainer::efct_words`), never stored in the model.
