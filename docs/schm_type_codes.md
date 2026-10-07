@@ -5,26 +5,36 @@ Cross-referenced against documented component field layouts.
 
 ## Type Code → Width Mapping
 
-| Type Code | Width (bytes) | Swap Unit | Semantic | Evidence |
-|-----------|---------------|-----------|----------|----------|
-| 1 | sub-byte (bit) | none | bool/flag | HibernationControl: 2 fields at same byte offset 5 |
-| 2 | 1 | none | u8 | HibernationControl: fields at sequential byte offsets 2,3,4 |
-| 4 | 2 | u16 | u16 | HibernationControl @0 (next field at +2); Transform fields 2 apart |
-| 5 | 4 | f32 | f32 | Transform @32 (next at 36) |
-| 6 | 4 | u32 | hash/u32 | ModelName (single u32 hash); DestructionLink; Road; RoadIntersection |
-| 7 | 4 | u32 | u32 (ref?) | DestructionLink @8 (next at 12) |
-| 8 | 4 | u32 | string ref | Name @0 (next at 4) |
-| 9 | 4 | u32 | u32 (flags?) | DestructionLink @4 (next at 8) |
-| 10 | 12 | 3×f32 | Vec3 | Road @16 (next at 28); RoadIntersection @28 (next at 40) |
-| 11 | 32 | 8×f32 | Transform blob | Transform @0 (next at 32); pos+pad+quat = 32 bytes |
+The engine's per-field stream readers in `mercs2_unpacked.exe` dispatch on the code: `FUN_00656210`
+(int) and `FUN_00656320` (float) read codes 1 and 2 as one byte, 3 and 4 as two, 5, 6 and 9 as a
+4-byte `int`, and 7 as an `f32`; `FUN_00656720` (enum) resolves code 9 through `FUN_00655EA0`;
+`FUN_00656610` reads code 10 as three dwords and `FUN_0065644A` code 11 as eight. Retail
+`worldentity` check: `Health`'s code-7 field holds `100.0f`. See
+[`worldentity_container_format.md`](worldentity_container_format.md) §3.2.
+
+| Type Code | Width (bytes) | Swap Unit | Read as | `SchemaFieldType` |
+|-----------|---------------|-----------|---------|-------------------|
+| 1 | 1 | none | `char` | `Byte` |
+| 2 | 1 | none | `char` | `U8` |
+| 3 | 2 | u16 | `short` | `Short` |
+| 4 | 2 | u16 | `short` | `U16` |
+| 5 | 4 | u32 | `int` | `Int` |
+| 6 | 4 | u32 | `int` (name hash or raw value) | `Hash` |
+| 7 | 4 | f32 | `f32` | `F32` |
+| 8 | inline string | none | `Name`'s string | `StringRef` |
+| 9 | 4 | u32 | `int`, resolved as an enum-value hash by the enum reader | `Enum` |
+| 10 | 12 | 3×f32 | three `f32` | `Vec3` |
+| 11 | 32 | 8×u32 | eight dwords | `Blob32` |
+
+What separates codes 1 from 2 and 3 from 4 is not established; the engine reads each pair the same.
 
 ## Offset Field Encoding
 
 The `field_offset` u32 in schm entries is packed, and **which half holds the byte offset depends on
 the container's endianness** (the word is byte-swapped between builds):
 - **Retail PC (little-endian schm):** `byte_offset = offset_word & 0xFFFF` (**LOW** 16 bits);
-  `bit_index = (offset_word >> 16) & 0xFF` selects the bit for sub-byte type-1 fields; the remaining
-  high byte is metadata.
+  byte +14 is a bit field's start bit and byte +15 its width in bits inside the storage unit at
+  `byte_offset` (0 = the field is the whole unit). Retail bit fields are on codes 1, 4 and 5.
 - **Xbox / BE-converted (big-endian schm):** `byte_offset = offset_word >> 16` (**HIGH** 16 bits).
 
 > ⚠ **CORRECTION (2026-07, Wave-0 E1).** Earlier revisions stated `>> 16` unconditionally. That was
@@ -37,8 +47,8 @@ the container's endianness** (the word is byte-swapped between builds):
 ## Byte-Swap Rules (derived)
 
 For the converter, swap decisions are:
-- **Types 1, 2**: NO swap (≤1 byte)
-- **Type 4**: swap 2 bytes (u16)
+- **Types 1, 2**: NO swap (1 byte)
+- **Types 3, 4**: swap 2 bytes (u16)
 - **Types 5, 6, 7, 8, 9**: swap 4 bytes (u32/f32)
 - **Type 10**: swap 4 bytes × 3 (Vec3 = three f32s)
 - **Type 11**: swap 4 bytes × 8 (8 f32s — pos+pad+quat blob)
@@ -51,7 +61,7 @@ For the converter, swap decisions are:
 | DestructionLink | 16 | 4×type6/7/9(4) | 16 | ✓ |
 | Road | 40 | 4×type6(4) + 2×type10(12) | 16+24=40 | ✓ |
 | RoadIntersection | 124 | 7×type6(4) + 6×type10(12) + 6×type6(4) | 28+72+24=124 | ✓ |
-| HibernationControl | 6 | type4(2) + 3×type2(1) + 2×type1(0) = 5+1byte | 6 | ✓ |
+| HibernationControl | 6 | type4(2) + 3×type2(1) + two 1-bit fields of one type1 byte | 6 | ✓ |
 | Transform | 52 (schm) | type11(32) + type5(4) + 8×type4(2) | 32+4+16=52 | ✓ (schm stride; runtime is 38) |
 
 ## DLC Block schm Presence

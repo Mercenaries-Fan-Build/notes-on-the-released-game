@@ -117,6 +117,12 @@ not what causes this crash.)
 
 **Do not chase the loader.** The failure is draw-gated, not load-gated.
 
+The same `+0x182` word is the material's pixel-shader registry index: a material whose pixel-shader
+key is not registered crashes earlier, at `0x00858DB8` in `Mtrl_Parse`. `qm` checks every material
+key and primitive-group vertex-shader word it emits against the registry (**M0235**, **M0236**), and
+`add_model` writes them by the retail convention
+([`manifest_format.md` — the shader import](manifest_format.md#the-shader-import)).
+
 **Source.** `memory/mtrl-name-hash-shader-registry.md`
 
 ---

@@ -113,6 +113,28 @@ into the named enum table. Unlabeled int fields are usually ids/handles (default
 6. `f` float = **50.0**  — volume / max-distance
 7. `f` float = **1.0**   — pitch / falloff scale
 
+**On disk (retail `vz.wad`, PROVEN by the census `sound_effect_names_the_engine_loaded_banks`,
+`mercs2_quartermaster`, `retail` feature).** The `COMP` (type hash `0xB40954F5`) sits in the
+world-entity container (type `0x5647C35D`, ASET type 17). Its `schm` gives a 0x1C-byte payload of
+seven fields, in stream order:
+
+| word | byte | field hash | schm type | meaning |
+|---|---|---|---|---|
+| 0 | 0x00 | `0x2EB62242` | U32 | *unknown*: 81 of its 1,066 non-zero values are cue guids of `vz.wad` soundbanks, never of the word-4 bank |
+| 1 | 0x04 | `0xC43322C3` | F32 | *unknown* |
+| 2 | 0x08 | `0x29F15442` | F32 | *unknown* |
+| 3 | 0x0C | `0x4E97DE03` | Ref | *unknown* |
+| 4 | 0x10 | `0x14A67FA6` | U32 | the soundbank name hash, `m2(<bank>)`; 0 for none |
+| 5 | 0x14 | `0xD932985B` | F32 | *unknown* |
+| 6 | 0x18 | `0x11957817` | Ref | *unknown* |
+
+The `data` chunk is grouped `[u32 n][n × u32 entity key][7-word payload]`: 1,080 groups over 2,754
+entity keys, consuming its 11,394 words exactly. Word 4 names 63 of `vz.wad`'s 64 `veh_*` / `wpn_*`
+soundbanks, and the engine loads the named bank by it on the local player's equipment and seat
+changes ([`audio_code_map.md` §11.11](../reverse_engineer/audio_code_map.md#1111-the-banks-the-engine-loads-soundeffect)).
+The schm order and types differ from the ordered list above, which is read from the deserialize
+template's defaults.
+
 ### SoundAmbience — `FUN_006618f0`, stride 0x14
 1–5. `i` int = 0  (five bank/key/zone ids — looping ambience set)
 

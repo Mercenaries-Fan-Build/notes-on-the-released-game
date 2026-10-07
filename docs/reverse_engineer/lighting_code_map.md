@@ -107,9 +107,10 @@ function. The ambient data itself is the designer-tunable `.rdata` block `Ambien
 ## 4. Shader light permutations (proven)
 
 The permutation family registers inline in the global shader registry **`FUN_0084f130`** (render map
-§4). Every shader is inserted by **`FUN_0085ac90(logical_name, name.sho, light_class)`** whose 3rd arg
-**is** the light class (proven: `param_4 → record[0x23]`; name→FNV handle via `FUN_00824270`; insert
-into pool `DAT_01977a38`):
+§4). Every shader is inserted by **`FUN_0085ac90(logical_name, name.sho, light_class)`**, `__thiscall`
+on a static record object in `ECX`, whose 3rd arg **is** the light class (proven: `param_4 →
+record+0x8c`; name→FNV key via `FUN_00824270`; the index is assigned in the pixel registry of pool
+`DAT_01977a38`, [`shader_store_format.md` §9](../shader_store_format.md#9-registration)):
 
 **`light_class ∈ {0 = base, 1 = _pl (point), 2 = _sl (spot), 3 = _pl_sl (both)}`** — matches
 [particle_fx_code_map.md](particle_fx_code_map.md) §4 and `particle_fx_shadow_code_map.json`.
@@ -137,8 +138,8 @@ SpecNormAmbOcc}RimFP`, … .
 | Gate | Address | Role |
 |---|---|---|
 | per-pixel-light master ("ShaderLevel") | `DAT_00dfc345` (bool) | `!=0` → register the whole `_pl`/`_sl`/`_pl_sl` family per FP; `==0` → base only (no dynamic per-pixel lights). Mercs2.ini `ShaderLevel` (render map §9). |
-| `_li` alternate selector | per-shader `DAT_019xxxxx` (`01970a2c`, `01970b28`, `01970c24`, …) | `==0` → also register a `_li` `.sho` under the **same** (name, light_class), overriding the plain variant (an alternate compiled blob) |
-| AmbientWind / veg VP quality (orthogonal) | `(DAT_01176288+0x5e4 >> 2 & 1)`, bit 3 | selects `*AmbientWind*.sho` VP variants — a VP-side axis, independent of light class |
+| `_li` alternate selector | the D3D handle (`+0xf8`) of the record just registered (`DAT_01970a2c` = `0x01970934+0xf8`, the `PgFastFP_pl` record) | `==0` (the plain stem has no store record) → `FUN_0085ac90` again on the **same record** (`0x0084fb21` and `0x0084fb40` both load `ecx = 0x01970934`) with the `_li` `.sho`: the `.sho` at `+0x0b` and the handle change; the name, light class and index do not. Retail's registered plain stems all have records, so no `_li` registration is made |
+| AmbientWind VP selector (orthogonal) | caps word `DAT_01176288+0x5e4` bit 2 (`>> 2 & 1`): the vertex-texture capability, set when `CheckDeviceFormat(D3DUSAGE_QUERY_VERTEXTEXTURE, …)` succeeds (**INFERRED**, `0x00754ffb`–`0x0075514b`); bit 3 is the R2VB FOURCC and does not gate these | set → the `PgMesh*AmbientWind*` registrations load their `*AmbientWind*.sho`; clear → the same names load the non-wind `.sho`. The `PgSkin1*AmbientWind*` registrations are ungated and load their AmbientWind `.sho` in every configuration — a VP-side axis, independent of light class |
 
 | Shader / permutation | Register site | Gate | Conf |
 |---|---|---|---|
@@ -158,12 +159,14 @@ carries the markers (retail-stripped) and the accumulation math is D3D-constant/
 
 What *is* proven: the placed-light data path (§1.1) and that the **shaders accept point/spot lighting**
 (the `_pl`/`_sl`/`_pl_sl` classes, §4). The per-draw selection of *which* class handle binds (base vs
-`_pl` vs `_sl` vs `_pl_sl`) is a material-resolve decision at draw — the material resolves a shader by
-name→u16 via **`FUN_0085abd0`** (u16 at `rec+2`; ~120+ call sites are the material bind points). **Which
-of the 4 class handles it picks, and how the nearest lights load into shader constants, is stripped /
-vtable-gated → confirm-live.** (`FUN_0085aff0` is a *sibling* multi-handle resolver but it is the
-**post-process** effect object storing 15 shader handles at obj+0x94..+0x104 — do not conflate it with
-the mesh per-light bind.)
+`_pl` vs `_sl` vs `_pl_sl`) is a material-resolve decision at draw — the material names its pixel
+shader once, and the draw (`FUN_00855420`) selects `index_table[material+0x182 + light]` from the pixel
+registry's index table `0x0197ba40`, with `light` forced to 0 when `DAT_00dfc345` is 0 — so the four
+classes are consecutive registrations. (`FUN_0085abd0` assigns **vertex**-registry indices; the pixel
+one is `FUN_0085ab70`. `FUN_0085aff0` is the base **vertex** family's constant binder, which resolves 15
+constant names into the record at `+0x94..+0x108` — see
+[`shader_store_format.md` §10](../shader_store_format.md#10-constant-binding).) **How the nearest
+lights load into shader constants is stripped / vtable-gated → confirm-live.**
 
 ## 6. Sun / directional / ambient
 
@@ -196,7 +199,7 @@ handle-resolved/vtable-gated. The engine's current stand-in is one fixed directi
 | master per-frame `Rt*` Update | `FUN_00675e50` | observe which `Rt*` pools are non-empty + `dt` |
 | RtLightAnimation apply (light-math) | `FUN_004a80d0` / `FUN_004a7c70` (via lookup `FUN_006654b0`) | inspect the 0x2c record + the resolved LightObject to pin the light-math |
 | RtScale / RtAlpha apply | `FUN_00469140` / `FUN_00469200` | confirm which record floats drive scale vs alpha |
-| per-draw light-class shader select | material resolve `FUN_0085abd0` | on a lit interior draw read the resolved u16 at `rec+2` + requested name → which of base/`_pl`/`_sl`/`_pl_sl` |
+| per-draw light-class shader select | the draw `FUN_00855420`: `index_table[material+0x182 + light]` (`0x0197ba40`; `material+0x182` is the u16 index at `+0x08` of the registration `Mtrl_Parse` resolved) | on a lit interior draw read `material+0x182` and the light class `item_light+0x2a0` → which of base/`_pl`/`_sl`/`_pl_sl` |
 | light-constant bind / "RenderLights" body | HW-watch the light-list buffer built after `FUN_006622e0` records load | find the color-pass reader that loads D3D light constants — the PC `RenderLights` analog |
 | sun → mesh | atmosphere struct `[[PTR_PTR_00e7adfc]+0x104]+0xe0/+0x124` on a paused lit-mesh draw | check whether LightIntensity/Modifier appear in the mesh FP constant registers (vs only sky/cloud CBs @`DAT_00ff46c8`) |
 | RtAmbience | per-frame reader of `AmbientCube*` @0x003c9a8 | walk callers to locate the ambient-gather |

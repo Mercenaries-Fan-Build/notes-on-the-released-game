@@ -74,7 +74,7 @@ All registered in the shared registry `FUN_0084f130` (name → FNV-1a → u16 ha
 | Single-matrix (1-bone) skin | `PgSkin1ShadowVP` | Tex / Morph / MorphTex / AmbientWind / TexAmbientWind |
 | LOD imposter ("tiny" far mesh) | `PgMeshTinyShadowVP` | Tex; **_Ruin / _RuinTex** |
 | Road decal strip | `PgRoadShadowVP` | — |
-| Vegetation billboard tree | `PgBillboardTreeShadowVP` | *(data-table bound, not in registry)* |
+| Vegetation billboard tree | `PgBillboardTreeShadowVP` | registered by the billboard-tree island (`0x004a0bb0` `jmp [0x0245f024]` → `0x006188b0`), record `0x0143b9d0`, family `billboard_tree_vertex` |
 | Terrain heightfield | `PgLtiTerrainShadowVP` | — |
 | Cheap blob fallback | `PgBlobShadowVP` | — |
 
@@ -86,15 +86,25 @@ billboard) / `PgBlobShadowFP`.
 name → u16 at load and caches it; draw code binds the cached u16. This is why grep finds no
 render-side references to the VP name strings.
 
-- **AmbientWind quality gate (verified):** every `*AmbientWind*` VP is registered under
+- **AmbientWind gate:** the `PgMesh*AmbientWind*` and `PgSkin*AmbientWind*` VPs are registered under
   `if ((DAT_01176288+0x5e4 >> 2) & 1)`. Bit clear → the AmbientWind name aliases the plain `.sho`
-  (e.g. `PgMeshAmbientWindShadowVP → PgMeshShadowVP.sho`); bit set → the real `…AmbientWind.sho`.
-  So `DAT_01176288+0x5e4` bit 2 = the ambient-wind vegetation quality toggle.
+  (e.g. `PgMeshAmbientWindShadowVP → PgMeshShadowVP.sho`); bit set → the real `…AmbientWind.sho`
+  (**PROVEN**, `registered_shaders.tsv`). Bit 2 is the vertex-texture capability, set by the device
+  probe when `CheckDeviceFormat(D3DUSAGE_QUERY_VERTEXTEXTURE, …)` succeeds (**INFERRED**, stack
+  accounting through `0x00754ffb`–`0x0075514b`), so it also loads the `shaderVT` store pair. The six
+  `PgSkin1*AmbientWind*` names are ungated: they load their AmbientWind `.sho` in every configuration
+  (**PROVEN**).
 - **FP suffixes:** `_Z` depth-only, `_ZA` depth+alpha-test, `_ZABB` depth+alpha+billboard.
 - **`_Ruin` destruction linkage:** the `_Ruin`/`_RuinTex` variants exist only in the Tiny (LOD
-  imposter) family — when an entity's destruction/vz_state overlay marks it ruined, its far imposter
-  casts with `PgMeshTinyShadowVP_Ruin` (ties to the destruction COMP + vz_state overlay from the
-  world-LOD/destruction scope).
+  imposter) family. A TINY group is drawn by `PgMeshTinyVP` (the intact role) or `PgMeshTinyVP_Ruin`
+  (the ruined role), and its shadow by the matching `PgMeshTinyShadow*VP` / `…_Ruin`. Each vertex's
+  `POSITION.w` is the slot of the world object it belongs to in the container's `TINY` id list; the
+  shader reads that slot's state from `ObjectIDScaleArray` and keeps the vertex when the state is 1
+  (intact, drawn; plain) or 3 (ruined, drawn; `_Ruin`) (**PROVEN**, bytecode of
+  `PgMeshTinyVP_3.sho` / `PgMeshTinyVP_Ruin_3.sho`). The object-destroyed path sets the ruined state
+  (`FUN_005234F0` at `0x0052373A` → `FUN_0050F7E0` → `0x0050F6B0`), and fade/visibility sets the drawn
+  state (`FUN_0050F730` → `0x0050F5E0`) (**PROVEN**). vz_state does not write these states; a layer
+  ships its own tiny containers (**INFERRED**).
 
 ## 4. Caster collection, distance/LOD, bounds
 

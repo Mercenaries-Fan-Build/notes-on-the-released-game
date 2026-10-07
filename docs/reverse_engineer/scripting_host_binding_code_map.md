@@ -142,6 +142,23 @@ The trace pins that table:
   chain — every contract does `inherit("MrxTaskContract")`); `dynamic_import(m, cb, data)` is the
   async variant with a completion callback; `dynamic_remove` unloads. Every game script is a module
   that `inherit`s a base class and `import`s helpers (`MrxUtil`, `MrxObjectiveHelper`, …).
+- **The `_SYS` bodies (PC, READ).** The table at `0x00B9A854` maps `_IMPORT` → `0x005AE2D0`,
+  `_INHERIT` → `0x005AE3B0`, `_DYNAMIC_IMPORT` → `0x005AE580`, `_DYNAMIC_REMOVE` → `0x005AEA50`,
+  `_MODULEINDEX` → `0x005AEB90`, `_GETFENV` → `0x005AE160` (name/function pairs read from the
+  SecuROM-free image).
+- **Where `import` finds a module (PROVEN for the key, INFERRED for the reach).** `_IMPORT`
+  (`FUN_005AE2D0`, decomp 219707-219760) hashes the module-name argument (`FUN_00824270`, the
+  `Hash_String` of §4), pairs it with the script type `0x42498680`, and looks the pair up through
+  `FUN_00874150` under the critical section `DAT_01174FFC`; `FUN_00874150` (decomp 674357-674379)
+  picks a handler by the key's hash and calls its `+8` method. The key names no block and no WAD —
+  the same `{name hash, type hash}` shape the Pg bank manager's unload passes (`FUN_00602880`,
+  `{bank, 0x9F8BCA10}`) and a font's atlas lookup uses (`eighth_language_wiring.md` §10.2). So a
+  script is found by name in whatever mounted block publishes an ASET row for it: the shell's 28
+  scripts, all in `blocks\Shell\resident_P000_Q3.block`, import one another (`shell/shell.lua:1`,
+  `shell/shellbootstrap.lua:1-4`), and `vz.wad`'s resident modules import one another
+  (`resident/mrxsound.lua:1-3`). `import` resolves in any loaded block, `scripts_vz` or another; a script minted into a
+  patch WAD's copy of a block resolves the same way (INFERRED from the key: the per-type handler's
+  body is not read).
 
 ### 1.4 Console, debugger, save hooks (host services)
 
@@ -157,6 +174,28 @@ The trace pins that table:
 - **Save/persistence:** `SetLuaSaveVersion` (`0x005E6120`), `lastsavegame.lua`,
   `SaveSingleton`/`LoadSingleton`, `SaveData`/`InitialSaveData`/`LoadGame`/`autosave` (write-side
   spine = `save_serialize_code_map.md`, driver `FUN_005a4520`).
+
+### 1.5 VM lifetime
+
+- **Create and close (PROVEN).** `FUN_005A1760` creates the VM — `lua_newstate` `FUN_00865920`
+  (decomp 212511-212552; its only caller is `0x005A1778`), then the module system (`FUN_005A2C40`,
+  §5.1). `FUN_005A1830` closes it — `lua_close` `FUN_00865A70` (decomp 212556-212578; its only
+  caller is `0x005A187B`). The two are slots `+0x14` and `+0x18` of the vtable at `0x00BB4670`
+  (read from the image), and their only callers are the one site `0x004C0928` in `FUN_004C0730`.
+- **The toggle (PROVEN for the code).** `FUN_004C0730` (decomp 98776-98925, called from
+  `FUN_00630EF0`) walks the subsystem table at `0x00D28668` (entry 0 is `0x014A5DA0`) twice. The first
+  walk lowers each active subsystem's count and calls its `+0x18` (disable) when the count leaves
+  the enabled state; then it runs `FUN_005FAB20`, `FUN_004645F0` and `FUN_004BF8C0` (the WAD
+  close-all / reopen-all cycle, [`wad_duplicate_inventory.md` §B.5](../fixpack/wad_duplicate_inventory.md));
+  the second walk raises each count and calls `+0x14` (enable). Subsystems listed in
+  `0x00D287A0` are toggled through `+0x24` / `+0x28`.
+- **Every level swap gets a fresh VM (INFERRED, strong).** Entry 0 is the script host: its object
+  is `.bss`, so the vtable pointer `0x00BB4670` is set at run time and not read statically. The
+  script host is then closed on the first walk and created again on the second, on each pass of
+  `FUN_004C0730` — the level swap between `shell` and `vz` — and every Lua global and module table
+  of one level is gone in the next.
+- **Confirm live:** hardware breakpoints on `lua_close` `0x00865A70` and `lua_newstate` `0x00865920`
+  across game → main menu → game.
 
 ---
 
@@ -412,8 +451,8 @@ void __fastcall FUN_00860240(name?, sz, buff, chunkname) {   // EAX=name(len tok
   emitted no body). ~120 are VA-recovered across the sibling maps (consolidated in §3). The rest
   need the forcing-script.
 - **`_SYS._*` hook bodies** (`_IMPORT`/`_INHERIT`/`_MODULEINDEX`/`_GETFENV`/`_DYNAMIC_*`) are
-  binding-only on PC — the *semantics* are known from the Lua-side wrappers + the 370-script corpus,
-  but the C bodies aren't decompiled.
+  decompiled on PC (§1.3). What each per-type handler behind `FUN_00874150` does with the key is not
+  read.
 - **Two-image VA drift** — resolved (§3): use unpacked-image VAs, not the cracked-`MERCENAR.EXE`
   string offsets.
 

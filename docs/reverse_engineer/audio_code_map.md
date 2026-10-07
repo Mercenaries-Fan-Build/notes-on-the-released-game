@@ -90,7 +90,7 @@ stack) → `FUN_004c0ec0` → **`FUN_004c9740`** (the ~40-subsystem master frame
 | PC FUN_ | Xbox symbol | Role |
 |---|---|---|
 | `FUN_0082ee60` | `PalEngine::BankUpdate` | BankMan pass: walk cue list @engine+0x50 (`FUN_00835060`), recycle finished into ring `DAT_01176400`, timer list @+0x30, then `(*vtbl+8)(dt)` = engine Update |
-| `FUN_00835a70` | `PalGlobalTable::FindCue` | cue resolve: `FUN_0083c610` (id<0x401 direct) / `FUN_0083c760` (0xffff-sentinel hashed) |
+| `FUN_00835a70` | `PalGlobalTable::FindCue` | cue resolve over the loaded sounddbs, first loaded first (§11.2); per table, by its cue count `[body+0x08]` (`0x00835AE3` `cmp word [esi+8], 0x400` / `jbe`): ≤ 0x400 entries → binary search `FUN_0083c610`, more → the hash index `FUN_0083c760` (0xffff-sentinel), which the parser builds only for a table of more than 0x400 entries (`FUN_0083c670`) |
 | `FUN_00836280` | `PalSoundEngine::GetClosestListener` | 4 listeners, pos = engine+0x50+i·0x60 (matrix translation), returns index |
 | `FUN_00836610` | `PalSoundEngine::MixSources` | mixer→PrepareMix, per-source MixWavesToOutput, mixer→MixWave (runs on mixer thread) |
 | `FUN_00836c70` | `PalSoundInstance::Update` (+CalcSubmitValues / CreateWave / WaveUpdate / MaxDistCheck / StopCheck / WaveSubmitValues / CheckFinished, all inlined) | 3 KB per-instance state machine; all 8 scope strings verified in-body |
@@ -314,15 +314,21 @@ waits `FUN_008495c0` (`DirectSoundEnumerateA`) then per device `FUN_00849f80` (`
    > (The eight `0x0083xxxx` engine-vtable entries were not individually re-checked.)
 2. **Message-bus & singleton constructors** (`DAT_015386xx`, 14-slot factory fill) are in
    SecuROM-relocated code — break on first write to `DAT_015386b0` to catch construction live.
-3. **SecuROM-thunked hot paths** — confirm-live: `LoadBank`
-   `*_DAT_0244fb2c`, `OpenStreamFile` `thunk_FUN_035f0000`, `VO.Cue` `thunk_FUN_028da000`, ambience
-   update `thunk_FUN_024f2850`, audio-enabled gate `thunk_FUN_024e67b0`.
+3. **Hot paths behind `.securom`:** `OpenStreamFile` `thunk_FUN_035f0000` and `VO.Cue`
+   `thunk_FUN_028da000` are plaintext relocated into `.securom` (blocks joined by
+   `push <ret>; push <target>; ret`), read by disassembly. The ambience update `thunk_FUN_024f2850`
+   (`push 0x024f285a; call 0x01aaff10`) and the audio-enabled gate `thunk_FUN_024e67b0` (a push/ret
+   into `0x01aaff10`) are VM stubs — confirm-live. `LoadBank` goes through `*_DAT_0244fb2c`
+   (→ `0x024ba5c0`) — confirm-live.
 4. **8 uncracked m2 hashes** (§7) — add to the rainbow table (candidates: interior, underwater,
    danger, camera-distance).
 5. Wave-object construction/format-bind site (candidates `FUN_0083ab00/ab60/ac00/ac40`, unread) and
    the `DAT_0198db60` kernel table's format axis (PCM8/PCM16/ADPCM?).
-6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7 and the streamed
-   wave record's `+0x1C` have no established meaning; kind 10 is handled by `FUN_0083b4a0` but no
+6. **Bank-table unknowns (§11).** The fields marked *unknown* in §11.4 and §11.7 (the multi-wave
+   group's `+0x2F`, `+0x30`, `+0x34`, `+0x48`, `+0x4C`, `+0x58`, `+0x64`; a multi-track sound's
+   `+0x01`, `+0x02`; the `u32` marked *unknown* in automation kinds 0–3, 5, 6 and 8) and the streamed wave record's `+0x1C` have no established meaning. The group
+   `+0x20`, the single-track cue `+0x16` and the wave record `+0x00` are marked *no reader known*:
+   no engine code in a bounded search range reads them (§11.4, §11.5). Kind 10 is handled by `FUN_0083b4a0` but no
    retail cue carries one, so its size is unmeasured. The §3.5 row for `FUN_00835b80` ("u16 counts
    @+0xA/+0xC, 8-byte GUID entries @+0x14") describes the parser's reads of the *global* sounddb
    (category count at `+0x0A`, parameter count at `+0x0C`, category table offset at `+0x14`), not the
@@ -384,9 +390,12 @@ checker, for every audio table in `English.wad` and `shell.wad`.
 
 The key words **MUST** and **MUST NOT** are normative: a table that breaks one was not produced by the
 retail toolchain, and the reference reader rejects it. Field names marked *unknown* are fields whose
-meaning is not established; a writer carries them as given (e.g. copied from a retail bank), it does
-not invent them. Names marked *(inferred)* are read off the values the field holds, not off engine
-code.
+meaning is not established; fields marked *no reader known* are fields no engine code in a bounded
+search range reads, and the range is named beside each. A writer carries both as its author gives
+them. Names marked *(inferred)* are read off the values the
+field holds, not off engine code. The retail counts quoted for the fields an author declares are
+asserted by the census tests of `crates/mercs2_audio/tests/retail_fields.rs` (`retail` feature),
+named where each count is given.
 
 ### 11.1 Conventions and packaging
 
@@ -413,8 +422,8 @@ code.
 `Sound.CueSound(name)` resolves as follows (instance start `FUN_00834ad0`; FindCue `FUN_00835a70`;
 cue lookup `FUN_0082e820`; group lookup `FUN_0082e7d0`):
 
-1. **sounddb** — binary-search the entry whose guid is `m2(name)`; it names a soundbank hash and a
-   **cue index in that soundbank**.
+1. **sounddb** — find the entry whose guid is `m2(name)` in the loaded sounddbs, in the order below;
+   it names a soundbank hash and a **cue index in that soundbank**.
 2. **soundbank cue** — `cue = bank + [bank+0x18] + [bank + [bank+0x1C] + 4·index]`; its guid MUST
    equal the entry's.
 3. **sounds** — a single-track cue plays its one group at once. A multi-track cue (§11.7) starts every
@@ -424,6 +433,46 @@ cue lookup `FUN_0082e820`; group lookup `FUN_0082e7d0`):
 4. **group** — `group = bank + [bank+0x10] + [bank + [bank+0x14] + 4·index]`; the sound instance picks
    one of its waves (§11.8): `{wavebank hash, u16 wave index}`.
 5. **wavebank** — the record at the wave index holds the samples.
+
+**Routing order (PROVEN).** The loaded sounddbs are one list on the Pal global table
+`E = [0x011763FC]`: the parser `FUN_00835b80` is called at `0x00607DB8` with `EDI = E + 8`
+(`8B 3D FC 63 17 01` at `0x00607D18`, `83 C7 08` at `0x00607DB5`), and FindCue receives the same
+`E + 8` at all three call sites (`0x005FACB7`, `0x00593BAA`, and `FUN_00834ad0`, decomp 627028).
+
+- **Load appends at the tail.** The parser links the new table's node after the current tail (decomp
+  627793–627800: `next` = the list sentinel `E+8+0x18`, `prev` = the old tail `[E+8+0x1C]`; the old
+  tail's `next` and `[E+8+0x1C]` become the new node; the count at `+0x24` goes up by one). Neither
+  it nor `FUN_0083c670` checks for a guid another table already has. Unload (`FUN_00835da0`) removes
+  a node by its table pointer.
+- **FindCue walks from the head.** `FUN_00835a70` (decomp 627666–627685) starts at `*(E+8+0x18)`,
+  follows `next`, and stops at the first table whose search hits. The search is chosen per table by
+  its cue count `[body+0x08]` (`0x00835AE3`, `66 81 7E 08 00 04` `cmp word [esi+8], 0x400`, then
+  `jbe`): a table of at most 0x400 entries is binary-searched (`FUN_0083c610`), a larger one is
+  looked up in the hash index `FUN_0083c670` built for it at load (`FUN_0083c760`). The guid, in
+  `EDI`, is compared only with table entries.
+- So **for a guid two loaded tables both route, the table loaded first answers**; the later one's
+  cue never plays.
+- The soundbank list at `E + 0x30` (`FUN_0082e820`, `FUN_0082e7d0`, `FUN_0082f960`) and the wavebank
+  list at `E + 0x40` (`FUN_0082e870`) are searched the same way, first match wins; the soundbank
+  loader `FUN_0082f5e0` → `FUN_0082e370` appends at the tail with no duplicate check (decomp
+  622196–622202).
+
+A bank is loaded through the Pg bank manager `[0x01175F9C]` (65 slots). `LoadSoundBank(name)`
+requests exactly `(name, 0x9F8BCA10)` and `(name, 0xE5273C14)` — the soundbank and the sounddb of
+the same name (`0x00602768`–`0x006027A1`, PROVEN); `LoadWaveBank(name)` requests only the wavebank.
+The sounddb reaches FindCue through its type handler (`FUN_00602ff0` → `0x006024E0`, a VM stub:
+`0x006024E0` `jmp [0x0245ED74]` → `0x024EA900`, which enters `0x01AAFF10`; emulating it continues at
+`0x005FE100`), which appends it to `[0x01175FAC]+0x190`, the list `FUN_00607c50` passes to
+`FUN_00835b80`. Loading a bank that is loaded (slot state 3, flag 1) only registers the callback:
+no second request, no second Pal node, no error; the callback fires on the next update (PROVEN by
+emulating `0x006026C0`), with no success flag. A name no mounted WAD holds leaves its slot in state
+1 until a 20.0 timeout releases it; the callback then fires with no failure indication, and nothing
+is logged (PROVEN at the Pg layer; the timeout's unit is not resolved).
+
+Census (`cue_guids_across_sounddbs`): cue guids are unique within each archive's per-bank sounddbs
+(`vz.wad` 1,198, `English.wad` 13,636, `shell.wad` 270). All 270 `shell.wad` guids are also in
+`vz.wad`, from the three banks both carry (`music` 158, `ui_hud` 88, `ui_shell` 24), and all 10
+`shell.wad` audio tables are byte-identical to `vz.wad`'s.
 
 Over the 1,198 per-bank sounddb entries of `vz.wad`, following every track, every entry and every
 wave, with every `vz.wad` bank resident: **1,012** cues resolve to embedded PCM on every path (628 of
@@ -496,17 +545,17 @@ offset  type  field
 **Group** — every group starts with this head:
 
 ```
-0x00  u32  sound id (unknown; equals the guid of the cue that plays it in some banks, not others)
+0x00  u32  sound id: the language gate below reads it (FUN_008369e0); no other reader known
 0x04  u32  category hash = m2(category name), one of the global category tree's (§11.3)
 0x08  u32  0
 0x0C  u32  form: 0 = single-wave, 1 = multi-wave
-0x10  f32  unknown
+0x10  f32  priority: voice stealing (below)
 0x14  u32  0 or 1: 1 = positional — with an emitter its instances play from the emitter's own source,
            otherwise from the shared 2D source (FUN_00837830, 0x008378A9). The sounddb record has no
            such flag (§11.3)
 0x18  f32  minimum distance: full volume up to it (FUN_0083d3a0)
 0x1C  f32  maximum distance: silent from it (FUN_0083d3a0)
-0x20  f32  unknown (1.0 in all but one retail group)
+0x20  f32  no reader known (below); 1.0 in all but one retail group
 0x24  f32  distance fall-off exponent (FUN_0083d3a0)
 0x28  f32  Doppler scale (FUN_0083b120)
 ```
@@ -516,12 +565,52 @@ offset  type  field
 (`0x00838F70`), which copies the 24 bytes to wave `+0x5C`; otherwise it passes 24 zero bytes (§11.9,
 *Emitter sources*).
 
+**`+0x00` sound id.** The one known reader is `FUN_008369e0` at `0x00836A27`–`0x00836A45`
+(`8B 00`, then `cmp eax` with `0xEA1343AA`, `0xC05D8686`, `0xBB8AE67D`, then
+`cmp [edi+0x78], 0xB6A13123`): for a group with one of those three ids it clears the instance's
+group pointer — nothing plays — unless the Pal language hash at `+0x78` is `m2("english")` (the
+language gate, PROVEN; the hash is set by `FUN_006067b0`, below). No other reader: every `+0x34`
+dereference in the Pal code `0x0082A000`–`0x00842000` reads the group at `+0x0C`, `+0x10`, `+0x14`,
+`+0x2C` or above, never `+0x00` (INFERRED, bounded search). Census
+(`group_sound_id_against_the_playing_cue_guids`) — the id equals the guid of a cue that plays the
+group / differs from every such guid / no cue of the bank plays the group: `vz.wad` 411 / 1,278 /
+87, `English.wad` 12,893 / 740 / 3, `shell.wad` 131 / 145 / 14. The gated ids sit at
+(`language_gated_sound_ids`): `0xEA1343AA` in `vz.wad` bank `0xB796AE64` group 17 (played by cue
+`0xEA1343AA`); `0xC05D8686` in `vz.wad` `0xEB61D6E1` group 13 (cue `0xD051A52F`) and `English.wad`
+`0x50787BFF` group 142 (cue `0x23DCD31E`); `0xBB8AE67D` in `ui_hud` (`0xDD4573C5`) group 100, in
+`vz.wad` and `shell.wad`, played by no cue.
+
+**`+0x10` priority (PROVEN).** `PalSoundInstance::GetWavePriority` (`FUN_00837e10`, named by its
+profiler string) returns it times the wave's distance volume (`0x00837EDC` `8B 46 34`,
+`0x00837EDF` `F3 0F 10 40 10` `movss xmm0, [eax+0x10]`, then `mulss` by `FUN_00837f00` for a 3D
+source, 1.0 otherwise), and 0.0 for an instance with no group. `FUN_00837830` computes a new
+instance's priority the same way (`0x00837950`); when the wave pool (`[0x01176400]+0x4C`) is
+exhausted it finds the lowest-priority playing instance (`FUN_0082f990`, "GetLowestPrioritySound")
+and steals its voice (`FUN_00837c50`, "StealWave") only if the new priority is higher
+(`0x00837A0C` `comiss` / `jbe 0x00837B15`); otherwise no wave is created. The value is also passed
+to the wave's vtable `+0x15C` (decomp 629141). Census (`group_priority_values`): `vz.wad` 15 values
+(0.0 ×2, 0.3 ×281, 0.4 ×141, 0.5 ×84, 0.6 ×108, 0.75 ×12, 0.828 ×1, 0.85 ×545, 0.9 ×40, 0.95 ×176,
+0.955 ×56, 0.96 ×140, 0.97 ×37, 0.98 ×1, 1.0 ×152); `English.wad` 0.0 ×11, 0.2 ×3, 0.7 ×7,532,
+0.9 ×2, 0.98 ×6,088; `shell.wad` 0.9 ×36, 0.95 ×102, 1.0 ×152.
+
+**`+0x20`: no reader known (INFERRED, bounded to the Pal region).** `FUN_00837830` copies group
+`+0x14`..`+0x2B` into the wave (vtable `+0x60`, `0x00838F70`), which puts `+0x20` at wave `+0x68`.
+The only reader of wave `+0x68` is the getter `0x00838F30` (`D9 41 68` `fld [ecx+0x68]`) at vtable
+slot `+0x44` of both wave vtables (`0x00BE2240`, `0x00BE24D0`); nothing references the getter but
+the vtables, and there is no `call [reg+0x44]` in `0x00828000`–`0x00842000`. Census
+(`group_word_20_values`): 1.0 in every group but `vz.wad` bank `0xF2175845` group 105, which holds
+`0x3FFFFCB9` (≈ 1.9999).
+
+**The language hash.** `FUN_006067b0` (decomp 266015–266030) sets the Pal language hash from
+`*DAT_01176018`: 0 → english `0xB6A13123`, 1 → spanish `0x8AAAF243`, 2 → italian `0x8A8C7573`,
+3 → french `0xE687CC7D`, 4 → german `0xC2197ABB`, any other index → english.
+
 Single-wave form (form 0, 64 bytes; 344 in `vz.wad`):
 
 ```
 0x2C  f32  base volume of the sound instance (FUN_0083d770)
 0x30  f32  base pitch of the sound instance, semitones (FUN_0083d700)
-0x34  wave { u32 wavebank hash, u32 wave index, f32 weight = 1.0 }
+0x34  wave { u32 wavebank hash, u32 wave index, f32 weight = 1.0, not read on the pick path (below) }
 ```
 
 Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
@@ -549,16 +638,23 @@ Multi-wave form (form 1, `0x68 + 12·W` bytes; 1,432 in `vz.wad`):
 
 A group's waves may live in another bank's wavebank. `FUN_008369e0` refuses (plays nothing for) the
 groups whose sound id is `0xEA1343AA`, `0xC05D8686` or `0xBB8AE67D` unless the Pal global at `+0x78`
-holds `0xB6A13123`, the value `FUN_006067b0` sets in its default case (the switch reads
-`*DAT_01176018`; its other cases set `0x8AAAF243`, `0x8A8C7573`, `0xE687CC7D`, `0xC2197ABB`).
+holds `0xB6A13123` (`m2("english")`), the value `FUN_006067b0` sets for index 0 and in its default
+case (*The language hash*, above).
+
+A single-wave group's weight (`+0x3C`) is not read when its wave is picked: for form 0
+`FUN_0083d410` returns the wave at `+0x34` directly (decomp 633049–633051), and only the multi-wave
+pickers `FUN_0083d450` / `FUN_0083d5c0`, reached for form 1, read weights; `FUN_008369e0` copies
+only the wave's `[ref]` and `u16 [ref+4]` (`0x00836A68`, `0x00836A6D`) (PROVEN on the pick path;
+that nothing else reads it is INFERRED). It is 1.0 in every retail single-wave group
+(`single_wave_group_weight_is_one`: `vz.wad` 344, `English.wad` 12,181, `shell.wad` 161).
 
 **Cue** — every cue starts with this head:
 
 ```
 0x00  u32   cue guid = m2(cue name)
-0x04  u8x4  [0, form, limit, 0]; form 0 = single-track, 1 = multi-track. FUN_00834ad0 starts the
-            cue only while a u16 counter in the cue's runtime record (+4) is below `limit`, or when
-            `limit` is 0 (that the counter counts live instances is inferred)
+0x04  u8x4  [0, form, limit, 0]; form 0 = single-track, 1 = multi-track. +0x06 `limit` is the
+            start limit: the cue starts only while fewer than `limit` instances of it are playing,
+            or when `limit` is 0 (below)
 0x08  f32   gain (FUN_00835060 multiplies the cue's volume by it each frame)
 0x0C  f32   length in seconds, or −1 when the cue loops
 ```
@@ -568,8 +664,30 @@ Single-track form (form 0, exactly 24 bytes; 505 in `vz.wad`):
 ```
 0x10  u32  soundbank hash (the cue's own bank in every retail cue)
 0x14  u16  group index
-0x16  u16  unknown (0 in most cues; in others it holds values shaped like the high half of an f32)
+0x16  u16  no reader known (below); 0 in most cues, otherwise one value per bank shaped like the
+           high half of an f32
 ```
+
+**Cue `+0x06`, the start limit (PROVEN).** `FUN_00834ad0` (decomp 627053–627066) takes the cue's
+runtime record — `soundbank node[8] + cue index × 0x18` on the first loaded node with the bank's hash
+(`FUN_0082f960`) — and starts the cue only if the record's `f32` timer (`record[0]`) is ≤ 0 and
+either the limit is 0 or the `u16` counter at `record + 4` is below it. The counter counts live
+playing instances: `FUN_008354e0` adds one when an instance plays (decomp 627406, 627456) and
+`FUN_00835850` takes one away when it finishes (decomp 627565). When the play-probability draw
+drops a multi-track cue (§11.7 `+0x18`), `FUN_008354e0` calls `FUN_00835850`, which takes one away
+with no matching add (decomp 627426–627430). The timer is set at start from the multi-track cue's
+`+0x24` (§11.7); a single-track cue sets it from a zeroed default (`DAT_0198DAEC`). Census
+(`cue_start_limit_values`): `vz.wad` 0 ×920, 1 ×9, 2 ×47, 3 ×30, 4 ×30, 5 ×125, 7 ×4, 10 ×23,
+15 ×2, 20 ×8; `English.wad` 0 ×13,634, 1 ×2; `shell.wad` 0 ×265, 1 ×3, 2 ×2.
+
+**Single-track `+0x16`: no reader known (INFERRED).** `FUN_0083be80` returns `cue + 0x10` (the
+`{bank, u16 group, u16 +0x16}` reference); `FUN_008369e0` stores it at instance `+0x28`
+(`0x00836A05`) and passes it to `FUN_0082e7d0` / `FUN_0083d410`, which read only `[ref+0]` and the
+`u16 [ref+4]`. The only accesses to instance `+0x28` outside the vtables are that write and a clear
+at `0x00836BEE`. Census (`single_track_cue_word_16_values`): within a bank the non-zero value is one
+value (37 banks in `vz.wad`, 41 in `English.wad`); `vz.wad` 0 ×378 and `0x3D75`, `0x3DA3`,
+`0x3DB8`, `0x3DCC`, `0x3E99`, `0x3EB6`, `0x3ECC`, `0x3F19`, `0x3F33`, `0x3F80`, `0x3F81`;
+`English.wad` 0 ×11,985, `0x036E` ×1,627; `shell.wad` 0 ×187.
 
 Multi-track form (form 1; 693 in `vz.wad`, 800 across the three archives): specified in §11.7.
 
@@ -615,7 +733,7 @@ offset  type  field
 Record (36 bytes):
 
 ```
-0x00  u32   clip hash
+0x00  u32   clip hash: no reader known (below)
 0x04  u8x4  [0, channels (1 or 2), format, 0]; format = 2 (bytes per sample, PCM16) when
             embedded, 4 when streamed
 0x08  u32   sample rate
@@ -626,6 +744,16 @@ Record (36 bytes):
 0x20  u32   data offset: when embedded, RELATIVE TO THIS RECORD'S OWN START; when streamed, the
             byte offset in the .pws file
 ```
+
+**Record `+0x00`: no reader known (INFERRED).** `FUN_0082e790` computes a record's address (stride
+0x24) after matching the bank hash at wavebank `+0x04` (`FUN_0082e870`); `FUN_00837830` reads the
+record at `+0x05`, `+0x06`, `+0x08`, `+0x0C`, `+0x14`, `+0x18`, `+0x1C` and `+0x20`, not `+0x00`
+(`0x00837883`–`0x0083789F`, `0x00837AB7`–`0x00837AF4`); the wave init at `0x0083DAE0` stores the
+record pointer at wave `+0x14`, and no wave method reads it as data. Census
+(`wave_clip_hash_against_sound_id_and_cue_guid`, single-wave groups whose wavebank is in the same
+archive) — clip = the group's sound id / ≠ / clip = the guid of a cue that plays the group / ≠ /
+wavebanks repeating a clip hash: `vz.wad` 142 / 198 / 47 / 273 / 0, `English.wad` 11,472 / 709 /
+12,174 / 7 / 0, `shell.wad` 75 / 86 / 33 / 119 / 0.
 
 Embedded banks (93 in `vz.wad`, 2,043 clips):
 
@@ -640,7 +768,13 @@ Embedded banks (93 in `vz.wad`, 2,043 clips):
 
 Streamed banks (2 in `vz.wad`: `music` → `music.pws`, `ambience` → `ambience.pws`; `English.wad`'s
 `vo_stream` → `vo_stream.pws`) carry no blob area: the body ends at the end of the record table, and
-each record's `(offset, size)` addresses the `.pws` file.
+each record's `(offset, size)` addresses the `.pws` file. `FUN_0082e8f0` returns the `+0x18` name
+and `FUN_00837830` passes it to the stream interface `[0x011763F4]` (`0x00837A8B`–`0x00837AAF`); a
+null result fails the wave's creation. The name is the alias `Sound.OpenStreamFile(path, alias)`
+registers (INFERRED): retail Lua opens `<audio dir>\vo_stream.<language>.pws` under the alias
+`vo_stream.pws` (`_OpenFile`, `mrxsoundbanks.lua:96-107`). Census (`streamed_wavebank_names`):
+`vz.wad` `music` → `music.pws`, `ambience` → `ambience.pws`; `English.wad` `vo_stream` →
+`vo_stream.pws`; `shell.wad` `music` → `music.pws`.
 
 ### 11.6 Writing a bank
 
@@ -654,10 +788,13 @@ shape of retail `ui_PDA_Open_01_st`, cue 57 → group 70 of `ui_hud`):
 2. Write one sounddb entry `{m2(n), m2(N), i}` per cue, sorted ascending by guid; reject two cue
    names that hash alike.
 3. Lay out each table exactly as §11.3–§11.5 require, and wrap each per §11.1.
-4. Fields marked *unknown* or *(inferred)* are inputs. `ui_PDA_Open_01_st`'s values, for a UI sound
-   configured like the game's own: group `+0x10` 0.95 (`0x3F733333`), `+0x14` 0, distances 10 / 1000,
-   `+0x20` 1.0, exponent 1.0, Doppler scale 1.0, gain `0x3F21866C` (≈ 0.631), `+0x30` 0.0, weight 1.0; cue
-   `+0x06` 0, gain `0x3F004DCE` (≈ 0.501), `+0x16` 0; sound id and clip hash both `m2(cue name)`.
+4. Every other field is an input the author declares, with no default: group `+0x00` sound id,
+   `+0x10` priority, `+0x14` positional, `+0x18` / `+0x1C` distances, `+0x20` (no reader known),
+   `+0x24` exponent, `+0x28` Doppler scale, `+0x2C` base volume, `+0x30` base pitch; cue `+0x06`
+   start limit, `+0x08` gain, single-track `+0x16` (no reader known); wave record `+0x00` clip hash
+   (no reader known). The derived fields are the category hash (`m2(c)`), group `+0x08` = 0, the
+   forms, the wave reference (weight 1.0, which the engine does not read for a single-wave group),
+   the cue's `{bank, group}`, the cue length, the record's audio fields and the sounddb.
 
 A writer MAY also author multi-wave groups (the multi-wave form, a selection mode 0–2, at least one
 wave) and multi-track cues (§11.7: every sound's slot below the cue's slot count, at least one entry,
@@ -679,7 +816,10 @@ Every offset is relative to the cue's start; the engine reads the structure in p
 0x16  u16  0
 0x18  f32  play probability: FUN_008354e0 draws r once (§11.8) and plays the cue only if this ≥ r
 0x1C  f32  loop start       0x20  f32  loop end (§11.9)
-0x24  f32  unknown (FUN_00834ad0 loads it into the cue's runtime timer on each start)
+0x24  f32  retrigger cooldown: FUN_00834ad0 loads it into the cue's runtime timer on each start,
+           FUN_0082e310 (from the cue walk FUN_0082ee60, decomp 622094–622108) subtracts the frame
+           time each frame, and the cue cannot start again while the timer is above 0 (§11.4,
+           start limit; PROVEN from the decomp, seconds INFERRED)
 0x28  u32  event records (= 0x44)          0x2C  u32  event offset table
 0x30  u32  track records                   0x34  u32  track offset table
 0x38  u32  parameter hashes
@@ -1097,6 +1237,140 @@ when there is none, and returns no value. Over the 1,198 `vz.wad` cues with ever
 child cue); the two that carry kind 9 (`0xD8CE1427`, `0xF23B9836`) play with their waves' filters
 attached and mix audibly — asserted in `tests/retail_banks.rs` — and the other 186 do not resolve
 (§11.2). With `English.wad`'s wavebanks also resident, all 1,019 play.
+
+### 11.10 Where banks are loaded
+
+A bank's tables are read only once Lua loads the bank, and each level WAD runs its own Lua VM, so
+where a bank is loaded is a property of the level and the session. The call sites below are the
+decompiled corpus's (`crates/mercs2_script/corpus/mercs2-luacd/src`); the corpus scan and the
+carrier census are tests in `mercs2_quartermaster` (`the_sound_load_sites_are_the_corpus_calls`,
+`the_carried_soundbanks_against_the_retail_load_sites`).
+
+**The front end (`shell.wad`) — PROVEN.** `MrxSound.EnterShellState` (`shell/mrxsound.lua:5-15`)
+loads `ui_shell`, `ui_hud` and `music` (soundbank and wavebank each, with one batch callback,
+`_StartShellMusic`) after `_LoadRequiredAssetsCommon`. `ExitShellState` (`:17-27`) unloads them.
+`EnterShellState` is called from `MrxGuiShell._OpenShell` (`shell/mrxguishell.lua:505`), which runs
+when the `Shell` game state is entered (`HandleGameStateChangeEvent`, `:211-221`), requested by
+`MrxGuiShellBootstrap.ShellScreenLoaded` (`shell/mrxguishellbootstrap.lua:67-70`). `ExitShellState`
+is called from `_CloseShell` (`shell/mrxguishell.lua:589`) and from
+`MrxSoundShellBootstrap.ExitShell` (`shell/mrxsoundshellbootstrap.lua:98-100`), which `ShellBootstrap`
+runs on the way out of the shell (`shell/shellbootstrap.lua:111-121`). These are the only bank-load
+calls among the shell's 28 scripts, and `shell.wad` carries exactly these three soundbanks.
+
+**Gameplay (`vz.wad`) — PROVEN for the call sites.** `MrxSoundBootstrap.LoadBanks`
+(`resident/mrxsoundbootstrap.lua:192-246`, from `Init`, `:108`) loads 11 soundbanks by name —
+`ambience`, `amb_birds`, `collision_shared`, `destruction_shared`, `fol_shared`, `veh_shared`,
+`wpn_shared`, `building_destruct`, `veh_support`, `music`, `ui_hud` — the wavebanks (`amb_shared`
+and `vo_stream` wavebank-only; the `building_destruct` soundbank's wavebank is spelled
+`bulding_destruct`), and the `vo_*` soundbanks, localized. `ExitGame` (`:188-190`) calls
+`UnloadBanks` (`:248-302`); `vz`'s `ResetSingleton` calls `MrxSoundBootstrap.ExitGame()` on the way
+out of the game (`vz/xQ!L.lua:612`). Briefings and starters load their `vo_*` banks by name from
+data tables through `LoadTempBank` (`resident/mrxbriefing.lua:510`, `resident/mrxstarter.lua:452`;
+the tables in `vz/wifbriefingdata.lua`, `vz/wifstarterdata.lua`, `resident/mrxhq.lua:69-76`,
+`vz/wifpmcinterior.lua:95`). `vz.wad` carries 76 soundbanks: the 11 above, `ui_shell`, and 64 that no
+Lua in the corpus names in a load call; the engine loads those 64 by name (§11.11).
+
+**`ui_shell` in `vz.wad` — the call site PROVEN, its reach INFERRED.** `vz.wad` carries `ui_shell`
+(`vz.wad#3525`, byte-identical to `shell.wad#35`, [`wad_duplicate_inventory.md`](../fixpack/wad_duplicate_inventory.md))
+and, in its resident block, the same `mrxsound.lua` and `mrxguishell.lua` as the shell. Across the
+corpus, `EnterShellState` has exactly two callers, `resident/mrxguishell.lua:505` and
+`shell/mrxguishell.lua:505`. In `vz`, the `Shell` widget exists only once
+`MrxGuiShellBootstrap.EnterShell` / `LoadShell` (`resident/mrxguishellbootstrap.lua:55-83`) loads
+its layout; their callers are `GameBootstrap.Start` (`resident/gamebootstrap.lua:58-75`) and
+`ClosePrecacheOnLoad` (reached from `LoadPrecache`, which no `vz` or resident script calls).
+`GameBootstrap.Init` returns before `Start` when `Sys.FinishedShell()` is true
+(`resident/gamebootstrap.lua:43-46`); `Sys.FinishedShell` (`0x005E54C0`) returns
+`DAT_01175A72 != 0`, which `FUN_004BC6D0` sets to 1 in its state 1 (decomp 96533) and to 0 in state 8
+when `DAT_01175A84 == 1` (decomp 96642); no static write to `DAT_01175A84` is in the decomp. A
+vanilla menu-to-game run logs `##@ GameBootstrap - bailing because finished shell`
+([`dlc_pc_activation_checklist.md`](../dlc_pc_activation_checklist.md)). No gameplay path calls
+`EnterShellState`: the pause menu's quit is `Sys.RequestGameState("unloading")` then
+`Net.QuitGame()` (`resident/mrxguipausescreen.lua:403-404`), and the return to the menu is a level
+swap to `shell` (`FUN_004C1280`). So `ui_shell` is loaded in the front end; the `vz` level reaches
+its own copy of `EnterShellState` only on a boot that enters `vz` with `Sys.FinishedShell()` false
+(INFERRED; whether a retail boot does is UNPROVEN).
+
+**The swap.** Only one of `shell.wad` and `vz.wad` is mounted at a time
+([`wad_duplicate_inventory.md` §B.5](../fixpack/wad_duplicate_inventory.md)). The script host is
+created and closed by the subsystem toggle `FUN_004C0730`
+([`scripting_host_binding_code_map.md` §1.5](scripting_host_binding_code_map.md#15-vm-lifetime)),
+so each level's Lua state, and any table a loader keeps in it, starts fresh (INFERRED). Whether the
+Pg bank manager's slots (`[0x01175F9C]`, 65 slots) survive `FUN_005FAB20` / `FUN_004BF8C0` across
+the swap is UNPROVEN. A load of a bank that is loaded only registers the callback (§11.2), so a
+loader that loads again after a swap costs nothing.
+
+**No failure report.** `MrxSoundBanks` keeps one batch callback (`_funcBatchComplete`,
+`mrxsoundbanks.lua:10-36`): a load or unload given a callback replaces the caller's. Its completion
+handler `_FlagAssetOpComplete` takes no argument (`:141-152`), `Sound.LoadBankWithCallback`
+(`FUN_005E2BF0`) hands the request to `FUN_006026C0`, and the callback fires with no success flag,
+also after the 20.0 timeout of a name no mounted WAD holds (§11.2). Lua cannot tell a failed load
+from a loaded one, and no `Sound` binding reports whether a bank is loaded (the 88 entries of the
+table at `0x00B98C98`).
+
+### 11.11 The banks the engine loads: `SoundEffect`
+
+The 64 soundbanks of `vz.wad` that no Lua load call names — 38 `veh_*` and 26 `wpn_*` — are
+loaded by the engine, by name, from the `SoundEffect` ECS component. The census is
+`sound_effect_names_the_engine_loaded_banks` (`mercs2_quartermaster`, `retail` feature).
+
+**Packaging — PROVEN (census).** Each of the 64 has exactly one soundbank, one sounddb and one
+wavebank row under `m2(<bank>)`, all three naming one block (`blocks\VZ\<bank>_P000_Q3.block`), and
+every one of the 64 wavebanks embeds its waves (none streams). `shell.wad` carries none of them.
+
+**The component — PROVEN (census).** `SoundEffect` (m2 `0xB40954F5`, descriptor base
+`0x017BDFD8`, [`mercs2-ecs/05_presentation_audio_fx.md`](../mercs2-ecs/05_presentation_audio_fx.md))
+is a `COMP` of `vz.wad`'s one world-entity container that carries it (type hash `0x5647C35D`,
+ASET type 17). Its `schm` gives a 0x1C-byte payload of seven fields:
+
+| word | byte | field hash | schm type | meaning |
+|---|---|---|---|---|
+| 0 | 0x00 | `0x2EB62242` | U32 | *unknown* (below) |
+| 1 | 0x04 | `0xC43322C3` | F32 | *unknown* |
+| 2 | 0x08 | `0x29F15442` | F32 | *unknown* |
+| 3 | 0x0C | `0x4E97DE03` | Ref | *unknown* |
+| 4 | 0x10 | `0x14A67FA6` | U32 | the soundbank name hash, `m2(<bank>)`; 0 for none |
+| 5 | 0x14 | `0xD932985B` | F32 | *unknown* |
+| 6 | 0x18 | `0x11957817` | Ref | *unknown* |
+
+The `data` chunk is grouped: `[u32 n][n × u32 entity key][7-word payload]`, repeated. In `vz.wad`
+it is 1,080 groups over 2,754 entity keys, and the groups consume its 11,394 words exactly. Word 4
+names 63 of the 64 banks and no bank retail Lua loads. The entities are vehicle and weapon
+templates (by the `Name` component: `veh_jeep` on `M151 (Base)`, `wpn_pistol` on `Pistol`).
+`wpn_grapplegun` is named by no payload: the `Grapple` template's word 4 is 0. Three payloads'
+word 4 is not a soundbank `vz.wad` carries: `0x38BBF29A` = `m2("wpn_heavyatmissile_fire")`, a cue
+name (the `AT Missile`, `Vehicle AT Missile (Hellfire)`, `AT Missile (CH)` and `FA Missile`
+templates), and `0x07ED495F` (`_outskirt_bld_market04`) and `0xF3B81041` (`DLC_50cal`), which name
+nothing known.
+
+Word 0 is *unknown*: of the 1,080 payloads, 14 carry 0; of the other 1,066, 81 equal the guid of a
+cue of some `vz.wad` soundbank, never one of the bank word 4 names, and 985 match no cue guid or
+sounddb entry of `vz.wad` (measured with a one-off scan of this run, not a committed test).
+
+**The request — PROVEN for the call sites.** `FUN_005FF140` (`0x005FF1C8`–`0x005FF1E2`) and
+`FUN_005FF230` (`0x005FF4ED`–`0x005FF505`) each look the entity's `SoundEffect` up
+(`mov ecx, 0x17BDFD8`; `call 0x005857E0`), read word 4 (`mov eax, [eax+0x10]`), and, when it is
+non-zero, call `0x006022B0` with it and the Pg bank manager `[0x01175F9C]` (§11.2). `0x006022B0` is
+relocated into `.securom` (`0x006022B0` `jmp [0x0245DBC4]` → plaintext `0x028BF000`); its body there
+calls `0x00602060(bank, 0x9F8BCA10)` (`push 0x9F8BCA10` at `0x028BF020`) and
+`0x00602060(bank, 0xF753F6D0)` (`push 0xF753F6D0` at `0x028BF03F`), between an
+`EnterCriticalSection` and a `LeaveCriticalSection`: the soundbank and the wavebank of that name. The sounddb, which
+`LoadSoundBank` also requests (§11.2), is not among them, so these banks' cues are not routed by
+name through FindCue from this load. `FUN_005FE880` calls both functions (`0x005FE909`, `0x005FEBCA`,
+`0x005FEC28`), and `FUN_005FF230` calls `FUN_005FF140` (`0x005FF51E`).
+
+**When — INFERRED.** The callers run on the local player's equipment changes (`FUN_005FF140`) and
+seat changes (`FUN_005FF230`, `FUN_005FE880`); these trigger meanings are read off the call
+structure, not traced to their events. So an override of one of these banks changes what the engine
+loads for the local player's own weapon or vehicle (INFERRED); AI units are INFERRED to be
+unaffected, as these requests come from the local player's changes. Callers of `0x006022B0` other
+than the two above are not enumerated, and whether another path loads these banks for other units
+is UNPROVEN.
+
+**Shared waves — PROVEN (census).** Over every group of every soundbank in `vz.wad`, `shell.wad`
+and `English.wad`, `veh_largedieselold` and `veh_largedieselnew` play waves of
+`veh_largegasold`'s wavebank; no other soundbank plays a wave of another of the 64 banks'
+wavebanks (`no_other_soundbank_plays_an_engine_loaded_banks_waves`). A writer that changes one of
+these wavebanks keeps every retail wave at its index.
 
 ## Provenance
 

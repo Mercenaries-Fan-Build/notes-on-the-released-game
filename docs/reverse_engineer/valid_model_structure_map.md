@@ -70,7 +70,7 @@ GEOM                         geometry container
   MESH                       (one per LOD / group — hqsuites has 2)
     INFO
     PRMG                     primitive group
-      INFO                   PRMG bounds (center/radius/min/max) + group hash
+      INFO                   vertex shaders (+0x0C main, +0x10 shadow) + bounds (center/radius/min/max)
       STRM                   vertex stream
         info                 [flag=4][stride][vcount]
         decl                 vertex declaration (element table)
@@ -147,6 +147,17 @@ material. Whether a later `MtrlRepoint` pass masks this is NOT yet checked. The 
 See `tools/wad_simulator/crates/mercs2_formats/src/model_build.rs` for the
 from-scratch attempt; treat those layouts as **hypotheses**, not authority — the
 authority is a real container's bytes at the same tree position.
+
+**PRMG INFO `+0x0C` and `+0x10` are the group's vertex shaders**, not a group hash and a pad: the
+main and the shadow vertex shader, each `pandemic_hash_m2` of a registration name. `MESH` and
+`TINY` groups carry a 60-byte `INFO`, `SKIN` groups a 56-byte one, with the same two words. The
+group loaders (`FUN_00478270` / `FUN_004796f0`) look them up in the vertex registry
+(`0x0197de48`, `FUN_008242b0`). Every one of the 57,083 model groups in `vz.wad` names a vertex shader
+the retail registry registers in every configuration (**PROVEN**, game-gated test
+`every_retail_material_and_group_key_is_registered_everywhere`). `model_build.rs` writes the model
+hash at `+0x0C` and 0 at `+0x10`, neither a registered vertex shader. The model's top `INFO` holds
+its material count at `+0x24` (the `MTRL` records fill the leaf exactly, 3,007 of 3,007 retail
+models).
 
 ### CSUM
 `"CSUM"` tag then `crc32_mercs2` over everything through the tag (inclusive).

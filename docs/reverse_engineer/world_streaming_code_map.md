@@ -390,6 +390,138 @@ pointing at it, read `+4` = cfunc VA. **The walk reproduces the population doc's
 
 ---
 
+## 4.5 TINY stand-ins: one far-distance model per 200 m cell of a layer
+
+A **TINY stand-in** is a model that draws, from far away, the world objects of one 200 m cell of one
+layer, each object's part shown while the object is intact or while it is ruined. A
+`TinyGeometryObject` placement loads it. Retail places **1,208**, in 340 layers: the `vz_*_tiny`
+satellites of `layers_static` and the `vz_state` layers. The container format is decoded in full in
+`mercs2_formats::tiny_model` (all 1,208 round-trip byte for byte); the Shipment kind that writes one is
+[`add_tiny_geometry`](../modding/manifest_format.md#add_tiny_geometry). Grades: **PROVEN** = read in
+the disassembly or the data this pass; **INFERRED** = reasoned from what was read.
+
+### The slot list (PROVEN)
+
+The container's top-level `TINY` chunk is `u32 N`, then `N` world-object GUIDs ascending. A vertex's
+`POSITION.w` (FLOAT16_4) is a **slot**: an index into that list and into the container's
+`ObjectIDScaleArray` floats, whose entry is the object's state. Retail slots are integers below `N`,
+the same on a triangle's three vertices (all 2,547 groups), and a group may hold several (1,480 do).
+
+| state | meaning | drawn by |
+|---|---|---|
+| 1 | intact, drawn | `PgMeshTinyVP` (and its shadow shaders) |
+| 2 | intact, hidden | — |
+| 3 | ruined, drawn | `PgMeshTinyVP_Ruin` |
+| 4 | ruined, hidden | — |
+
+### The registry (PROVEN)
+
+The manager singleton is `0x01535A68` (`PTR_PTR_00ED56F8` points at it; vtable `0x00BB3678`),
+initialised by `0x0050F1B0` with a capacity of `0x578` = **1,400** slot lists at `+0x15F8`.
+
+- **`0x0050F260` registers a container's list** (reached from the relocated fragment at `0x0246238D`).
+  At capacity (`+0x15F4 ≥ +0x15F8`, `0x0050F26C`) it returns without registering. It allocates a
+  0x14-byte record `{+0 next, +4 container key, +8 u8 count, +9 u8 drawn count, +C GUIDs, +10
+  floats}`, stores the stream's `u32` count **as a byte** (`0x0050F42B`), reads `count × 4` bytes of
+  GUIDs, allocates `((count + 3) & ~3) × 4` bytes of floats, sets each slot to 2.0 and has
+  `0x0050FBA0` evaluate it.
+- **`0x0050FBA0` evaluates a slot** from its GUID's components: drawn when its `SceneObject` lacks
+  flags `0x3000` (or a second component's `+0x28` is at most 0.99990), ruined from `RuntimeHealth` /
+  `Health`; it ends in `0x0050F5E0` and `0x0050F6B0`.
+- **`0x0050F5E0` sets drawn or hidden** (`dl`) keeping intact/ruined: 1↔2, 3↔4. It moves the record's
+  drawn count (`+9`) and calls `0x0050F9E0(key, 1)` when the count leaves 0 and `(key, 0)` when it
+  returns to 0. **`0x0050F6B0` sets ruined or intact** (`ecx`) keeping drawn/hidden: 1↔3, 2↔4.
+- **An object's state change reaches its stand-ins through its cell.** `0x0050F730` (drawn, from
+  `0x00466ABE`, `0x005B05E9`, `0x006695B1`, `0x006695C8`) and `0x0050F7E0` (ruined, from
+  `FUN_005234F0` at `0x0052373A`, the object-destroyed path) read the object's position
+  (`0x00665AF0`), take its cell's chain of registered lists, and search each:
+  `0x0050F530` / `0x0050F590` are VM stubs whose relocated bodies at **`0x004ADF40`** and
+  **`0x00515BA0`** **binary-search** the list (`mid = (lo + hi) >> 1`, signed bounds, unsigned
+  compare) and call `0x0050F5E0` / `0x0050F6B0` on the slot found. So the list must be ascending, and
+  of two equal neighbours the search stops at the one it probes first.
+
+The cell index is `(trunc(z/200) − zmin) · width + (trunc(x/200) − xmin)` (`0x0050F75F`: `cvttss2si`,
+then a signed divide by 200), with the bounds in the manager at `+0x1600`..`+0x1610` (PROVEN for the
+arithmetic). Because `trunc` folds (−200, 200) into one index on each axis, a stand-in at its cell's
+centre and the objects inside its cell share an index, but an object exactly on the low edge of a cell
+with negative coordinates lands in the index below (INFERRED from the arithmetic; the extents are
+read from `0x0179C7BC`..`0x0179C7D0` and were not read live).
+
+### The grid and the placement (PROVEN on the data)
+
+The stand-ins sit on a 40 × 40 grid of 200 m cells: `col = floor((x + 4000) / 200)`, `row =
+floor((z + 4000) / 200)`, and each `TinyGeometryObject` placement is at its cell's centre
+`(−3900 + 200·col, 0, −3900 + 200·row)`, unrotated (1,204 of 1,204 named). The model is named
+`<layer>_tinygeometry_tgr<row>_tgc<col>_0x<key>`, `key` being the placement's entity key; the
+placement's `Name` is `tinygeometry_tgr<row>_tgc<col> 0x<key>`. A slot's object lies in the same cell
+(6,097 of 6,098), matched by GUID. 2,684 slot objects are placements of the stand-in's own layer;
+3,414 are placements of other layers, those of the `vz_*_tiny` satellites (3,312) and of three
+`vz_state_*_tg…` layers (102).
+
+Every TINY placement lives in the layer's own sub-block, in the ascending key order of its `Name`,
+`ModelName`, `Transform` and `flgs` records, and carries the `flgs` state with **bit 111** (byte 13,
+`0x80`) alone (1,208 of 1,208; 55 placements of other models carry bit 111 too). There is no
+`TinyGeometryObject` COMP in those layers. Retail's stand-in keys came from one pass of the world
+editor's GUID counter, layer by layer: the band `0x0014399B`..`0x00144F24` holds the 1,208 and no
+other placement, above every other key below `0x10000000`; nothing in the data derives them.
+
+`FUN_006696A0` realises a placement: when the entity has a `TinyGeometryObject` component
+(`0x005857E0` with descriptor `0x017BC458`, at `0x00669769`) it allocates a 0x1F0-byte renderable,
+constructs it with `FUN_00477D10(model)` and links the container's list into the cell at the
+entity's position (`0x0050FAC0(mgr, [model + 4])`, `0x006697A6`).
+
+### The renderable (PROVEN, one step INFERRED)
+
+`FUN_00477D10` stores the model at `+0x1E0`, zeroes `+0x1E4` and `+0x1E8`, and calls `0x0050F4E0`
+(`jmp [0x02459D20]` → VM stub `0x024EC650`) with `edx` = the manager (`0x0050F930`), `edi` = the
+model's key `[model + 4]` and the addresses of `+0x1E4` and `+0x1E8`. The stub's relocated body is
+**`0x0068B9A0`**: it walks the manager's records for `[rec + 4] == key` and writes the record's byte
+count (`+8`) to `+0x1E4` and its floats pointer (`+0x10`) to `+0x1E8` (`0x0068B9E7`..`0x0068B9F8`);
+with no record both stay 0. That `0x0068B9A0` is the body the stub reaches is INFERRED: nothing
+references it statically, as with every VM-reached body, and its register contract (`edx`, `edi`, two
+stack arguments, `ret 8`) and its writes are the stub's; it is the only code in the image that reads
+a record's `+8` byte and `+0x10` pointer together.
+
+### The draw (PROVEN)
+
+The renderable's two passes, `0x00477F00` (vtable `+0x1C`) and `0x00477FC0` (`+0x18`), walk the
+model's draw records (`[model + 0x54]` of them at `[model + 0x58]`; each record's `+4` is a group
+count and `+8` the groups, stride 0x1C4: the `GEOM` sub-objects, INFERRED from the layout). For
+record `i` they set `record + 0x14` = `+0x1E8 + 4·((i >> 1)·200)` and `record + 0x10` =
+`+0x1E4 − (i >> 1)·200`, clamped to 200 by an unsigned compare, and call `0x0047AA20` /
+`0x0047A860`. Those emit command 2 (`{2, register, pointer, count}`) with the register the binder
+`FUN_0085AFF0` resolved for `ObjectIDScaleArray` (`+0xFC`, via `0x0085B16D`) and `count` capped at
+the constant's register count (`+0x100`, written by `0x0085AC7B` from `GetConstantDesc`); command 2
+runs `SetVertexShaderConstantF(register, pointer, count)` (`FUN_00856760` case 2 → `0x00748E00`).
+`ObjectIDScaleArray` is `c0`..`c199`, 200 registers, in all six TINY vertex shaders.
+
+- **The count is slots, the call takes registers.** `count` is the list's slot count `N` and the call
+  uploads `N` registers, `16·N` bytes, from an allocation of `4·((N + 3) & ~3)`: every TINY draw
+  reads up to `12·N + 12` bytes past the floats. The shader reads slot `w` from register `w / 4`, so
+  every slot below `N` comes from the allocation and the over-read reaches no vertex: harmless to
+  what is drawn. It would fault only if the allocation ended within that distance of an unmapped
+  page (SPECULATIVE; not seen).
+- **Records 2 and up read a second window.** `(i >> 1)·200` moves records 2 and 3 to slot 200 on;
+  with `N` below 200 the subtraction wraps, the clamp makes it 200, and the pointer starts 800 bytes
+  past the floats: a latent over-read of 3,200 bytes. Every retail container has at most two draw
+  records (one intact, one ruined: 1,208 of 1,208), and so does every container `add_tiny_geometry`
+  builds, so neither runs past records 0 and 1. The byte count caps `N` at 255, so records 0 and 1
+  cover every slot.
+
+### The shaders (PROVEN, by running the bytecode)
+
+`PgMeshTinyVP` and `PgMeshTinyVP_Ruin` and the four shadow shaders compute `index = trunc(w / 4)`,
+`c = w mod 4` and read `ObjectIDScaleArray[index]`: component `x` for `c = 0`, else through two
+`lrp`s, which give `y` for 1, `z` for 2 and **`2·w − y` for 3**. The vertex is kept (its position
+multiplied by 1, else by 0) when that value is 1 (intact shaders) or 3 (`_Ruin`). Interpreted over
+every combination of a register's four states, in `shader3.bin` and `shader3Low.bin`
+(`tests/tiny_retail.rs`), slots `≢ 3 (mod 4)` read their own state, and a slot `≡ 3` shows exactly
+when twice its state minus its neighbour two below is the role's value: an intact object beside a
+hidden one disappears, a hidden one beside a ruined one can show its ruin. Retail places objects at
+such slots (436 of 1,208 stand-ins); `add_tiny_geometry` keeps every object off them.
+
+---
+
 ## 5. Confirm-live inventory (x32dbg, read-only while PAUSED — [[x32dbg-mcp-no-resume]])
 
 **Orchestration**
@@ -430,6 +562,17 @@ pointing at it, read `+4` = cfunc VA. **The walk reproduces the population doc's
     Ghidra had no static caller to walk from, not that the body is missing — see
     `ghidra_knowledge_inventory.md` Part F.4.
 12. PC death-distance constants — confirm the Xbox 50²…400² table against `FUN_00500ac0`/`FUN_005007d0`.
+
+**TINY stand-ins** (§4.5)
+13. **`+0x1E4` / `+0x1E8` come from `0x0068B9A0`.** Break at `0x0068B9E7` (the found branch) and at
+    `0x00477D60` (after `0x0050F4E0` returns). At `0x0068B9E7`: `ecx` is the record; note `[ecx+4]`,
+    `byte [ecx+8]`, `[ecx+0x10]`. At `0x00477D60`: `esi` is the renderable; `[esi+0x1E4]` and
+    `[esi+0x1E8]` equal those two, and `[[esi+0x1E0]+4]` equals `[ecx+4]`.
+14. **The slot states.** With a stand-in's cell in view, break at `0x0047AA65` (and `0x0047A8A5`):
+    `[edi+0x14]` is the floats, `[edi+0x10]` the count, `[ebx+0xFC]` the register (0) and
+    `[ebx+0x100]` 200. Dump the floats: each slot 1 to 4. Destroy one of the cell's objects: break at
+    `0x00515BD7` (the ruined setter's found branch, `eax` the slot), then at `0x0050F6B0`: the float
+    goes 1 → 3, and at the next `0x0047AA65` the dump shows it.
 
 ---
 

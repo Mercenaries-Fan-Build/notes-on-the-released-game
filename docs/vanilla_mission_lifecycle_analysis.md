@@ -350,11 +350,11 @@ end;
 
 | Function | Mechanism | Env | Loading |
 |----------|-----------|-----|---------|
-| `import(m)` | `_SYS._IMPORT(caller_env, m)` | Caller's fenv | Synchronous, scripts_vz only |
+| `import(m)` | `_SYS._IMPORT(caller_env, m)` | Caller's fenv | Synchronous; looks the script up by `{hash of m, script type 0x42498680}`, with no block or WAD in the key (`FUN_005AE2D0`) |
 | `dynamic_import(m, cb, data)` | `_SYS._DYNAMIC_IMPORT(caller_env, m, cb, data)` | Caller's fenv | **Async, any loaded WAD block** |
 | `inherit(m)` | `_SYS._INHERIT(caller_env, m)` | Caller's fenv | Synchronous, copies exports |
 
-**`dynamic_import` is the only function that can load scripts from non-scripts_vz blocks** (like block 464 where DLC contracts live). The game log confirms it's used: `"Dynamically imported module MrxTask"`.
+`import` resolves a script in any loaded block: the shell's 28 scripts, all in `blocks\Shell\resident_P000_Q3.block`, import one another, and so do `vz.wad`'s resident modules ([`scripting_host_binding_code_map.md` §1.3](reverse_engineer/scripting_host_binding_code_map.md#13-module-system-importinheritdynamic_import--the-_sys-table), PROVEN for the key). `import` returns at once; a module whose block is not loaded is `dynamic_import`'s case, which completes through a callback (INFERRED). DLC contracts (block 464) load through `dynamic_import`; the game log confirms it is used: `"Dynamically imported module MrxTask"`.
 
 ---
 

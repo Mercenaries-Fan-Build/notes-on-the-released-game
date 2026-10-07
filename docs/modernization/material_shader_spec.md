@@ -68,14 +68,20 @@ offset  size          field
     type_hash=0xF011157A, resolved_ptr:u32 }`. `0xF011157A` is `TEXTURE_TYPE_HASH` —
     each slot is a deferred **texture** asset reference resolved by the streaming system.
   - unused slots (i..10) are zero-filled.
-- If `flags & 0x200`: binds one extra **environment/dynamic** texture at `p1+0xA4`
-  from a global registry (`FUN_008242b0(0x100)`), not from the record.
+- If the runtime `flags & 0x200` (on-disk `0x100`; `FUN_0084ee70` moves bits `0x780` up one): binds
+  one extra texture at `p1+0xA4`, not from the record: the texture asset hash
+  `[[0x00dfc2f8]+0x2cf0]`, typed `0xF011157A` (decomp of `Mtrl_Parse`, the block after the texture
+  loop). `FUN_008242b0(0x100)` there only finds and releases the handle a previous bind left. The
+  five retail materials with on-disk `0x100` are all `PgDiffRefractNormFP` (**PROVEN**), so this is
+  the refraction source texture (**INFERRED**).
 
 **Slot semantics (index → role):** slot 0 = **diffuse (albedo)**, slot 1 = **specular /
 gloss**, slot 2 = **normal map**, slots 3+ = extra maps (detail/env/mask). This ordering
 is the project's working convention (`material_probe.py`, `tools/ucfx_mesh_codec.py`
-docstring). Characters are typically `tex_count = 3` (diffuse+spec+normal). The extra
-`flags&0x200` slot is a cube/env map. **For the minimal renderer, bind slots 0–2.**
+docstring). Characters are typically `tex_count = 3` (diffuse+spec+normal). For a
+`PgDiffEmis*` material slot 1 is the **emissive** map (**INFERRED**: those materials carry zero
+preamble words 4–6 and non-zero words 10–12). The extra runtime `flags&0x200` texture is the
+refraction source (above). **For the minimal renderer, bind slots 0–2.**
 
 ### 1c. Preamble float params (offsets into the runtime struct, `p1`)
 
@@ -122,7 +128,7 @@ Notes / fidelity:
 - **Tangent-space normal mapping is the load-bearing effect** — getting the TBN right
   (from the DEC3N tangent) is what makes the character read as lit/detailed rather than
   flat (memory `dec3n-tangent-layout-bug`: wrong tangent → ~125° error → "mangled").
-- The real engine adds shadow-buffer shadows, env/cube reflection (`flags&0x200`), rim,
+- The real engine adds shadow-buffer shadows, the refraction source (runtime `flags&0x200`), rim,
   and HDR tonemap. **All optional for faithful-enough.** Start with diffuse+normal+one
   directional light; add spec + fresnel next; env/shadows last.
 - Vertex COLOR (bgra8) is usually white for characters — multiply in if present.
@@ -250,7 +256,7 @@ white); `spec_intensity` ← MTRL prop[17]; `spec_power` ← MTRL prop[16] (clam
 2. Add directional `NdotL` using vertex normal → confirms normal decode.
 3. Add normal map + TBN (slot 2) → confirms tangent decode (the `dec3n` correctness gate).
 4. Add spec + fresnel (slot 1 + preamble) → material completeness.
-5. Later: skinning (BLENDINDICES/WEIGHT + bone matrices), shadows, env/cube (`flags&0x200`), HDR.
+5. Later: skinning (BLENDINDICES/WEIGHT + bone matrices), shadows, refraction (runtime `flags&0x200`), HDR.
 
 ---
 

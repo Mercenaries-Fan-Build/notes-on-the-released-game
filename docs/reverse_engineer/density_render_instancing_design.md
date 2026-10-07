@@ -154,11 +154,16 @@ Per the **no-destructive-replacements** mandate, patched shaders ship as **new**
 overwriting a shipped `.sho`:
 
 - **Route 1 — new `.sho` variants + registration.** Emit the patched blob as an additive shader,
-  register it beside the original. Static props register through `FUN_0084f130`
-  (`register(name, name.sho, lod)`); veg is *not* in that registry — its four programs live in the
-  data table at **0x0143b460** (`{class-vtable, name-hash, program handle, inline .sho name}`), so
-  for veg we redirect the **program handle** field of the record for the tagged pass to our instanced
-  program. Select our variant for tagged draw-classes only; everything else keeps stock.
+  register it beside the original. Static props and vegetation both register through `FUN_0084f130`,
+  each registration being `FUN_0085ac90(record, name, name.sho, class)` with the class argument the
+  light class on PC. Veg's six records are registered by the billboard-tree island (`0x004a0bb0`
+  `jmp [0x0245f024]` → `0x006188b0`): `PgBillboardTreeVP` `0x0143b460`, `PgBillboardTreeFP`
+  `0x0143b7c0`, `PgBillboardTreeVP_fade` `0x0143b6a0`, `PgBillboardTreeFP_fade` `0x0143b8c8`,
+  `PgBillboardTreeShadowVP` `0x0143b9d0`, `PgBillboardTreeZPassVP` `0x0143bc10` (**PROVEN**,
+  disassembly). Each is a static registry record (vtable, key `+4`, u16 index `+8`, `.sho` `+0x0B`,
+  D3D handle `+0x110` for a vertex shader, `+0xF8` for a pixel shader), so for veg we redirect the
+  **D3D handle** field of the record for the tagged pass to our instanced program. Select our variant
+  for tagged draw-classes only; everything else keeps stock.
 - **Route 2 — d3d9 shader-replacement shim (3DMigoto-style).** A thin D3D9 wrapper (the ecosystem is
   already reviewed in `docs/external_tools_review.md §5`) hashes each `CreateVertexShader` blob and
   substitutes our patched bytecode by hash at load. This **decouples the shader crux from exe
@@ -300,7 +305,7 @@ Ranked coldest→hottest (hook cold, never hot):
 | Consumer coalescer | `FUN_00854b38` | per-bucket (warm) | **Rust-replaced body (ASI)** | Tier B collapse runs → 1 DIP |
 | Vertex-decl for stream-1 | `FUN_0074d6d0`/`FUN_00856360`/`FUN_00752b30` | setup (cold) | call existing builders | append per-instance elements |
 | Stream-freq emit | `FUN_00752a50` / opcode 0x13 `FUN_007513f0` | per instanced DIP (warm) | **use as-is** (already wired) | HW instancing, no new import |
-| Shader delivery | table `0x0143b460` (veg) / `FUN_0084f130` (props) / d3d9 shim | load-time (cold) | additive register / shim | bind §2 instanced VS |
+| Shader delivery | billboard-tree records `0x0143b460`… (veg, handle `+0x110`) / `FUN_0084f130` registrations (props) / d3d9 shim | load-time (cold) | additive register / shim | bind §2 instanced VS |
 | DIP choke | `FUN_007512f0` | per-primitive (**hottest**) | **READ-ONLY anchor; never hook** | verify + issue the coalesced DIP through it unchanged |
 
 **Stability rules (learned the hard way — see `x32dbg-mcp-pitfalls`, the past hot-path wedges):**
@@ -433,8 +438,8 @@ committing a seam. **No resume; no conditional bp on hot fns** (`x32dbg-mcp-no-r
 | `FUN_004a2070/22a0/1af0/1d10/1ed0` | — | per-pass veg draw fns | PROVEN |
 | `FUN_004a24a0` | 0x004a24a0 | build 11 per-instance VS constants c0–c10 (tree path) | PROVEN |
 | `FUN_00858150` / `FUN_00857a90` / `FUN_00857c00` | — | dist/LOD classify / AABB / frustum (cull math to mirror) | PROVEN |
-| `FUN_0084f130` | 0x0084f130 | static-shader registry `register(name,name.sho,lod)` — additive prop-shader delivery | PROVEN |
-| PgBillboardTree table | 0x0143b460 | 4-record veg shader data table (redirect program handle) | PROVEN |
+| `FUN_0084f130` | 0x0084f130 | shader registry: `FUN_0085ac90(record, name, name.sho, class)`, class = light class on PC — additive prop-shader delivery | PROVEN |
+| PgBillboardTree records | 0x0143b460, 0x0143b7c0, 0x0143b6a0, 0x0143b8c8, 0x0143b9d0, 0x0143bc10 | six veg registry records (4 VP, 2 FP) registered by the island `0x006188b0`; D3D handle `+0x110` (VP) / `+0xF8` (FP) | PROVEN |
 | `PgMeshTiny*` / `ObjectIDScaleArray` / `objectData.LocalToWorld[]` | — | engine's own constant-indexed instancer (§2.3 fallback) | PROVEN |
 | Device ptr | `*(DAT_01176288+0x5bc)` | IDirect3DDevice9 | PROVEN |
 | View-proj | `PTR_PTR_00dfc2f8 + vp*0xE80 + 0xb70` | (view +0xab0, proj +0xaf0, world pos +0xb20) | PROVEN |
