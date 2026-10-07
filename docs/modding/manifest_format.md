@@ -935,6 +935,13 @@ Adds a new particle effect and the world template that starts it.
   name or `0xHHHHHHHH`, each with `value`, `curve` (`none` or `[time, value]` keys) and `options` (a
   list of `bit7`, `resample`, `bit9`). Nothing has a default. The writer's rules are
   [`effect_container_format.md`](../effect_container_format.md) §8.
+- **An emitter spawns on a shape.** Its `geom` is `{shape, word}`: `shape` names one of the
+  effect's shape tables, which has at least one record, and `word` is how many of its records the
+  engine samples, from 1 to the table's record count. Each record is a triangle a particle starts
+  on: `|A × B|`, a unit vector along `±(A × B)`, the vertex `P`, the edges `A` and `B` (13 floats)
+  ([`effect_container_format.md`](../effect_container_format.md) §2.1). An emitter with `geom: none`
+  has a constant `rate` at or below 0 and a `ratevar` of 0, so it spawns nothing; any other is
+  **M0309**.
 - **A frame** is the key of a record in the game's `fxdict`, or a sprite of this Shipment or of one
   it requires ([`add_fx_sprite`](#add_fx_sprite)): the loader looks each one up in the `fxdict` and
   draws the record's rectangle of the `vfx` atlas
@@ -1686,9 +1693,11 @@ still cannot ship a broken Shipment.
 listed on purpose: a linter that silently omits its most dangerous checks reads as a clean bill of
 health.
 
-The fx rules M0252–M0262 and the sprite rules M0304–M0308 are errors. M0252–M0255, M0262, M0304,
-M0305 and M0308 need no game; M0256–M0261, M0306 and M0307 need the game stack and run in
-`qm lint --with-game` and in `qm build`, and `qm link` applies the same rules to the installed set.
+The fx rules M0252–M0262 and M0309 and the sprite rules M0304–M0308 are errors. M0252–M0255,
+M0262, M0304, M0305 and M0308 need no game; M0256–M0261, M0306 and M0307 need the game stack and run
+in `qm lint --with-game` and in `qm build`, and `qm link` applies the same rules to the installed
+set. M0309 needs no game for an `add_fx` effect form and the game stack for a `replace_fx` and for
+the templates that start an effect.
 
 The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
 need the game stack and run in `qm lint --with-game` and in `qm build`.
@@ -1987,9 +1996,9 @@ Fix: what the message names.
 
 **An `add_fx` effect form does not read as an effect.** The file is missing, its extension names no
 form format, it does not parse, or it does not lower: an attribute not declared or declared twice,
-an unknown key, a value its position cannot take, a curve at a position the loader takes none at, a
-`GEOM` naming a shape the effect does not have, or another rule of the effect writer
-([`effect_container_format.md`](../effect_container_format.md) §8).
+an unknown key, a value its position cannot take, a curve at a position the loader takes none at,
+or another rule of the effect writer ([`effect_container_format.md`](../effect_container_format.md)
+§8). An emitter's shape is **M0309**.
 
 Fix: what the message names.
 
@@ -2062,7 +2071,7 @@ Fix: name an effect, or a template that starts one; to edit another Shipment's a
 **A `replace_fx` edit addresses a node the effect does not have, or breaks a writer rule**: an
 emitter, force or shape index past the effect's, an attribute the node does not have, a value its
 position cannot take, a shape removed while a `GEOM` names it, or an effect left breaking a rule of
-the effect writer.
+the effect writer. An emitter left without a shape the engine can sample is **M0309**.
 
 Fix: what the message names; the effect's own form (`EffectForm::express`) shows its nodes.
 
@@ -2110,5 +2119,28 @@ and the atlas through `replace_texture` of `vfx`, which `qm link` merges into th
 atlas.
 
 Fix: use `add_fx_sprite` or `replace_texture`.
+
+### M0309
+
+**An effect emitter has no shape table the engine can sample.** A spawned effect picks each new
+particle's spawn record from its emitter's `GEOM` as `random % count`
+([`effect_container_format.md`](../effect_container_format.md) §2.1), so it divides by zero or reads
+past the shape when:
+
+- a `GEOM` names a shape the effect does not have, or a shape without records;
+- a `GEOM`'s `word` (the count) is 0, more than the named shape's record count, or more than 32,767;
+- an emitter without `GEOM` can spawn a particle: its `rate` has a curve or is above 0, or its
+  `ratevar` is not 0;
+- with the game: a template whose `RedEffectComponent` field `0x62C7746E` (its per-distance factor)
+  is not 0 starts an effect with an emitter without `GEOM`, the factor spawning particles as the
+  effect moves. An `add_fx` template that does is refused, and so is a `replace_fx` that leaves an
+  emitter without `GEOM` in an effect such a template starts; the message names the templates.
+
+Observed 2026-10-06: an emitter without `GEOM` crashed the game with `INT_DIVIDE_BY_ZERO` at
+`0x0048AFF6` on `Pg.Spawn` of its template ([`fx_live_gate.md`](fx_live_gate.md) §3).
+
+Fix: give the emitter a `GEOM` naming a shape of the effect, with `word` the shape's record count;
+or, for an emitter that spawns nothing, a constant `rate` of 0 and a `ratevar` of 0, started only by
+templates whose `0x62C7746E` is 0.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
