@@ -1,8 +1,8 @@
 # FX live gate: effects and templates through `qm link`
 
 Three parts: what the live runs of 2026-10-04 showed (§1), the retest of `add_fx` and `replace_fx`
-as `qm` ships them (§2), and the sprites the fixtures add and draw (§3), with the outcome of its
-first run (§3.5). The container formats are in
+as `qm` ships them (§2), and the sprites the fixtures add and draw (§3), with the outcomes of its
+first run (§3.5) and its second (§3.6). The container formats are in
 [`../effect_container_format.md`](../effect_container_format.md) and
 [`../worldentity_container_format.md`](../worldentity_container_format.md); the kinds are in
 [`manifest_format.md`](manifest_format.md#add_fx).
@@ -239,3 +239,24 @@ PROVEN by the disassembly and the dump
 own: `qm_fx_cyan_burst` on the eight faces of an octahedron of radius 0.25 about the effect's origin
 (`geom: { shape: 0, word: 8 }`), `qm_fx_green_burst` on a 0.5 × 0.5 square in the `y = 0` plane, two
 triangles (`geom: { shape: 0, word: 2 }`). The next run repeats §3.1–§3.4 with them.
+
+### 3.6 Outcome, 2026-10-07
+
+The game ran under Wine on macOS, with `qm-fx-a` and `qm-fx-b` installed with the fixtures of §3.5,
+whose emitters spawn on shapes of their own.
+
+- `Pg.GetGuidByName("qm_cyan_burst")` returned `899E7D78` and `Pg.GetGuidByName("qm_green_burst")`
+  returned `8E53AD44`: both templates registered.
+- `Pg.Spawn("qm_cyan_burst", …)` drew a fountain of ring sprites, gold. Its colour keys, authored
+  red 0, green 255, blue 255, were stored `00 FF FF`.
+- `Pg.Spawn("qm_green_burst", …)` drew green five-point star sprites (keys stored `00 FF 00`).
+- `global_particle_fire_carhood`, recoloured red 255, green 255, blue 0 (yellow), drew cyan (keys
+  stored `FF FF 00`). The C4, recoloured magenta (`FF 00 FF`), drew magenta.
+
+**Conclusion.** A `COLR` key stores its colour blue, green, red, alpha. PROVEN by the gold rings
+and the cyan car-hood fire, each the red/blue swap of what its bytes give read red-first; green and
+magenta are the same under that swap
+([`../effect_container_format.md`](../effect_container_format.md) §6). `qm` takes red, green, blue,
+alpha from the effect form and the edits and writes them blue, green, red, alpha. The sprite packing,
+the linked fxdict and the atlas work end to end in the game: each burst drew its own sprite, the
+ring and the star, from the free square of the `vfx` atlas.
