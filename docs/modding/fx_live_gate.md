@@ -260,3 +260,16 @@ magenta are the same under that swap
 alpha from the effect form and the edits and writes them blue, green, red, alpha. The sprite packing,
 the linked fxdict and the atlas work end to end in the game: each burst drew its own sprite, the
 ring and the star, from the free square of the `vfx` atlas.
+
+### 3.7 Outcome, 2026-10-07 (channel order applied)
+
+The game ran under Wine on macOS, with `qm-fx-a` and `qm-fx-b` built by a `qm` that writes `COLR`
+keys blue, green, red, alpha (`vz-patch.wad` sha256 `58c7965e…`).
+
+- `Pg.Spawn("qm_cyan_burst", …)` drew a fountain of cyan ring sprites.
+- `Pg.Spawn("global_particle_fire_carhood", …)`, recoloured red 255, green 255, blue 0, drew a
+  yellow fire.
+
+**Conclusion.** The effect form and the edits produce the colours they name. `add_fx`,
+`replace_fx`, `add_fx_sprite` and the linked templates, fxdict and atlas draw as authored in the
+game.
