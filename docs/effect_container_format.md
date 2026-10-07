@@ -6,7 +6,9 @@ equals the stored one in 314/314 (`mercs2_formats/tests/effect_retail_roundtrip.
 **Implementation:** `mercs2_formats::fxdict::{parse_effect_container, write_effect_container,
 EffectContainer}`.
 **Loader:** `mercs2_unpacked.exe` — effect driver `FUN_00491920`, PTYP-child reader `FUN_00492af0`,
-EMIT walker `FUN_0048cc30`, TRFM-channel reader `FUN_00493150`.
+EMIT walker `FUN_0048cc30`, TRFM-channel reader `FUN_00493150`. **Runtime:** spawner
+`FUN_00488d70`, per-frame spawn count `FUN_0048f4f0`, particle spawn `FUN_0048f900` →
+`FUN_0048ae80` → `FUN_00488770` (§2.1).
 
 Confidence labels: **PROVEN** = checked against retail bytes or a decomp read this pass;
 **INFERRED** = reasoned from the decomp or the data, not exercised; **UNKNOWN** = carried verbatim,
@@ -83,7 +85,7 @@ EFCT                          18 B    nine u16, computed (§3)
 ├─ EMIT  (marker)                     ┐
 │  ├─ TRFM                    64 B    │ 4×4 f32
 │  │  └─ ATRB × 9                     │ the nine channels (§5.1)
-│  └─ GEOM (optional)          4 B    │ u16 shape index, u16          } one pair per emitter
+│  └─ GEOM (optional)          4 B    │ u16 shape index, u16 count    } one pair per emitter
 ├─ PTYP                        4 B    │ u32 flags
 │  ├─ ATRB × 19                       │ (§5.2, fixed order)
 │  ├─ COLR                   800 B    │ (§6)
@@ -107,9 +109,9 @@ There is no `POFF` in any retail effect.
 | Node | Rule | Evidence |
 |---|---|---|
 | `EMTR` | u16 equals its GEOM child count; every retail EMTR has ≥ 1 | PROVEN; loader allocates `count × 4` |
-| `EMTR/GEOM` | `4 + 52·k` bytes; each record is 13 f32 | PROVEN; loader allocates `k × 0x34`, copies 13 words |
-| `EMIT` | marker; children `TRFM` then optional `GEOM` (811 of 820 have one) | PROVEN |
-| `EMIT/GEOM` | u16 shape index into the EMTR table (`shapes[u16]`), then a u16 stored at `+0x00` of the EMIT record (UNKNOWN meaning) | decomp `FUN_0048cc30` |
+| `EMTR/GEOM` | `4 + 52·k` bytes; each record is 13 f32, a triangle particles spawn on (§2.1) | PROVEN; loader allocates `k × 0x34`, copies 13 words |
+| `EMIT` | marker; children `TRFM` then optional `GEOM` (811 of 820 have one; §2.1 says when an emitter may go without) | PROVEN |
+| `EMIT/GEOM` | u16 shape index into the EMTR table, then u16 count: the number of the shape's records the emitter samples (§2.1) | PROVEN, decomp `FUN_0048cc30`, disassembly `FUN_0048ae80` |
 | `PTYP` | u32 flags: bit 0 → emitter `+0x205`, bit 1 → `+0x206`; no other bit is read; retail uses 0–3 | decomp `FUN_00491920` |
 | `TEXT` | u32 n, then n frames; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
 
@@ -130,6 +132,93 @@ starts at 0 and advances by `n × 0.01` (`DAT_00B97EEC`) per rectangle, wrapping
 of the `n` frames fills about `100 / n` consecutive slots of the 100. With bit 1 set, it writes the `n`
 rectangles once, in order (and the loader reserves `2·n` stream words, §3). PROVEN by the decomp;
 how the renderer indexes the slots over a particle's life was not read.
+
+### 2.1 Emitter shapes: where particles spawn
+
+**The `GEOM` of an emitter.** `FUN_0048cc30`, the EMIT walker, reads the `GEOM` body as two u16:
+the first indexes the EMTR shape table and the shape's record pointer goes to `+0x04` of the
+emitter's 0x210-byte runtime record; the second, sign-extended (`(int)(short)`), goes to `+0x00`.
+PROVEN (decomp `FUN_0048cc30`, the `GEOM` arm). An emitter without `GEOM` has 0 at both: PROVEN by
+the live dump below; the code that zeroes them was not read.
+
+**The spawn.** The spawner `FUN_00488d70` zeroes the effect instance's mode word `+0x770` (`mov
+[ebp+0x770], edi` with `edi = 0` at `0x00488F7E`), so a spawned effect runs in mode 0
+(`FUN_0048b470` sets modes 1, 4 and 5 for attached effects). For an effect instance,
+`FUN_0048f900` calls `FUN_0048ae80` once per emitter with the emitter's runtime record as its first
+argument (the call at `0x0048FE08`). In mode 0,
+for each particle to spawn, `FUN_0048ae80` takes the count at `+0x00` and picks a record as
+`random % count`, then reads it at `+0x04 + 52 × index`:
+
+```text
+0x0048AFC7  mov edi,[esp+0x64]        ; the emitter's runtime record
+0x0048AFD1  mov esi,[edi]             ; +0x00: the GEOM count
+            ...                       ; the LCG at 0x00DFCBAC
+0x0048AFF4  xor edx,edx
+0x0048AFF6  div esi                   ; unsigned: random % count
+0x0048AFFC  mov eax,edx
+0x0048AFFE  imul eax,eax,0x34
+0x0048B001  add eax,[edi+4]           ; +0x04: the shape's records
+0x0048B008  call 0x488770
+```
+
+PROVEN (disassembly of `mercs2_unpacked.exe`). So the engine runs an emitter's shape only when:
+
+| Rule | What breaks otherwise | Evidence |
+|---|---|---|
+| A `GEOM` names a shape of the EMTR table | the record pointer is read from past the table | PROVEN, `FUN_0048cc30` |
+| The count is ≥ 1 | `div` by 0: `INT_DIVIDE_BY_ZERO` | PROVEN, disassembly; observed live (below) |
+| The count is ≤ the shape's record count | the index reaches past the shape's records | PROVEN, disassembly |
+| The count is ≤ 32,767 | sign-extended, it is a negative count, and the unsigned `div` yields an index past the records | PROVEN, decomp `(int)(short)` |
+| An emitter without `GEOM` spawns no particle | its count is 0: `div` by 0 on its first particle | PROVEN, disassembly; observed live |
+
+In all 811 retail `GEOM`s the count equals the named shape's record count; no retail shape is
+empty. PROVEN (`mercs2_quartermaster/tests/fx_retail.rs`).
+
+**Observed, 2026-10-06.** An authored effect whose one emitter had no `GEOM` (rate 30) crashed the
+game under Wine on `Pg.Spawn` of its template: `pmc_blackbox.log` recorded `VEH EXCEPTION C0000094
+INT_DIVIDE_BY_ZERO @ EIP=0048AFF6`, `ESI=00000000`, `EDI=1F5C63F0`, and the 16 bytes at `EDI` were
+zero (count 0, record pointer 0); the return address on the stack was `0x0048FE0D`, the call in
+`FUN_0048f900`. The fixture is [`modding/fx_live_gate.md`](modding/fx_live_gate.md) §3.
+
+**How many particles an emitter spawns.** `FUN_0048f4f0` adds to each emitter's spawn accumulator
+(the instance's `+0x670 + 4·i`), on each update:
+
+- `max(rate + (1 − 2u)·ratevar, 0)` times the instance's `+0x7F0` (1.0 from the spawner), where
+  `rate` is the attribute `0x062F0D37` (`FUN_00492af0` stores it in the emitter slot `+0xC0`, and
+  `0x70653182`, `ratevar`, in that slot's `+0xC`), evaluated by `FUN_00490960` (`u` uniform in
+  `[0, 1)`, the constant `2.0` at `0x00B92874`); PROVEN, disassembly;
+- the instance's displacement since the last update (`FUN_00401740` of `Δx² + Δy² + Δz²`, a
+  square root — INFERRED — capped) times the
+  instance's `+0x7F4`, which the spawner copies from `+0x08` of the template's
+  `RedEffectComponent` (`ecx = 0x017BE398`, that class's descriptor, at `0x00488DC8`). PROVEN by
+  the disassembly; that `+0x08` of the runtime component is the schm field at offset 8,
+  `0x62C7746E`, is INFERRED (the schm offsets are the serialized layout, and the class stride is
+  `0x38` in both).
+
+In mode 0, `FUN_0048ac80` makes the integer part of the accumulator, capped at 2,000, the update's
+count; `FUN_0048ae80` spawns nothing when it is below 1. PROVEN, disassembly.
+
+So an emitter without `GEOM` runs only when both terms stay 0: `rate` a constant (no curve) at or
+below 0, `ratevar` 0, and every template that starts the effect with a `0x62C7746E` of 0. The 9
+retail emitters without `GEOM` (in 9 effects) all have `rate` 0.0 with no curve and `ratevar` 0.0,
+and all 20 retail `RedEffectComponent` records that name those effects have `0x62C7746E` = 0.0
+(of the 538 retail records, 71 have a non-zero value). PROVEN, `fx_retail.rs`.
+
+**The record.** `FUN_00488770` reads a record as a triangle: the vertex `P` at floats 4–6, the edges
+`A` at 7–9 and `B` at 10–12. The particle starts at `P + u·A + v·B`, `u` uniform in `[0, 1)` and
+`v` uniform in `[0, 1 − u)`, and floats 1–3 are copied out beside it. PROVEN, decomp
+`FUN_00488770`. `FUN_0048ae80` passes the copied vector through `D3DXVec3TransformNormal` (PROVEN,
+disassembly at `0x0048B0D2`) and then `FUN_00401630`; that the result is the particle's emission
+direction, perturbed by `spread`, is INFERRED. Float 0 is not read by `FUN_00488770`; where else it
+is read is UNKNOWN.
+
+| Floats | Retail (13,148 records) | Read by |
+|---|---|---|
+| 0 | `\|A × B\|`, in all 13,148 | not `FUN_00488770` |
+| 1–3 | a unit vector along `±(A × B)` in all 13,148 (`+` in 8,766) | copied out by `FUN_00488770` |
+| 4–6 | `P` | `FUN_00488770` |
+| 7–9 | `A` | `FUN_00488770` |
+| 10–12 | `B` | `FUN_00488770` |
 
 ---
 
@@ -328,6 +417,11 @@ loader reads nothing for one.
 
 The reference writer refuses: a flag word that disagrees with its value or curve; a bit outside
 {0, 7, 8, 9, 10}; options or a curve on a u32 attribute; an empty curve; an attribute out of
-position or of the wrong value type; a curve at a position marked "—"; a `GEOM` shape index past the
-shape table; PTYP flag bits other than 0 and 1; an empty `TEXT`; PTYP bit 1 with more than 100
-frames.
+position or of the wrong value type; a curve at a position marked "—"; PTYP flag bits other than 0
+and 1; an empty `TEXT`; PTYP bit 1 with more than 100 frames (`EffectContainer::validate_nodes`).
+It also refuses every emitter shape §2.1 says the engine cannot run
+(`EffectContainer::check_emitter_shapes`): a `GEOM` shape index past the shape table; a `GEOM`
+naming a shape without records; a count of 0, above the shape's record count, or above 32,767; and
+an emitter without `GEOM` whose `rate` has a curve or is above 0, or whose `ratevar` is not 0. The
+template side of §2.1 (`0x62C7746E` = 0 for every template that starts an effect with an emitter
+without `GEOM`) is checked by `qm` where it merges templates (lint M0309).
