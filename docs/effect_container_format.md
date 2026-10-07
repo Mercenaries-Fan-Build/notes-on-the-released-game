@@ -372,14 +372,26 @@ and the drag extra) are unresolved and kept as hashes.
 of 8 bytes, spread over the particle's life (key `i` at age `i / 99`):
 
 ```text
-+0  u8[4]   colour
++0  u8      blue
++1  u8      green
++2  u8      red
++3  u8      alpha
 +4  u16     binary16 bit pattern
 +6  u16     0
 ```
 
 - The trailing u16 is 0 in all 82,000 retail keys. PROVEN.
-- The colour bytes read as three near-equal bytes plus a fourth that fades to 0 over the keys
-  (retail god-ray: `3f 3f 3f 29`). That the order is R, G, B, A is UNKNOWN; carry them as data.
+- The colour is stored blue, green, red, alpha. PROVEN live, 2026-10-07 (the game under Wine,
+  [`modding/fx_live_gate.md`](modding/fx_live_gate.md) §3.6), for bytes 0–2:
+  - `qm_fx_cyan_burst` (fixture `qm-fx-a`), its keys stored `00 FF FF`, drew gold/yellow;
+  - `global_particle_fire_carhood` recoloured with its keys stored `FF FF 00` drew cyan;
+  - keys stored `00 FF 00` drew green and keys stored `FF 00 FF` (the C4) drew magenta, both the
+    same under a red/blue swap.
+- Byte 3 is alpha: it fades to 0 over the keys in retail (god-ray: `3f 3f 3f 29`). INFERRED; the
+  live run held it fixed.
+- Authors give red, green, blue, alpha. `mercs2_formats::fxdict::ColrKey::rgba` holds them in that
+  order, and `Colr::to_bytes` / `Colr::from_bytes` are the one place the stored order is mapped, so
+  retail keys still re-encode byte for byte.
 - The binary16 is `0x3C00` (1.0) or `0xBC00` (−1.0) in the samples read. Its role is UNKNOWN.
 
 Earlier notes gave COLR as 200 bytes of 50 RGBA stops (the 200 is the stream-word reservation, not
