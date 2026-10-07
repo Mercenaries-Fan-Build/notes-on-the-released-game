@@ -132,10 +132,17 @@ Default path: `output/_scratch/fx_probe/fxdict.json`
 Summary:
 
 - One tree rooted at `EFCT` (18 B, nine u16, computed). Children: `EMTR` (u16 = GEOM child count;
-  each `GEOM` = u32 k + k × 13 f32), then one (`EMIT` marker, `PTYP`) pair per emitter, then the
-  `FRCE`s.
+  each `GEOM` = u32 k + k × 13 f32, k triangles particles spawn on), then one (`EMIT` marker,
+  `PTYP`) pair per emitter, then the `FRCE`s.
 - `EMIT` → `TRFM` (64 B 4×4) with the nine channel `ATRB`s (`posx`…`sclz`), and an optional
-  `GEOM` (u16 shape index, u16).
+  `GEOM` (u16 shape index, u16 count of the shape's records sampled). **The engine requires a
+  sampleable shape:** a spawned effect picks each particle's spawn record as `random % count`
+  (`FUN_0048ae80`, `div` at `0x0048AFF6`), so a `GEOM` names a shape with records and a count from 1
+  to that shape's record count (all 811 retail `GEOM`s give exactly the record count), and an emitter
+  without `GEOM` (count 0) must spawn no particle: a constant `rate` at or below 0, a `ratevar` of 0,
+  and every template that starts it with `RedEffectComponent` `0x62C7746E` = 0, as the 9 retail
+  emitters without `GEOM` are. An emitter that breaks this divides by zero when it spawns, observed
+  live 2026-10-06 ([`effect_container_format.md`](effect_container_format.md) §2.1).
 - `PTYP` (u32 flags; bits 0/1 read) → 19 `ATRB`, `COLR`, 13 `ATRB`, `TEXT`, in a fixed order.
 - `ATRB` (12 B `{u32 hash, u32 flags, u32|f32 value}`) may own `ANIM` (u32 key count) → `AKEY`
   × n (8 B `{f32 time, f32 value}`). `ANIM` and `AKEY` exist; 1,880 retail curves.
@@ -169,6 +176,8 @@ See [`audio_ue5_path.md`](audio_ue5_path.md) §2.
 | Record order `key as i32`, unique; a miss draws `(0, 0, 1, 1)` | **PROVEN** (lookup `FUN_00491510`) |
 | Frame key string names | hash-only |
 | effect tree, sizes and EFCT rule | **High** — 314/314 byte-identical re-encode ([`effect_container_format.md`](effect_container_format.md)) |
+| Emitter `GEOM` = shape index + sampled record count; count 0 or a missing `GEOM` divides by zero on spawn | **PROVEN** (disassembly of `FUN_0048ae80`, decomp `FUN_0048cc30`, 811/811 retail counts, live crash 2026-10-06) |
+| Shape record = `\|A × B\|`, unit `±(A × B)`, vertex `P`, edges `A`, `B`; spawn at `P + u·A + v·B` | **PROVEN** for `P`, `A`, `B` (`FUN_00488770`) and the retail layout (13,148/13,148); float 0's reader **unknown** |
 | COLR key structure (100 × 8 B) | **High** for the layout; colour channel order and the binary16's role unknown |
 
 ---
