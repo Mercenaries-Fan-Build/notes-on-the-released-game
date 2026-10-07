@@ -930,10 +930,11 @@ Adds a new particle effect and the world template that starts it.
 
 - **The effect** is declared whole in the effect form (`mercs2_quartermaster::effect`): the `EMTR`
   shape tables, every emitter (its `TRFM` 4×4, all nine channels, its `GEOM` or `none`, the `PTYP`
-  flags, all 32 attributes, exactly 100 colour keys and at least one frame) and every force (its kind
-  and parameters, and its seven common attributes plus the kind's own). Every attribute is given by
-  name or `0xHHHHHHHH`, each with `value`, `curve` (`none` or `[time, value]` keys) and `options` (a
-  list of `bit7`, `resample`, `bit9`). Nothing has a default. The writer's rules are
+  flags, all 32 attributes, exactly 100 colour keys, each `{rgba, half}` with `rgba` red, green,
+  blue, alpha, and at least one frame) and every force (its kind and parameters, and its seven
+  common attributes plus the kind's own). Every attribute is given by name or `0xHHHHHHHH`, each
+  with `value`, `curve` (`none` or `[time, value]` keys) and `options` (a list of `bit7`,
+  `resample`, `bit9`). Nothing has a default. The writer's rules are
   [`effect_container_format.md`](../effect_container_format.md) §8.
 - **An emitter spawns on a shape.** Its `geom` is `{shape, word}`: `shape` names one of the
   effect's shape tables, which has at least one record, and `word` is how many of its records the
@@ -988,8 +989,8 @@ edits:
 |---|---|---|
 | `attribute` | `emitter`, `attribute`, any of `value`, `curve`, `options` | edits one `PTYP` attribute |
 | `channel` | `emitter`, `channel`, any of `value`, `curve`, `options` | edits one `TRFM` channel |
-| `colour_rgb` | `emitter`, `rgb` | sets the first three bytes of all 100 colour keys; each key keeps its fourth byte and its `half` |
-| `colour_keys` | `emitter`, `keys` (100 `{rgba, half}`) | replaces the colour keys |
+| `colour_rgb` | `emitter`, `rgb` (red, green, blue) | sets the red, green and blue of all 100 colour keys; each key keeps its alpha and its `half` |
+| `colour_keys` | `emitter`, `keys` (100 `{rgba, half}`, `rgba` red, green, blue, alpha) | replaces the colour keys |
 | `frames` | `emitter`, `frames` | replaces the frames |
 | `transform` | `emitter`, `transform` | replaces the `TRFM` 4×4 |
 | `flags` | `emitter`, `flags` | replaces the `PTYP` flags |
