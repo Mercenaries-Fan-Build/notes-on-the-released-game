@@ -273,3 +273,31 @@ keys blue, green, red, alpha (`vz-patch.wad` sha256 `58c7965e…`).
 **Conclusion.** The effect form and the edits produce the colours they name. `add_fx`,
 `replace_fx`, `add_fx_sprite` and the linked templates, fxdict and atlas draw as authored in the
 game.
+
+### 3.8 Outcome, 2026-10-07 (with a script Shipment, §2.3)
+
+The game ran under Wine on macOS. Into the game folder, through `headless_deploy install --real`, in
+order: m2-sdk 0.2.0, the unofficial patch, `qm-fx-a`, `qm-fx-b`. Every outcome was **Applied** under
+`qm-link:scripts`, with no claim conflict. The final `vz-patch.wad` sha256 was `0a8236e9…`, the same
+as the scratch install of the same set.
+
+- Decoding the final `vz-patch.wad`: link's resident block carries `mrxplayer` with
+  `_QmGetClipAmmo` and `_QmRestoreAmmo` in its constants, and the templates `qm_cyan_burst` and
+  `qm_green_burst`; the effects block carries `qm_fx_cyan_burst` and `qm_fx_green_burst`.
+- `scripts/unofficial_patch.log` read `m2 0.2.0`, 4 armed, 0 failed. `pmc_blackbox.log` loaded every
+  ASI and `vz-patch.wad` `0a8236e9…`.
+- `Pg.GetGuidByName("qm_cyan_burst")` returned `899E7D78` and `Pg.GetGuidByName("qm_green_burst")`
+  returned `8E53AD44`.
+- `Pg.Spawn("qm_cyan_burst", …)` drew cyan rings; `Pg.Spawn("global_particle_fire_carhood", …)` drew
+  a yellow fire.
+- `_QmGetClipAmmo` and `_QmRestoreAmmo` were not reached from `lua_repl`: both read `nil` in its
+  globals, as does the game's own `SaveSingleton` from `mrxplayer`. UNTESTED in the game.
+
+`uninstall` with no Shipments removed `m2-sdk.dll`, `scripts/unofficial_patch.asi`,
+`scripts/unofficial_patch.ini` and `vz-patch.wad`; `restore-wad --file vz-patch.58c7965e48ffeabb.wad`
+put back the `vz-patch.wad` of before the run. `verify` then matched the snapshot except the files the
+run itself wrote: `d3d.log`, `pmc_blackbox.log`, `scripts/lua_bridge_DEV.log`,
+`scripts/lua_loader_printf.log` and `scripts/unofficial_patch.log`.
+
+**Conclusion.** `add_fx`, `replace_fx`, `add_fx_sprite` and the templates draw as authored alongside a
+Shipment that links resident scripts: link's one resident block carries both.
