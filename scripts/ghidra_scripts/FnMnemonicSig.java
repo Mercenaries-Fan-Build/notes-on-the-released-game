@@ -4,7 +4,7 @@
 // its size and instruction count. Same code moved => identical mnemonic-sig; a patched function
 // => changed sig. Run once per program (-process <name>) and diff the two JSONs offline.
 //
-// Output: output/_ghidra/fnsig_<programName>.json  => { "0xADDR": {"sig":"<hex sha>","n":<insns>,"sz":<bytes>,"calls":<int>} }
+// Args: <outDir>  — writes <outDir>/fnsig_<programName>.json  => { "0xADDR": {"sig":"<hex sha>","n":<insns>,"sz":<bytes>,"calls":<int>} }
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -17,12 +17,25 @@ import java.io.PrintWriter;
 import java.security.MessageDigest;
 
 public class FnMnemonicSig extends GhidraScript {
+    private static final String USAGE = "<outDir>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
+
     @Override
     public void run() throws Exception {
+        String outDir = requiredArg(0);
         MemoryBlock text = currentProgram.getMemory().getBlock(".text");
         long lo = text.getStart().getOffset(), hi = text.getEnd().getOffset();
         String prog = currentProgram.getName().replaceAll("[^A-Za-z0-9._-]", "_");
-        File out = new File("C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\fnsig_" + prog + ".json");
+        File out = new File(outDir, "fnsig_" + prog + ".json");
         PrintWriter pw = new PrintWriter(out, "UTF-8");
         pw.println("{");
         MessageDigest md = MessageDigest.getInstance("SHA-1");
