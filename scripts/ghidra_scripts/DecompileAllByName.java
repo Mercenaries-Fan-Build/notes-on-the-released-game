@@ -1,6 +1,6 @@
 // Export decompiled C for every FUN_* in .text, named per-program so multiple
 // builds can be analyzed without clobbering each other's output.
-// Writes output/_ghidra/<programName>_decomp.txt
+// Args: <outDir>  — writes <outDir>/<programName>_decomp.txt
 // (Sibling of DecompileAllFunctions.java, which hardcodes all_functions_decomp.txt.)
 //
 // @category Mercs2
@@ -18,8 +18,18 @@ import java.io.PrintWriter;
 import java.util.TreeMap;
 
 public class DecompileAllByName extends GhidraScript {
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\";
+    private static final String USAGE = "<outDir>";
+    private String outDir;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     // x87 math helpers (sqrt/abs/…) were falsely marked noreturn, truncating every
     // float-heavy function at its first sqrt call. Clear the flag so the export is
@@ -69,9 +79,10 @@ public class DecompileAllByName extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        outDir = requiredArg(0);
         clearFalseNoReturn();
-        String outPath = OUT_DIR + currentProgram.getName() + "_decomp.txt";
-        new File(OUT_DIR).mkdirs();
+        String outPath = new File(outDir, currentProgram.getName() + "_decomp.txt").getPath();
+        new File(outDir).mkdirs();
         fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface();
         decomp.openProgram(currentProgram);
