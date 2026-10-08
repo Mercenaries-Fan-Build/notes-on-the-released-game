@@ -8,6 +8,7 @@
 // "*(X + i*0x10 + 8)" via the decompiler C text containing "* 0x10" AND "+ 8)" patterns is too
 // noisy, so instead: enumerate callers of FUN_00464780 (descriptor reader) up the chain to the
 // block opener, and decompile them.
+// Args: <outPath> (the output text file).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -27,8 +28,18 @@ import java.util.Set;
 
 public class FindEntryOffsetUse extends GhidraScript {
     private static final long SEED = 0x00464780L; // descriptor reader
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\entry_offset_use.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -46,8 +57,9 @@ public class FindEntryOffsetUse extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {
