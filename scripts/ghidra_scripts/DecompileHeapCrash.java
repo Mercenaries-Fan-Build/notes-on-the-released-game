@@ -1,7 +1,7 @@
 // Decompile the deterministic pool-allocator crash 0x0084DD5B
 // (mov edx,[esi], esi = free-list head 0xD28FA5B0, unmapped) and its callers,
 // to identify what pool/subsystem this is. Writes to
-// output/_ghidra/heap_crash_decomp.txt.
+// <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -37,8 +37,18 @@ public class DecompileHeapCrash extends GhidraScript {
     };
     private static final long FAULT_SITE = 0x0084DD5BL;
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -48,8 +58,9 @@ public class DecompileHeapCrash extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "heap_crash_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();
