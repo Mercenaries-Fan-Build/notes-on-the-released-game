@@ -3,7 +3,7 @@
 //   - 0x414B0B (ring-adjacency candidate; near the PHY2 name-lookup crash 0x414B4C)
 //   - 0x414AF0-ish copy loop neighbourhood (the 0x41AFB6 victim earlier lived in 0x41xxxx)
 // The overflower allocates a 512-byte buffer and writes one u32 past its end; these are the
-// call sites to read. Writes output/_ghidra/overflower_decomp.txt.
+// call sites to read. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -35,8 +35,18 @@ public class DecompileOverflower extends GhidraScript {
         "flood caller C 0x67AB2D (16B allocs)",
         "adjacency candidate 0x414B0B",
     };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -46,8 +56,9 @@ public class DecompileOverflower extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "overflower_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();
