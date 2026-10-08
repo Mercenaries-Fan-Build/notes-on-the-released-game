@@ -2,7 +2,7 @@
 //   - FUN_00464780  GetChunkDataReader (sets up the reader object the parser reads count3 from)
 //   - FUN_00825dc0  string reader (returns the SAME string each record -> identical FNV hashes)
 //   - FUN_0067a7fa  re-decompile (count3 source + descriptor-table navigation)
-// Goal: find why count3 overruns the real record data. Writes output/_ghidra/chunkreader_decomp.txt.
+// Goal: find why count3 overruns the real record data. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -25,8 +25,18 @@ public class DecompileChunkReader extends GhidraScript {
         "FUN_00825DC0 string reader (repeating strings)",
         "FUN_0067A7FA chunk parser (count3 source + nav)",
     };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -56,8 +66,9 @@ public class DecompileChunkReader extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "chunkreader_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             DecompInterface decomp = new DecompInterface();
