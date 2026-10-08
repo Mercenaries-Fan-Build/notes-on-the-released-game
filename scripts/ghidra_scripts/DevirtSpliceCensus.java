@@ -8,7 +8,7 @@
 //   A* (needs fixup) : as A but contains internal rel8/rel32 branches whose disp must be recomputed
 //   C (protection)   : macro calls a dispatcher ([mem]) or contains anti-debug (push ss / int 2d / rdtsc)
 //   B (unknown)      : no clean return-to-.text within the walk limit
-// Output: output/_ghidra/devirt_splice_census.json  + printed summary counts.
+// Args: <outPath>  — the output JSON; summary counts are also printed.
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -26,6 +26,17 @@ public class DevirtSpliceCensus extends GhidraScript {
     private MemoryBlock textBlk;
     private MemoryBlock[] srBlks;
     private static final int MAX_MACRO_INSNS = 48;
+    private static final String USAGE = "<outPath>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private boolean inText(Address a) { return a != null && textBlk.contains(a); }
     private boolean inSR(Address a) {
@@ -42,13 +53,14 @@ public class DevirtSpliceCensus extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        String outPath = requiredArg(0);
         textBlk = currentProgram.getMemory().getBlock(".text");
         String[] names = {"Stext", "Sitext", "Srdata", "Sdata", ".securom"};
         java.util.List<MemoryBlock> sr = new java.util.ArrayList<>();
         for (String n : names) { MemoryBlock b = currentProgram.getMemory().getBlock(n); if (b != null) sr.add(b); }
         srBlks = sr.toArray(new MemoryBlock[0]);
 
-        File out = new File("C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\devirt_splice_census.json");
+        File out = new File(outPath);
         PrintWriter pw = new PrintWriter(out, "UTF-8");
         pw.println("{\"sites\":[");
 
