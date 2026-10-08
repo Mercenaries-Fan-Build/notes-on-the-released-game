@@ -1,6 +1,6 @@
 // Locate spatial-hash / asset-registration code by string xrefs + program layout.
 // VA-independent (works on any Mercs2 build). Native Ghidra Java script.
-// Writes output/_ghidra/<progname>_findings.txt
+// Args: <outDir>  — writes <outDir>/<progname>_findings.txt
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -19,8 +19,18 @@ import java.util.TreeSet;
 
 public class FindSpatialHash extends GhidraScript {
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outDir>";
+    private String outDir;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private static final String[] KEYWORDS = {
         "spatial", "spatialhash", "sceneobject", "scene object", "cell",
@@ -34,9 +44,10 @@ public class FindSpatialHash extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
+        outDir = requiredArg(0);
+        new File(outDir).mkdirs();
         String name = currentProgram.getName().replace(".", "_");
-        File out = new File(OUT_DIR, name + "_findings.txt");
+        File out = new File(outDir, name + "_findings.txt");
         fp = new PrintWriter(out, "UTF-8");
         try {
             w("# " + currentProgram.getName());
