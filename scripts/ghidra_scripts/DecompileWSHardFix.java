@@ -1,7 +1,7 @@
 // Hard-fix the Xbox360 __savegprlr/__restgprlr/__savefpr/__restfpr helpers (which Ghidra marks
 // no-return, truncating big-frame functions to just the prologue bl), then re-disassemble + decompile
 // the target VAs. Names all map symbols first for readability.
-// Args: <outPath> <VA:name> ...
+// Args: <outPath> <mapPath> <VA:name> ...   (mapPath = WildStar_d.map)
 import ghidra.app.script.GhidraScript;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
@@ -19,8 +19,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class DecompileWSHardFix extends GhidraScript {
-    private static final String MAP =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-reversing-the-sabetour\\game-files\\symbols\\WildStar_d.map";
+    private static final String USAGE = "<outPath> <mapPath> <VA:name> ...";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private static final Pattern LINE =
         Pattern.compile("^\\s+[0-9a-f]{4}:[0-9a-f]{8}\\s+(\\S+)\\s+([0-9a-f]{8})\\s+f\\b");
     // helper lines have NO 'f' flag: "<sect>:<off>  __savegprlr_22  831c3f40  LIBCMTD:crtgpr.obj"
@@ -44,10 +53,11 @@ public class DecompileWSHardFix extends GhidraScript {
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
-        String out = args[0];
+        String out = requiredArg(0);
+        String mapPath = requiredArg(1);
         new File(out).getParentFile().mkdirs();
         int named = 0, fixed = 0;
-        try (BufferedReader br = new BufferedReader(new FileReader(MAP))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(mapPath))) {
             String ln;
             while ((ln = br.readLine()) != null) {
                 Matcher hm = HELPER.matcher(ln);
@@ -79,7 +89,7 @@ public class DecompileWSHardFix extends GhidraScript {
         DecompInterface dec = new DecompInterface(); dec.openProgram(currentProgram);
         ConsoleTaskMonitor mon = new ConsoleTaskMonitor();
         PrintWriter fp = new PrintWriter(new File(out), "UTF-8");
-        for (int i = 1; i < args.length; i++) {
+        for (int i = 2; i < args.length; i++) {
             String[] kv = args[i].split(":", 2);
             long va = Long.decode(kv[0]); String nm = kv.length > 1 ? kv[1] : kv[0];
             Address a = toAddr(va);
