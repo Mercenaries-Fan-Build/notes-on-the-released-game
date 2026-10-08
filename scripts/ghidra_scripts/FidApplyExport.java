@@ -1,6 +1,8 @@
 // Apply the community Ghidra FID databases (<fidbDir>/*.fidb) to the PC image and export
 // every FID match to <outPath> (addr,fid_name,score,library,version).
 // Args: <outPath> <fidbDir>
+// The script stops with an error naming <fidbDir> when the folder is missing, unreadable or
+// empty, or when no *.fidb in it can be attached.
 // Byte-signature identification (FLIRT/FID): a match names a statically-linked library function
 // authoritatively. NOTE the shipped repo is Linux/GCC (glibc/gcc/openssl/qt/SDL); a MSVC
 // (MSVCR80) game will mostly NOT match — the empty/tiny result IS the finding, and confirms an
@@ -47,15 +49,27 @@ public class FidApplyExport extends GhidraScript {
         String outPath = requiredArg(0);
         File dir = new File(requiredArg(1));
         FidFileManager ffm = FidFileManager.getInstance();
+        if (!dir.isDirectory()) {
+            throw new IllegalArgumentException("FID database folder does not exist or is not a folder: "
+                + dir.getAbsolutePath());
+        }
         File[] all = dir.listFiles();
+        if (all == null) {
+            throw new IllegalStateException("FID database folder is unreadable: " + dir.getAbsolutePath());
+        }
+        if (all.length == 0) {
+            throw new IllegalStateException("FID database folder is empty: " + dir.getAbsolutePath());
+        }
         int attached = 0;
-        if (all != null) {
-            for (File f : all) {
-                if (f.getName().toLowerCase().endsWith(".fidb")) {
-                    try { ffm.addUserFidFile(f); attached++; }
-                    catch (Exception e) { println("skip " + f.getName() + ": " + e.getMessage()); }
-                }
+        for (File f : all) {
+            if (f.getName().toLowerCase().endsWith(".fidb")) {
+                try { ffm.addUserFidFile(f); attached++; }
+                catch (Exception e) { println("skip " + f.getName() + ": " + e.getMessage()); }
             }
+        }
+        if (attached == 0) {
+            throw new IllegalStateException("no FID database (*.fidb) could be attached from "
+                + dir.getAbsolutePath());
         }
         ffm.load();
         boolean canQuery = ffm.canQuery(currentProgram.getLanguage());
