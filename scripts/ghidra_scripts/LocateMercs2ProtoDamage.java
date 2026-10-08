@@ -2,7 +2,7 @@
 // (Mercs2_Xenon_P, Xenon BE PPC, base 0x82000000, DECOMPILABLE — no SecuROM). The solver fn names
 // survive as STRINGS; we xref them to their code/binding-table sites and decompile.
 //
-// Run as headless postScript AFTER -analyze. Output -> output/jul08_prototype/mercs2_proto_damage_decomp.txt
+// Run as headless postScript AFTER -analyze. Args: <outPath> (the output text file).
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
 import ghidra.app.decompiler.DecompInterface;
@@ -21,8 +21,18 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class LocateMercs2ProtoDamage extends GhidraScript {
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\jul08_prototype\\mercs2_proto_damage_decomp.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private static final String[] TARGETS = {
         "ApplyDamageToPrimaryHealth", "ApplyDamageToNodeHealth", "ApplyExplosionToBodies",
         "ApplyExplosionToPrimary", "ApplyExplosion", "ApplyDamage",
@@ -50,8 +60,9 @@ public class LocateMercs2ProtoDamage extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         dec = new DecompInterface(); dec.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         Memory mem = currentProgram.getMemory();
@@ -85,6 +96,6 @@ public class LocateMercs2ProtoDamage extends GhidraScript {
             fp.flush();
         }
         dec.dispose(); fp.close();
-        println("done -> " + OUT);
+        println("done -> " + outPath);
     }
 }
