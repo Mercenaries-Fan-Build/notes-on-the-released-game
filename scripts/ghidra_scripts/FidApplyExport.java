@@ -1,5 +1,6 @@
-// Apply the community Ghidra FID databases (tools/fidb/*.fidb) to the PC image and export
-// every FID match to output/_ghidra/fid_matches.csv (addr,fid_name,score,library,version).
+// Apply the community Ghidra FID databases (<fidbDir>/*.fidb) to the PC image and export
+// every FID match to <outPath> (addr,fid_name,score,library,version).
+// Args: <outPath> <fidbDir>
 // Byte-signature identification (FLIRT/FID): a match names a statically-linked library function
 // authoritatively. NOTE the shipped repo is Linux/GCC (glibc/gcc/openssl/qt/SDL); a MSVC
 // (MSVCR80) game will mostly NOT match — the empty/tiny result IS the finding, and confirms an
@@ -7,7 +8,7 @@
 //
 // Headless: JAVA_HOME=tools/jdk21/jdk-21.0.11+10; analyzeHeadless output/_ghidra/proj_unpacked \
 //   m2_unpacked -process mercs2_unpacked.exe -noanalysis -scriptPath scripts/ghidra_scripts \
-//   -postScript FidApplyExport.java
+//   -postScript FidApplyExport.java output/_ghidra/fid_matches.csv tools/fidb
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -23,8 +24,17 @@ import java.io.PrintWriter;
 import java.util.List;
 
 public class FidApplyExport extends GhidraScript {
-    private static final String ROOT = "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\";
-    private static final String OUT = ROOT + "output\\_ghidra\\fid_matches.csv";
+    private static final String USAGE = "<outPath> <fidbDir>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private String csv(String s) {
         if (s == null) return "";
@@ -34,8 +44,9 @@ public class FidApplyExport extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        String outPath = requiredArg(0);
+        File dir = new File(requiredArg(1));
         FidFileManager ffm = FidFileManager.getInstance();
-        File dir = new File(ROOT + "tools\\fidb");
         File[] all = dir.listFiles();
         int attached = 0;
         if (all != null) {
@@ -51,7 +62,7 @@ public class FidApplyExport extends GhidraScript {
         println("FID: attached " + attached + " db(s); program lang=" + currentProgram.getLanguageID()
             + "; canQuery=" + canQuery);
 
-        PrintWriter pw = new PrintWriter(new File(OUT), "UTF-8");
+        PrintWriter pw = new PrintWriter(new File(outPath), "UTF-8");
         pw.println("addr,fid_name,score,library,version");
         if (!canQuery) {
             println("FID: no attached db matches the program language -> 0 matches.");
@@ -81,6 +92,6 @@ public class FidApplyExport extends GhidraScript {
         }
         pw.close();
         q.close();
-        println("FID: " + n + " functions matched -> " + OUT);
+        println("FID: " + n + " functions matched -> " + outPath);
     }
 }
