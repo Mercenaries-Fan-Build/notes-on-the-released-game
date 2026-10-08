@@ -4,11 +4,11 @@
 //   2. vtable     — every "<Class>::vftable" data symbol is walked as a pointer array; each
 //                   pointed-to function is a method of <Class> (names most virtual methods that
 //                   are still FUN_ in the decomp text).
-// Output CSV: output/_ghidra/func_class_map.csv  => addr,class,name,source
+// Args: <outPath>  — the output CSV  => addr,class,name,source
 //
 // Run headless against the already-analyzed project (no re-analysis):
 //   support/analyzeHeadless.bat <proj_loc> m2_unpacked -process mercs2_unpacked.exe \
-//       -noanalysis -scriptPath scripts/ghidra_scripts -postScript ExportFuncClass.java
+//       -noanalysis -scriptPath scripts/ghidra_scripts -postScript ExportFuncClass.java <outPath>
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -24,8 +24,18 @@ import java.io.File;
 import java.io.PrintWriter;
 
 public class ExportFuncClass extends GhidraScript {
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\func_class_map.csv";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private String csv(String s) {
         return (s.indexOf(',') >= 0 || s.indexOf('"') >= 0)
@@ -34,7 +44,8 @@ public class ExportFuncClass extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        PrintWriter pw = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        PrintWriter pw = new PrintWriter(new File(outPath), "UTF-8");
         pw.println("addr,class,name,source");
         FunctionManager fm = currentProgram.getFunctionManager();
         SymbolTable st = currentProgram.getSymbolTable();
@@ -90,6 +101,6 @@ public class ExportFuncClass extends GhidraScript {
         }
         pw.close();
         println("ExportFuncClass: " + nsN + " namespace rows, " + vtSyms + " vtables -> "
-            + vtFns + " vtable-method rows. Wrote " + OUT);
+            + vtFns + " vtable-method rows. Wrote " + outPath);
     }
 }
