@@ -11,7 +11,7 @@
 //   2. Lists + decompiles the CONSTRUCTORS that store each cluster vtable (xrefs to the vtable addrs)
 //      -> names the classes (which component / entity).
 //   3. Finds code refs to the constant 0xF011157A (texture builder sites) and decompiles them.
-// Writes output/_ghidra/texcomp_producer.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -34,8 +34,18 @@ public class TexCompProducer extends GhidraScript {
     private static final long[] CLUSTER = { 0x00BDB404L, 0x00BDB410L, 0x00BDB534L, 0x00BDB540L };
     private static final long[] DIRECT  = { 0x007E0420L, 0x007919D0L, 0x007DCC70L };
     private static final long TEX_HASH = 0xF011157AL;
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\texcomp_producer.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -59,8 +69,9 @@ public class TexCompProducer extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {
