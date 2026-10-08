@@ -3,7 +3,7 @@
 // every non-thunk function in any executable block, sorted by address.
 // Each function is emitted once (dedup by entry) with a header line:
 //   ==== <name> @0xADDR  size=N  callers=[...] ====
-// Writes output/_ghidra_saboteur/saboteur_all_functions_decomp.txt
+// Args: <outPath>  — the output text file
 //
 // @category Saboteur
 import ghidra.app.script.GhidraScript;
@@ -23,8 +23,18 @@ import java.util.Set;
 import java.util.TreeMap;
 
 public class DecompileSaboteur extends GhidraScript {
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra_saboteur\\";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private DecompInterface decomp;
@@ -62,8 +72,8 @@ public class DecompileSaboteur extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        String outPath = OUT_DIR + "saboteur_all_functions_decomp.txt";
-        new File(OUT_DIR).mkdirs();
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface();
         decomp.openProgram(currentProgram);
