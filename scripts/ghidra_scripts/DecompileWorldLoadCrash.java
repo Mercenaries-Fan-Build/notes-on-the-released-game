@@ -1,7 +1,7 @@
 // Decompile the world-load NULL-write crash 0x004CF58B (mov [eax],edi, eax=0)
 // and its caller chain, plus xrefs to the crashing object's vtable 0x00BB12B4
 // (to identify the class via its constructor). Writes to
-// output/_ghidra/worldload_crash_decomp.txt.
+// <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -42,8 +42,18 @@ public class DecompileWorldLoadCrash extends GhidraScript {
     private static final long VTABLE_VA = 0x00BB12B4L;
     private static final long FAULT_SITE = 0x004CF58BL;
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -53,8 +63,9 @@ public class DecompileWorldLoadCrash extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "worldload_crash_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();
