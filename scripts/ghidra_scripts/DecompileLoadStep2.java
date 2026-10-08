@@ -9,7 +9,7 @@
 //   0x004781E7  16-byte alloc
 //   0x0085BFB0  16-byte alloc
 //   0x0074D74C  16-byte alloc
-// Writes output/_ghidra/loadstep2_decomp.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -34,8 +34,18 @@ public class DecompileLoadStep2 extends GhidraScript {
         "call @0x0085BFB0  16-byte alloc",
         "call @0x0074D74C  16-byte alloc",
     };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private Memory mem;
     private PrintWriter fp;
@@ -74,9 +84,10 @@ public class DecompileLoadStep2 extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        outPath = requiredArg(0);
         mem = currentProgram.getMemory();
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "loadstep2_decomp.txt");
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             DecompInterface decomp = new DecompInterface();
