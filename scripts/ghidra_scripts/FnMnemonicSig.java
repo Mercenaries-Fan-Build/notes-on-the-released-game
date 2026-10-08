@@ -1,10 +1,14 @@
-// Per-function content signature for cross-build (v1.0 vs v1.1) diffing. The 1.1 patch moved
-// functions to new addresses, so a byte/address diff is meaningless. Instead signature each
-// .text function by its instruction-MNEMONIC sequence (invariant to addresses/immediates) plus
-// its size and instruction count. Same code moved => identical mnemonic-sig; a patched function
-// => changed sig. Run once per program (-process <name>) and diff the two JSONs offline.
+// Per-function content signature for cross-build and cross-platform diffing. Builds place the
+// same functions at different addresses, so a byte/address diff is meaningless. Instead signature
+// each function in the named code blocks by its instruction-MNEMONIC sequence (invariant to
+// addresses/immediates) plus its size and instruction count. Same code moved => identical
+// mnemonic-sig; a patched function => changed sig. Run once per program (-process <name>) and diff
+// the JSONs offline.
 //
-// Args: <outDir>  — writes <outDir>/fnsig_<programName>.json  => { "0xADDR": {...} } with fields:
+// Args: <outDir> <codeBlocks>  — <codeBlocks> is a comma-separated list of executable memory block
+//   names (".text" for the PC images, ".text,BINK" for the Xbox 360 images); a name that is missing
+//   or not executable stops the script. Writes <outDir>/fnsig_<programName>.json
+//   => { "0xADDR": {...} } with fields:
 //   sig     8-byte SHA-1 prefix (hex) of the mnemonic sequence "mov;push;call;..."
 //   n       instruction count
 //   sz      body size in bytes
@@ -44,7 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FnMnemonicSig extends GhidraScript {
-    private static final String USAGE = "<outDir>";
+    private static final String USAGE = "<outDir> <codeBlocks>";
 
     // Script argument <index>; the script stops with the usage line when it is absent.
     private String requiredArg(int index) {
@@ -114,8 +118,17 @@ public class FnMnemonicSig extends GhidraScript {
     @Override
     public void run() throws Exception {
         String outDir = requiredArg(0);
-        MemoryBlock text = currentProgram.getMemory().getBlock(".text");
-        long lo = text.getStart().getOffset(), hi = text.getEnd().getOffset();
+        List<MemoryBlock> code = new ArrayList<>();
+        for (String name : requiredArg(1).split(",")) {
+            MemoryBlock b = currentProgram.getMemory().getBlock(name);
+            if (b == null) {
+                throw new IllegalArgumentException("no memory block named '" + name + "' in " + currentProgram.getName());
+            }
+            if (!b.isExecute()) {
+                throw new IllegalArgumentException("memory block '" + name + "' is not executable");
+            }
+            code.add(b);
+        }
         String prog = currentProgram.getName().replaceAll("[^A-Za-z0-9._-]", "_");
         File out = new File(outDir, "fnsig_" + prog + ".json");
         PrintWriter pw = new PrintWriter(out, "UTF-8");
@@ -126,7 +139,9 @@ public class FnMnemonicSig extends GhidraScript {
         int nfn = 0;
         for (Function f : currentProgram.getFunctionManager().getFunctions(true)) {
             long a = f.getEntryPoint().getOffset();
-            if (a < lo || a > hi || f.isThunk()) continue;
+            boolean inCode = false;
+            for (MemoryBlock b : code) inCode |= b.contains(f.getEntryPoint());
+            if (!inCode || f.isThunk()) continue;
             StringBuilder mn = new StringBuilder();
             int n = 0, calls = 0;
             List<String> callees = new ArrayList<>();
@@ -195,6 +210,6 @@ public class FnMnemonicSig extends GhidraScript {
         }
         pw.println("\n}");
         pw.close();
-        println("FnMnemonicSig: " + nfn + " .text functions -> " + out.getAbsolutePath());
+        println("FnMnemonicSig: " + nfn + " functions in " + requiredArg(1) + " -> " + out.getAbsolutePath());
     }
 }
