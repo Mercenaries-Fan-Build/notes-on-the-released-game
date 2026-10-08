@@ -10,7 +10,7 @@
 //   0x0046FE50  obj builder (calls 0x470BC0; obj has count@+0x7C, word[]@+0x8C)
 //   0x005A030D  component factory (16-byte DCE0 + Pool2 body pattern)
 //   0x004C9C80  outer world-load loop
-// Writes output/_ghidra/loadstep_decomp.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -38,8 +38,18 @@ public class DecompileLoadStep extends GhidraScript {
         "FUN @0x005A030D  component factory (DCE0 16 + Pool2 body)",
         "FUN @0x004C9C80  outer world-load loop",
     };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -69,8 +79,9 @@ public class DecompileLoadStep extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "loadstep_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             DecompInterface decomp = new DecompInterface();
