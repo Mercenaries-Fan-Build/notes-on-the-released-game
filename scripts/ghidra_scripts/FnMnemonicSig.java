@@ -15,7 +15,12 @@
 //   calls   number of call instructions
 //   callees call targets in instruction order (duplicates kept). A direct call gives its target
 //           "0xADDR"; an indirect call through a referenced memory slot gives "*0xSLOT"; an
-//           indirect call with no reference (call reg) gives "?".
+//           indirect call with no reference (call reg) gives "?". A target in Ghidra's external
+//           space (an imported function, e.g. "call dword ptr [IAT slot]") is written as
+//           "ext:<library>!<name>" from the external location's library name and label
+//           ("ext:KERNEL32.DLL!TlsGetValue"); an external target Ghidra cannot name stops the
+//           script with the call's address. A direct call to an in-image thunk stub ("jmp [IAT
+//           slot]") gives the stub's "0xADDR".
 //   drefs   data-reference targets ("0xADDR") from every instruction, in instruction order
 //           (references whose type is data: read, write, data, pointer)
 //   strs    for each data reference whose target is a defined string, the string's raw bytes as
@@ -37,10 +42,13 @@ import ghidra.program.model.lang.OperandType;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.Library;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.ExternalLocation;
 import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.Symbol;
 import java.io.File;
 import java.io.PrintWriter;
 import java.security.MessageDigest;
@@ -68,6 +76,34 @@ public class FnMnemonicSig extends GhidraScript {
 
     private static String addrHex(Address a) {
         return String.format("0x%08x", a.getOffset());
+    }
+
+    // Callee text for a call target: "0xADDR" for a memory address; "ext:<library>!<name>" for an
+    // address in external space (an imported function), from the external location's library name
+    // and label. Stops the script, naming the call and target, when the external target has no
+    // symbol, no external location, an empty label, or an empty or unknown ("<EXTERNAL>") library.
+    private String calleeText(Instruction call, Address t) {
+        if (!t.isExternalAddress()) return addrHex(t);
+        Symbol sym = currentProgram.getSymbolTable().getPrimarySymbol(t);
+        if (sym == null) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets external address " + t + " with no symbol");
+        }
+        ExternalLocation el = currentProgram.getExternalManager().getExternalLocation(sym);
+        if (el == null) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets external address " + t + " (symbol '" + sym.getName(true)
+                + "') with no external location");
+        }
+        String lib = el.getLibraryName();
+        String label = el.getLabel();
+        if (lib == null || lib.isEmpty() || Library.UNKNOWN.equals(lib)
+                || label == null || label.isEmpty()) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets external address " + t + " whose import has library '" + lib
+                + "' and label '" + label + "'");
+        }
+        return "ext:" + lib + "!" + label;
     }
 
     private static String scalarHex(Scalar s) {
@@ -159,12 +195,12 @@ public class FnMnemonicSig extends GhidraScript {
                     calls++;
                     Address[] flows = m.getFlows();
                     if (flows.length > 0) {
-                        for (Address t : flows) callees.add(addrHex(t));
+                        for (Address t : flows) callees.add(calleeText(m, t));
                     } else {
                         boolean slot = false;
                         for (Reference r : m.getReferencesFrom()) {
                             if (r.getReferenceType().isData() || r.getReferenceType().isIndirect()) {
-                                callees.add("*" + addrHex(r.getToAddress()));
+                                callees.add("*" + calleeText(m, r.getToAddress()));
                                 slot = true;
                             }
                         }
