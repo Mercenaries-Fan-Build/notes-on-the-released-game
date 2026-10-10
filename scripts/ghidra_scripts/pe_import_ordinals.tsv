@@ -1,0 +1,68 @@
+# Export names for the PE imports the Mercenaries 2 PC images (mercs2_unpacked.exe,
+# genuine_patched_unpacked.exe) take by ordinal. FnMnemonicSig.java reads this table (script
+# argument 3) to write an ordinal import ("Ordinal_<n>" in Ghidra) as ext:<library>!<name>.
+#
+# Source: the export directories of the 32-bit Wine builtin DLLs shipped in the Mercs2 Modkit Wine
+# runtime, Wine-Crossover 23.7.1-1, directory
+#   mercs2-modkit/runtimes/wine/23.7.1-1/Wine-Crossover-23.7.1-1/Contents/Resources/wine/lib/wine/i386-windows/
+# Each name is the export-name-table entry whose ordinal-table index plus the export directory's
+# ordinal base equals <ordinal>. These DLLs are Wine's reimplementations (header marker
+# "Wine builtin DLL", version resource ProductName "Wine"), not Microsoft binaries:
+#   ws2_32.dll    sha256 f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8  FileVersion 5.1.2600.5512   ordinal base 1
+#   oleaut32.dll  sha256 a55cc91273ef695be203e00c17a2d7ea27c21cc4aa4b93c2fb516676b3c29c85  FileVersion 6.0.6001.18000  ordinal base 2
+#   shell32.dll   sha256 f539618a79f909d1801058e7c732757919db843f2d5815b83e2a9c757c960ae1  FileVersion 6.0.2900.6242   ordinal base 2
+#   dsound.dll    sha256 dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb  FileVersion 5.3.1.904      ordinal base 1
+#   wsock32.dll   sha256 e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d  FileVersion 4.0.0.0        ordinal base 1
+#   xinput1_3.dll sha256 22b7cec3ee0738e2a75e75726a361ff53f75a593b5a9ba386abac3fa5e511150  FileVersion 9.15.779.0000  ordinal base 1
+#
+# Columns (tab-separated): library as Ghidra names it, ordinal (decimal), export name, sha256 of
+# the source DLL.
+WS2_32.DLL	1	accept	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	2	bind	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	3	closesocket	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	4	connect	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	5	getpeername	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	6	getsockname	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	7	getsockopt	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	8	htonl	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	9	htons	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	10	ioctlsocket	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	11	inet_addr	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	12	inet_ntoa	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	13	listen	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	14	ntohl	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	15	ntohs	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	16	recv	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	17	recvfrom	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	18	select	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	19	send	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	20	sendto	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	21	setsockopt	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	22	shutdown	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	23	socket	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	51	gethostbyaddr	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	52	gethostbyname	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	55	getservbyname	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	56	getservbyport	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	57	gethostname	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	101	WSAAsyncSelect	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	111	WSAGetLastError	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	115	WSAStartup	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	116	WSACleanup	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+WS2_32.DLL	151	__WSAFDIsSet	f7fe6f01d3fa8be072ca89d1b3586e3fe90866a438e7572ecf686f6a907ef4c8
+OLEAUT32.DLL	2	SysAllocString	a55cc91273ef695be203e00c17a2d7ea27c21cc4aa4b93c2fb516676b3c29c85
+OLEAUT32.DLL	6	SysFreeString	a55cc91273ef695be203e00c17a2d7ea27c21cc4aa4b93c2fb516676b3c29c85
+SHELL32.DLL	165	SHCreateDirectory	f539618a79f909d1801058e7c732757919db843f2d5815b83e2a9c757c960ae1
+DSOUND.DLL	1	DirectSoundCreate	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+DSOUND.DLL	2	DirectSoundEnumerateA	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+DSOUND.DLL	6	DirectSoundCaptureCreate	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+DSOUND.DLL	7	DirectSoundCaptureEnumerateA	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+DSOUND.DLL	9	GetDeviceID	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+DSOUND.DLL	11	DirectSoundCreate8	dbf9b5de32ec695675b892a9cdd6ae9dc98430c8f2e6fb4619c177c5d1494ceb
+WSOCK32.DLL	3	closesocket	e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d
+WSOCK32.DLL	19	send	e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d
+WSOCK32.DLL	22	shutdown	e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d
+WSOCK32.DLL	111	WSAGetLastError	e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d
+WSOCK32.DLL	112	WSASetLastError	e77d8c94c3ef30ede07635a54dc8f7039ce83efb12f3c1ca845ef7ea73c9d38d
+XINPUT1_3.DLL	2	XInputGetState	22b7cec3ee0738e2a75e75726a361ff53f75a593b5a9ba386abac3fa5e511150
+XINPUT1_3.DLL	3	XInputSetState	22b7cec3ee0738e2a75e75726a361ff53f75a593b5a9ba386abac3fa5e511150
