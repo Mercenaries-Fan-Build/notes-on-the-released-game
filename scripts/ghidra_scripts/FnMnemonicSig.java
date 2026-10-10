@@ -11,23 +11,37 @@
 //   tab-separated file (pe_import_ordinals.tsv next to this script) of rows
 //   "<library>\t<ordinal>\t<name>\t<source dll sha256>", '#' lines being comments; a malformed or
 //   duplicate row stops the script. <imports> is the image's imports sidecar (`exemap imports`,
-//   <id>.imports.tsv: header "address\tkind\tlibrary\tordinal", one row per XEX import record,
-//   kind "function" for an import stub, "variable" for an import slot), or "-" for an image with
-//   none. A program with no Ghidra external libraries given "-", or with Ghidra external libraries
-//   given a sidecar, stops the script; so does a malformed or duplicate sidecar row, and a
-//   function record whose bytes at +8 and +12 are not "mtctr r11; bctr". The stub range runs from
-//   the lowest function record to 16 bytes past the highest. Import stub functions (an entry on a
-//   function record) are not written as keys; a function entry in the stub range on no record
-//   stops the script. Writes <outDir>/fnsig_<programName>.json
+//   <id>.imports.tsv), or "-" for an image with none. Its header line names its format:
+//   XEX (Xbox 360), "address\tkind\tlibrary\tordinal": one row per XEX import record, kind
+//   "function" for an import stub, "variable" for an import slot; a function record whose bytes
+//   at +8 and +12 are not "mtctr r11; bctr" stops the script, and a function record covers 16
+//   bytes. PRX (PS3), "address\tkind\tlibrary\tfnid\tstub": one row per function import, kind
+//   "function", the FNID as 8 lowercase hex digits and the stub's bytes as lowercase hex; a stub
+//   whose bytes in the program are not the row's stops the script, and a function record covers
+//   as many bytes as the row gives. A program with no Ghidra external libraries given "-", or with
+//   Ghidra external libraries given a sidecar, stops the script; so does a malformed or duplicate
+//   sidecar row. The stub range runs from the lowest function record to the end of the highest.
+//   Import stub functions (an entry on a function record) are not written as keys; a function
+//   entry in the stub range on no record stops the script. Writes <outDir>/fnsig_<programName>.json
 //   => { "0xADDR": {...} } with fields:
 //   sig     8-byte SHA-1 prefix (hex) of the mnemonic sequence "mov;push;call;..."
 //   n       instruction count
 //   sz      body size in bytes
-//   calls   number of call instructions
+//   calls   number of call instructions, counting each PS3 system call (`sc`)
 //   callees call targets in instruction order (duplicates kept), followed in place by the target
-//           of every branch to a sidecar function record (a tail jump). A direct call gives its
-//           target "0xADDR"; a direct call or branch to a sidecar function record gives
-//           "ext:<library>!ord_<ordinal>"; a call or branch into the stub range on no function
+//           of every branch to a sidecar function record (a tail jump) and by every PS3 `sc`. A
+//           direct call gives its target "0xADDR"; a direct call or branch to a sidecar function
+//           record gives "ext:<library>!ord_<ordinal>" (XEX) or "ext:<library>!fnid_<fnid>"
+//           (PRX). In a program given a PRX sidecar, each `sc` (the word 0x44000002) gives
+//           "sys:<N>", N (decimal) the system call number in r11: walking backwards from the sc
+//           over its predecessors in the function (the instruction falling through to it and the
+//           source of each Ghidra flow reference to it), every path must meet "li r11,N" (a p-code
+//           COPY of a constant into r11) with the same N. A path that meets any other write of
+//           r11, a call or another sc first, reaches a function entry or leaves the function body,
+//           or meets an instruction with no known predecessor or with a reference that is not a
+//           branch from an instruction, stops the script naming the sc; so do paths whose
+//           constants differ. An `sc` in any other PowerPC program stops the script. A call or
+//           branch into the stub range on no function
 //           record, and a call to a variable record, stops the script. An indirect call with no
 //           flow is written per data or indirect reference it carries: a memory slot gives
 //           "*0xSLOT"; a stack READ (a function pointer read from a parameter or local) gives
@@ -75,6 +89,8 @@ import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.Library;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.ExternalLocation;
 import ghidra.program.model.symbol.RefType;
@@ -95,10 +111,13 @@ import java.util.Map;
 public class FnMnemonicSig extends GhidraScript {
     private static final String USAGE = "<outDir> <codeBlocks> <ordinalTable> <imports|->";
     private static final String IMPORTS_HEADER = "address\tkind\tlibrary\tordinal";
+    private static final String PRX_IMPORTS_HEADER = "address\tkind\tlibrary\tfnid\tstub";
     // The last two words of an Xbox 360 import stub: mtctr r11; bctr.
     private static final int STUB_MTCTR = 0x7d6903a6;
     private static final int STUB_BCTR = 0x4e800420;
     private static final int STUB_SIZE = 16;
+    // The PowerPC system call instruction with LEV 0.
+    private static final int SC_WORD = 0x44000002;
 
     // Export name per "<library>\t<ordinal>", from the ordinal table (script argument 3).
     private final Map<String, String> ordinalNames = new HashMap<>();
@@ -108,17 +127,25 @@ public class FnMnemonicSig extends GhidraScript {
     private final Map<Long, String> stubImports = new HashMap<>();
     private final Map<Long, String> varImports = new HashMap<>();
     private long stubLo = 0, stubHi = 0;
+    // Whether the sidecar is a PRX (PS3) imports sidecar.
+    private boolean prxImports = false;
 
     // Reads the imports sidecar at path into stubImports / varImports and sets the stub range.
-    // Stops the script, naming the file and line, on a wrong header, a row that is not
-    // "0x<8 hex>\t<function|variable>\t<library>\t<decimal ordinal>", a repeated address, an
-    // address outside the program's memory, or a function record whose bytes at +8 and +12 are
-    // not mtctr r11; bctr.
+    // The header line names the format. XEX: "address\tkind\tlibrary\tordinal"; stops the script,
+    // naming the file and line, on a row that is not "0x<8 hex>\t<function|variable>\t<library>\t
+    // <decimal ordinal>", a repeated address, an address outside the program's memory, or a
+    // function record whose bytes at +8 and +12 are not mtctr r11; bctr. PRX:
+    // "address\tkind\tlibrary\tfnid\tstub" (loadPrxImports). Any other header stops the script.
     private void loadImports(String path) throws Exception {
         List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
+        if (!lines.isEmpty() && lines.get(0).equals(PRX_IMPORTS_HEADER)) {
+            loadPrxImports(path, lines);
+            return;
+        }
         if (lines.isEmpty() || !lines.get(0).equals(IMPORTS_HEADER)) {
-            throw new IllegalArgumentException("imports sidecar " + path + ": header is not '"
-                + IMPORTS_HEADER.replace("\t", "\\t") + "'");
+            throw new IllegalArgumentException("imports sidecar " + path + ": header is neither '"
+                + IMPORTS_HEADER.replace("\t", "\\t") + "' nor '"
+                + PRX_IMPORTS_HEADER.replace("\t", "\\t") + "'");
         }
         long lo = Long.MAX_VALUE, hi = Long.MIN_VALUE;
         for (int i = 1; i < lines.size(); i++) {
@@ -160,6 +187,161 @@ public class FnMnemonicSig extends GhidraScript {
         }
         stubLo = lo;
         stubHi = hi;
+    }
+
+    // Reads a PRX imports sidecar (header "address\tkind\tlibrary\tfnid\tstub", one row per PS3
+    // function import: the code stub's address, "function", the library, the FNID as 8 lowercase
+    // hex digits, and the stub's bytes as lowercase hex, whose length is the stub size) into
+    // stubImports as "ext:<library>!fnid_<fnid>" and sets the stub range from the lowest stub to
+    // the end of the highest. Stops the script, naming the file and line, on a row that is not of
+    // that form, a repeated address, an address outside the program's memory, or a stub whose bytes
+    // in the program are not the row's bytes.
+    private void loadPrxImports(String path, List<String> lines) throws Exception {
+        long lo = Long.MAX_VALUE, hi = Long.MIN_VALUE;
+        for (int i = 1; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String where = path + ":" + (i + 1);
+            String[] f = line.split("\t", -1);
+            if (f.length != 5 || !f[0].matches("0x[0-9a-f]{8}") || !f[1].equals("function")
+                    || f[2].isEmpty() || !f[3].matches("[0-9a-f]{8}")
+                    || !f[4].matches("([0-9a-f]{2})+")) {
+                throw new IllegalArgumentException("imports sidecar row " + where + " is not"
+                    + " 0x<address>\\tfunction\\t<library>\\t<8 hex fnid>\\t<hex stub bytes>: '" + line + "'");
+            }
+            long addr = Long.parseLong(f[0].substring(2), 16);
+            Address a = toAddr(addr);
+            if (!currentProgram.getMemory().contains(a)) {
+                throw new IllegalArgumentException("imports sidecar row " + where + ": " + f[0]
+                    + " is not in " + currentProgram.getName() + "'s memory");
+            }
+            if (stubImports.containsKey(addr)) {
+                throw new IllegalArgumentException("imports sidecar row " + where + " repeats " + f[0]);
+            }
+            byte[] want = new byte[f[4].length() / 2];
+            for (int k = 0; k < want.length; k++) {
+                want[k] = (byte) Integer.parseInt(f[4].substring(2 * k, 2 * k + 2), 16);
+            }
+            byte[] got = getBytes(a, want.length);
+            if (!java.util.Arrays.equals(got, want)) {
+                throw new IllegalArgumentException("imports sidecar row " + where + ": the stub at "
+                    + f[0] + " is " + hex(got) + " in " + currentProgram.getName() + ", not " + f[4]);
+            }
+            stubImports.put(addr, "ext:" + f[2] + "!fnid_" + f[3]);
+            lo = Math.min(lo, addr);
+            hi = Math.max(hi, addr + want.length);
+        }
+        if (stubImports.isEmpty()) {
+            throw new IllegalArgumentException("imports sidecar " + path + " has no function record");
+        }
+        stubLo = lo;
+        stubHi = hi;
+        prxImports = true;
+    }
+
+    // r11, the register that holds the system call number at a PS3 `sc`.
+    private Register r11;
+    private long r11Lo, r11Hi;
+    private int scOnePath = 0, scJoins = 0;
+
+    // Whether any p-code op of ins writes a register range overlapping r11.
+    private boolean writesR11(Instruction ins) {
+        for (PcodeOp op : ins.getPcode()) {
+            Varnode o = op.getOutput();
+            if (o != null && o.isRegister() && o.getOffset() < r11Hi && o.getOffset() + o.getSize() > r11Lo) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The constant ins copies into r11 when its one write of r11 is a COPY of a constant into the
+    // whole register ("li r11,N"); null for any other write.
+    private Long constantR11(Instruction ins) {
+        Long v = null;
+        for (PcodeOp op : ins.getPcode()) {
+            Varnode o = op.getOutput();
+            if (o == null || !o.isRegister() || o.getOffset() >= r11Hi || o.getOffset() + o.getSize() <= r11Lo) continue;
+            if (v != null || op.getOpcode() != PcodeOp.COPY || o.getOffset() != r11Lo
+                    || o.getSize() != r11Hi - r11Lo || !op.getInput(0).isConstant()) {
+                return null;
+            }
+            v = op.getInput(0).getOffset();
+        }
+        return v;
+    }
+
+    // The instructions control reaches i from, inside f: the instruction that falls through to i
+    // and the source of every flow reference to i. Stops the script (naming the sc) when i is a
+    // function entry, lies outside f's body, carries a reference that is not a flow from an
+    // instruction (its address is taken, so control may arrive from code Ghidra does not show), or
+    // has no known predecessor. Sets joined[0] when i has more than one predecessor.
+    private List<Instruction> predecessors(Instruction sc, Function f, Instruction i, boolean[] joined) {
+        Address a = i.getAddress();
+        String site = "sc at " + sc.getAddress() + " in " + f.getName(true) + ": r11 is not provable: ";
+        if (getFunctionAt(a) != null) {
+            throw new IllegalStateException(site + "a path reaches the entry of " + getFunctionAt(a).getName(true)
+                + " at " + a + " with no write of r11");
+        }
+        if (!f.getBody().contains(a)) {
+            throw new IllegalStateException(site + "a path leaves the function body at " + a);
+        }
+        List<Instruction> out = new ArrayList<>();
+        for (Reference r : getReferencesTo(a)) {
+            Instruction from = getInstructionAt(r.getFromAddress());
+            if (from == null || !r.getReferenceType().isFlow() || r.getReferenceType().isCall()) {
+                throw new IllegalStateException(site + a + " is the target of a " + r.getReferenceType()
+                    + " reference from " + r.getFromAddress() + ", not a branch from an instruction");
+            }
+            out.add(from);
+        }
+        Instruction prev = currentProgram.getListing().getInstructionContaining(a.subtract(1));
+        if (prev != null && a.equals(prev.getFallThrough())) out.add(prev);
+        if (out.isEmpty()) {
+            throw new IllegalStateException(site + a + " has no fall-through predecessor and no branch to it");
+        }
+        if (out.size() > 1) joined[0] = true;
+        return out;
+    }
+
+    // The system call number of the PS3 `sc` instruction sc in f: the value every path reaching sc
+    // last wrote to r11, each such write being "li r11,N" (a COPY of a constant into r11). Walks
+    // backwards from sc over predecessors (fall-through and Ghidra's flow references) inside f until
+    // each path meets a write of r11. Stops the script, naming the sc, when sc is not the word
+    // 0x44000002, a path meets any other write of r11, a call or another sc before a write of r11,
+    // when predecessors stops, or when the paths' constants differ.
+    private long syscallNumber(Instruction sc, Function f) throws Exception {
+        String site = "sc at " + sc.getAddress() + " in " + f.getName(true) + ": r11 is not provable: ";
+        if (sc.getInt(0) != SC_WORD) {
+            throw new IllegalStateException("'" + sc + "' at " + sc.getAddress() + " is the word "
+                + String.format("%08x", sc.getInt(0)) + ", not sc (" + String.format("%08x", SC_WORD) + ")");
+        }
+        boolean[] joined = {false};
+        java.util.ArrayDeque<Instruction> work = new java.util.ArrayDeque<>(predecessors(sc, f, sc, joined));
+        java.util.Set<Address> seen = new java.util.HashSet<>();
+        java.util.TreeMap<Long, List<Address>> defs = new java.util.TreeMap<>();
+        while (!work.isEmpty()) {
+            Instruction p = work.pop();
+            if (!seen.add(p.getAddress())) continue;
+            if (writesR11(p)) {
+                Long v = constantR11(p);
+                if (v == null) {
+                    throw new IllegalStateException(site + "'" + p + "' at " + p.getAddress()
+                        + " writes r11 with something other than a constant");
+                }
+                defs.computeIfAbsent(v, k -> new ArrayList<>()).add(p.getAddress());
+                continue;
+            }
+            if (p.getFlowType().isCall() || p.getMnemonicString().equals("sc")) {
+                throw new IllegalStateException(site + "'" + p + "' at " + p.getAddress()
+                    + " lies on a path before any write of r11");
+            }
+            work.addAll(predecessors(sc, f, p, joined));
+        }
+        if (defs.size() != 1) {
+            throw new IllegalStateException(site + "the paths' last writes of r11 are " + defs);
+        }
+        if (joined[0]) scJoins++; else scOnePath++;
+        return defs.firstKey();
     }
 
     private boolean inStubRange(Address t) {
@@ -427,14 +609,27 @@ public class FnMnemonicSig extends GhidraScript {
         MessageDigest md = MessageDigest.getInstance("SHA-1");
         MessageDigest mbd = MessageDigest.getInstance("SHA-1");
         boolean first = true;
-        int nfn = 0;
+        int nfn = 0, stubFunctions = 0;
+        boolean powerPc = currentProgram.getLanguage().getProcessor().toString().equals("PowerPC");
+        if (prxImports) {
+            r11 = currentProgram.getRegister("r11");
+            if (r11 == null) {
+                throw new IllegalStateException(currentProgram.getName() + " was given a PRX imports"
+                    + " sidecar but its language has no register r11");
+            }
+            r11Lo = r11.getAddress().getOffset();
+            r11Hi = r11Lo + r11.getMinimumByteSize();
+        }
         for (Function f : currentProgram.getFunctionManager().getFunctions(true)) {
             long a = f.getEntryPoint().getOffset();
             boolean inCode = false;
             for (MemoryBlock b : code) inCode |= b.contains(f.getEntryPoint());
             if (!inCode || f.isThunk()) continue;
             if (inStubRange(f.getEntryPoint())) {
-                if (stubImports.containsKey(a)) continue;
+                if (stubImports.containsKey(a)) {
+                    stubFunctions++;
+                    continue;
+                }
                 throw new IllegalStateException("function " + f.getName(true) + " at "
                     + f.getEntryPoint() + " starts inside the import stub range on no function record");
             }
@@ -470,6 +665,14 @@ public class FnMnemonicSig extends GhidraScript {
                     for (Address t : m.getFlows()) {
                         if (inStubRange(t)) callees.add(stubText(m, t));
                     }
+                } else if (powerPc && m.getMnemonicString().equals("sc")) {
+                    if (!prxImports) {
+                        throw new IllegalStateException("sc at " + m.getAddress() + " in " + f.getName(true)
+                            + ": the system call number register is known for a program given a PRX"
+                            + " imports sidecar (PS3, r11) only");
+                    }
+                    calls++;
+                    callees.add("sys:" + syscallNumber(m, f));
                 }
                 for (Reference r : m.getReferencesFrom()) {
                     RefType rt = r.getReferenceType();
@@ -511,6 +714,11 @@ public class FnMnemonicSig extends GhidraScript {
         }
         pw.println("\n}");
         pw.close();
+        if (prxImports) {
+            println("FnMnemonicSig PRX: " + stubFunctions + " import stub functions not written as keys; "
+                + (scOnePath + scJoins) + " sc sites: " + scOnePath + " with r11 written on one path, "
+                + scJoins + " through joins whose every path writes the same constant");
+        }
         println("FnMnemonicSig: " + nfn + " functions in " + requiredArg(1) + " -> " + out.getAbsolutePath());
     }
 }
