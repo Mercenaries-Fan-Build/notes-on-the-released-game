@@ -5,20 +5,38 @@
 // mnemonic-sig; a patched function => changed sig. Run once per program (-process <name>) and diff
 // the JSONs offline.
 //
-// Args: <outDir> <codeBlocks> <ordinalTable>  — <codeBlocks> is a comma-separated list of
-//   executable memory block names (".text" for the PC images, ".text,BINK" for the Xbox 360
+// Args: <outDir> <codeBlocks> <ordinalTable> <imports>  — <codeBlocks> is a comma-separated list
+//   of executable memory block names (".text" for the PC images, ".text,BINK" for the Xbox 360
 //   images); a name that is missing or not executable stops the script. <ordinalTable> is a
 //   tab-separated file (pe_import_ordinals.tsv next to this script) of rows
 //   "<library>\t<ordinal>\t<name>\t<source dll sha256>", '#' lines being comments; a malformed or
-//   duplicate row stops the script. Writes <outDir>/fnsig_<programName>.json
+//   duplicate row stops the script. <imports> is the image's imports sidecar (`exemap imports`,
+//   <id>.imports.tsv: header "address\tkind\tlibrary\tordinal", one row per XEX import record,
+//   kind "function" for an import stub, "variable" for an import slot), or "-" for an image with
+//   none. A program with no Ghidra external libraries given "-", or with Ghidra external libraries
+//   given a sidecar, stops the script; so does a malformed or duplicate sidecar row, and a
+//   function record whose bytes at +8 and +12 are not "mtctr r11; bctr". The stub range runs from
+//   the lowest function record to 16 bytes past the highest. Import stub functions (an entry on a
+//   function record) are not written as keys; a function entry in the stub range on no record
+//   stops the script. Writes <outDir>/fnsig_<programName>.json
 //   => { "0xADDR": {...} } with fields:
 //   sig     8-byte SHA-1 prefix (hex) of the mnemonic sequence "mov;push;call;..."
 //   n       instruction count
 //   sz      body size in bytes
 //   calls   number of call instructions
-//   callees call targets in instruction order (duplicates kept). A direct call gives its target
-//           "0xADDR"; an indirect call through a referenced memory slot gives "*0xSLOT"; an
-//           indirect call with no reference (call reg) gives "?". A target in Ghidra's external
+//   callees call targets in instruction order (duplicates kept), followed in place by the target
+//           of every branch to a sidecar function record (a tail jump). A direct call gives its
+//           target "0xADDR"; a direct call or branch to a sidecar function record gives
+//           "ext:<library>!ord_<ordinal>"; a call or branch into the stub range on no function
+//           record, and a call to a variable record, stops the script. An indirect call with no
+//           flow is written per data or indirect reference it carries: a memory slot gives
+//           "*0xSLOT"; a stack READ (a function pointer read from a parameter or local) gives
+//           "*stack:<signed hex frame offset>" ("*stack:-0x68", "*stack:0x10"); a stack DATA
+//           reference on a register operand ("call esp") or on a memory operand with an index
+//           register ("callf [esp+ebx*4+disp]") gives "?"; any other stack reference, a slot that
+//           is a sidecar variable record, and a reference into any other non-memory, non-external
+//           space stop the script. A call with no flow and no such reference (call reg) gives "?".
+//           A target in Ghidra's external
 //           space (an imported function, e.g. "call dword ptr [IAT slot]") is written as
 //           "ext:<library>!<name>" from the external location's library name and label
 //           ("ext:KERNEL32.DLL!TlsGetValue"); an external target Ghidra cannot name stops the
@@ -33,7 +51,8 @@
 //           library (Ghidra's "<EXTERNAL>" library, e.g. a jump to an absolute address outside
 //           the image, labelled "EXT_FUN_<addr>"), gives the thunk's "0xADDR".
 //   drefs   data-reference targets ("0xADDR") from every instruction, in instruction order
-//           (references whose type is data: read, write, data, pointer)
+//           (references whose type is data: read, write, data, pointer); a target that is a
+//           sidecar variable record gives "ext:<library>!ord_<ordinal>"
 //   strs    for each data reference whose target is a defined string, the string's raw bytes as
 //           hex, in instruction order
 //   imms    scalar operands in instruction order ("0x10", "-0x8"), including memory
@@ -50,6 +69,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.lang.InstructionPrototype;
 import ghidra.program.model.lang.Mask;
 import ghidra.program.model.lang.OperandType;
+import ghidra.program.model.lang.Register;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
@@ -73,10 +93,137 @@ import java.util.List;
 import java.util.Map;
 
 public class FnMnemonicSig extends GhidraScript {
-    private static final String USAGE = "<outDir> <codeBlocks> <ordinalTable>";
+    private static final String USAGE = "<outDir> <codeBlocks> <ordinalTable> <imports|->";
+    private static final String IMPORTS_HEADER = "address\tkind\tlibrary\tordinal";
+    // The last two words of an Xbox 360 import stub: mtctr r11; bctr.
+    private static final int STUB_MTCTR = 0x7d6903a6;
+    private static final int STUB_BCTR = 0x4e800420;
+    private static final int STUB_SIZE = 16;
 
     // Export name per "<library>\t<ordinal>", from the ordinal table (script argument 3).
     private final Map<String, String> ordinalNames = new HashMap<>();
+
+    // Sidecar records by address (script argument 4): "ext:<library>!ord_<ordinal>" per function
+    // record and per variable record.
+    private final Map<Long, String> stubImports = new HashMap<>();
+    private final Map<Long, String> varImports = new HashMap<>();
+    private long stubLo = 0, stubHi = 0;
+
+    // Reads the imports sidecar at path into stubImports / varImports and sets the stub range.
+    // Stops the script, naming the file and line, on a wrong header, a row that is not
+    // "0x<8 hex>\t<function|variable>\t<library>\t<decimal ordinal>", a repeated address, an
+    // address outside the program's memory, or a function record whose bytes at +8 and +12 are
+    // not mtctr r11; bctr.
+    private void loadImports(String path) throws Exception {
+        List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
+        if (lines.isEmpty() || !lines.get(0).equals(IMPORTS_HEADER)) {
+            throw new IllegalArgumentException("imports sidecar " + path + ": header is not '"
+                + IMPORTS_HEADER.replace("\t", "\\t") + "'");
+        }
+        long lo = Long.MAX_VALUE, hi = Long.MIN_VALUE;
+        for (int i = 1; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String where = path + ":" + (i + 1);
+            String[] f = line.split("\t", -1);
+            if (f.length != 4 || !f[0].matches("0x[0-9a-f]{8}")
+                    || !(f[1].equals("function") || f[1].equals("variable"))
+                    || f[2].isEmpty() || !f[3].matches("[0-9]+")) {
+                throw new IllegalArgumentException("imports sidecar row " + where + " is not"
+                    + " 0x<address>\\t<function|variable>\\t<library>\\t<ordinal>: '" + line + "'");
+            }
+            long addr = Long.parseLong(f[0].substring(2), 16);
+            Address a = toAddr(addr);
+            if (!currentProgram.getMemory().contains(a)) {
+                throw new IllegalArgumentException("imports sidecar row " + where + ": " + f[0]
+                    + " is not in " + currentProgram.getName() + "'s memory");
+            }
+            String text = "ext:" + f[2] + "!ord_" + Integer.parseInt(f[3]);
+            if (stubImports.containsKey(addr) || varImports.containsKey(addr)) {
+                throw new IllegalArgumentException("imports sidecar row " + where + " repeats " + f[0]);
+            }
+            if (f[1].equals("function")) {
+                int w2 = getInt(a.add(8)), w3 = getInt(a.add(12));
+                if (w2 != STUB_MTCTR || w3 != STUB_BCTR) {
+                    throw new IllegalArgumentException("imports sidecar row " + where + ": the stub at "
+                        + f[0] + " ends " + String.format("%08x %08x", w2, w3)
+                        + " in " + currentProgram.getName() + ", not mtctr r11; bctr");
+                }
+                stubImports.put(addr, text);
+                lo = Math.min(lo, addr);
+                hi = Math.max(hi, addr + STUB_SIZE);
+            } else {
+                varImports.put(addr, text);
+            }
+        }
+        if (stubImports.isEmpty()) {
+            throw new IllegalArgumentException("imports sidecar " + path + " has no function record");
+        }
+        stubLo = lo;
+        stubHi = hi;
+    }
+
+    private boolean inStubRange(Address t) {
+        return t.isMemoryAddress() && t.getOffset() >= stubLo && t.getOffset() < stubHi;
+    }
+
+    // Callee text for a call or branch target t that is in the stub range: the function record's
+    // "ext:<library>!ord_<ordinal>". Stops the script, naming the instruction and target, when t
+    // is on no function record.
+    private String stubText(Instruction ins, Address t) {
+        String s = stubImports.get(t.getOffset());
+        if (s == null) {
+            throw new IllegalStateException("'" + ins + "' at " + ins.getAddress() + " targets "
+                + t + ", inside the import stub range 0x" + Long.toHexString(stubLo) + "..0x"
+                + Long.toHexString(stubHi) + " but on no function record");
+        }
+        return s;
+    }
+
+    // Signed hex of a stack frame offset: "-0x68", "0x10", "0x0".
+    private static String signedHex(long v) {
+        return v < 0 ? "-0x" + Long.toHexString(-v) : "0x" + Long.toHexString(v);
+    }
+
+    // Whether operand i of ins is a register ("call esp") or a memory operand with an index
+    // register (two or more registers among its objects, "callf [esp+ebx*4+disp]").
+    private static boolean registerOrIndexed(Instruction ins, int i) {
+        if (i < 0 || i >= ins.getNumOperands()) return false;
+        if (OperandType.isRegister(ins.getOperandType(i))) return true;
+        int regs = 0;
+        for (Object o : ins.getOpObjects(i)) {
+            if (o instanceof Register) regs++;
+        }
+        return regs >= 2;
+    }
+
+    // Callee text for one data or indirect reference r of a call with no flow. Memory: "*0xSLOT"
+    // (stops on a sidecar variable record); external: "*ext:..." as calleeText; stack READ:
+    // "*stack:<signed hex offset>"; stack DATA on a register or index-register operand: "?". Stops
+    // the script, naming the call, on any other stack reference and on any other address space.
+    private String slotText(Instruction call, Reference r) {
+        Address to = r.getToAddress();
+        if (to.isMemoryAddress()) {
+            if (varImports.containsKey(to.getOffset())) {
+                throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                    + " reads its target from import variable " + varImports.get(to.getOffset())
+                    + " at " + to + "; a call through an import variable is not handled");
+            }
+            return "*" + calleeText(call, to);
+        }
+        if (to.isExternalAddress()) return "*" + calleeText(call, to);
+        if (to.isStackAddress()) {
+            RefType rt = r.getReferenceType();
+            if (rt == RefType.READ) return "*stack:" + signedHex(to.getOffset());
+            if (rt == RefType.DATA && registerOrIndexed(call, r.getOperandIndex())) return "?";
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " carries a stack " + rt + " reference to " + to + " on operand "
+                + r.getOperandIndex() + ", which is neither a READ nor a DATA reference on a"
+                + " register or index-register operand");
+        }
+        throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+            + " carries a " + r.getReferenceType() + " reference into address space '"
+            + to.getAddressSpace().getName() + "' (" + to + "), which is not handled");
+    }
 
     // Reads the ordinal table at path into ordinalNames. Stops the script, naming the file and
     // line, on a row that is not four tab-separated fields (non-empty library and name, a
@@ -141,7 +288,8 @@ public class FnMnemonicSig extends GhidraScript {
         return extText(call, t, el);
     }
 
-    // Callee text for a direct call flow target: a thunk function at t whose thunk chain ends at
+    // Callee text for a direct call flow target: a target in the stub range gives stubText; a
+    // sidecar variable record stops the script; a thunk function at t whose thunk chain ends at
     // an external function in a named library gives "ext:<library>!<name>" of that external
     // function; a thunk whose chain ends at an in-image function, or at an external function in
     // Ghidra's unknown library ("<EXTERNAL>"), gives the thunk's "0xADDR"; any other target gives
@@ -149,6 +297,11 @@ public class FnMnemonicSig extends GhidraScript {
     // thunked function or the external function at the end of the chain has no external location.
     private String flowCalleeText(Instruction call, Address t) {
         if (!t.isMemoryAddress()) return calleeText(call, t);
+        if (inStubRange(t)) return stubText(call, t);
+        if (varImports.containsKey(t.getOffset())) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets import variable " + varImports.get(t.getOffset()) + " at " + t);
+        }
         Function tf = currentProgram.getFunctionManager().getFunctionAt(t);
         if (tf == null || !tf.isThunk()) return calleeText(call, t);
         Function end = tf.getThunkedFunction(true);
@@ -252,6 +405,21 @@ public class FnMnemonicSig extends GhidraScript {
             code.add(b);
         }
         loadOrdinalTable(requiredArg(2));
+        String imports = requiredArg(3);
+        String[] extLibs = currentProgram.getExternalManager().getExternalLibraryNames();
+        if (imports.equals("-")) {
+            if (extLibs.length == 0) {
+                throw new IllegalArgumentException(currentProgram.getName() + " has no external"
+                    + " libraries and no imports sidecar was given (\"-\"); give its <id>.imports.tsv");
+            }
+        } else {
+            if (extLibs.length > 0) {
+                throw new IllegalArgumentException(currentProgram.getName() + " has external libraries "
+                    + String.join(",", extLibs) + " and an imports sidecar " + imports
+                    + " was given; give \"-\"");
+            }
+            loadImports(imports);
+        }
         String prog = currentProgram.getName().replaceAll("[^A-Za-z0-9._-]", "_");
         File out = new File(outDir, "fnsig_" + prog + ".json");
         PrintWriter pw = new PrintWriter(out, "UTF-8");
@@ -265,6 +433,11 @@ public class FnMnemonicSig extends GhidraScript {
             boolean inCode = false;
             for (MemoryBlock b : code) inCode |= b.contains(f.getEntryPoint());
             if (!inCode || f.isThunk()) continue;
+            if (inStubRange(f.getEntryPoint())) {
+                if (stubImports.containsKey(a)) continue;
+                throw new IllegalStateException("function " + f.getName(true) + " at "
+                    + f.getEntryPoint() + " starts inside the import stub range on no function record");
+            }
             StringBuilder mn = new StringBuilder();
             int n = 0, calls = 0;
             List<String> callees = new ArrayList<>();
@@ -287,17 +460,22 @@ public class FnMnemonicSig extends GhidraScript {
                         boolean slot = false;
                         for (Reference r : m.getReferencesFrom()) {
                             if (r.getReferenceType().isData() || r.getReferenceType().isIndirect()) {
-                                callees.add("*" + calleeText(m, r.getToAddress()));
+                                callees.add(slotText(m, r));
                                 slot = true;
                             }
                         }
                         if (!slot) callees.add("?");
                     }
+                } else if (m.getFlowType().isJump()) {
+                    for (Address t : m.getFlows()) {
+                        if (inStubRange(t)) callees.add(stubText(m, t));
+                    }
                 }
                 for (Reference r : m.getReferencesFrom()) {
                     RefType rt = r.getReferenceType();
                     if (!rt.isData() || !r.getToAddress().isMemoryAddress()) continue;
-                    drefs.add(addrHex(r.getToAddress()));
+                    String var = varImports.get(r.getToAddress().getOffset());
+                    drefs.add(var != null ? var : addrHex(r.getToAddress()));
                     Data d = getDataAt(r.getToAddress());
                     if (d != null && d.hasStringValue()) strs.add(hex(d.getBytes()));
                 }
