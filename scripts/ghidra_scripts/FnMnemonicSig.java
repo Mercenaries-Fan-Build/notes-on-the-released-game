@@ -5,9 +5,12 @@
 // mnemonic-sig; a patched function => changed sig. Run once per program (-process <name>) and diff
 // the JSONs offline.
 //
-// Args: <outDir> <codeBlocks>  — <codeBlocks> is a comma-separated list of executable memory block
-//   names (".text" for the PC images, ".text,BINK" for the Xbox 360 images); a name that is missing
-//   or not executable stops the script. Writes <outDir>/fnsig_<programName>.json
+// Args: <outDir> <codeBlocks> <ordinalTable>  — <codeBlocks> is a comma-separated list of
+//   executable memory block names (".text" for the PC images, ".text,BINK" for the Xbox 360
+//   images); a name that is missing or not executable stops the script. <ordinalTable> is a
+//   tab-separated file (pe_import_ordinals.tsv next to this script) of rows
+//   "<library>\t<ordinal>\t<name>\t<source dll sha256>", '#' lines being comments; a malformed or
+//   duplicate row stops the script. Writes <outDir>/fnsig_<programName>.json
 //   => { "0xADDR": {...} } with fields:
 //   sig     8-byte SHA-1 prefix (hex) of the mnemonic sequence "mov;push;call;..."
 //   n       instruction count
@@ -19,8 +22,16 @@
 //           space (an imported function, e.g. "call dword ptr [IAT slot]") is written as
 //           "ext:<library>!<name>" from the external location's library name and label
 //           ("ext:KERNEL32.DLL!TlsGetValue"); an external target Ghidra cannot name stops the
-//           script with the call's address. A direct call to an in-image thunk stub ("jmp [IAT
-//           slot]") gives the stub's "0xADDR".
+//           script with the call's address. An import Ghidra labels by ordinal ("Ordinal_<n>",
+//           SymbolUtilities.getOrdinalValue) is written with the name the ordinal table gives
+//           for its library and ordinal ("ext:WS2_32.DLL!closesocket"); an ordinal import absent
+//           from the table stops the script, naming the library and ordinal. A direct call to an
+//           in-image thunk function whose thunk chain (Function.getThunkedFunction(true)) ends at
+//           an external function in a named library (a "jmp [IAT slot]" stub) is written the
+//           same way, as "ext:<library>!<name>" of that external function. A direct call to a
+//           thunk whose chain ends at an in-image function, or at an external function in no
+//           library (Ghidra's "<EXTERNAL>" library, e.g. a jump to an absolute address outside
+//           the image, labelled "EXT_FUN_<addr>"), gives the thunk's "0xADDR".
 //   drefs   data-reference targets ("0xADDR") from every instruction, in instruction order
 //           (references whose type is data: read, write, data, pointer)
 //   strs    for each data reference whose target is a defined string, the string's raw bytes as
@@ -49,14 +60,46 @@ import ghidra.program.model.symbol.ExternalLocation;
 import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolUtilities;
 import java.io.File;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class FnMnemonicSig extends GhidraScript {
-    private static final String USAGE = "<outDir> <codeBlocks>";
+    private static final String USAGE = "<outDir> <codeBlocks> <ordinalTable>";
+
+    // Export name per "<library>\t<ordinal>", from the ordinal table (script argument 3).
+    private final Map<String, String> ordinalNames = new HashMap<>();
+
+    // Reads the ordinal table at path into ordinalNames. Stops the script, naming the file and
+    // line, on a row that is not four tab-separated fields (non-empty library and name, a
+    // non-negative decimal ordinal, a 64-hex-digit sha256) or that repeats a library and ordinal.
+    private void loadOrdinalTable(String path) throws Exception {
+        List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line.isEmpty() || line.startsWith("#")) continue;
+            String where = path + ":" + (i + 1);
+            String[] f = line.split("\t", -1);
+            if (f.length != 4 || f[0].isEmpty() || f[2].isEmpty()
+                    || !f[1].matches("[0-9]+") || !f[3].matches("[0-9a-f]{64}")) {
+                throw new IllegalArgumentException("ordinal table row " + where + " is not"
+                    + " <library>\\t<ordinal>\\t<name>\\t<sha256>: '" + line + "'");
+            }
+            String key = f[0] + "\t" + Integer.parseInt(f[1]);
+            if (ordinalNames.put(key, f[2]) != null) {
+                throw new IllegalArgumentException("ordinal table row " + where + " repeats "
+                    + f[0] + " ordinal " + f[1]);
+            }
+        }
+    }
 
     // Script argument <index>; the script stops with the usage line when it is absent.
     private String requiredArg(int index) {
@@ -95,15 +138,58 @@ public class FnMnemonicSig extends GhidraScript {
                 + " targets external address " + t + " (symbol '" + sym.getName(true)
                 + "') with no external location");
         }
+        return extText(call, t, el);
+    }
+
+    // Callee text for a direct call flow target: a thunk function at t whose thunk chain ends at
+    // an external function in a named library gives "ext:<library>!<name>" of that external
+    // function; a thunk whose chain ends at an in-image function, or at an external function in
+    // Ghidra's unknown library ("<EXTERNAL>"), gives the thunk's "0xADDR"; any other target gives
+    // calleeText(call, t). Stops the script, naming the call and thunk, when the thunk has no
+    // thunked function or the external function at the end of the chain has no external location.
+    private String flowCalleeText(Instruction call, Address t) {
+        if (!t.isMemoryAddress()) return calleeText(call, t);
+        Function tf = currentProgram.getFunctionManager().getFunctionAt(t);
+        if (tf == null || !tf.isThunk()) return calleeText(call, t);
+        Function end = tf.getThunkedFunction(true);
+        if (end == null) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets thunk " + tf.getName(true) + " at " + t + " with no thunked function");
+        }
+        if (!end.isExternal()) return addrHex(t);
+        ExternalLocation el = end.getExternalLocation();
+        if (el == null) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets thunk " + tf.getName(true) + " at " + t + " whose thunked external"
+                + " function " + end.getName(true) + " has no external location");
+        }
+        if (Library.UNKNOWN.equals(el.getLibraryName())) return addrHex(t);
+        return extText(call, t, el);
+    }
+
+    // "ext:<library>!<name>" for the external location el reached by the call to t. <name> is
+    // the label, or for an ordinal label ("Ordinal_<n>") the ordinal table's name for the library
+    // and ordinal. Stops the script, naming the call and target, on an empty label, an empty or
+    // unknown ("<EXTERNAL>") library, or an ordinal label whose library and ordinal the table
+    // does not name.
+    private String extText(Instruction call, Address t, ExternalLocation el) {
         String lib = el.getLibraryName();
         String label = el.getLabel();
         if (lib == null || lib.isEmpty() || Library.UNKNOWN.equals(lib)
                 || label == null || label.isEmpty()) {
             throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
-                + " targets external address " + t + " whose import has library '" + lib
+                + " targets " + t + " whose import has library '" + lib
                 + "' and label '" + label + "'");
         }
-        return "ext:" + lib + "!" + label;
+        int ordinal = SymbolUtilities.getOrdinalValue(label);
+        if (ordinal < 0) return "ext:" + lib + "!" + label;
+        String name = ordinalNames.get(lib + "\t" + ordinal);
+        if (name == null) {
+            throw new IllegalStateException("call '" + call + "' at " + call.getAddress()
+                + " targets " + t + ", import " + lib + " ordinal " + ordinal + " ('" + label
+                + "'), which the ordinal table " + requiredArg(2) + " does not name");
+        }
+        return "ext:" + lib + "!" + name;
     }
 
     private static String scalarHex(Scalar s) {
@@ -165,6 +251,7 @@ public class FnMnemonicSig extends GhidraScript {
             }
             code.add(b);
         }
+        loadOrdinalTable(requiredArg(2));
         String prog = currentProgram.getName().replaceAll("[^A-Za-z0-9._-]", "_");
         File out = new File(outDir, "fnsig_" + prog + ".json");
         PrintWriter pw = new PrintWriter(out, "UTF-8");
@@ -195,7 +282,7 @@ public class FnMnemonicSig extends GhidraScript {
                     calls++;
                     Address[] flows = m.getFlows();
                     if (flows.length > 0) {
-                        for (Address t : flows) callees.add(calleeText(m, t));
+                        for (Address t : flows) callees.add(flowCalleeText(m, t));
                     } else {
                         boolean slot = false;
                         for (Reference r : m.getReferencesFrom()) {
