@@ -11,16 +11,19 @@
 //   tab-separated file (pe_import_ordinals.tsv next to this script) of rows
 //   "<library>\t<ordinal>\t<name>\t<source dll sha256>", '#' lines being comments; a malformed or
 //   duplicate row stops the script. <imports> is the image's imports sidecar (`exemap imports`,
-//   <id>.imports.tsv), or "-" for an image with none. Its header line names its format:
-//   XEX (Xbox 360), "address\tkind\tlibrary\tordinal": one row per XEX import record, kind
-//   "function" for an import stub, "variable" for an import slot; a function record whose bytes
-//   at +8 and +12 are not "mtctr r11; bctr" stops the script, and a function record covers 16
-//   bytes. PRX (PS3), "address\tkind\tlibrary\tfnid\tstub": one row per function import, kind
-//   "function", the FNID as 8 lowercase hex digits and the stub's bytes as lowercase hex; a stub
-//   whose bytes in the program are not the row's stops the script, and a function record covers
-//   as many bytes as the row gives. A program with no Ghidra external libraries given "-", or with
-//   Ghidra external libraries given a sidecar, stops the script; so does a malformed or duplicate
-//   sidecar row. The stub range runs from the lowest function record to the end of the highest.
+//   <id>.imports.tsv), or "-" for an image with none. Its header line names its format, and both
+//   formats carry a name column: XEX (Xbox 360), "address\tkind\tlibrary\tordinal\tname": one row
+//   per XEX import record, kind "function" for an import stub, "variable" for an import slot, and
+//   the export's name; a function record whose bytes at +8 and +12 are not "mtctr r11; bctr" stops
+//   the script, and a function record covers 16 bytes. PRX (PS3),
+//   "address\tkind\tlibrary\tfnid\tname\tstub": one row per function import, kind "function", the
+//   FNID as 8 lowercase hex digits, the function's name and the stub's bytes as lowercase hex; a
+//   stub whose bytes in the program are not the row's stops the script, and a function record
+//   covers as many bytes as the row gives. A sidecar whose header is neither, among them one
+//   without the name column, stops the script. A program with no Ghidra external libraries given
+//   "-", or with Ghidra external libraries given a sidecar, stops the script; so does a malformed
+//   or duplicate sidecar row. The stub range runs from the lowest function record to the end of
+//   the highest.
 //   Import stub functions (an entry on a function record) are not written as keys; a function
 //   entry in the stub range on no record stops the script. Writes <outDir>/fnsig_<programName>.json
 //   => { "0xADDR": {...} } with fields:
@@ -31,8 +34,8 @@
 //   callees call targets in instruction order (duplicates kept), followed in place by the target
 //           of every branch to a sidecar function record (a tail jump) and by every PS3 `sc`. A
 //           direct call gives its target "0xADDR"; a direct call or branch to a sidecar function
-//           record gives "ext:<library>!ord_<ordinal>" (XEX) or "ext:<library>!fnid_<fnid>"
-//           (PRX). In a program given a PRX sidecar, each `sc` (the word 0x44000002) gives
+//           record gives "ext:<library>!<name>" from the record's library and name columns (XEX
+//           and PRX). In a program given a PRX sidecar, each `sc` (the word 0x44000002) gives
 //           "sys:<N>", N (decimal) the system call number in r11: walking backwards from the sc
 //           over its predecessors in the function (the instruction falling through to it and the
 //           source of each Ghidra flow reference to it), every path must meet "li r11,N" (a p-code
@@ -66,18 +69,20 @@
 //           the image, labelled "EXT_FUN_<addr>"), gives the thunk's "0xADDR".
 //   drefs   data-reference targets ("0xADDR") from every instruction, in instruction order
 //           (references whose type is data: read, write, data, pointer); a target that is a
-//           sidecar variable record gives "ext:<library>!ord_<ordinal>"
+//           sidecar variable record gives "ext:<library>!<name>"
 //   strs    for each data reference whose target is a defined string, the string's raw bytes as
 //           hex, in instruction order
 //   imms    scalar operands in instruction order ("0x10", "-0x8"), including memory
 //           displacements; a scalar equal to a reference target of the same operand is an
 //           address and is not listed (it appears in callees/drefs)
-//   mhash   SHA-1 (hex) of the body bytes in instruction order with every operand that carries
-//           a reference or is an address/relative operand (rel32/rel8 branch and call targets,
-//           absolute memory addresses) masked to zero via the instruction prototype's operand
-//           value mask. An operand made only of registers (e.g. `CALL EDI`) is never masked: its
-//           encoding holds no address, and the reference Ghidra may attach to it depends on
-//           analysis, not on the bytes
+//   mhash   SHA-1 (hex) of the body bytes in instruction order with every operand whose encoding
+//           holds a layout-dependent address masked to zero via the instruction prototype's
+//           operand value mask: relative branch/call targets; immediates, displacements and
+//           target addresses whose value is an address in the program's memory; on PowerPC the
+//           low half of a lis-built address (register + constant whose reference target minus the
+//           constant has zero low 16 bits) and, in an ELF (PS3) program, r2/TOC-relative operands.
+//           Registers-only operands, stack-frame offsets and other constants (field offsets) are
+//           never masked, whatever references Ghidra attached to them
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -112,8 +117,8 @@ import java.util.Map;
 
 public class FnMnemonicSig extends GhidraScript {
     private static final String USAGE = "<outDir> <codeBlocks> <ordinalTable> <imports|->";
-    private static final String IMPORTS_HEADER = "address\tkind\tlibrary\tordinal";
-    private static final String PRX_IMPORTS_HEADER = "address\tkind\tlibrary\tfnid\tstub";
+    private static final String IMPORTS_HEADER = "address\tkind\tlibrary\tordinal\tname";
+    private static final String PRX_IMPORTS_HEADER = "address\tkind\tlibrary\tfnid\tname\tstub";
     // The last two words of an Xbox 360 import stub: mtctr r11; bctr.
     private static final int STUB_MTCTR = 0x7d6903a6;
     private static final int STUB_BCTR = 0x4e800420;
@@ -124,8 +129,8 @@ public class FnMnemonicSig extends GhidraScript {
     // Export name per "<library>\t<ordinal>", from the ordinal table (script argument 3).
     private final Map<String, String> ordinalNames = new HashMap<>();
 
-    // Sidecar records by address (script argument 4): "ext:<library>!ord_<ordinal>" per function
-    // record and per variable record.
+    // Sidecar records by address (script argument 4): "ext:<library>!<name>" per function record
+    // and per variable record.
     private final Map<Long, String> stubImports = new HashMap<>();
     private final Map<Long, String> varImports = new HashMap<>();
     private long stubLo = 0, stubHi = 0;
@@ -133,11 +138,12 @@ public class FnMnemonicSig extends GhidraScript {
     private boolean prxImports = false;
 
     // Reads the imports sidecar at path into stubImports / varImports and sets the stub range.
-    // The header line names the format. XEX: "address\tkind\tlibrary\tordinal"; stops the script,
-    // naming the file and line, on a row that is not "0x<8 hex>\t<function|variable>\t<library>\t
-    // <decimal ordinal>", a repeated address, an address outside the program's memory, or a
-    // function record whose bytes at +8 and +12 are not mtctr r11; bctr. PRX:
-    // "address\tkind\tlibrary\tfnid\tstub" (loadPrxImports). Any other header stops the script.
+    // The header line names the format. XEX: "address\tkind\tlibrary\tordinal\tname"; stops the
+    // script, naming the file and line, on a row that is not "0x<8 hex>\t<function|variable>\t
+    // <library>\t<decimal ordinal>\t<name>" (a name without whitespace), a repeated address, an
+    // address outside the program's memory, or a function record whose bytes at +8 and +12 are not
+    // mtctr r11; bctr. PRX: "address\tkind\tlibrary\tfnid\tname\tstub" (loadPrxImports). Any other
+    // header stops the script.
     private void loadImports(String path) throws Exception {
         List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
         if (!lines.isEmpty() && lines.get(0).equals(PRX_IMPORTS_HEADER)) {
@@ -154,11 +160,11 @@ public class FnMnemonicSig extends GhidraScript {
             String line = lines.get(i);
             String where = path + ":" + (i + 1);
             String[] f = line.split("\t", -1);
-            if (f.length != 4 || !f[0].matches("0x[0-9a-f]{8}")
+            if (f.length != 5 || !f[0].matches("0x[0-9a-f]{8}")
                     || !(f[1].equals("function") || f[1].equals("variable"))
-                    || f[2].isEmpty() || !f[3].matches("[0-9]+")) {
+                    || f[2].isEmpty() || !f[3].matches("[0-9]+") || !f[4].matches("\\S+")) {
                 throw new IllegalArgumentException("imports sidecar row " + where + " is not"
-                    + " 0x<address>\\t<function|variable>\\t<library>\\t<ordinal>: '" + line + "'");
+                    + " 0x<address>\\t<function|variable>\\t<library>\\t<ordinal>\\t<name>: '" + line + "'");
             }
             long addr = Long.parseLong(f[0].substring(2), 16);
             Address a = toAddr(addr);
@@ -166,7 +172,7 @@ public class FnMnemonicSig extends GhidraScript {
                 throw new IllegalArgumentException("imports sidecar row " + where + ": " + f[0]
                     + " is not in " + currentProgram.getName() + "'s memory");
             }
-            String text = "ext:" + f[2] + "!ord_" + Integer.parseInt(f[3]);
+            String text = "ext:" + f[2] + "!" + f[4];
             if (stubImports.containsKey(addr) || varImports.containsKey(addr)) {
                 throw new IllegalArgumentException("imports sidecar row " + where + " repeats " + f[0]);
             }
@@ -191,24 +197,24 @@ public class FnMnemonicSig extends GhidraScript {
         stubHi = hi;
     }
 
-    // Reads a PRX imports sidecar (header "address\tkind\tlibrary\tfnid\tstub", one row per PS3
-    // function import: the code stub's address, "function", the library, the FNID as 8 lowercase
-    // hex digits, and the stub's bytes as lowercase hex, whose length is the stub size) into
-    // stubImports as "ext:<library>!fnid_<fnid>" and sets the stub range from the lowest stub to
-    // the end of the highest. Stops the script, naming the file and line, on a row that is not of
-    // that form, a repeated address, an address outside the program's memory, or a stub whose bytes
-    // in the program are not the row's bytes.
+    // Reads a PRX imports sidecar (header "address\tkind\tlibrary\tfnid\tname\tstub", one row per
+    // PS3 function import: the code stub's address, "function", the library, the FNID as 8
+    // lowercase hex digits, the function's name, and the stub's bytes as lowercase hex, whose
+    // length is the stub size) into stubImports as "ext:<library>!<name>" and sets the stub range
+    // from the lowest stub to the end of the highest. Stops the script, naming the file and line,
+    // on a row that is not of that form (a name without whitespace), a repeated address, an address
+    // outside the program's memory, or a stub whose bytes in the program are not the row's bytes.
     private void loadPrxImports(String path, List<String> lines) throws Exception {
         long lo = Long.MAX_VALUE, hi = Long.MIN_VALUE;
         for (int i = 1; i < lines.size(); i++) {
             String line = lines.get(i);
             String where = path + ":" + (i + 1);
             String[] f = line.split("\t", -1);
-            if (f.length != 5 || !f[0].matches("0x[0-9a-f]{8}") || !f[1].equals("function")
-                    || f[2].isEmpty() || !f[3].matches("[0-9a-f]{8}")
-                    || !f[4].matches("([0-9a-f]{2})+")) {
+            if (f.length != 6 || !f[0].matches("0x[0-9a-f]{8}") || !f[1].equals("function")
+                    || f[2].isEmpty() || !f[3].matches("[0-9a-f]{8}") || !f[4].matches("\\S+")
+                    || !f[5].matches("([0-9a-f]{2})+")) {
                 throw new IllegalArgumentException("imports sidecar row " + where + " is not"
-                    + " 0x<address>\\tfunction\\t<library>\\t<8 hex fnid>\\t<hex stub bytes>: '" + line + "'");
+                    + " 0x<address>\\tfunction\\t<library>\\t<8 hex fnid>\\t<name>\\t<hex stub bytes>: '" + line + "'");
             }
             long addr = Long.parseLong(f[0].substring(2), 16);
             Address a = toAddr(addr);
@@ -219,16 +225,16 @@ public class FnMnemonicSig extends GhidraScript {
             if (stubImports.containsKey(addr)) {
                 throw new IllegalArgumentException("imports sidecar row " + where + " repeats " + f[0]);
             }
-            byte[] want = new byte[f[4].length() / 2];
+            byte[] want = new byte[f[5].length() / 2];
             for (int k = 0; k < want.length; k++) {
-                want[k] = (byte) Integer.parseInt(f[4].substring(2 * k, 2 * k + 2), 16);
+                want[k] = (byte) Integer.parseInt(f[5].substring(2 * k, 2 * k + 2), 16);
             }
             byte[] got = getBytes(a, want.length);
             if (!java.util.Arrays.equals(got, want)) {
                 throw new IllegalArgumentException("imports sidecar row " + where + ": the stub at "
-                    + f[0] + " is " + hex(got) + " in " + currentProgram.getName() + ", not " + f[4]);
+                    + f[0] + " is " + hex(got) + " in " + currentProgram.getName() + ", not " + f[5]);
             }
-            stubImports.put(addr, "ext:" + f[2] + "!fnid_" + f[3]);
+            stubImports.put(addr, "ext:" + f[2] + "!" + f[4]);
             lo = Math.min(lo, addr);
             hi = Math.max(hi, addr + want.length);
         }
@@ -351,8 +357,8 @@ public class FnMnemonicSig extends GhidraScript {
     }
 
     // Callee text for a call or branch target t that is in the stub range: the function record's
-    // "ext:<library>!ord_<ordinal>". Stops the script, naming the instruction and target, when t
-    // is on no function record.
+    // "ext:<library>!<name>". Stops the script, naming the instruction and target, when t is on no
+    // function record.
     private String stubText(Instruction ins, Address t) {
         String s = stubImports.get(t.getOffset());
         if (s == null) {
@@ -543,17 +549,54 @@ public class FnMnemonicSig extends GhidraScript {
         sb.append(']');
     }
 
-    // Operand i is masked in mhash when it carries a reference or is an address / relative operand,
-    // unless it is made only of registers.
-    private static boolean isAddressOperand(Instruction ins, int i) {
+    // Operand i is masked in mhash when its encoding holds a layout-dependent address:
+    //   - a relative branch/call target;
+    //   - an immediate, displacement or target address whose value is an address in the program's
+    //     memory (x86 `[0x00b05128]`, `[ESI*0x4 + 0xe79220]`, `push 0x00c1d2e0`, a PowerPC `bl`);
+    //   - PowerPC: register + constant where the operand's (non-stack) reference target minus the
+    //     constant has zero low 16 bits, i.e. the constant is the low half of an address built
+    //     with lis;
+    //   - PowerPC in an ELF program (PS3): an operand based on r2, the TOC pointer, whose offsets
+    //     move with the TOC's contents.
+    // Never masked: operands made only of registers, stack-frame offsets, and other constants
+    // (field offsets such as `[EDX + 0x23c]`), whatever references Ghidra attached to them.
+    private boolean isAddressOperand(Instruction ins, int i) {
         Object[] objs = ins.getOpObjects(i);
-        boolean registersOnly = objs.length > 0;
-        for (Object o : objs) registersOnly &= o instanceof Register;
+        boolean hasReg = false, registersOnly = objs.length > 0, r2 = false;
+        for (Object o : objs) {
+            if (o instanceof Register) {
+                hasReg = true;
+                if (((Register) o).getName().equals("r2")) r2 = true;
+            } else {
+                registersOnly = false;
+            }
+        }
         if (registersOnly) return false;
-        if (ins.getOperandReferences(i).length > 0) return true;
-        int t = ins.getOperandType(i);
-        return OperandType.isAddress(t) || OperandType.isRelative(t)
-            || OperandType.isCodeReference(t) || OperandType.isDataReference(t);
+        Reference[] refs = ins.getOperandReferences(i);
+        for (Reference r : refs) if (r.isStackReference()) return false;
+        if (OperandType.isRelative(ins.getOperandType(i))) return true;
+        for (Object o : objs) {
+            Long v = o instanceof Scalar ? Long.valueOf(((Scalar) o).getUnsignedValue())
+                : o instanceof Address ? Long.valueOf(((Address) o).getOffset()) : null;
+            if (v == null) continue;
+            Address a = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(v, true);
+            if (a != null && currentProgram.getMemory().contains(a)) return true;
+        }
+        if (!isPowerPC() || !hasReg) return false;
+        if (r2 && currentProgram.getExecutableFormat().contains("ELF")) return true;
+        for (Object o : objs) {
+            if (!(o instanceof Scalar)) continue;
+            long c = ((Scalar) o).getSignedValue();
+            for (Reference r : refs) {
+                if (!r.getToAddress().isMemoryAddress()) continue;
+                if (((r.getToAddress().getOffset() - c) & 0xffffL) == 0) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isPowerPC() {
+        return currentProgram.getLanguage().getProcessor().toString().equals("PowerPC");
     }
 
     // Instruction bytes with the address operands zeroed. Stops the script when the prototype
