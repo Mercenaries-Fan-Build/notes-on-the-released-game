@@ -130,6 +130,10 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
     `DecompileAllFunctions.java` (both call `clearFalseNoReturn()` — fix for x87 sqrt/abs
     helpers that truncate float-heavy fns), `RecoverSecuromCode.java`, `CoverageReport.java`,
     `FnMnemonicSig.java` (build matching).
+  - `DecompileAllByName.java` decompiles in parallel (Ghidra's `ParallelDecompiler`) and requires
+    Ghidra's `cpu.core.override` Java property as its thread count, e.g.
+    `GHIDRA_HEADLESS_JAVA_OPTIONS="-Dcpu.core.override=4"` for `support/analyzeHeadless`; without
+    it the script stops.
   - `mercs2_reassemble` (`cargo run -p mercs2_reassemble --release`) left-joins every attribution
     source onto the decomp by virtual address (`FUN_00478120` == `0x478120`), then propagates
     residue by locality + call-graph. Output: `output/engine_reassembled/`. Evidence is **graded**
