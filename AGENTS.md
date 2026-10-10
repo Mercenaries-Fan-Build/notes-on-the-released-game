@@ -130,6 +130,10 @@ The shipped PC exe is symbol-less and SecuROM-packed; three assets make RE tract
   in the corpus as source `ghidra` (one row per function with caller/callee edges).
   - Headless run (PowerShell): set `JAVA_HOME` to `tools/jdk21/…`, then
     `tools/ghidra_12.1_PUBLIC/support/analyzeHeadless.bat <proj> <name> -import <exe> -scriptPath scripts/ghidra_scripts -postScript <Script>.java`.
+  - `DecompileAllByName.java` decompiles in parallel (Ghidra's `ParallelDecompiler`) and requires
+    Ghidra's `cpu.core.override` Java property as its thread count, e.g.
+    `GHIDRA_HEADLESS_JAVA_OPTIONS="-Dcpu.core.override=4"` for `support/analyzeHeadless`; without it
+    the script stops.
   - Key post-scripts in `scripts/ghidra_scripts/`: `DecompileAllByName.java` / `DecompileAllFunctions.java`
     (both call `clearFalseNoReturn()` — the fix for the x87 sqrt/abs helpers whose bad `noreturn` flag
     truncated every float-heavy fn), `RecoverSecuromCode.java`, `CoverageReport.java`,
