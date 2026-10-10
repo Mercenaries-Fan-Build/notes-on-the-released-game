@@ -75,7 +75,9 @@
 //   mhash   SHA-1 (hex) of the body bytes in instruction order with every operand that carries
 //           a reference or is an address/relative operand (rel32/rel8 branch and call targets,
 //           absolute memory addresses) masked to zero via the instruction prototype's operand
-//           value mask
+//           value mask. An operand made only of registers (e.g. `CALL EDI`) is never masked: its
+//           encoding holds no address, and the reference Ghidra may attach to it depends on
+//           analysis, not on the bytes
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -541,8 +543,13 @@ public class FnMnemonicSig extends GhidraScript {
         sb.append(']');
     }
 
-    // Operand i is masked in mhash when it carries a reference or is an address / relative operand.
+    // Operand i is masked in mhash when it carries a reference or is an address / relative operand,
+    // unless it is made only of registers.
     private static boolean isAddressOperand(Instruction ins, int i) {
+        Object[] objs = ins.getOpObjects(i);
+        boolean registersOnly = objs.length > 0;
+        for (Object o : objs) registersOnly &= o instanceof Register;
+        if (registersOnly) return false;
         if (ins.getOperandReferences(i).length > 0) return true;
         int t = ins.getOperandType(i);
         return OperandType.isAddress(t) || OperandType.isRelative(t)
