@@ -13,7 +13,7 @@ stay in the DRM-free exe).
 | `pc-v11` | `output/_ghidra/securom_dump/genuine_patched_unpacked.exe` (v1.1 process dump) | `output/_ghidra_pc_v11/proj`, `pc_v11` |
 
 Each project is a clean import with Ghidra's default auto-analysis (`scripts/ghidra_securom_import.sh`),
-plus the functions `CreateMovedFunctions.java` adds (below). No linear sweep of the SecuROM blocks.
+plus the functions `CreateMovedFunctions.java` adds (below).
 
 ## What a splice is
 
