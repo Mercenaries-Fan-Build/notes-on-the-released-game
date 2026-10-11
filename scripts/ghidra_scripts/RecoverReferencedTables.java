@@ -1,9 +1,5 @@
-// postScript: recover code reached only through pointer tables that instructions reference.
-//
-// Ghidra's "Create Address Tables" analyzer breaks a table at every referenced address and drops
-// pieces shorter than its minimum table size, so short vtables (for example 4-entry Xbox 360 vtables
-// that constructors reference one by one) are never typed and their targets never disassembled; and
-// Ghidra's switch analysis leaves some jump tables unresolved. This script works at any table size.
+// postScript: recover code reached through pointer tables that instructions reference, at any table
+// size.
 //
 // Candidates: every address that an instruction references with a data reference.
 //
