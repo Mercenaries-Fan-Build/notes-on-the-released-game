@@ -553,19 +553,19 @@ public class FnMnemonicSig extends GhidraScript {
     //   - a relative branch/call target;
     //   - an immediate, displacement or target address whose value is an address in the program's
     //     memory (x86 `[0x00b05128]`, `[ESI*0x4 + 0xe79220]`, `push 0x00c1d2e0`, a PowerPC `bl`);
-    //   - PowerPC: register + constant where the operand's (non-stack) reference target minus the
-    //     constant has zero low 16 bits, i.e. the constant is the low half of an address built
-    //     with lis;
+    //   - PowerPC, the constant read from the instruction word (signed low halfword): in addis/lis
+    //     when, shifted left 16, it is an address in the program's memory (the high half of an
+    //     address); in any other instruction when one of the instruction's non-stack memory
+    //     references minus the constant has zero low 16 bits (the low half of a lis-built address);
     //   - PowerPC in an ELF program (PS3): an operand based on r2, the TOC pointer, whose offsets
     //     move with the TOC's contents.
     // Never masked: operands made only of registers, stack-frame offsets, and other constants
     // (field offsets such as `[EDX + 0x23c]`), whatever references Ghidra attached to them.
-    private boolean isAddressOperand(Instruction ins, int i) {
+    private boolean isAddressOperand(Instruction ins, int i) throws Exception {
         Object[] objs = ins.getOpObjects(i);
-        boolean hasReg = false, registersOnly = objs.length > 0, r2 = false;
+        boolean registersOnly = objs.length > 0, r2 = false;
         for (Object o : objs) {
             if (o instanceof Register) {
-                hasReg = true;
                 if (((Register) o).getName().equals("r2")) r2 = true;
             } else {
                 registersOnly = false;
@@ -582,15 +582,34 @@ public class FnMnemonicSig extends GhidraScript {
             Address a = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(v, true);
             if (a != null && currentProgram.getMemory().contains(a)) return true;
         }
-        if (!isPowerPC() || !hasReg) return false;
+        if (!isPowerPC()) return false;
+        boolean hasScalar = false;
+        for (Object o : objs) hasScalar |= o instanceof Scalar;
+        if (!hasScalar) return false;
         if (r2 && currentProgram.getExecutableFormat().contains("ELF")) return true;
-        for (Object o : objs) {
-            if (!(o instanceof Scalar)) continue;
-            long c = ((Scalar) o).getSignedValue();
-            for (Reference r : refs) {
-                if (!r.getToAddress().isMemoryAddress()) continue;
-                if (((r.getToAddress().getOffset() - c) & 0xffffL) == 0) return true;
-            }
+        // The constant of a PowerPC D-form instruction is the signed low halfword of its word;
+        // Ghidra may show it with the sign folded into the mnemonic (`subi r6,r11,0xbc4` for
+        // addi -0xbc4), so it is read from the bytes.
+        byte[] w = ins.getBytes();
+        if (w.length != 4) {
+            throw new IllegalStateException("PowerPC instruction '" + ins + "' at " + ins.getMinAddress()
+                + " is " + w.length + " bytes, not 4");
+        }
+        int word = ((w[0] & 0xff) << 24) | ((w[1] & 0xff) << 16) | ((w[2] & 0xff) << 8) | (w[3] & 0xff);
+        long c = (short) (word & 0xffff);
+        // addis/lis (primary opcode 15): the constant is the high half of an address when, shifted
+        // into place, it is an address in the program's memory.
+        if ((word >>> 26) == 15) {
+            Address hi = currentProgram.getAddressFactory().getDefaultAddressSpace()
+                .getAddress((c << 16) & 0xffffffffL, true);
+            if (hi != null && currentProgram.getMemory().contains(hi)) return true;
+        }
+        // The low half of a lis-built address: a memory reference of the instruction (on any
+        // operand; Ghidra puts it on the destination register of an addi) minus the constant has
+        // zero low 16 bits.
+        for (Reference r : ins.getReferencesFrom()) {
+            if (r.isStackReference() || !r.getToAddress().isMemoryAddress()) continue;
+            if (((r.getToAddress().getOffset() - c) & 0xffffL) == 0) return true;
         }
         return false;
     }
