@@ -79,10 +79,9 @@
 //           holds a layout-dependent address masked to zero via the instruction prototype's
 //           operand value mask: relative branch/call targets; immediates, displacements and
 //           target addresses whose value is an address in the program's memory; on PowerPC the
-//           low half of a lis-built address (register + constant whose reference target minus the
-//           constant has zero low 16 bits) and, in an ELF (PS3) program, r2/TOC-relative operands.
-//           Registers-only operands, stack-frame offsets and other constants (field offsets) are
-//           never masked, whatever references Ghidra attached to them
+//           high half of an address in addis/lis, the low half of a lis-built address, and, in an
+//           ELF (PS3) program, r2/TOC-relative operands (see isAddressOperand). Registers-only
+//           operands, stack-frame offsets and other constants (field offsets) are not masked
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -559,8 +558,8 @@ public class FnMnemonicSig extends GhidraScript {
     //     references minus the constant has zero low 16 bits (the low half of a lis-built address);
     //   - PowerPC in an ELF program (PS3): an operand based on r2, the TOC pointer, whose offsets
     //     move with the TOC's contents.
-    // Never masked: operands made only of registers, stack-frame offsets, and other constants
-    // (field offsets such as `[EDX + 0x23c]`), whatever references Ghidra attached to them.
+    // Not masked: operands made only of registers, stack-frame offsets, and other constants
+    // (field offsets such as `[EDX + 0x23c]`).
     private boolean isAddressOperand(Instruction ins, int i) throws Exception {
         Object[] objs = ins.getOpObjects(i);
         boolean registersOnly = objs.length > 0, r2 = false;
@@ -587,9 +586,7 @@ public class FnMnemonicSig extends GhidraScript {
         for (Object o : objs) hasScalar |= o instanceof Scalar;
         if (!hasScalar) return false;
         if (r2 && currentProgram.getExecutableFormat().contains("ELF")) return true;
-        // The constant of a PowerPC D-form instruction is the signed low halfword of its word;
-        // Ghidra may show it with the sign folded into the mnemonic (`subi r6,r11,0xbc4` for
-        // addi -0xbc4), so it is read from the bytes.
+        // The constant is the signed low halfword of the instruction word.
         byte[] w = ins.getBytes();
         if (w.length != 4) {
             throw new IllegalStateException("PowerPC instruction '" + ins + "' at " + ins.getMinAddress()
@@ -604,9 +601,8 @@ public class FnMnemonicSig extends GhidraScript {
                 .getAddress((c << 16) & 0xffffffffL, true);
             if (hi != null && currentProgram.getMemory().contains(hi)) return true;
         }
-        // The low half of a lis-built address: a memory reference of the instruction (on any
-        // operand; Ghidra puts it on the destination register of an addi) minus the constant has
-        // zero low 16 bits.
+        // The low half of a lis-built address: a non-stack memory reference from any operand of
+        // the instruction, minus the constant, has zero low 16 bits.
         for (Reference r : ins.getReferencesFrom()) {
             if (r.isStackReference() || !r.getToAddress().isMemoryAddress()) continue;
             if (((r.getToAddress().getOffset() - c) & 0xffffL) == 0) return true;
