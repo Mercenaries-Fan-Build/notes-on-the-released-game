@@ -2,8 +2,7 @@
 //
 // SpliceMap.java lists every .text transfer into the SecuROM blocks. A site whose outcome is
 // "moved" reaches code that ends only in returns, imports or the code block: a game function body
-// that SecuROM moved out of .text. Most are entered by `JMP dword ptr [slot]`, so Ghidra's
-// analysis never makes them functions and they have no signature to match. This script creates a
+// that SecuROM moved out of .text, most entered by `JMP dword ptr [slot]`. This script creates a
 // function (Ghidra's CreateFunction, default name) at the target of every "moved" site where none
 // starts, and writes one TSV row per such target. The program must be opened writable; the
 // headless run saves it.
