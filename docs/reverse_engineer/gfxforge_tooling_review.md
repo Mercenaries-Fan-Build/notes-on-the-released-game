@@ -134,7 +134,7 @@ belt-and-suspenders check, not a known problem.)
 
 **Golden-set tooling (built 2026-07-06, branch `gfx-golden-set`).** Rec #3 is now automated: the 83
 extracted retail movies are established as a **golden reference set** by
-[`mercs2_formats/src/bin/gfx_golden.rs`](../../tools/wad_simulator/crates/mercs2_formats/src/bin/gfx_golden.rs)
+`mercs2_probe gfx-golden` ([`gfx_golden.rs`](../../tools/wad_simulator/crates/mercs2_probe/src/gfx_golden.rs))
 (parser [`mercs2_formats::gfx`](../../tools/wad_simulator/crates/mercs2_formats/src/gfx.rs)) →
 [`gfx_golden_set.md`](gfx_golden_set.md) + [`gfx_golden_set.json`](../data/gfx_golden_set.json), with
 the authoring guide in [`gfx_authoring_feature_spec.md`](gfx_authoring_feature_spec.md). It measured
