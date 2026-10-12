@@ -191,12 +191,13 @@
       "primary_path": "output/_ghidra/securom_dump/mercs2_nodrm_v2.exe",
       "aliases": [],
       "lineage": "v1.0",
-      "provenance": "Built from the on-disk decrypted v1.0 exe (NOT from the live dump). Retail-clean bytes at every address — no runtime patches.",
+      "provenance": "Built from the on-disk decrypted v1.0 exe (NOT from the live dump). Retail-clean bytes at every address — no runtime patches. Hand-applied header edits on the on-disk RELOADED-cracked exe: AddressOfEntryPoint 0x704c2e -> OEP 0x5ee71c (WinMainCRTStartup); import directory truncated to the 19 game DLL descriptors (size 0x190); IAT directory 0x705000 / 0x690 (hand-picked size); checksum 0. Session 2f2e9d64.",
       "decomp": {"state": "none"},
       "corpus_indexed": false,
       "atlas_role": "byte-clean v1.0 control image — use to disambiguate v10_dump hot-patch artefacts",
       "caveats": [
-        "Same size as v11_cracked (53,482,288 B) but completely different lineage. Do not confuse."
+        "Same size as v11_cracked (53,482,288 B) but completely different lineage. Do not confuse.",
+        "Does NOT import pmc_bb.dll. The only 'pmc_bb.dll' string is inside the dead RELOADED entry stub at VA 0x704C0E (push 'pmc_bb.dll'; call LoadLibraryA; jmp OEP), which the repointed entry bypasses."
       ]
     },
     {
@@ -213,10 +214,36 @@
       "primary_path": "output/_ghidra/securom_dump/mercs2_nodrm_v3.exe",
       "aliases": [],
       "lineage": "v1.0",
-      "provenance": "Successor to v10_nodrm_v2 — same clean-lineage recipe with fixes. Preferred byte-clean v1.0 reference.",
+      "provenance": "Output of the securom_unwrap crate (tools/wad_simulator/crates/securom_unwrap) run on the same on-disk RELOADED-cracked v1.0 exe as v10_nodrm_v2 — the crate's golden test. Byte-identical to v10_nodrm_v2 except ONE byte: IAT directory size at file offset 0x2C4, 0x690 -> 0x69c (the crate derives the precise size). Session 2f2e9d64.",
       "decomp": {"state": "none"},
       "corpus_indexed": false,
-      "atlas_role": "PREFERRED byte-clean v1.0 image"
+      "atlas_role": "PREFERRED byte-clean v1.0 image",
+      "caveats": [
+        "Does NOT import pmc_bb.dll — same 19 imports as v10_nodrm_v2. The 'pmc_bb.dll' string at VA 0x704C23 belongs to the dead RELOADED entry stub. pmc_bb reaches this exe via dxwrapper (LoadCustomDllPath), not the import table."
+      ]
+    },
+    {
+      "image_id": "v10_nodrm_v3_laa",
+      "canonical_name": "mercs2_nodrm_v3.exe (game-folder copy, LARGE_ADDRESS_AWARE)",
+      "platform": "pc",
+      "arch": "x86",
+      "endian": "little",
+      "kind": "engine_exe",
+      "crypto_state": "drm_stripped_clean",
+      "runnable": true,
+      "sha256": "3a388d665d19f4ee42f0c7c78e2610fc7d96c7dc59d953893c9b5e57f310e564",
+      "size_bytes": 53482288,
+      "primary_path": "C:/Users/Shadow/Desktop/Mercenaries 2 World in Flames/mercs2_nodrm_v3.exe",
+      "aliases": [],
+      "lineage": "v1.0",
+      "provenance": "v10_nodrm_v3 with the IMAGE_FILE_LARGE_ADDRESS_AWARE bit set: COFF Characteristics at file offset 0x1FE, 0x0103 -> 0x0123. One byte differs from v10_nodrm_v3. Applied alongside the cdbsizes.ini pool edits, session c90c9a61.",
+      "decomp": {"state": "none"},
+      "corpus_indexed": false,
+      "atlas_role": "the deployed DRM-free exe in the game folder; code/data bytes identical to v10_nodrm_v3",
+      "caveats": [
+        "Shares the filename mercs2_nodrm_v3.exe with v10_nodrm_v3 but has a different SHA-256. Key by hash.",
+        "Does NOT import pmc_bb.dll (inherits v10_nodrm_v3's import table)."
+      ]
     },
     {
       "image_id": "xenon_devkit_profile_raw",
