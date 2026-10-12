@@ -4,13 +4,18 @@
 ([`gfxforge`](../../tools/mercs2-tools-gfxforge/), our review:
 [`gfxforge_tooling_review.md`](gfxforge_tooling_review.md)) is missing — **gradients, bitmaps, and
 the rest** — grounded in **our 83 extracted retail movies as the golden reference set**. Every claim
-here is measured, not assumed: the inventory tool
-[`mercs2_formats/src/bin/gfx_golden.rs`](../../tools/wad_simulator/crates/mercs2_formats/src/bin/gfx_golden.rs)
+here is measured, not assumed: the inventory tool `mercs2_probe gfx-golden`
+([`gfx_golden.rs`](../../tools/wad_simulator/crates/mercs2_probe/src/gfx_golden.rs))
 parses all 83 movies (`output/gfx_movies/`) and emits [`gfx_golden_set.md`](gfx_golden_set.md) (the
-report) + [`gfx_golden_set.json`](../data/gfx_golden_set.json) (the machine-readable index). Re-run:
+report) + [`gfx_golden_set.json`](../data/gfx_golden_set.json) (the machine-readable index). Re-run,
+from the repo root:
 
 ```
-cargo run -p mercs2_formats --bin gfx_golden -- output/gfx_movies
+cargo run -p mercs2_probe -- gfx-extract output/gfx_movies         --wad <game>/data/vz.wad
+cargo run -p mercs2_probe -- gfx-extract output/gfx_movies/shell   --wad <game>/data/shell.wad
+cargo run -p mercs2_probe -- gfx-extract output/gfx_movies/loading --wad <game>/data/Loading.wad
+cargo run -p mercs2_probe -- gfx-golden output/gfx_movies \
+    --md docs/reverse_engineer/gfx_golden_set.md --json docs/data/gfx_golden_set.json
 ```
 
 **The runtime ceiling (fixed).** Retail is **Scaleform GFx 2.0.48 / Flash 8 / AVM1 (AS2)**

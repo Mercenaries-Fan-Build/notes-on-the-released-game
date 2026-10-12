@@ -334,7 +334,9 @@ is `error M0xxx`. Modders never lose to leaked timer closures. Symmetric with th
 **Global-shadowing gate** (F7 companion). A top-level assignment in a Shipment module that
 shadows a base-game module symbol (`tEvents`, `_tEvents`, `_MODULES`, `tMissionData`, etc.)
 is `error M0xxx`. Prevents the resident-script pattern (`tEvents = tEvents or {}` shared across
-`import()`ers) from being clobbered by a mod-local table.
+`import()`ers) from being clobbered by a mod-local table. A module that writes a global on purpose —
+a library's public table, an engine callback it chains — declares it in its `add_script`'s `exports`
+list, and M0302 accepts a write to a declared name; anything undeclared stays an error.
 
 **Cross-mod name-collision gate** (F9). `qm link` refuses to compose two Shipments whose
 declared mission-ids, outfit-names, spawn-template-names, or `patch_lua` append targets collide.

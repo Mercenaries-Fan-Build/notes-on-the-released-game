@@ -171,10 +171,10 @@ measurement) and the `scaleform-gfx-2048-lib-map` memory.
 - **SDK: Scaleform GFx 2.0.48, Flash 8 / ActionScript 2 / AVM1.** Proven four ways in the exe:
   `gfxVersion` getter returns literal `"2.0.48"` (`FUN_007676d0`); the loader rejects with
   `"incompatible GFX file, version 2.x expected"`; `$version` = `"WIN 8,0,0,0"`; and **all 83 movies are
-  `CFX` v8**. **No AS3** — 0 of 83 movies carry `DoABC(82)`; the VM has no AVM2.
+  SWF version 8** (80 `CFX` + 3 raw `GFX`). **No AS3** — 0 of 83 movies carry `DoABC(82)`; the VM has no AVM2.
 - **Container.** `magic[3]` (`GFX`/`CFX`/`FWS`/`CWS`) + `u8 version`(=8) + `u32` uncompressed length,
-  then (optionally zlib) a `RECT` + `u16` fps(8.8) + `u16` frame-count + tag stream. Retail ships **61
-  `CFX` (zlib `78 DA`) + 3 raw `GFX`**; the loader dispatches on the magic's leading char
+  then (optionally zlib) a `RECT` + `u16` fps(8.8) + `u16` frame-count + tag stream. Retail `vz.wad`
+  ships **61 `CFX` (zlib `78 DA`) + 3 raw `GFX`** (80 + 3 across all three WADs); the loader dispatches on the magic's leading char
   (`C`=compressed, `G`/`F`=raw), so **both load** (`gfx_authoring_feature_spec.md` §7). The inner
   Scaleform payload is **platform-neutral little-endian** — the Xbox→PC converter must copy it verbatim
   and swap only the outer UCFX wrapper (`scaleformgfx-cfx-blind-swap` memory, 2026-06-15; the "blind

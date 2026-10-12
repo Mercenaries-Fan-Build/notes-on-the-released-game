@@ -1,5 +1,10 @@
 # TLS Modernization Detour — Handoff Spec
 
+> **Superseded as the FESL hook target** by [`multiplayer_rewrite_re.md`](multiplayer_rewrite_re.md) §4/§9:
+> FESL's TLS is DirtySock ProtoSSL (`0x9d7ff0–0x9daa30`), and the OpenSSL `SSL_METHOD` table below belongs
+> to the OpenSSL copy in the SecuROM sections (`SSL_CTX_new` has no callers). The table itself is real; it is
+> not on the FESL path.
+
 **Status: RESEARCH COMPLETE, NOT COMMITTED.** The detour *target* is fully reverse-engineered and
 live-verified (below). The decision to actually build it is **deferred** — the project owner wants to
 reverse the networking protocols above TLS further before committing to a TLS version or a change this

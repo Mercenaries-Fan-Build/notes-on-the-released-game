@@ -42,6 +42,7 @@ an address belongs to instead of the current implicit "probably v10_dump."
 | `v10_nodrm_v1` | 53,485,568 | drm-stripped (from dump, deprecated) | ✅ | none |
 | `v10_nodrm_v2` | 53,482,288 | drm-stripped (from on-disk decrypt) | ✅ | none |
 | `v10_nodrm_v3` | 53,482,288 | drm-stripped (v2 successor, preferred) | ✅ | none |
+| `v10_nodrm_v3_laa` | 53,482,288 | drm-stripped (v3 + LARGE_ADDRESS_AWARE, game folder) | ✅ | none |
 | `v11_uncracked` | 53,944,080 | SecuROM-packed | ❌ | **backup present** |
 | `v11_cracked` | 53,482,288 | cracked (pmc_bb/cruise.dll) | ✅ | none (runnable target) |
 
@@ -112,10 +113,13 @@ Two useful surprises:
 ### `v10_nodrm` variants: three sizes, three provenances
 
 - `nodrm_v1` (53,485,568 B) — built **from the memory dump**; inherits three pmc_bb.dll hot-patch splices. Deprecated.
-- `nodrm_v2` (53,482,288 B) — built from the **on-disk decrypted** exe. Byte-clean.
-- `nodrm_v3` (53,482,288 B) — successor to v2 with fixes. **Preferred** byte-clean v1.0 reference.
+- `nodrm_v2` (53,482,288 B) — built from the **on-disk decrypted** (RELOADED-cracked) exe by three hand-applied header edits: entry `0x704c2e` → OEP `0x5ee71c`; import directory truncated to the 19 game DLLs; IAT directory `0x705000`/`0x690`, checksum 0. Byte-clean.
+- `nodrm_v3` (53,482,288 B) — the `securom_unwrap` crate's output on the same input (its golden test). Differs from v2 in **one byte**: the IAT directory size at file offset `0x2C4`, `0x690` → `0x69c` (crate-derived). **Preferred** byte-clean v1.0 reference.
+- `nodrm_v3_laa` (53,482,288 B) — the copy deployed in the game folder under the same filename `mercs2_nodrm_v3.exe`. Differs from v3 in **one byte**: COFF Characteristics at `0x1FE`, `0x0103` → `0x0123` (LARGE_ADDRESS_AWARE).
 
-`nodrm_v2/v3` are the same size as `v11_cracked` but have completely different SHA-256s and totally different lineages. Rely on hash, not size.
+None of the `nodrm` builds import `pmc_bb.dll`. The only `pmc_bb.dll` string (VA `0x704C23`) belongs to the dead RELOADED entry stub at `0x704C0E` (`push "pmc_bb.dll"; call LoadLibraryA; jmp OEP`), which the repointed entry never runs. pmc_bb reaches them through dxwrapper.
+
+`nodrm_v2/v3/v3_laa` are the same size as `v11_cracked` but have different SHA-256s and different lineages. Rely on hash, not size.
 
 ---
 

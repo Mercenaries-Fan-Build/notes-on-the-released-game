@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mercenaries-game.local/schemas/ue_game_binding.json",
+  "title": "Mercenaries 2 UE game binding manifest",
+  "description": "Machine-readable Game→UE mapping emitted by tools/build_ue_game_binding.py and consumed by game-scripts/mercs2_binding_apply.py",
+  "type": "object",
+  "required": ["schema_version", "meta", "visibility_preset", "presets"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "output_root": { "type": "string" },
+        "generated_by": { "type": "string" },
+        "inputs_present": { "type": "array", "items": { "type": "string" } },
+        "inputs_missing": { "type": "array", "items": { "type": "string" } },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "confidence": {
+                "type": "string",
+                "enum": ["verified", "hypothesis", "gap", "blocked"]
+              },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "counts": { "type": "object" }
+      }
+    },
+    "presets": {
+      "type": "object",
+      "properties": {
+        "visibility_default": { "type": "string" }
+      }
+    },
+    "visibility_preset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "activate_parents": { "type": "array", "items": { "type": "string" } },
+          "unload_parents": { "type": "array", "items": { "type": "string" } },
+          "activate_leaf_patterns": { "type": "array", "items": { "type": "string" } },
+          "unload_leaf_patterns": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/binding_entry" }
+    },
+    "water": { "$ref": "#/$defs/water_binding" },
+    "terrain": { "$ref": "#/$defs/terrain_binding" },
+    "world_cells": { "$ref": "#/$defs/world_cells_binding" },
+    "lights": { "type": "array", "items": { "$ref": "#/$defs/light_binding" } },
+    "hibernation": { "type": "array", "items": { "$ref": "#/$defs/hibernation_binding" } },
+    "road_edges": { "type": "array", "items": { "$ref": "#/$defs/road_edge_binding" } },
+    "destruction_pairs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/destruction_pair_binding" }
+    },
+    "placement_visibility": {
+      "type": "object",
+      "description": "Map placement source string → visible | hidden | skip",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["visible", "hidden", "skip"]
+      }
+    }
+  },
+  "$defs": {
+    "confidence": {
+      "type": "string",
+      "enum": ["verified", "hypothesis", "gap", "blocked"]
+    },
+    "binding_entry": {
+      "type": "object",
+      "required": ["id", "kind", "confidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "vz_overlay",
+            "world_cell",
+            "static_placement_rule",
+            "terrain",
+            "water",
+            "light",
+            "hibernation",
+            "road_spline",
+            "destruction_pair",
+            "damage_branch"
+          ]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "game_source": { "type": "object" },
+        "ue": { "type": "object" },
+        "runtime_default": {
+          "type": "string",
+          "enum": ["activated", "unloaded", "visible", "hidden", "skip"]
+        },
+        "fields": { "type": "object" }
+      }
+    },
+    "water_binding": {
+      "type": "object",
+      "properties": {
+        "sea_level_m": { "type": "number" },
+        "sea_level_ue_cm": { "type": "number" },
+        "ocean_half_m": { "type": "number" },
+        "grid_size": { "type": "integer" },
+        "cell_size_m": { "type": "number" },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "terrain_binding": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string" },
+        "review_glb_hint": { "type": "string" },
+        "placement": { "type": "string" },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "world_cells_binding": {
+      "type": "object",
+      "properties": {
+        "data_layer": { "type": "string" },
+        "runtime_default": { "type": "string" },
+        "cell_count": { "type": "integer" },
+        "cells": { "type": "array" }
+      }
+    },
+    "light_binding": {
+      "type": "object",
+      "properties": {
+        "entity_id": { "type": "string" },
+        "entity_name": { "type": "string" },
+        "position": { "type": "object" },
+        "ue": {
+          "type": "object",
+          "properties": {
+            "actor_class": { "type": "string" },
+            "intensity": { "type": "number" },
+            "radius_m": { "type": "number" },
+            "color_rgb": { "type": "array" }
+          }
+        }
+      }
+    },
+    "hibernation_binding": {
+      "type": "object",
+      "properties": {
+        "entity_id": { "type": "string" },
+        "hibernation_u8_0": { "type": "integer" },
+        "min_draw_distance_cm": { "type": "number" },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "road_edge_binding": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "endpoint_a": { "type": "object" },
+        "endpoint_b": { "type": "object" },
+        "topology": { "type": "string" }
+      }
+    },
+    "destruction_pair_binding": {
+      "type": "object",
+      "properties": {
+        "entity_a_key": { "type": "string" },
+        "entity_b_key": { "type": "string" },
+        "entity_a_name": { "type": "string" },
+        "entity_b_name": { "type": "string" },
+        "rubble_data_layer": { "type": "string" }
+      }
+    }
+  }
+}

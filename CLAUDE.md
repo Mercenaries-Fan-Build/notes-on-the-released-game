@@ -345,6 +345,11 @@ bytecode compiler).
 `loadprobe`, `mercs2_reassemble`, `mercs2_bridge` (live TCP REPL into the running game via
 Wally's lua-bridge ASI, `127.0.0.1:27050`), `mercs2_poc`.
 
+**Mod runtime:** `mercs2_mod_runtime` builds `m2-sdk.dll`, the one runtime every mod shares in the
+game process (MinHook, the log stream, load triggers, the shader registry). 32-bit Windows only, so it
+is its own workspace, excluded from wad_simulator's; its host-testable logic is in `mercs2_formats`.
+The m2-sdk Shipment (C headers, tests, release) is `shipments/mercs2-sdk/`.
+
 **Asset pipeline / mod tooling:** `wad_simulator` (engine-accurate consumption simulator),
 `mercs2_quartermaster` (`qm` CLI + Shipment mod format), `smuggler`, `wad_builder`, `densify`,
 `anim_patch`, `dlc_port`, `havok_extract`, `destruction_extract`, `ps3_dlc_crypt`,
