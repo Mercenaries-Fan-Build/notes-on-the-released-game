@@ -151,6 +151,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_movie` | Data | `name`, `movie` |
 | `add_ui` | Data + Script | `name`, `movie` |
 | `patch_lua` | Script | `target`, `append` |
+| `add_script` | Script | `name`, `source` (`exports` optional) ([`add_script`](#add_script)) |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
@@ -462,6 +463,29 @@ reach it from Lua). Its on-screen **rect and hide trigger** are still yours — 
 manipulates `_QM.ui["<name>"]` if you need to place or toggle it. For a movie that *replaces* a
 shipped one, use `add_movie` with the exact shipped name instead; a replacement needs no widget of
 its own.
+
+### `add_script`
+
+Adds a new Lua module the game can `import`:
+
+```yaml
+  - kind: add_script
+    name: ess                       # what Lua passes to import("ess")
+    source: src/lua/ess.lua         # compiled to the game's LuaQ at build time
+    exports: [Ess, OnStateChange]   # optional: the globals this module writes on purpose
+```
+
+`name` is the module name the engine hashes to find the script: bare, no extension, and not the name
+of a shipped script (M0197). `source` is the `.lua` file, compiled when the Shipment is built. The
+module runs when something first imports it, not at load.
+
+**`exports`.** A module that writes into `_G` competes with the engine's own writes to it (M0302,
+[Lua engine seams](lua_engine_seam_hardening.md)), so a write to `_G` or `_MODULES` is an error unless
+the module declares it. `exports` lists the globals the module writes deliberately — a library's public
+table, an engine callback it chains — each as a bare Lua identifier. A write to `_G.<name>` or a field
+under it (`_G.<name>.<field>`) passes for a listed name; any other `_G` write, every `_MODULES` write,
+and an entry that is not a Lua identifier stay errors. Writes inside comments and strings are not
+writes.
 
 ### `edit_stringdb`
 
