@@ -14942,6 +14942,18 @@
     ],
     "0xF88B552A": [
       "wpn_covertpistol_fire"
+    ],
+    "0x1AE56060": [
+      "loadingscreen_new"
+    ],
+    "0x3CC34BA0": [
+      "Font_glyphs"
+    ],
+    "0xB29423EA": [
+      "controller_map"
+    ],
+    "0xF8E7B7F4": [
+      "POI_UP_Introduction"
     ]
   }
 }
