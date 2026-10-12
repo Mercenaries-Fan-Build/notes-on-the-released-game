@@ -204,6 +204,10 @@ handling for PS3 titles using the same protocol.
 
 From Agent A's LTI callback analysis and shell state machine:
 
+> **Corrected (2026-10-10)** by [`../reverse_engineer/multiplayer_menu_re.md`](../reverse_engineer/multiplayer_menu_re.md):
+> there is no `lobby.swf` — the shell runs one movie, `shell.gfx` (`mrxguishell.lua:198`); `joinGame` /
+> `onlineError` are movie labels, not Lua shell states; most online screens are native-handled.
+
 ```
 [Main Menu]
     │
