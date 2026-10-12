@@ -15,7 +15,7 @@ unpacked exe):
 | `gfxVersion` AS property returns literal `"2.0.48"` | `FUN_007676d0` (System/capabilities getter) |
 | `Error: GFxLoader read failed - incompatible GFX file, version 2.x expected` | .rdata (loader version check) |
 | `$version` = `"WIN 8,0,0,0"`, AS2-only builtin classes (`ExternalInterface`, `MovieClip`, `LoadVars`, `AsBroadcaster`, no AVM2) | builtin registrar `FUN_007677f0` + class table @~0xBDD800 |
-| Movie files are `CFX` (compressed GFx) with SWF version byte 0x08 | all 83 extracted movies |
+| Movie files carry SWF version byte 0x08: 80 `CFX` (compressed GFx) + 3 raw `GFX` (`vz.wad`: 61 + 3; `shell.wad`: 16 + 0; `Loading.wad`: 3 + 0) | all 83 extracted movies (`docs/data/gfx_golden_set.json`) |
 
 `docs/ui/main_menu_structure.md` previously said "confirmed GFx 3.x SDK" — that was wrong
 (GFx 3.0 shipped in 2009, after the game's Aug 2008 release) and has been corrected.
