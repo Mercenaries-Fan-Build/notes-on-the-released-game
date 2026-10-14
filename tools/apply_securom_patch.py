@@ -1,28 +1,39 @@
 #!/usr/bin/env python3
 """Apply binary patch to remove SecuROM from Mercenaries 2 retail EXE.
 
-Supports both v1.0 (original disc, 17MB SecuROM-packed) and v1.1 (update, 51MB).
-Auto-detects the input version by file size and MD5, then applies the appropriate
-patches in sequence:
+DEPRECATED — superseded by the Rust `apply_crack` tool in
+`/Volumes/Projects/mercs2-securom-bypass`. The authoritative sha256 catalogue
+is `tools/wad_simulator/crates/mercs2_exemap/data/builds.tsv`; the identifier
+of record is `apply_crack::detect::detect_version`. This Python helper is
+kept only for historical reference and emits warnings now; new work should
+not call it.
 
-  v1.0 retail → [update patch] → v1.1 retail → [crack patch] → cracked
-  v1.1 retail → [crack patch] → cracked
+CAVEATS with this file's heuristics (all documented in
+`docs/reverse_engineer/pc_exe_build_fingerprints.md`):
 
-Patches are stored as bsdiff deltas in tools/patches/ — no game code is
-redistributed.
+- The `RETAIL_V10_*` constants below name the EA-signed compact shell
+  (`a1532b4c…`, 17,122,568 bytes). That shell wraps **v1.1 game code**, not
+  v1.0. The variable name is a historical misnomer kept to avoid breaking
+  any legacy caller.
+- The `CRACKED_MD5` targets the main-repo `mercs2_v1.1_securom_bypass.bspatch`
+  output (`23fe7f38…`, keeps cruise.dll). The community-canonical cracked
+  shipping artifact is `958eb227…` (pmc_bb.dll substituted) — produced by
+  the sibling repo's `v11_to_cracked.bspatch`, NOT by the main-repo patch.
+- `tools/patches/mercs2_v1.0_to_v1.1_update.bspatch` is NOT the sibling-repo
+  `v10_unsigned_to_v11.bspatch`; it is byte-equivalent to the sibling-repo
+  `v10_signed_to_v11.bspatch` and only accepts the compact-shell input.
 
-After patching, pmc_bb.dll is injected into the import table (ordinal #1).
-The pmc_bb.dll handles SecuROM event spoofing, opens a debug console, and
-loads ASI plugins — replacing the legacy cruise.dll entirely.
+Original docstring (for history only):
 
-Build pmc_bb.dll with: make pmc-blackbox
+  Supports both v1.0 (original disc, 17MB SecuROM-packed) and v1.1 (update, 51MB).
+  Auto-detects the input version by file size and MD5, then applies the appropriate
+  patches in sequence:
 
-Usage:
+    v1.0 retail → [update patch] → v1.1 retail → [crack patch] → cracked
+    v1.1 retail → [crack patch] → cracked
+
+Usage (kept for completeness; prefer `apply_crack`):
   python3 tools/apply_securom_patch.py <retail_exe> [-o <output>]
-  python3 tools/apply_securom_patch.py --generate-patch <retail> <cracked> -o <patch_file>
-
-Requirements:
-  - Python 3.12+ (stdlib only for patching; bsdiff4 only needed for --generate-patch)
 """
 from __future__ import annotations
 
@@ -31,18 +42,29 @@ import hashlib
 import sys
 from pathlib import Path
 
-# --- Known EXE versions ---
+sys.stderr.write(
+    "[apply_securom_patch.py] DEPRECATED — use `apply_crack` from "
+    "/Volumes/Projects/mercs2-securom-bypass instead. Catalogue of record: "
+    "tools/wad_simulator/crates/mercs2_exemap/data/builds.tsv. See "
+    "docs/reverse_engineer/pc_exe_build_fingerprints.md.\n"
+)
 
-RETAIL_V10_SIZE = 17_122_568
+# --- Known EXE sizes/MD5s ---
+# Variable names kept for backward compatibility; see docstring for the
+# naming correction (RETAIL_V10_* is actually v1.1 code).
+
+RETAIL_V10_SIZE = 17_122_568  # a1532b4c…, v1.1 game code in EA-signed compact shell
 RETAIL_V10_MD5 = "596efbf5e6c88924acef1fd8b0891012"
 
 RETAIL_V11_SIZE = 53_944_080
 RETAIL_V11_MD5 = "5b9976f162e050f4adcc51bb997ba97f"
 
 CRACKED_SIZE = 53_482_288
-CRACKED_MD5 = "857b3387d54774a32c1328effb5de4d4"  # pre-rename (cruise.dll variant)
+CRACKED_MD5 = "857b3387d54774a32c1328effb5de4d4"  # 23fe7f38… (keeps cruise.dll)
 
 # --- Patch files ---
+# These two bspatches in-repo are NOT the shipping chain — they produce different
+# outputs than the sibling `mercs2-securom-bypass` tool. See the DEPRECATED notice.
 
 PATCHES_DIR = Path(__file__).parent / "patches"
 PATCH_V10_TO_V11 = PATCHES_DIR / "mercs2_v1.0_to_v1.1_update.bspatch"
