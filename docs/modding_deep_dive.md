@@ -35,12 +35,18 @@ Evidence:
 
 #### Version identification (confirmed via binary analysis)
 
-| Executable | SecuROM Version | PDB Build Path |
-|-----------|----------------|----------------|
-| Demo (`Merc2-Demo.exe`, 16.3 MB) | v7.38 | `SecuROM-DRM_7_38` |
-| Retail v1.0 (`Mercenaries2.exe`, 16.1 MB) | v7.37 | `SecuROM-DRM_7_37` |
-| Update v1.1 (`Mercenaries2.exe`, 51.4 MB) | v7.38 | `SecuROM-DRM_7_38` |
-| Cracked (from ISO `Crack/`) | v7.37 (patched) | `SecuROM-DRM_7_37` |
+**Authoritative reference:** [`docs/reverse_engineer/pc_exe_build_fingerprints.md`](./reverse_engineer/pc_exe_build_fingerprints.md).
+The identifier of record is sha256 against [`builds.tsv`](../tools/wad_simulator/crates/mercs2_exemap/data/builds.tsv);
+the SecuROM shell version only disambiguates the shell flavor and does not pin the game code
+alone (SecuROM-DRM_7_38 appears on v1.0 EA-signed, v1.1 patched, AND the demo).
+
+| Executable | sha256 (prefix) | Size (bytes) | SecuROM shell | Game code |
+|-----------|----------------|-------------:|---------------|-----------|
+| Demo (`Merc2-Demo.exe`) | `9da26832…` | 17,118,472 | `SecuROM-DRM_7_38` | demo |
+| Retail v1.0 unsigned (disc dump) | `ada55455…` | 16,846,848 | `SecuROM-DRM_7_37` | v1.0 |
+| EA-signed shipping form (**v1.1 code in a compact shell**, build_id `v10-ea-signed` is a misnomer) | `a1532b4c…` | 17,122,568 | `SecuROM-DRM_7_38` | **v1.1** |
+| Patched v1.1 (uncracked, roomy shell) | `7a348847…` | 53,944,080 | `SecuROM-DRM_7_38` | v1.1 |
+| Cracked (`v10-cracked-pmcbb`, pmc_bb.dll substituted) | `958eb227…` | 53,482,288 | stripped | v1.1-derived, v1.0-shape at SecuROM-touched VAs |
 
 #### PE section layout (SecuROM v7 specific)
 
