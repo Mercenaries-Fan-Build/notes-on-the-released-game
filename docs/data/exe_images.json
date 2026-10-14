@@ -18,7 +18,7 @@
   "engine_images": [
     {
       "image_id": "v10_retail_packed",
-      "canonical_name": "Mercenaries2.exe (v1.0 retail packed)",
+      "canonical_name": "Mercenaries2.exe (EA-signed v1.1 compact shell — build_id 'v10-ea-signed' is a historical misnomer)",
       "platform": "pc",
       "arch": "x86",
       "endian": "little",
@@ -33,21 +33,24 @@
         "game-files/Mercenaries2-signed.exe",
         "game-files/Mercenaries2.signed.personal.exe"
       ],
-      "lineage": "v1.0",
-      "provenance": "Original v1.0 retail disc; SecuROM-packed; runs the game with a disc check.",
-      "decomp": {"state": "none", "reason": "encrypted at rest; use v10_dump for statics"},
+      "lineage": "v1.1",
+      "provenance": "Produced by running the official EA v1.1 patcher SFX (b27fedc2…) on the v1.0 unsigned retail disc (ada55455). SecuROM 7.38 EA-signed compact shell wrapping v1.1 game code. Proven by byte test at the three Ghidra-identified v1.0-vs-v1.1 divergent function VAs (0x5c37f0 / 0x683ce0 / 0x6a5970) and the on-disk import directory of 22 unique DLLs matching dump-v11-securom-unpacked (2026-10-14).",
+      "decomp": {"state": "none", "reason": "encrypted at rest; use dump-v11-securom-unpacked (819a96db) for statics"},
       "corpus_indexed": false,
-      "atlas_role": "identity anchor for v1.0 lineage"
+      "atlas_role": "identity anchor for v1.1 lineage — the EA-shipping compact form",
+      "caveats": [
+        "The image_id and sha-catalogue build_id ('v10-ea-signed') imply v1.0; this is a historical naming error. Code is v1.1. See docs/reverse_engineer/pc_exe_build_fingerprints.md."
+      ]
     },
     {
       "image_id": "v10_community_a237",
-      "canonical_name": "Mercenaries2.A237.exe (community unsigned)",
+      "canonical_name": "Mercenaries2.A237.exe (v1.0 unsigned retail disc)",
       "platform": "pc",
       "arch": "x86",
       "endian": "little",
       "kind": "engine_exe",
-      "crypto_state": "unknown_community",
-      "runnable": null,
+      "crypto_state": "securom_packed",
+      "runnable": true,
       "sha256": "ada5545526c4d09d8000f0e7600c0cbc24b7b360638fa2dde407cd7f976534d7",
       "size_bytes": 16846848,
       "primary_path": "game-files/Mercenaries2.A237.exe",
@@ -58,13 +61,13 @@
         "game-files/Mercenaries2.unpatched.uncracked.exe",
         "game-files/Mercenaries2.updated-com-mem-modded.exe"
       ],
-      "lineage": "v1.0-adjacent",
-      "provenance": "Community-supplied variant; six identical copies across game-files/. 275,720 bytes SMALLER than v1.0 retail packed. Provenance unknown — a pre-crack or community-rebuilt trim; NOT a bit-for-bit v1.0 retail.",
+      "lineage": "v1.0",
+      "provenance": "The pressed-disc v1.0 retail — the canonical v1.0 unsigned form. SecuROM 7.37. 275,720 bytes smaller than a1532b4c because that file has an EA Authenticode signing block appended by the v1.1 patcher (and wraps upgraded v1.1 code). Catalogued as archived-2-disk-dump in builds.tsv.",
       "decomp": {"state": "none"},
       "corpus_indexed": false,
-      "atlas_role": "candidate v1.0-lineage clean image; investigate before treating as authoritative",
+      "atlas_role": "canonical v1.0 starting point for the v1.0 → v1.1 upgrade chain",
       "caveats": [
-        "The name 'A237' also appears in the FESL b-version builder memory as a specific PC exe variant — cross-check whether this file is that build."
+        "The 'A237' alias is a community filename and also appears in the FESL b-version builder memory as a specific PC exe variant — cross-check whether that build identifier refers to this file."
       ]
     },
     {
