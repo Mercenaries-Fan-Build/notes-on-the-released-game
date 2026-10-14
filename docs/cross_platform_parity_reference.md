@@ -556,18 +556,24 @@ hash and same on-disk shape it is likely tractable.
 
 ## 12. Version families (executable / patch history)
 
-**PROVEN.** Source: [`docs/modding_deep_dive.md`](./modding_deep_dive.md) §"Version identification",
-[`docs/mercs2_install_registry_contract.md`](./mercs2_install_registry_contract.md).
+**PROVEN.** Authoritative source:
+[`docs/reverse_engineer/pc_exe_build_fingerprints.md`](./reverse_engineer/pc_exe_build_fingerprints.md)
++ the catalogue at
+[`tools/wad_simulator/crates/mercs2_exemap/data/builds.tsv`](../tools/wad_simulator/crates/mercs2_exemap/data/builds.tsv).
+Identifier of record is sha256; size and SecuROM shell version are corroborating signals, not
+primary discriminators (e.g. the 17.1 MB EA-signed shell wraps v1.1 code, defeating any
+`size < 20 MB → v1.0` heuristic).
 
-| Executable                     | Size       | SecuROM version | Notes |
-|--------------------------------|------------|-----------------|-------|
-| PC Demo (`Merc2-Demo.exe`)     | 16.3 MB    | v7.38           | PDB path `SecuROM-DRM_7_38` |
-| PC Retail v1.0                 | 16.1 MB    | v7.37           | `SecuROM-DRM_7_37` |
-| PC Update v1.1                 | 51.4 MB    | v7.38           | `SecuROM-DRM_7_38` |
-| PC v1.1 (uncracked, this repo) | 53.94 MB   | v7.38           | Byte-verified against `is_canonical_v11` |
-| Xbox 360 Jul-11-2008 preview   | (STFS)     | n/a             | `Profile` devkit build with 38,581 fns |
-| Xbox 360 retail                | (STFS)     | n/a             | `Final` build — stripped debug strings |
-| PS3 v1.03 patch                | (EBOOT)    | n/a             | Ships `VZ-PATCH.WAD` / `SHELL-PATCH.WAD` — same last-wins overlay as PC |
+| Executable                      | sha256 prefix | Size (bytes)  | SecuROM shell | Game code | Notes |
+|---------------------------------|---------------|--------------:|---------------|-----------|-------|
+| PC Demo (`Merc2-Demo.exe`)      | `9da26832…`   | 17,118,472    | 7.38          | demo      | distinct code family (18 unique DLL imports) |
+| PC Retail v1.0 (disc, unsigned) | `ada55455…`   | 16,846,848    | 7.37          | v1.0      | the pressed-disc shipping form |
+| PC v1.1 EA-signed compact shell | `a1532b4c…`   | 17,122,568    | 7.38          | **v1.1**  | official v1.1 patcher output; build_id `v10-ea-signed` is a historical misnomer |
+| PC v1.1 patched (roomy shell)   | `7a348847…`   | 53,944,080    | 7.38          | v1.1      | the DRM-still-installed canonical v1.1 reference |
+| PC v1.1 cracked (pmc_bb)        | `958eb227…`   | 53,482,288    | stripped      | v1.1-derived (v1.0-shape at SecuROM-touched VAs) | ships via the `apply_crack` tool |
+| Xbox 360 Jul-11-2008 preview    | (STFS)        | —             | n/a           | preview   | `Profile` devkit build with 38,581 fns |
+| Xbox 360 retail                 | (STFS)        | —             | n/a           | retail    | `Final` build — stripped debug strings |
+| PS3 v1.03 patch                 | (EBOOT)       | —             | n/a           | v1.03     | Ships `VZ-PATCH.WAD` / `SHELL-PATCH.WAD` — same last-wins overlay as PC |
 
 PC users on multiplayer need normalized registry `Region` for matchmaking parity
 (the modkit does this). Version-mismatch on retail v1.0 vs v1.1 is a common
