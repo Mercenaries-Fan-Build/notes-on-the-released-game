@@ -98,17 +98,19 @@ an address belongs to instead of the current implicit "probably v10_dump."
 
 ### 15 PC filenames → 4 distinct binaries
 
-The `game-files/` directory carries a lot of aliases. By SHA-256:
+The `game-files/` directory carries a lot of aliases. By SHA-256 (code versions proven by byte
+tests at Ghidra-identified v1.0-vs-v1.1 divergent VAs; see
+[`pc_exe_build_fingerprints.md`](./pc_exe_build_fingerprints.md)):
 
-- **`a1532b4c…`** (17,122,568 B, v1.0 retail packed): `Mercenaries2.exe`, `Mercenaries2-signed.exe`, `Mercenaries2.signed.personal.exe`
-- **`ada55455…`** (16,846,848 B, community A237): `Mercenaries2(1).exe`, `Mercenaries2.A237.exe`, `Mercenaries2.community-member-original.exe`, `Mercenaries2.random-unsigned.exe`, `Mercenaries2.unpatched.uncracked.exe`, `Mercenaries2.updated-com-mem-modded.exe` — **six copies of the same file**
-- **`7a348847…`** (53,944,080 B, v1.1 uncracked): `output/mercs2_v1.1_uncracked.exe`, `Mercenaries2(2).exe`, `Mercenaries2(3).exe`, `Mercenaries2.patched.uncracked.exe`
-- **`23fe7f38…`** (53,482,288 B, v1.1 patched cracked): the runnable game, `Mercenaries2 (1).exe`, `Mercenaries2.community-member-modded.exe`, `Mercenaries2.patched.cracked.crusedll.exe`
+- **`a1532b4c…`** (17,122,568 B, **v1.1 game code** in a SecuROM 7.38 EA-signed compact shell; catalogued as `v10-ea-signed` — a historical misnomer; the file wraps v1.1 code): `Mercenaries2.exe`, `Mercenaries2-signed.exe`, `Mercenaries2.signed.personal.exe`
+- **`ada55455…`** (16,846,848 B, **v1.0 unsigned retail disc dump**, catalogued as `archived-2-disk-dump`; SecuROM 7.37): `Mercenaries2(1).exe`, `Mercenaries2.A237.exe`, `Mercenaries2.community-member-original.exe`, `Mercenaries2.random-unsigned.exe`, `Mercenaries2.unpatched.uncracked.exe`, `Mercenaries2.updated-com-mem-modded.exe` — **six copies of the same file**
+- **`7a348847…`** (53,944,080 B, **v1.1 patched SecuROM-still-installed uncracked**, catalogued as `v11-patched-securom`): `output/mercs2_v1.1_uncracked.exe`, `Mercenaries2(2).exe`, `Mercenaries2(3).exe`, `Mercenaries2.patched.uncracked.exe`
+- **`23fe7f38…`** (53,482,288 B, catalogued as `archived-1-cracked-cruise`; cracked derivative of `7a348847…` via the main-repo `mercs2_v1.1_securom_bypass.bspatch` — the crack keeps the cruise.dll import and restores v1.0-shape bytes at SecuROM-touched addresses): `Mercenaries2 (1).exe`, `Mercenaries2.community-member-modded.exe`, `Mercenaries2.patched.cracked.crusedll.exe`
 
 Two useful surprises:
 
 1. `Mercenaries2.community-member-modded.exe` **has the same SHA-256 as the runnable game**. Whatever the community modded, it wasn't this exe — likely at the WAD/asset level.
-2. The `v10_community_a237` at 16,846,848 B is **275,720 bytes smaller** than v1.0 retail packed. It's not a bit-for-bit copy of retail v1.0; provenance is unclear and it needs investigation before being treated as authoritative. The `A237` name also appears in the FESL b-version builder memory as a specific build identifier — cross-check.
+2. The `archived-2-disk-dump` at 16,846,848 B is **275,720 bytes smaller** than `v10-ea-signed`. The difference is EA's Authenticode signing block appended to the SecuROM shell — not two different builds. Both wrap different game-code versions (v1.0 vs v1.1 respectively), which is the real distinction. The `A237` filename alias also appears in the FESL b-version builder memory as a specific build identifier.
 
 ### `v10_nodrm` variants: three sizes, three provenances
 
