@@ -85,7 +85,6 @@ asset_hash,types,block_paths
 0x01D51114,path,blocks\VZ\resident_P000_Q3.block
 0x01DB0F57,terrainmesh,blocks\VZ\c31364_P000_Q3.block
 0x01EABBD5,path,blocks\VZ\resident_P000_Q3.block
-0x01ED3D6F,model,blocks\VZ\c32154_P000_Q3.block
 0x01FA2779,animation,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
 0x01FAD072,texture,blocks\Shell\scaleform_shell_P000_Q3.block
 0x01FDA1A2,path,blocks\VZ\resident_P000_Q3.block
@@ -240,7 +239,6 @@ asset_hash,types,block_paths
 0x055510C8,animation,blocks\VZ\vehiclenameanimgroup_ah1z_P000_Q3.block
 0x05576FC6,lineregion,blocks\VZ\resident_P000_Q3.block
 0x05594613,path,blocks\VZ\resident_P000_Q3.block
-0x055E9085,model,blocks\VZ\c30403_P000_Q3.block
 0x0565173E,path,blocks\VZ\resident_P000_Q3.block
 0x0566D48D,path,blocks\VZ\resident_P000_Q3.block
 0x056A19E1,scrub,blocks\VZ\c31386_P000_Q3.block
@@ -370,7 +368,6 @@ asset_hash,types,block_paths
 0x07F4D878,path,blocks\VZ\resident_P000_Q3.block
 0x07F517B1,animation,blocks\VZ\vehiclenameanimgroup_stingray_P000_Q3.block
 0x07F6D63F,path,blocks\VZ\resident_P000_Q3.block
-0x07FC456B,model,blocks\VZ\c31090_P000_Q3.block
 0x080CDE98,path,blocks\VZ\resident_P000_Q3.block
 0x080D4A63,path,blocks\VZ\resident_P000_Q3.block
 0x08235D42,animation,blocks\VZ\resident_P000_Q3.block
@@ -422,7 +419,6 @@ asset_hash,types,block_paths
 0x090206F3,scrub,blocks\VZ\c31374_P000_Q3.block
 0x0902D030,path,blocks\VZ\resident_P000_Q3.block
 0x0903DC4A,texture,blocks\Shell\scaleform_shell_P000_Q3.block
-0x09139BCD,model,blocks\VZ\c30940_P000_Q3.block
 0x09161DCA,lineregion,blocks\VZ\resident_P000_Q3.block
 0x09183D88,animation,blocks\VZ\vehiclenameanimgroup_huangfeng_P000_Q3.block
 0x0918C4E6,lineregion,blocks\VZ\resident_P000_Q3.block
@@ -603,7 +599,6 @@ asset_hash,types,block_paths
 0x0D00F6CC,font,blocks\Shell\italian_P000_Q3.block
 0x0D015E20,path,blocks\VZ\resident_P000_Q3.block
 0x0D0548C3,animation,blocks\VZ\resident_P000_Q3.block
-0x0D0B8CF5,model,blocks\VZ\c30934_P000_Q3.block
 0x0D1429B1,path,blocks\VZ\resident_P000_Q3.block
 0x0D14E221,path,blocks\VZ\resident_P000_Q3.block
 0x0D152241,path,blocks\VZ\resident_P000_Q3.block
@@ -772,7 +767,6 @@ asset_hash,types,block_paths
 0x105CE8C8,path,blocks\VZ\resident_P000_Q3.block
 0x105FAD71,effect,blocks\VZ\effects_P000_Q3.block
 0x1065E5A2,path,blocks\VZ\resident_P000_Q3.block
-0x1066F684,model,blocks\VZ\c32066_P000_Q3.block
 0x106B3F64,path,blocks\VZ\resident_P000_Q3.block
 0x106D24F3,effect,blocks\VZ\effects_P000_Q3.block
 0x106D6384,scrub,blocks\VZ\c30100_P000_Q3.block
@@ -1308,7 +1302,6 @@ asset_hash,types,block_paths
 0x1A8D4A5E,animation,blocks\VZ\vehiclenameanimgroup_zu23aa_P000_Q3.block
 0x1A922D5D,animation,blocks\VZ\vehiclenameanimgroup_alouette3_P000_Q3.block
 0x1A92D79B,path,blocks\VZ\resident_P000_Q3.block
-0x1A9D89DF,model,blocks\VZ\c32154_P000_Q3.block
 0x1A9EA024,animation,blocks\VZ\vehiclenameanimgroup_armwrestle_P000_Q3.block
 0x1AA463D3,scrub,blocks\VZ\c30359_P000_Q3.block
 0x1AA6BC1F,path,blocks\VZ\resident_P000_Q3.block
@@ -1838,7 +1831,6 @@ asset_hash,types,block_paths
 0x25C5277F,path,blocks\VZ\resident_P000_Q3.block
 0x25CE73DA,animation,blocks\VZ\resident_P000_Q3.block
 0x25CF8005,animation,blocks\VZ\vehiclenameanimgroup_smallfishing_P000_Q3.block
-0x25E39BE9,model,blocks\VZ\c31182_P000_Q3.block
 0x25F3F28B,path,blocks\VZ\resident_P000_Q3.block
 0x25FAB5E0,path,blocks\VZ\resident_P000_Q3.block
 0x25FF64B4,path,blocks\VZ\resident_P000_Q3.block
@@ -1906,7 +1898,6 @@ asset_hash,types,block_paths
 0x26EF2955,path,blocks\VZ\resident_P000_Q3.block
 0x26F6E707,scrub,blocks\VZ\c31359_P000_Q3.block
 0x26FF4A97,animation,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
-0x2703554F,model,blocks\VZ\c30006_P000_Q3.block
 0x270B9287,path,blocks\VZ\resident_P000_Q3.block
 0x270C9971,animation,blocks\VZ\vehiclenameanimgroup_ridgeline_P000_Q3.block
 0x2710CE95,path,blocks\VZ\resident_P000_Q3.block
@@ -2284,7 +2275,6 @@ asset_hash,types,block_paths
 0x2EE4332D,path,blocks\VZ\resident_P000_Q3.block
 0x2EE8BA45,effect,blocks\VZ\effects_P000_Q3.block
 0x2EF19835,lineregion,blocks\VZ\resident_P000_Q3.block
-0x2EF7E3C3,model,blocks\VZ\c30002_P000_Q3.block
 0x2F0170B0,path,blocks\VZ\resident_P000_Q3.block
 0x2F02F9F5,animation,blocks\VZ\vehiclenameanimgroup_chopper_P000_Q3.block
 0x2F0FD589,path,blocks\VZ\resident_P000_Q3.block
@@ -2597,7 +2587,6 @@ asset_hash,types,block_paths
 0x34FB72BD,path,blocks\VZ\resident_P000_Q3.block
 0x3504664E,lowresterrain,blocks\VZ\low_res_terrain_P000_Q3.block
 0x35052D45,animation,blocks\VZ\vehiclenameanimgroup_huey_P000_Q3.block
-0x3511CCE7,model,blocks\VZ\c30572_P000_Q3.block
 0x35124496,lowresterrain,blocks\VZ\low_res_terrain_P000_Q3.block
 0x35127117,scrub,blocks\VZ\c30444_P000_Q3.block
 0x3513BA9A,path,blocks\VZ\resident_P000_Q3.block
@@ -2962,7 +2951,6 @@ asset_hash,types,block_paths
 0x3C871CFF,lineregion,blocks\VZ\resident_P000_Q3.block
 0x3C8E8B81,path,blocks\VZ\resident_P000_Q3.block
 0x3C957155,path,blocks\VZ\resident_P000_Q3.block
-0x3C9A5987,model,blocks\VZ\c31090_P000_Q3.block
 0x3C9E6655,animation,blocks\VZ\vehiclenameanimgroup_mh53j_P000_Q3.block
 0x3CA43D54,path,blocks\VZ\resident_P000_Q3.block
 0x3CAC093D,terrainmesh,blocks\VZ\c30071_P000_Q3.block
@@ -3477,7 +3465,6 @@ asset_hash,types,block_paths
 0x475047A8,path,blocks\VZ\resident_P000_Q3.block
 0x475F7878,effect,blocks\VZ\effects_P000_Q3.block
 0x475FA09C,terrainmesh,blocks\VZ\c31390_P000_Q3.block
-0x4761451B,model,blocks\VZ\civ_hum_mechanic_P000_Q3.block
 0x4766BF1D,lineregion,blocks\VZ\resident_P000_Q3.block
 0x4768E8CC,path,blocks\VZ\resident_P000_Q3.block
 0x476A6C4E,animation,blocks\VZ\characternameanimgroup_soldier_P000_Q3.block
@@ -3642,7 +3629,6 @@ asset_hash,types,block_paths
 0x4AAF74E3,path,blocks\VZ\resident_P000_Q3.block
 0x4AB040E7,lineregion,blocks\VZ\resident_P000_Q3.block
 0x4AB17EC8,lineregion,blocks\VZ\resident_P000_Q3.block
-0x4AB6F9B6,model,blocks\VZ\c31034_P000_Q3.block
 0x4AB951D0,animation,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
 0x4AC332E3,path,blocks\VZ\resident_P000_Q3.block
 0x4AC4CEFD,scrub,blocks\VZ\c31028_P000_Q3.block
@@ -3978,7 +3964,6 @@ asset_hash,types,block_paths
 0x5245BD59,animation,blocks\VZ\vehiclenameanimgroup_smallfishing_P000_Q3.block
 0x5248E239,animation,blocks\VZ\vehiclenameanimgroup_ka29b_P000_Q3.block
 0x5249D49A,lineregion,blocks\VZ\resident_P000_Q3.block
-0x5253854D,model,blocks\VZ\c31182_P000_Q3.block
 0x52560593,path,blocks\VZ\resident_P000_Q3.block
 0x52580434,lowresterrain,blocks\VZ\low_res_terrain_P000_Q3.block
 0x5259B8B8,effect,blocks\VZ\effects_P000_Q3.block
@@ -4653,7 +4638,6 @@ asset_hash,types,block_paths
 0x609E39FA,animation,blocks\VZ\resident_P000_Q3.block
 0x60A37B9A,path,blocks\VZ\resident_P000_Q3.block
 0x60A4909A,lineregion,blocks\VZ\resident_P000_Q3.block
-0x60A4EEF3,model,blocks\VZ\c30006_P000_Q3.block
 0x60AB3105,lineregion,blocks\VZ\resident_P000_Q3.block
 0x60AEAFE0,path,blocks\VZ\resident_P000_Q3.block
 0x60B05133,chatter,blocks\VZ\resident_P000_Q3.block
@@ -5640,7 +5624,6 @@ asset_hash,types,block_paths
 0x758453B6,path,blocks\VZ\resident_P000_Q3.block
 0x7584BE02,lowresterrain,blocks\VZ\low_res_terrain_P000_Q3.block
 0x759653A8,path,blocks\VZ\resident_P000_Q3.block
-0x759BDE16,model,blocks\VZ\c31034_P000_Q3.block
 0x759F74F7,animation,blocks\VZ\resident_P000_Q3.block
 0x75A25A9E,animation,blocks\VZ\vehiclenameanimgroup_m1a2_P000_Q3.block
 0x75A4F506,path,blocks\VZ\resident_P000_Q3.block
@@ -5983,7 +5966,6 @@ asset_hash,types,block_paths
 0x7C9E6086,lineregion,blocks\VZ\resident_P000_Q3.block
 0x7CB0D3F6,path,blocks\VZ\resident_P000_Q3.block
 0x7CB40751,font,blocks\Shell\russian_P000_Q3.block
-0x7CB86FC9,model,blocks\VZ\c32155_P000_Q3.block
 0x7CB9B4EB,texture,blocks\Shell\scaleform_shell_P000_Q3.block
 0x7CCA25CF,lineregion,blocks\VZ\resident_P000_Q3.block
 0x7CCA6619,scrub,blocks\VZ\c30819_P000_Q3.block
@@ -6720,7 +6702,6 @@ asset_hash,types,block_paths
 0x8BBB8FEB,path,blocks\VZ\resident_P000_Q3.block
 0x8BC05269,animation,blocks\VZ\vehiclenameanimgroup_mi35solano_P000_Q3.block
 0x8BC08323,animation,blocks\VZ\vehicleclassanimgroup_monstertruck_P000_Q3.block
-0x8BC154D7,model,blocks\VZ\c30572_P000_Q3.block
 0x8BC61F98,model,blocks\VZ\effects_P000_Q3.block
 0x8BCD7A01,animation,blocks\VZ\vehiclenameanimgroup_scooter_P000_Q3.block
 0x8BCE019E,model,blocks\VZ\c39998_P000_Q3.block
@@ -7132,7 +7113,6 @@ asset_hash,types,block_paths
 0x946F6A0A,model,blocks\VZ\c30717_P000_Q3.block
 0x9482588A,animation,blocks\VZ\resident_P000_Q3.block
 0x9487F0E7,font,blocks\VZ\english_P000_Q3.block
-0x949187D0,model,blocks\VZ\c30791_P000_Q3.block
 0x9493BED0,texture,blocks\Shell\scaleform_shell_P000_Q3.block
 0x949518C5,path,blocks\VZ\resident_P000_Q3.block
 0x949A88B0,lineregion,blocks\VZ\resident_P000_Q3.block
@@ -7895,7 +7875,6 @@ asset_hash,types,block_paths
 0xA3ABB184,terrainmesh,blocks\VZ\c30297_P000_Q3.block
 0xA3B1CE43,animation,blocks\VZ\vehicleclassanimgroup_monstertruck_P000_Q3.block
 0xA3BDAB31,path,blocks\VZ\resident_P000_Q3.block
-0xA3BFC1E6,model,blocks\VZ\c30556_P000_Q3.block
 0xA3D2C017,animation,blocks\VZ\vehiclenameanimgroup_amx30_P000_Q3.block
 0xA3D63361,path,blocks\VZ\resident_P000_Q3.block
 0xA3E2595B,animation,blocks\VZ\vehicleclassanimgroup_automedium_P000_Q3.block
@@ -8387,7 +8366,6 @@ asset_hash,types,block_paths
 0xADBE0716,animation,blocks\VZ\vehiclenameanimgroup_cigarette_P000_Q3.block
 0xADCD07C4,path,blocks\VZ\resident_P000_Q3.block
 0xADCE244B,model,blocks\VZ\resident2_P000_Q3.block
-0xADD11AC5,model,blocks\VZ\c33693_P000_Q3.block
 0xADD6E3F3,path,blocks\VZ\resident_P000_Q3.block
 0xADDC3EAD,animation,blocks\VZ\resident_P000_Q3.block
 0xADE3CED6,model,blocks\VZ\c32074_P000_Q3.block
@@ -8516,7 +8494,6 @@ asset_hash,types,block_paths
 0xB0866A86,animation,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
 0xB086EAB1,path,blocks\VZ\resident_P000_Q3.block
 0xB0911BC4,path,blocks\VZ\resident_P000_Q3.block
-0xB0A0930E,model,blocks\VZ\c30403_P000_Q3.block
 0xB0A1BE0D,lineregion,blocks\VZ\resident_P000_Q3.block
 0xB0A3B301,animation,blocks\VZ\resident_P000_Q3.block
 0xB0A59044,effect,blocks\VZ\effects_P000_Q3.block
@@ -9094,7 +9071,6 @@ asset_hash,types,block_paths
 0xBC5DF554,animation,blocks\VZ\characternameanimgroup_soldier_P000_Q3.block
 0xBC5F3B23,path,blocks\VZ\resident_P000_Q3.block
 0xBC62C0C7,lineregion,blocks\VZ\resident_P000_Q3.block
-0xBC65582A,model,blocks\VZ\c39998_P000_Q3.block
 0xBC6681BD,path,blocks\VZ\resident_P000_Q3.block
 0xBC67A330,animation,blocks\VZ\vehiclenameanimgroup_ztz98_P000_Q3.block
 0xBC6867A5,animation,blocks\VZ\resident_P000_Q3.block
@@ -9113,7 +9089,6 @@ asset_hash,types,block_paths
 0xBCAC670B,path,blocks\VZ\resident_P000_Q3.block
 0xBCB1D97B,scrub,blocks\VZ\c30358_P000_Q3.block
 0xBCB213CB,animation,blocks\VZ\resident_P000_Q3.block
-0xBCBA07EE,model,blocks\VZ\c30403_P000_Q3.block
 0xBCC11A94,texture,blocks\Shell\scaleform_shell_P000_Q3.block
 0xBCC49B58,path,blocks\VZ\resident_P000_Q3.block
 0xBCC5BC0A,terrainmesh,blocks\VZ\c31237_P000_Q3.block
@@ -9569,7 +9544,6 @@ asset_hash,types,block_paths
 0xC5BDA44C,animation,blocks\VZ\vehiclenameanimgroup_m551_P000_Q3.block
 0xC5BEC4CE,path,blocks\VZ\resident_P000_Q3.block
 0xC5C112A9,path,blocks\VZ\resident_P000_Q3.block
-0xC5C23603,model,blocks\VZ\c33693_P000_Q3.block
 0xC5C8F9BE,path,blocks\VZ\resident_P000_Q3.block
 0xC5CFBA32,path,blocks\VZ\resident_P000_Q3.block
 0xC5E31B20,model,blocks\VZ\c30224_P000_Q3.block
@@ -11197,7 +11171,6 @@ asset_hash,types,block_paths
 0xE7C7727D,path,blocks\VZ\resident_P000_Q3.block
 0xE7C8F502,animation,blocks\VZ\vehiclenameanimgroup_m551_P000_Q3.block
 0xE7D3B446,animation,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
-0xE7D6462D,model,blocks\VZ\c32155_P000_Q3.block
 0xE7E39F4D,lineregion,blocks\VZ\resident_P000_Q3.block
 0xE7E5EEFD,animation,blocks\VZ\vehicleclassanimgroup_truckmid_P000_Q3.block
 0xE7EA9112,path,blocks\VZ\resident_P000_Q3.block
@@ -11314,7 +11287,6 @@ asset_hash,types,block_paths
 0xEA74362C,path,blocks\VZ\resident_P000_Q3.block
 0xEA76650E,animation,blocks\VZ\resident_P000_Q3.block
 0xEA7B472B,scrub,blocks\VZ\c30100_P000_Q3.block
-0xEA7F9F3F,model,blocks\VZ\c31090_P000_Q3.block
 0xEA81D2EA,path,blocks\VZ\resident_P000_Q3.block
 0xEA81E7BD,path,blocks\VZ\resident_P000_Q3.block
 0xEA916B8E,animation,blocks\VZ\resident_P000_Q3.block
@@ -11322,7 +11294,6 @@ asset_hash,types,block_paths
 0xEA9B1210,animation,blocks\VZ\vehiclenameanimgroup_weightbench_P000_Q3.block
 0xEAA2B1E9,path,blocks\VZ\resident_P000_Q3.block
 0xEAA636F9,path,blocks\VZ\resident_P000_Q3.block
-0xEAA71CCB,model,blocks\VZ\c33017_P000_Q3.block
 0xEAAC7346,path,blocks\VZ\resident_P000_Q3.block
 0xEAB0269D,path,blocks\VZ\resident_P000_Q3.block
 0xEAB9D3B0,path,blocks\VZ\resident_P000_Q3.block
@@ -11666,7 +11637,6 @@ asset_hash,types,block_paths
 0xF237A8DA,animation,blocks\VZ\vehiclenameanimgroup_saltonsea_P000_Q3.block
 0xF23B92C6,animation,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
 0xF2405AD1,animation,blocks\VZ\vehiclenameanimgroup_turbosquid_P000_Q3.block
-0xF245AC63,model,blocks\VZ\c30952_P000_Q3.block
 0xF25C0EF4,path,blocks\VZ\resident_P000_Q3.block
 0xF25C98F8,scrub,blocks\VZ\c30328_P000_Q3.block
 0xF2641B60,animation,blocks\VZ\vehiclenameanimgroup_mi26_P000_Q3.block
@@ -11763,7 +11733,6 @@ asset_hash,types,block_paths
 0xF3FCF3D5,animation,blocks\VZ\vehiclenameanimgroup_ka29b_P000_Q3.block
 0xF3FD4686,path,blocks\VZ\resident_P000_Q3.block
 0xF40EEA27,path,blocks\VZ\resident_P000_Q3.block
-0xF419FFEB,model,blocks\VZ\c30952_P000_Q3.block
 0xF4294B15,effect,blocks\VZ\effects_P000_Q3.block
 0xF42E9133,animation,blocks\VZ\vehiclenameanimgroup_mi35solano_P000_Q3.block
 0xF4309A98,model,blocks\VZ\c31186_P000_Q3.block
@@ -12050,7 +12019,6 @@ asset_hash,types,block_paths
 0xF9CCFF27,animation,blocks\VZ\vehiclenameanimgroup_ka29b_P000_Q3.block
 0xF9D2E8E7,path,blocks\VZ\resident_P000_Q3.block
 0xF9D97E0A,lineregion,blocks\VZ\resident_P000_Q3.block
-0xF9EA3B44,model,blocks\VZ\c30791_P000_Q3.block
 0xF9EAF8CE,path,blocks\VZ\resident_P000_Q3.block
 0xF9F217DF,animation,blocks\VZ\vehiclenameanimgroup_m113_P000_Q3.block
 0xF9F47B38,path,blocks\VZ\resident_P000_Q3.block
