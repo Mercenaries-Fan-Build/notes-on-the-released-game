@@ -14954,6 +14954,102 @@
     ],
     "0xF8E7B7F4": [
       "POI_UP_Introduction"
+    ],
+    "0x01ED3D6F": [
+      "civ_hum_super_aidworkerfemale"
+    ],
+    "0x055E9085": [
+      "civ_hum_super_taxi"
+    ],
+    "0x07FC456B": [
+      "civ_hum_super_rich"
+    ],
+    "0x09139BCD": [
+      "vz_hum_super_soldier"
+    ],
+    "0x0D0B8CF5": [
+      "oc_hum_super_mercenary"
+    ],
+    "0x1066F684": [
+      "ch_hum_super_worker"
+    ],
+    "0x1A9D89DF": [
+      "civ_hum_super_aidworker"
+    ],
+    "0x25E39BE9": [
+      "civ_hum_super_poor"
+    ],
+    "0x2703554F": [
+      "civ_hum_super_businessfemale"
+    ],
+    "0x2EF7E3C3": [
+      "oc_hum_super_executive"
+    ],
+    "0x3511CCE7": [
+      "civ_hum_super_protester"
+    ],
+    "0x3C9A5987": [
+      "civ_hum_super_businessb"
+    ],
+    "0x4761451B": [
+      "civ_hum_super_mechanic"
+    ],
+    "0x4AB6F9B6": [
+      "gr_hum_super_soldier"
+    ],
+    "0x5253854D": [
+      "civ_hum_super_poorfemale"
+    ],
+    "0x60A4EEF3": [
+      "civ_hum_super_richfemale"
+    ],
+    "0x759BDE16": [
+      "gr_hum_super_soldierfemale"
+    ],
+    "0x7CB86FC9": [
+      "civ_hum_super_cartworker"
+    ],
+    "0x8BC154D7": [
+      "civ_hum_super_protesterfemale"
+    ],
+    "0x949187D0": [
+      "civ_hum_super_industrialfemale"
+    ],
+    "0xA3BFC1E6": [
+      "vz_hum_hvt03"
+    ],
+    "0xADD11AC5": [
+      "vz_hum_hvt04"
+    ],
+    "0xB0A0930E": [
+      "civ_hum_super_casual"
+    ],
+    "0xBC65582A": [
+      "ch_hum_super_sailor"
+    ],
+    "0xBCBA07EE": [
+      "civ_hum_super_casualfemale"
+    ],
+    "0xC5C23603": [
+      "vz_hum_hvt02"
+    ],
+    "0xE7D6462D": [
+      "civ_hum_super_cartworkerfemale"
+    ],
+    "0xEA7F9F3F": [
+      "civ_hum_super_business"
+    ],
+    "0xEAA71CCB": [
+      "oc_hum_super_executivefemale"
+    ],
+    "0xF245AC63": [
+      "pr_hum_super_thug"
+    ],
+    "0xF419FFEB": [
+      "pr_hum_super_thugfemale"
+    ],
+    "0xF9EA3B44": [
+      "civ_hum_super_industrial"
     ]
   }
 }
