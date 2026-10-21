@@ -1,7 +1,7 @@
 // Decompile the OTHER class-122 (512-byte) allocation callers seen in poolguard's per-class
 // history (besides the chunk parser 0x67A7FA): 0x85BFB0, 0x471B4A, 0x632692. One of these is
 // the real overflower (allocator of `below`). Ghidra has analysis gaps, so scan back for the
-// prologue, create the function, decompile. Writes output/_ghidra/alloc_callers_decomp.txt.
+// prologue, create the function, decompile. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -19,8 +19,18 @@ import java.io.PrintWriter;
 public class DecompileAllocCallers extends GhidraScript {
 
     private static final long[] INSIDE = { 0x0085BFB0L, 0x00471B4AL, 0x00632692L };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -51,8 +61,9 @@ public class DecompileAllocCallers extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "alloc_callers_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             DecompInterface decomp = new DecompInterface();

@@ -7,7 +7,7 @@
 //   0x008242B0  per-context index function
 // For each: list xrefs (code callers + data refs). For data refs (vtables), list THEIR xrefs
 // (constructors). Decompile the code callers of the grid builder (grid init/register sites).
-// Writes output/_ghidra/grid_xrefs.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -24,8 +24,18 @@ import java.io.PrintWriter;
 
 public class GridProducerXrefs extends GhidraScript {
     private static final long[] TARGETS = { 0x004CBF60L, 0x004CC030L, 0x004CC130L, 0x008731F0L, 0x008242B0L };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\grid_xrefs.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -45,8 +55,9 @@ public class GridProducerXrefs extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         ReferenceManager rm = currentProgram.getReferenceManager();

@@ -1,5 +1,5 @@
 // Generic: name every function from WildStar_d.map, then decompile a target set passed as args.
-// Args: <outPath> <VA:name> <VA:name> ...   (VA hex like 0x825c86e8)
+// Args: <outPath> <mapPath> <VA:name> <VA:name> ...   (mapPath = WildStar_d.map; VA hex like 0x825c86e8)
 // @category Saboteur
 import ghidra.app.script.GhidraScript;
 import ghidra.app.decompiler.DecompInterface;
@@ -19,8 +19,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class DecompileWildStarTargets extends GhidraScript {
-    private static final String MAP =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-reversing-the-sabetour\\game-files\\symbols\\WildStar_d.map";
+    private static final String USAGE = "<outPath> <mapPath> <VA:name> ...";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private static final Pattern LINE =
         Pattern.compile("^\\s+[0-9a-f]{4}:[0-9a-f]{8}\\s+(\\S+)\\s+([0-9a-f]{8})\\s+f\\b");
 
@@ -42,10 +51,11 @@ public class DecompileWildStarTargets extends GhidraScript {
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
-        String out = args[0];
+        String out = requiredArg(0);
+        String mapPath = requiredArg(1);
         new File(out).getParentFile().mkdirs();
         int named = 0;
-        try (BufferedReader br = new BufferedReader(new FileReader(MAP))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(mapPath))) {
             String ln;
             while ((ln = br.readLine()) != null) {
                 Matcher m = LINE.matcher(ln); if (!m.find()) continue;
@@ -64,7 +74,7 @@ public class DecompileWildStarTargets extends GhidraScript {
         DecompInterface dec = new DecompInterface(); dec.openProgram(currentProgram);
         ConsoleTaskMonitor mon = new ConsoleTaskMonitor();
         PrintWriter fp = new PrintWriter(new File(out), "UTF-8");
-        for (int i = 1; i < args.length; i++) {
+        for (int i = 2; i < args.length; i++) {
             String[] kv = args[i].split(":", 2);
             long va = Long.decode(kv[0]); String nm = kv.length > 1 ? kv[1] : kv[0];
             Address a = toAddr(va); Function f = getFunctionAt(a);

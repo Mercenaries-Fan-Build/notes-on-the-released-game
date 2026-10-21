@@ -6,7 +6,7 @@
 //   writer stack: 0x004CF5AD,0x004CF43B,0x004CF42C (FUN_004cf340) <- 0x005FD598 <- 0x0046FE50
 //                 <- 0x004C0B6F/0x004C1672/0x004C1540 <- 0x00630FB1 <- 0x00631A90/0x0063193D
 //   alloc callers seen: 0x0085BEA8 (16B P), 0x0085BFB0 (4908B via D760)
-// Writes output/_ghidra/texbuf_overflow.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -32,8 +32,18 @@ public class TexRecordBufferOverflow extends GhidraScript {
         0x00630FB1L,  // texture-list consumer
         0x00631A90L,
     };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\texbuf_overflow.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -58,8 +68,9 @@ public class TexRecordBufferOverflow extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

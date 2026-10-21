@@ -4,7 +4,7 @@
 //   0x004CC030  __thiscall pool-pop helper: reads [this+0x78010] count, [this+0x7300C] table  (crash)
 //   0x004CBF80  builds the +0x7300C table from 0x1A4-byte records (sub eax,0x1A4 loop)
 //   0x004CC130  caller that virtual-dispatches into 0x4CC030
-// Writes output/_ghidra/gridcrash_decomp.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -27,8 +27,18 @@ public class DecompileGridCrash extends GhidraScript {
         "builder of +0x7300C table from 0x1A4-byte records",
         "caller that dispatches into 0x4CC030",
     };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private Memory mem;
     private PrintWriter fp;
@@ -58,9 +68,11 @@ public class DecompileGridCrash extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
+        outPath = requiredArg(0);
         mem = currentProgram.getMemory();
-        new File(OUT_DIR).mkdirs();
-        fp = new PrintWriter(new File(OUT_DIR, "gridcrash_decomp.txt"), "UTF-8");
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(out, "UTF-8");
         try {
             DecompInterface decomp = new DecompInterface();
             decomp.openProgram(currentProgram);

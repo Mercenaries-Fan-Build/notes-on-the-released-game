@@ -1,12 +1,27 @@
-// preScript: create a function at every .pdata-derived start address.
+// preScript: create a function at every start address listed in <startsPath>.
+// Args: <startsPath>  — one hex VA per line (no 0x prefix), e.g. the .pdata function starts of
+// the image being imported. The list must belong to that image: the Xbox builds share no layout.
+// @category Mercs2
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import java.nio.file.*;
 import java.util.List;
 
 public class CreateFunctions extends GhidraScript {
+    private static final String USAGE = "<startsPath>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
+
     public void run() throws Exception {
-        String fp = "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra_x360\\func_starts.txt";
+        String fp = requiredArg(0);
         List<String> lines = Files.readAllLines(Paths.get(fp));
         int dis = 0, created = 0, n = 0;
         for (String line : lines) {

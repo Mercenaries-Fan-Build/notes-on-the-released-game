@@ -1,7 +1,7 @@
 // Decompile the spatial-hash crash function + cell-index/loader code.
 // Native Ghidra Java script (Ghidra 12.x dropped bundled Jython).
 // Writes C decompilation + disassembly around the fault sites to
-// output/_ghidra/crash_decomp.txt.
+// <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -34,8 +34,18 @@ public class DecompileCrashFns extends GhidraScript {
     };
     private static final long[] FAULT_SITES = { 0x0248BB7CL, 0x0248BBE2L, 0x0248BB6DL };
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
 
@@ -47,8 +57,9 @@ public class DecompileCrashFns extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "crash_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();

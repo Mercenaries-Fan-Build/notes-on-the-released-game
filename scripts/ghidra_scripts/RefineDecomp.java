@@ -7,7 +7,8 @@
 //       only the first 5 bytes in memory (bytes 6+ already match the dump), then create+decompile.
 // Emits the SAME header format as DecompileAllByName so the result splices into the dump:
 //   ==== <name> @0xADDR  size=N  callers=[...] ====
-// Writes output/_ghidra/comprehensive_patch_decomp.txt
+// Args: <outPath> <targetsFile>  — targetsFile lists one hex VA per line (the DECOMP FAIL set);
+// the decompiled C goes to outPath.
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -26,9 +27,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RefineDecomp extends GhidraScript {
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\";
-    private static final String TARGETS = OUT_DIR + "refine_targets.txt";
+    private static final String USAGE = "<outPath> <targetsFile>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private static final int TIMEOUT = 180;
 
     // nodrm_v3-restored prologues (first 5 bytes only; the rest already match the dump image).
@@ -72,8 +81,10 @@ public class RefineDecomp extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        fp = new PrintWriter(new File(OUT_DIR + "comprehensive_patch_decomp.txt"), "UTF-8");
+        String outPath = requiredArg(0);
+        String targetsPath = requiredArg(1);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface();
         decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
@@ -100,7 +111,7 @@ public class RefineDecomp extends GhidraScript {
 
         // (1) Retry the DECOMP FAIL targets at a longer timeout.
         List<Long> targets = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(TARGETS))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(targetsPath))) {
             String line;
             while ((line = br.readLine()) != null) {
                 line = line.trim();

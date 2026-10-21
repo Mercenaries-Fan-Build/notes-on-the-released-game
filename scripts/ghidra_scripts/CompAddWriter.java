@@ -6,6 +6,7 @@
 //   3. Decompile the worldentity/ECS-node component build: callers of FUN_004cae80(returns 0x5647c35d)
 //      and FUN_004cbc90(returns 0x140e8728) and FUN_0045e480(returns 0xe6b81a54) — these getters are
 //      used as type tags; their callers are the entity/component constructors.
+// Args: <outPath> (the output text file).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -28,8 +29,18 @@ public class CompAddWriter extends GhidraScript {
         0x00875FD0L
     };
     private static final long[] XREF_GETTERS = { 0x004CAE80L, 0x004CBC90L, 0x0045E480L };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\comp_add_writer.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -53,8 +64,9 @@ public class CompAddWriter extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

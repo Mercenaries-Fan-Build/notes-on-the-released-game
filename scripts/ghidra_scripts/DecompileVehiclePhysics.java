@@ -2,7 +2,8 @@
 // Root cause of prior unreadability: FUN_00401740 (x87 SQRT helper) was marked noreturn,
 // so every prior decomp export truncated the vehicle step functions at their first sqrt call.
 // This script clears the noreturn flag (and on its neighbors' thunks if flagged), then
-// re-decompiles the whole vehicle actor cluster to output/_ghidra/vehicle_phys_decomp.txt.
+// re-decompiles the whole vehicle actor cluster to <outPath>.
+// Args: <outPath>  — the output text file
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
@@ -12,8 +13,20 @@ import java.io.File;
 import java.io.PrintWriter;
 
 public class DecompileVehiclePhysics extends GhidraScript {
+    private static final String USAGE = "<outPath>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     @Override
     public void run() throws Exception {
+        String outPath = requiredArg(0);
         // 1) fix falsely-noreturn math helpers
         long[] fix = {0x401740L, 0x401750L, 0x4017a0L, 0x401630L};
         for (long a : fix) {
@@ -50,7 +63,7 @@ public class DecompileVehiclePhysics extends GhidraScript {
             0x430340L, 0x42c090L, 0x42c0a0L, 0x430950L, 0x430990L, 0x430390L,
             0x4303c0L, 0x430400L, 0x441da0L,
         };
-        File out = new File("c:/Users/Shadow/Desktop/notes-on-the-released-game/output/_ghidra/vehicle_phys_decomp.txt");
+        File out = new File(outPath);
         PrintWriter pw = new PrintWriter(out, "UTF-8");
         DecompInterface ifc = new DecompInterface();
         ifc.openProgram(currentProgram);

@@ -44,8 +44,18 @@ public class EcsNodeLoaderHunt extends GhidraScript {
         0x007BB1A0L, 0x007BEF60L, 0x007677F0L, // ctors referenced in scene ctor
         0x004A2CE0L, 0x004A01E0L              // referenced in FUN_004a0c40
     };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\ecs_node_loader.txt";
+    private static final String USAGE = "<outFile>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -69,8 +79,9 @@ public class EcsNodeLoaderHunt extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

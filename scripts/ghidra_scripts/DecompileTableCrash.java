@@ -1,6 +1,6 @@
 // Decompile the NULL-table-entry crash 0x004CC064 (mov eax,[esi], esi=0 = a
 // null slot in a table at object+0x7300C, iterated one past the valid entries).
-// Identify the loop bound/count source. Writes output/_ghidra/table_crash_decomp.txt.
+// Identify the loop bound/count source. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -35,8 +35,18 @@ public class DecompileTableCrash extends GhidraScript {
         "per-entry callee 0x4B0EC0",
     };
     private static final long FAULT_SITE = 0x004CC064L;
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -46,8 +56,9 @@ public class DecompileTableCrash extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "table_crash_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();

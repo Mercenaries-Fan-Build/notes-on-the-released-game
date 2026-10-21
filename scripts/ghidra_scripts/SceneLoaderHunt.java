@@ -4,7 +4,7 @@
 // writes each entity's component-table entries (entity+0xA0 table[i]={id,ptr}).
 // Find it: xref scene vtable 0x00BDF1C8 / 0x00BDF274, decompile code referrers (ctor + builders).
 // Also xref FUN_00790170 (entity ctor/dtor) callers — the per-entity construction.
-// Writes output/_ghidra/scene_loader.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -23,8 +23,18 @@ import java.util.Set;
 public class SceneLoaderHunt extends GhidraScript {
     private static final long[] SCENE_VT = { 0x00BDF1C8L, 0x00BDF274L };
     private static final long ENTITY_DTOR = 0x00790170L;
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\scene_loader.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -48,8 +58,9 @@ public class SceneLoaderHunt extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

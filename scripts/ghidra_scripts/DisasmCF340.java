@@ -2,7 +2,7 @@
 // the MESH_B CHDR/CEXE/NODE/STAT behaviour-tree parser). Map the alloc sites the timeline named
 // (0x4CF4E7, 0x4CF5AD, 0x4CF6A6, 0x4CF6C2) and the writer return-addresses (0x4CF43B) to the exact
 // count-vs-alloc-vs-write, so we know which count drives the overrun. Tags each insn with its
-// owning function. Writes output/_ghidra/cf340_disasm.txt.
+// owning function. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -18,8 +18,18 @@ public class DisasmCF340 extends GhidraScript {
 
     private static final long START = 0x004CF340L;
     private static final long END   = 0x004CF700L;
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\cf340_disasm.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private Address addr(long v) {
         return currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(v);
@@ -27,10 +37,11 @@ public class DisasmCF340 extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        outPath = requiredArg(0);
         Memory mem = currentProgram.getMemory();
         // make sure the function is defined so register/operand names resolve
         try { disassemble(addr(START)); createFunction(addr(START), null); } catch (Exception e) {}
-        PrintWriter fp = new PrintWriter(new File(OUT), "UTF-8");
+        PrintWriter fp = new PrintWriter(new File(outPath), "UTF-8");
         try {
             fp.println("# FUN_004cf340 disasm 0x" + Long.toHexString(START) + "..0x" + Long.toHexString(END));
             fp.println("# alloc-site return addrs from timeline: 0x4CF4E7 0x4CF5AD 0x4CF6A6 0x4CF6C2 ; writer 0x4CF43B");

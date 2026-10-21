@@ -5,7 +5,7 @@
 //   * CLUSTER_ONLY=false -> every FUN_* in .text (the user's "export all"). Large + slow.
 // Each function is emitted once (dedup by entry), sorted by address, with a header line
 //   ==== FUN_xxxx @addr  size=N  callers=[...] ====
-// Writes output/_ghidra/<all_functions|texloader_cluster>_decomp.txt
+// Args: <outDir>  — writes <outDir>/<all_functions|texloader_cluster>_decomp.txt
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -46,8 +46,18 @@ public class DecompileAllFunctions extends GhidraScript {
         0x0085BEA8L, 0x0085BFB0L,                                        // alloc wrappers (16B / D760)
     };
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\";
+    private static final String USAGE = "<outDir>";
+    private String outDir;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     // x87 math helpers (sqrt/abs/…) were falsely marked noreturn, truncating every
     // float-heavy function at its first sqrt call. Clear the flag so the export is
@@ -104,10 +114,11 @@ public class DecompileAllFunctions extends GhidraScript {
 
     @Override
     public void run() throws Exception {
+        outDir = requiredArg(0);
         clearFalseNoReturn();
-        String outPath = OUT_DIR + (CLUSTER_ONLY ? "texloader_cluster_decomp.txt"
-                                                  : "all_functions_decomp.txt");
-        new File(OUT_DIR).mkdirs();
+        String outPath = new File(outDir, CLUSTER_ONLY ? "texloader_cluster_decomp.txt"
+                                                       : "all_functions_decomp.txt").getPath();
+        new File(outDir).mkdirs();
         fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface();
         decomp.openProgram(currentProgram);

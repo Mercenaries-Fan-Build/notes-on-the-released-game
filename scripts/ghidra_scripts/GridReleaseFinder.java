@@ -9,7 +9,7 @@
 // Pop = FUN_004cc030 (vtbl+0x1c). We want the PUSH/release: writers of count 0x016ce8c0
 // and the table 0x016c98bc. Dump the vtable (32 entries) and decompile every function that
 // references the static count, the table base, or the grid base.
-// Writes output/_ghidra/grid_release.txt.
+// Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -33,8 +33,18 @@ public class GridReleaseFinder extends GhidraScript {
     private static final long GRID_TABLE = 0x016c98bcL;
     private static final long GRID_CAP = 0x016ce8c4L;
     private static final long[] PROBE = { GRID_COUNT, GRID_TABLE, GRID_BASE, GRID_CAP };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\grid_release.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -53,9 +63,10 @@ public class GridReleaseFinder extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
+        outPath = requiredArg(0);
         mem = currentProgram.getMemory();
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

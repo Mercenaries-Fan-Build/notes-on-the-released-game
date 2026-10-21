@@ -1,5 +1,6 @@
 // Second-tier vehicle physics callees: per-wheel suspension/friction/engine, boat/heli/tank
 // sub-steps, buoyancy sampler helpers, and the per-class controller command dispatchers.
+// Args: <outPath>  — the output text file
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
@@ -9,8 +10,20 @@ import java.io.File;
 import java.io.PrintWriter;
 
 public class DecompileVehiclePhysics2 extends GhidraScript {
+    private static final String USAGE = "<outPath>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     @Override
     public void run() throws Exception {
+        String outPath = requiredArg(0);
         long[] addrs = {
             // car second tier (wheel suspension/friction/engine)
             0x44f680L, 0x44e600L, 0x44f050L, 0x44f4e0L, 0x4571b0L,
@@ -27,7 +40,7 @@ public class DecompileVehiclePhysics2 extends GhidraScript {
             // controller command dispatchers / per-frame vehicle controllers
             0x437300L, 0x4373b0L, 0x437720L,
         };
-        File out = new File("c:/Users/Shadow/Desktop/notes-on-the-released-game/output/_ghidra/vehicle_phys_decomp2.txt");
+        File out = new File(outPath);
         PrintWriter pw = new PrintWriter(out, "UTF-8");
         DecompInterface ifc = new DecompInterface();
         ifc.openProgram(currentProgram);

@@ -9,6 +9,7 @@
 //
 // We enumerate all functions that contain an instruction "<reg>*0x10" combined with a "+8" read,
 // near a type-hash compare, and decompile the few unique ones.
+// Args: <outPath> (the output text file).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -32,8 +33,18 @@ public class BlockEntryReader extends GhidraScript {
         0x00875fd0L, // per-node type dispatcher
         0x008731f0L  // chain to grid pop (from memory note)
     };
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra\\block_entry_reader.txt";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
     private PrintWriter fp;
     private DecompInterface decomp;
     private ConsoleTaskMonitor mon;
@@ -57,8 +68,9 @@ public class BlockEntryReader extends GhidraScript {
     }
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
-        fp = new PrintWriter(new File(OUT), "UTF-8");
+        outPath = requiredArg(0);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
+        fp = new PrintWriter(new File(outPath), "UTF-8");
         decomp = new DecompInterface(); decomp.openProgram(currentProgram);
         mon = new ConsoleTaskMonitor();
         try {

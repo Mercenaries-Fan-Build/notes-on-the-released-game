@@ -2,7 +2,7 @@
 // alloc FUN_0084AC20 / FUN_0084DCE0) via the shared allocator critical section
 // DAT_00FF4570, and the size-class table base DAT_00DFD108. Goal: locate the
 // `free` entry + its pointer argument so a minimally-perturbing inline hook can
-// flag out-of-arena (garbage) frees. Writes output/_ghidra/free_decomp.txt.
+// flag out-of-arena (garbage) frees. Writes <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -24,8 +24,18 @@ public class DecompileFree extends GhidraScript {
 
     // shared allocator critical section + size-class table base
     private static final long[] ANCHORS = { 0x00FF4570L, 0x00DFD108L };
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private void w(String s) { fp.println(s); }
@@ -35,8 +45,9 @@ public class DecompileFree extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "free_decomp.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             FunctionManager fm = currentProgram.getFunctionManager();

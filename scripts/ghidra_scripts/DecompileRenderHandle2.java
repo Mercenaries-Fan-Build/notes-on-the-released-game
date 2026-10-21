@@ -1,7 +1,7 @@
 // Render-view handle-table resolve crash: pass 2.
 // Decompiles the dirty-flag manager, render-mgr writer, gate writers,
 // and dumps callers of the key functions. Writes to
-// output/_ghidra/render_handle_decomp2.txt.
+// <outPath> (script argument 1).
 //
 // @category Mercs2
 import ghidra.app.script.GhidraScript;
@@ -73,8 +73,18 @@ public class DecompileRenderHandle2 extends GhidraScript {
         {0x004BC780L, 0x004BC930L},  // gate writers neighborhood
     };
 
-    private static final String OUT_DIR =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra";
+    private static final String USAGE = "<outPath>";
+    private String outPath;
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     private PrintWriter fp;
     private DecompInterface decomp;
@@ -154,8 +164,9 @@ public class DecompileRenderHandle2 extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT_DIR).mkdirs();
-        File out = new File(OUT_DIR, "render_handle_decomp2.txt");
+        outPath = requiredArg(0);
+        File out = new File(outPath);
+        out.getAbsoluteFile().getParentFile().mkdirs();
         fp = new PrintWriter(out, "UTF-8");
         try {
             decomp = new DecompInterface();

@@ -2,9 +2,9 @@
 // SOLVER cluster with names applied from the linker .map. This is the Mercs2 "wall" named.
 //
 // Pipeline: (1) parse WildStar_d.map, create+name every code (' f ') symbol so call sites resolve;
-// (2) decompile the hand-picked solver target set to output/_ghidra_saboteur/wildstar_damage_decomp.txt.
+// (2) decompile the hand-picked solver target set to <outPath>.
 //
-// Run as a headless postScript after -analyze. Map + output paths are hardcoded.
+// Run as a headless postScript after -analyze. Args: <outPath> <mapPath>  (mapPath = WildStar_d.map)
 // @category Saboteur
 import ghidra.app.script.GhidraScript;
 import ghidra.app.decompiler.DecompInterface;
@@ -24,10 +24,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class DecompileWildStarDamage extends GhidraScript {
-    private static final String MAP =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-reversing-the-sabetour\\game-files\\symbols\\WildStar_d.map";
-    private static final String OUT =
-        "C:\\Users\\Shadow\\Desktop\\notes-on-the-released-game\\output\\_ghidra_saboteur\\wildstar_damage_decomp.txt";
+    private static final String USAGE = "<outPath> <mapPath>";
+
+    // Script argument <index>; the script stops with the usage line when it is absent.
+    private String requiredArg(int index) {
+        String[] args = getScriptArgs();
+        if (args.length <= index) {
+            throw new IllegalArgumentException("missing script argument " + (index + 1)
+                + "; usage: " + getClass().getSimpleName() + ".java " + USAGE);
+        }
+        return args[index];
+    }
 
     // authoritative solver targets: {VA, readableName}
     private static final String[][] TARGETS = {
@@ -86,10 +93,12 @@ public class DecompileWildStarDamage extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        new File(OUT).getParentFile().mkdirs();
+        String outPath = requiredArg(0);
+        String mapPath = requiredArg(1);
+        new File(outPath).getAbsoluteFile().getParentFile().mkdirs();
         // 1) name everything from the map so call sites read cleanly
         int named = 0, made = 0;
-        try (BufferedReader br = new BufferedReader(new FileReader(MAP))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(mapPath))) {
             String ln;
             while ((ln = br.readLine()) != null) {
                 Matcher m = LINE.matcher(ln);
@@ -117,7 +126,7 @@ public class DecompileWildStarDamage extends GhidraScript {
         DecompInterface dec = new DecompInterface();
         dec.openProgram(currentProgram);
         ConsoleTaskMonitor mon = new ConsoleTaskMonitor();
-        PrintWriter fp = new PrintWriter(new File(OUT), "UTF-8");
+        PrintWriter fp = new PrintWriter(new File(outPath), "UTF-8");
         fp.println("# WildStar (The Saboteur Xbox360 devkit, BE PPC) damage/explosion/destruction solver");
         fp.println("# names applied from WildStar_d.map; " + TARGETS.length + " target functions\n");
         for (String[] t : TARGETS) {
@@ -140,6 +149,6 @@ public class DecompileWildStarDamage extends GhidraScript {
         }
         dec.dispose();
         fp.close();
-        println("done -> " + OUT);
+        println("done -> " + outPath);
     }
 }
