@@ -210,7 +210,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x01AB4A4D,vz_cum_roads,vz_cum_roads,1,1,layer,vz.wad,1,1,blocks\VZ\layers_static_P000_Q3.block
 0x01B3F23A,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
 0x01B4986C,chinaoutpost_bld_hangar01_door_sm,chinaoutpost_bld_hangar01_door_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32121_P000_Q3.block
-0x01B52044,,,0,0,model,vz.wad,1,1,blocks\VZ\c32471_P000_Q3.block
+0x01B52044,global_listeningpost,global_listeningpost,1,1,model,vz.wad,1,1,blocks\VZ\c32471_P000_Q3.block
 0x01B88370,civ_hum_protester_female_bandanab,civ_hum_protester_female_bandanab,1,1,texture,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0x01BF512C,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x01BFE105,groutpost_camo_netting_nm,groutpost_camo_netting_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c39999_P000_Q3.block
@@ -237,7 +237,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x01E5B1A0,oc_hum_mercenary_a_ub_sm,oc_hum_mercenary_a_ub_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30934_P000_Q3.block
 0x01EABBD5,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x01ED24DA,global_windowbars03,global_windowbars03,1,1,texture,vz.wad,1,1,blocks\VZ\c30512_P000_Q3.block
-0x01ED3D6F,,,0,0,model,vz.wad,1,1,blocks\VZ\c32154_P000_Q3.block
+0x01ED3D6F,civ_hum_super_aidworkerfemale,civ_hum_super_aidworkerfemale,1,1,model,vz.wad,1,1,blocks\VZ\c32154_P000_Q3.block
 0x01F73647,groutpost_bld_shackcave04_ladder_sm,groutpost_bld_shackcave04_ladder_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c39999_P000_Q3.block
 0x01FA2779,,,0,0,animation,vz.wad,1,1,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
 0x01FAD072,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
@@ -416,7 +416,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x0352337B,vz_state_gurjob002_03_ruined,vz_state_gurjob002_03_ruined,1,1,layer,vz.wad,1,1,blocks\VZ\vz_state_gurjob002_03_ruined_P000_Q3.block
 0x03552C78,PirCon002,PirCon002;Pircon002;pirCon002;pircon002,4,1,script,vz.wad,1,1,blocks\VZ\scripts_vz_P000_Q3.block
 0x0357B02A,commercial_bld_corner16x16a_window_nm,commercial_bld_corner16x16a_window_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30546_P000_Q3.block
-0x03587437,,,0,0,model,vz.wad,1,1,blocks\VZ\c30418_P000_Q3.block
+0x03587437,docks_net,docks_net,1,1,model,vz.wad,1,1,blocks\VZ\c30418_P000_Q3.block
 0x035C1A9B,vz_veh_truck_m35_cab2_new_dm,vz_veh_truck_m35_cab2_new_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30571_P000_Q3.block
 0x035DE8A0,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x035E0BAF,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -644,7 +644,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x05576FC6,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x05594613,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x055BFD06,estate_bld_mansion03_stair_ruin,estate_bld_mansion03_stair_ruin,1,1,texture,vz.wad,1,1,blocks\VZ\c30611_P000_Q3.block
-0x055E9085,,,0,0,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
+0x055E9085,civ_hum_super_taxi,civ_hum_super_taxi,1,1,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
 0x055F02F1,outskirt_bld_market04_sm,outskirt_bld_market04_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30672_P000_Q3.block
 0x056141D6,all_mi35_driverdoor_actionhijack_getin_section06_fb,all_mi35_driverdoor_actionhijack_getin_section06_fb,1,1,animation,vz.wad,1,1,blocks\VZ\hijack_mi35_P000_Q3.block
 0x0565173E,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -944,7 +944,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x07F6D63F,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x07F9592C,industrial_att_pipelargecap_001,industrial_att_pipelargecap_001,1,1,texture,vz.wad,1,1,blocks\VZ\c32754_P000_Q3.block
 0x07F96BA2,port_containerb,port_containerb,1,1,model;texture,vz.wad,2,1,blocks\VZ\c30539_P000_Q3.block
-0x07FC456B,,,0,0,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
+0x07FC456B,civ_hum_super_rich,civ_hum_super_rich,1,1,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
 0x07FD5131,spiel_job_gur06_mattias,spiel_job_gur06_mattias,1,1,script,vz.wad,1,1,blocks\VZ\gur006_job_P000_Q3.block
 0x080262ED,gr_hum_officerfemale_hair,gr_hum_officerfemale_hair,1,1,texture,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
 0x080385BB,rocket_launcher_sm,rocket_launcher_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c33358_P000_Q3.block
@@ -1071,7 +1071,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x09089D5A,pickup_shotgun,pickup_shotgun,1,1,texture,vz.wad,1,1,blocks\VZ\c33111_P000_Q3.block
 0x0911E48D,vzoutpost_bld_garagebunker_pilasters_nm,vzoutpost_bld_garagebunker_pilasters_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30319_P000_Q3.block
 0x091253D0,tt_shortyellowgrass,tt_shortyellowgrass,1,1,texture,vz.wad,1,1,blocks\VZ\terraintextures_P000_Q3.block
-0x09139BCD,,,0,0,model,vz.wad,1,1,blocks\VZ\c30940_P000_Q3.block
+0x09139BCD,vz_hum_super_soldier,vz_hum_super_soldier,1,1,model,vz.wad,1,1,blocks\VZ\c30940_P000_Q3.block
 0x09161DCA,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x09183D88,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_huangfeng_P000_Q3.block
 0x0918C4E6,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -1374,7 +1374,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x0BB034DD,global_billboard05,global_billboard05,1,1,model,vz.wad,1,1,blocks\VZ\resident2_P000_Q3.block
 0x0BB2849D,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x0BBA3066,pmc_hum_mattias,pmc_hum_mattias,1,1,facefxactor;model,vz.wad,2,1,blocks\VZ\c30690_P000_Q3.block
-0x0BBD20A3,,,0,0,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
+0x0BBD20A3,global_fruitboxe,global_fruitboxe,1,1,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0x0BC21580,vehicle_tow,vehicle_tow,1,1,texture,vz.wad,1,1,blocks\VZ\c33599_P000_Q3.block
 0x0BC360FB,merida_market05_nm,merida_market05_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c32835_P000_Q3.block
 0x0BC5CDA9,,,0,0,lowresterrain,vz.wad,1,1,blocks\VZ\low_res_terrain_P000_Q3.block
@@ -1520,7 +1520,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x0D015E20,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x0D0548C3,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x0D0B4EA3,margarita_bld_condo01_doors_dm,margarita_bld_condo01_doors_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c31491_P000_Q3.block
-0x0D0B8CF5,,,0,0,model,vz.wad,1,1,blocks\VZ\c30934_P000_Q3.block
+0x0D0B8CF5,oc_hum_super_mercenary,oc_hum_super_mercenary,1,1,model,vz.wad,1,1,blocks\VZ\c30934_P000_Q3.block
 0x0D0C6398,mountain_blastdoors_details_sm,mountain_blastdoors_details_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32852_P000_Q3.block
 0x0D121C65,residential_bld_segment16x16c_ruin_sm,residential_bld_segment16x16c_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30609_P000_Q3.block
 0x0D1429B1,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -1885,7 +1885,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x0FEED419,global_weapon_m86pdm_sm,global_weapon_m86pdm_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32572_P000_Q3.block
 0x0FEEEFFC,vehicles_boat_fishing,vehicles_boat_fishing,1,1,texture,vz.wad,1,1,blocks\VZ\scaleform_pdavehiclesicons_P000_Q3.block
 0x0FEF5AE8,al_hum_starter02_lb_nm,al_hum_starter02_lb_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31655_P000_Q3.block
-0x0FF16E33,,,0,0,model,vz.wad,1,1,blocks\VZ\effects_P000_Q3.block
+0x0FF16E33,global_feather_fxmodel_b,global_feather_fxmodel_b,1,1,model,vz.wad,1,1,blocks\VZ\effects_P000_Q3.block
 0x0FF27C49,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_dragster_P000_Q3.block
 0x0FF2ACE3,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
 0x0FF36854,6-ucfx,6-ucfx,1,1,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -1951,7 +1951,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x1064206B,pause_menu_ifd,pause_menu_ifd,1,1,texture,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x10651EAE,radar_Jammer,radar_Jammer;radar_jammer,2,1,texture,vz.wad,1,1,blocks\VZ\c33337_P000_Q3.block
 0x1065E5A2,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x1066F684,,,0,0,model,vz.wad,1,1,blocks\VZ\c32066_P000_Q3.block
+0x1066F684,ch_hum_super_worker,ch_hum_super_worker,1,1,model,vz.wad,1,1,blocks\VZ\c32066_P000_Q3.block
 0x106B0843,pmccon002_shot_2,pmccon002_shot_2,1,1,texture,vz.wad,1,1,blocks\VZ\scaleform_pmccon002briefing_P000_Q3.block
 0x106B3F64,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x106D24F3,,,0,0,effect,vz.wad,1,1,blocks\VZ\effects_P000_Q3.block
@@ -3218,7 +3218,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x1A92D79B,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x1A98F393,commercial_road5cross,commercial_road5cross,1,1,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x1A992D82,vzoutpost_bld_garage_wall01_dm,vzoutpost_bld_garage_wall01_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30621_P000_Q3.block
-0x1A9D89DF,,,0,0,model,vz.wad,1,1,blocks\VZ\c32154_P000_Q3.block
+0x1A9D89DF,civ_hum_super_aidworker,civ_hum_super_aidworker,1,1,model,vz.wad,1,1,blocks\VZ\c32154_P000_Q3.block
 0x1A9EA024,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_armwrestle_P000_Q3.block
 0x1A9F08ED,pr_hum_sailorfemale_a_ub_nm,pr_hum_sailorfemale_a_ub_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
 0x1AA463D3,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c30359_P000_Q3.block
@@ -3254,7 +3254,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x1AE15659,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x1AE1C4DB,vzoutpost_bld_barrack_wood_dm,vzoutpost_bld_barrack_wood_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30885_P000_Q3.block
 0x1AE23A19,chinaoutpost_interior_flagpole_sm,chinaoutpost_interior_flagpole_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32131_P000_Q3.block
-0x1AE56060,,,0,0,scaleformgfx,shell.wad;vz.wad,2,2,blocks\Shell\resident_P000_Q3.block
+0x1AE56060,loadingscreen_new,loadingscreen_new,1,1,scaleformgfx,shell.wad;vz.wad,2,2,blocks\Shell\resident_P000_Q3.block
 0x1AEA9D36,global_env_palmtreeplanted01_imposter_nm,global_env_palmtreeplanted01_imposter_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c32388_P000_Q3.block
 0x1AEC29F4,jungle_bld_ruinshotelback_rubble_sm,jungle_bld_ruinshotelback_rubble_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31214_P000_Q3.block
 0x1AEF08A0,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -4555,7 +4555,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x25DDDFD6,global_handrails01_nm,global_handrails01_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30034_P000_Q3.block
 0x25DECE1C,MrxGuiBootstrap_ShellOnly,MrxGuiBootstrap_ShellOnly,1,1,script,shell.wad,1,1,blocks\Shell\resident_P000_Q3.block
 0x25E24D64,Vz_State_AllJob009_05_Pristine,Vz_State_AllJob009_05_Pristine;vz_state_alljob009_05_pristine,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_alljob009_05_pristine_P000_Q3.block
-0x25E39BE9,,,0,0,model,vz.wad,1,1,blocks\VZ\c31182_P000_Q3.block
+0x25E39BE9,civ_hum_super_poor,civ_hum_super_poor,1,1,model,vz.wad,1,1,blocks\VZ\c31182_P000_Q3.block
 0x25E8E5A8,civ_veh_truck_ridgeline_wheels_dm,civ_veh_truck_ridgeline_wheels_dm,1,1,texture,vz.wad,1,1,blocks\VZ\civ_veh_truck_ridgeline_P000_Q3.block
 0x25EA9928,poi_anch_sshot4,poi_anch_sshot4,1,1,texture,vz.wad,1,1,blocks\VZ\c33308_P000_Q3.block
 0x25EB48EA,vz_state_gurjob11_05_tinygeometry_tgr12_tgc22_0x00143c3e,vz_state_gurjob11_05_tinygeometry_tgr12_tgc22_0x00143c3e,1,1,model,vz.wad,1,1,blocks\VZ\c31383_P000_Q3.block
@@ -4714,7 +4714,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x26FF4A97,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
 0x27008B62,amb_birds,amb_birds,1,1,soundbank;sounddb;wavebank,vz.wad,3,1,blocks\VZ\sound_resident_P000_Q3.block
 0x270121C0,spiel_job_oil03_jennifer,spiel_job_oil03_jennifer,1,1,script,vz.wad,1,1,blocks\VZ\oil003_job_P000_Q3.block
-0x2703554F,,,0,0,model,vz.wad,1,1,blocks\VZ\c30006_P000_Q3.block
+0x2703554F,civ_hum_super_businessfemale,civ_hum_super_businessfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30006_P000_Q3.block
 0x27092D68,outskirt_bld_mercbar_pristine_ruin_lod,outskirt_bld_mercbar_pristine_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\outskirt_bld_mercbar_P000_Q3.block
 0x270B9287,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x270C9971,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_ridgeline_P000_Q3.block
@@ -5672,7 +5672,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x2EF19835,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x2EF266F8,ch_veh_tank_ztz98_sm,ch_veh_tank_ztz98_sm,1,1,texture,vz.wad,1,1,blocks\VZ\ch_veh_tank_ztz98_P000_Q3.block
 0x2EF46E54,groutpost_bld_bunkerconcrete,groutpost_bld_bunkerconcrete,1,1,model,vz.wad,1,1,blocks\VZ\c30499_P000_Q3.block
-0x2EF7E3C3,,,0,0,model,vz.wad,1,1,blocks\VZ\c30002_P000_Q3.block
+0x2EF7E3C3,oc_hum_super_executive,oc_hum_super_executive,1,1,model,vz.wad,1,1,blocks\VZ\c30002_P000_Q3.block
 0x2EF9FE98,allcon002_briefing_ia,allcon002_briefing_ia,1,1,texture,vz.wad,1,1,blocks\VZ\scaleform_allcon002briefing_P000_Q3.block
 0x2EFA8DA5,vz_state_gurjob012_04,vz_state_gurjob012_04,1,1,layer,vz.wad,1,1,blocks\VZ\vz_state_gurjob012_04_P000_Q3.block
 0x2EFCBB4C,vzoutpost_bld_barracktent_canvas_ruin_dm,vzoutpost_bld_barracktent_canvas_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\vzoutpost_bld_barracktent_P000_Q3.block
@@ -6380,7 +6380,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x35052D45,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_huey_P000_Q3.block
 0x350AAFC3,gr_hum_heavy_a_ammobelt_nm,gr_hum_heavy_a_ammobelt_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31035_P000_Q3.block
 0x351176AE,HUD_objective_timer,HUD_objective_timer,1,1,texture,vz.wad,1,1,blocks\VZ\c32727_P000_Q3.block
-0x3511CCE7,,,0,0,model,vz.wad,1,1,blocks\VZ\c30572_P000_Q3.block
+0x3511CCE7,civ_hum_super_protester,civ_hum_super_protester,1,1,model,vz.wad,1,1,blocks\VZ\c30572_P000_Q3.block
 0x351202BD,vz_caracas_ruindebris02_r13_c08_0x0013dae3,vz_caracas_ruindebris02_r13_c08_0x0013dae3,1,1,scrub,vz.wad,1,1,blocks\VZ\c30014_P000_Q3.block
 0x35124496,,,0,0,lowresterrain,vz.wad,1,1,blocks\VZ\low_res_terrain_P000_Q3.block
 0x35127117,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c30444_P000_Q3.block
@@ -6756,7 +6756,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x3831D5EB,village_bld_house01_wall_ruin_sm,village_bld_house01_wall_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31166_P000_Q3.block
 0x383764A9,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x383776D7,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x38381266,,,0,0,model,vz.wad,1,1,blocks\VZ\c31284_P000_Q3.block
+0x38381266,docks_bld_bar,docks_bld_bar,1,1,model,vz.wad,1,1,blocks\VZ\c31284_P000_Q3.block
 0x383A3FAC,Vz_State_ChiCon006_b_Pristine,Vz_State_ChiCon006_b_Pristine;vz_state_chicon006_b_pristine,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_chicon006_b_pristine_P000_Q3.block
 0x383BF405,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x383D01E1,shanty_bld_apartment01,shanty_bld_apartment01,1,1,model,vz.wad,1,1,blocks\VZ\c31291_P000_Q3.block
@@ -7269,7 +7269,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x3C957155,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x3C96F88B,vz_Chi_Job006_b,vz_Chi_Job006_b,1,1,layer,vz.wad,1,1,blocks\VZ\layers_static_P000_Q3.block
 0x3C9A2C16,vz_state_pirjob012_03_pristine_tinygeometry_tgr11_tgc12_0x00143d6b,vz_state_pirjob012_03_pristine_tinygeometry_tgr11_tgc12_0x00143d6b,1,1,model,vz.wad,1,1,blocks\VZ\c34454_P000_Q3.block
-0x3C9A5987,,,0,0,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
+0x3C9A5987,civ_hum_super_businessb,civ_hum_super_businessb,1,1,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
 0x3C9E1493,groutpost_bld_cranemining_cabintop_sm,groutpost_bld_cranemining_cabintop_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30068_P000_Q3.block
 0x3C9E6655,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_mh53j_P000_Q3.block
 0x3CA43D54,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -7293,7 +7293,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x3CBEDCF4,groutpostinterior_boxb,groutpostinterior_boxb,1,1,texture,vz.wad,1,1,blocks\VZ\c32631_P000_Q3.block
 0x3CBF011A,vz_State_AllJob002_03_Defenses,vz_State_AllJob002_03_Defenses;vz_state_alljob002_03_defenses,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_alljob002_03_defenses_P000_Q3.block
 0x3CC32A26,vz_state_pirjob007_a_pristine_tinygeometry_0x00143d4b,vz_state_pirjob007_a_pristine_tinygeometry_0x00143d4b,1,1,texture,vz.wad,1,1,blocks\VZ\c31313_P000_Q3.block
-0x3CC34BA0,,,0,0,scaleformgfx,shell.wad;vz.wad,2,2,blocks\Shell\resident_P000_Q3.block
+0x3CC34BA0,Font_glyphs,Font_glyphs,1,1,scaleformgfx,shell.wad;vz.wad,2,2,blocks\Shell\resident_P000_Q3.block
 0x3CC3B4CA,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x3CC41BE2,proutpost_att_neon_lights,proutpost_att_neon_lights,1,1,texture,vz.wad,1,1,blocks\VZ\c30950_P000_Q3.block
 0x3CC4D8D9,mountain_blastdoors_wall_ruin_sm,mountain_blastdoors_wall_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32853_P000_Q3.block
@@ -8543,7 +8543,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x475F7878,,,0,0,effect,vz.wad,1,1,blocks\VZ\effects_P000_Q3.block
 0x475FA09C,,,0,0,terrainmesh,vz.wad,1,1,blocks\VZ\c31390_P000_Q3.block
 0x47608DC9,MrxSoundShellBootstrap,MrxSoundShellBootstrap,1,1,script,shell.wad,1,1,blocks\Shell\resident_P000_Q3.block
-0x4761451B,,,0,0,model,vz.wad,1,1,blocks\VZ\civ_hum_mechanic_P000_Q3.block
+0x4761451B,civ_hum_super_mechanic,civ_hum_super_mechanic,1,1,model,vz.wad,1,1,blocks\VZ\civ_hum_mechanic_P000_Q3.block
 0x47662522,vz_hum_deathsquad_lba_sm,vz_hum_deathsquad_lba_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30171_P000_Q3.block
 0x4766BF1D,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x4768E8CC,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -8644,7 +8644,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x482BCCA2,spiel_minorcontract_chi50_chris,spiel_minorcontract_chi50_chris,1,1,script,vz.wad,1,1,blocks\VZ\chi050_con_P000_Q3.block
 0x482CC08D,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x482D4D59,vz_state_oilcon002_pristine_tinygeometry_tgr23_tgc32_0x00144057,vz_state_oilcon002_pristine_tinygeometry_tgr23_tgc32_0x00144057,1,1,model,vz.wad,1,1,blocks\VZ\c30751_P000_Q3.block
-0x482FD3FE,,,0,0,model,vz.wad,1,1,blocks\VZ\c31215_P000_Q3.block
+0x482FD3FE,jungle_ruinshotelpool,jungle_ruinshotelpool,1,1,model,vz.wad,1,1,blocks\VZ\c31215_P000_Q3.block
 0x48327B9A,al_veh_boat_destroyer_celing_dm,al_veh_boat_destroyer_celing_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c31664_P000_Q3.block
 0x483298B1,vzoutpost_bld_guardtower_roof_ruin_dm,vzoutpost_bld_guardtower_roof_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30884_P000_Q3.block
 0x4833D426,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
@@ -8953,7 +8953,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x4AAF74E3,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x4AB040E7,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x4AB17EC8,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x4AB6F9B6,,,0,0,model,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
+0x4AB6F9B6,gr_hum_super_soldier,gr_hum_super_soldier,1,1,model,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
 0x4AB951D0,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_autolargea_P000_Q3.block
 0x4ABB0B55,vz_state_oc_depot_tinygeometry_tgr27_tgc30_0x00144df4,vz_state_oc_depot_tinygeometry_tgr27_tgc30_0x00144df4,1,1,model,vz.wad,1,1,blocks\VZ\c30750_P000_Q3.block
 0x4ABF9AAA,vz_amazon_tiny_tinygeometry_tgr17_tgc21_0x00143faf,vz_amazon_tiny_tinygeometry_tgr17_tgc21_0x00143faf,1,1,model,vz.wad,1,1,blocks\VZ\c31153_P000_Q3.block
@@ -9566,7 +9566,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x502F5450,,,0,0,model,vz.wad,1,1,blocks\VZ\c33296_P000_Q3.block
 0x502F8171,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x50333181,wpn_combatrifle,wpn_combatrifle,1,1,soundbank;sounddb;wavebank,vz.wad,3,1,blocks\VZ\wpn_combatrifle_P000_Q3.block
-0x503C9BD5,,,0,0,model,vz.wad,1,1,blocks\VZ\c33318_P000_Q3.block
+0x503C9BD5,police_hum_officer_c,police_hum_officer_c,1,1,model,vz.wad,1,1,blocks\VZ\c33318_P000_Q3.block
 0x503EF73C,civ_hum_casual_ub_e_nm,civ_hum_casual_ub_e_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0x5040C09F,pr_att_thug_a_glasses,pr_att_thug_a_glasses,1,1,texture,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
 0x50430A1C,pickup_ammo_bullets,pickup_ammo_bullets,1,1,texture,vz.wad,1,1,blocks\VZ\c30653_P000_Q3.block
@@ -9816,7 +9816,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x5249D49A,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x524C9536,outskirt_road20t10,outskirt_road20t10,1,1,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x52513895,MrxRewardData,MrxRewardData,1,1,script,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x5253854D,,,0,0,model,vz.wad,1,1,blocks\VZ\c31182_P000_Q3.block
+0x5253854D,civ_hum_super_poorfemale,civ_hum_super_poorfemale,1,1,model,vz.wad,1,1,blocks\VZ\c31182_P000_Q3.block
 0x52560593,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x52580434,,,0,0,lowresterrain,vz.wad,1,1,blocks\VZ\low_res_terrain_P000_Q3.block
 0x52582DF2,village_bld_house01_windows_ruin_sm,village_bld_house01_windows_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31166_P000_Q3.block
@@ -11295,7 +11295,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x5ECA0922,aloutpost_bld_garage01_roof_ruin_nm,aloutpost_bld_garage01_roof_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\aloutpost_bld_garage01_P000_Q3.block
 0x5ECADCAE,vz_state_oiljob011_01_pristine_tinygeometry_tgr30_tgc33_0x00143cf5,vz_state_oiljob011_01_pristine_tinygeometry_tgr30_tgc33_0x00143cf5,1,1,model,vz.wad,1,1,blocks\VZ\c30184_P000_Q3.block
 0x5ECB535F,vz_hum_soldierelite_lba_sm,vz_hum_soldierelite_lba_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30940_P000_Q3.block
-0x5ECD18B5,,,0,0,model,vz.wad,1,1,blocks\VZ\c30618_P000_Q3.block
+0x5ECD18B5,global_fencechain,global_fencechain,1,1,model,vz.wad,1,1,blocks\VZ\c30618_P000_Q3.block
 0x5ECD6D9B,village_bld_farming03_ruin_lod,village_bld_farming03_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\c31165_P000_Q3.block
 0x5ECF5D8B,GUR_Job_Briefing_Diaz,GUR_Job_Briefing_Diaz,1,1,facefxanimationset,vz.wad,1,1,blocks\VZ\gurstarter1_P000_Q3.block
 0x5ED054FB,,,0,0,animation,vz.wad,1,1,blocks\VZ\characternameanimgroup_mattias_P000_Q3.block
@@ -11503,7 +11503,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x60A30D4C,Vz_State_AllCon003,Vz_State_AllCon003;vz_state_allcon003,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_allcon003_P000_Q3.block
 0x60A37B9A,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x60A4909A,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x60A4EEF3,,,0,0,model,vz.wad,1,1,blocks\VZ\c30006_P000_Q3.block
+0x60A4EEF3,civ_hum_super_richfemale,civ_hum_super_richfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30006_P000_Q3.block
 0x60A5886D,city_bld_apartment05_wall01_dm,city_bld_apartment05_wall01_dm,1,1,texture,vz.wad,1,1,blocks\VZ\city_bld_apartment05_P000_Q3.block
 0x60A8900A,city_bld_apartment01_wall01_ruin_nm,city_bld_apartment01_wall01_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30288_P000_Q3.block
 0x60AB3105,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -11703,7 +11703,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x6261ADA5,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x62632328,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_vanquish_P000_Q3.block
 0x62646147,,,0,0,animation,vz.wad,1,1,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
-0x62661F6C,,,0,0,model,vz.wad,1,1,blocks\VZ\c32565_P000_Q3.block
+0x62661F6C,global_weapon_emplaced_tow,global_weapon_emplaced_tow,1,1,model,vz.wad,1,1,blocks\VZ\c32565_P000_Q3.block
 0x6268F728,aloutpost_bld_bunker_ground_ruin_dm,aloutpost_bld_bunker_ground_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30318_P000_Q3.block
 0x626A2D5A,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x626A880E,TECHNOV,TECHNOV,1,1,script,vz.wad,1,1,blocks\VZ\subtitles_P000_Q3.block
@@ -13560,7 +13560,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x720BA8C1,gr_att_tank_helmet_a_nm,gr_att_tank_helmet_a_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
 0x720CFE62,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x720F3948,global_veh_fordf150,global_veh_fordf150,1,1,model;texture,vz.wad,2,1,blocks\VZ\c31085_P000_Q3.block
-0x72118596,,,0,0,model,vz.wad,1,1,blocks\VZ\c32553_P000_Q3.block
+0x72118596,global_weapon_maverick,global_weapon_maverick,1,1,model,vz.wad,1,1,blocks\VZ\c32553_P000_Q3.block
 0x7213B959,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c31243_P000_Q3.block
 0x7214A05B,vz_state_mar_city_pristine_tinygeometry_tgr23_tgc33_0x00143c6e,vz_state_mar_city_pristine_tinygeometry_tgr23_tgc33_0x00143c6e,1,1,model,vz.wad,1,1,blocks\VZ\c30751_P000_Q3.block
 0x7219544F,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -13620,7 +13620,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x729D41F8,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_mi35_P000_Q3.block
 0x729EFDDD,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c30867_P000_Q3.block
 0x729FE5E5,ch_hum_pilot_uba_nm,ch_hum_pilot_uba_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c32062_P000_Q3.block
-0x72A0BE76,,,0,0,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
+0x72A0BE76,global_barricadeb,global_barricadeb,1,1,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0x72A1EC51,industrial_bld_warehouse_roof_ruin,industrial_bld_warehouse_roof_ruin,1,1,texture,vz.wad,1,1,blocks\VZ\c31448_P000_Q3.block
 0x72A43D5F,vz_state_margarita_precrash_tinygeometry_tgr32_tgc06_0x00143c8e,vz_state_margarita_precrash_tinygeometry_tgr32_tgc06_0x00143c8e,1,1,model,vz.wad,1,1,blocks\VZ\c30392_P000_Q3.block
 0x72A5EDC9,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_mi35solano_P000_Q3.block
@@ -13978,7 +13978,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x756D52AD,subtitles_06_ynh_c,subtitles_06_ynh_c,1,1,script,vz.wad,1,1,blocks\VZ\subtitles_P000_Q3.block
 0x75777C30,civ_att_protester_acc1a_nm,civ_att_protester_acc1a_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0x757AB23F,,,0,0,model,vz.wad,1,1,blocks\VZ\c30895_P000_Q3.block
-0x757EAE95,,,0,0,model,vz.wad,1,1,blocks\VZ\c33295_P000_Q3.block
+0x757EAE95,pmcoutpost_interior_sickbay,pmcoutpost_interior_sickbay,1,1,model,vz.wad,1,1,blocks\VZ\c33295_P000_Q3.block
 0x758169CE,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x75829DC3,vz_maracaibo_tiny_tinygeometry_tgr21_tgc27_0x00144e62,vz_maracaibo_tiny_tinygeometry_tgr21_tgc27_0x00144e62,1,1,model,vz.wad,1,1,blocks\VZ\c30758_P000_Q3.block
 0x758453B6,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -13992,7 +13992,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x759653A8,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x7598ED58,global_bld_officetrailera_nm,global_bld_officetrailera_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30600_P000_Q3.block
 0x75994CA6,ALL04_Contract_Briefing_No_Starter-Jennifer,ALL04_Contract_Briefing_No_Starter-Jennifer,1,1,animation,vz.wad,1,1,blocks\VZ\all004_contract_P000_Q3.block
-0x759BDE16,,,0,0,model,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
+0x759BDE16,gr_hum_super_soldierfemale,gr_hum_super_soldierfemale,1,1,model,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
 0x759F74F7,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x75A0BBD2,vz_veh_truck_m151_lod_dm,vz_veh_truck_m151_lod_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c31037_P000_Q3.block
 0x75A1F986,chinaoutpost_bld_commbunker01_ground_ruin_sm,chinaoutpost_bld_commbunker01_ground_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30364_P000_Q3.block
@@ -14392,7 +14392,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x78D74563,village_bld_housestilts01_door_ruin_nm,village_bld_housestilts01_door_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31169_P000_Q3.block
 0x78D87170,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x78D8E818,,,0,0,soundbank;sounddb;wavebank,English.wad,3,1,blocks\English\vo_job_chin_wu.english_P000_Q3.block
-0x78D95307,,,0,0,model,vz.wad,1,1,blocks\VZ\c30146_P000_Q3.block
+0x78D95307,port_crane01,port_crane01,1,1,model,vz.wad,1,1,blocks\VZ\c30146_P000_Q3.block
 0x78DC692B,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x78E2AFBF,industrial_bld_hangar01_ruin_lod,industrial_bld_hangar01_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\c32756_P000_Q3.block
 0x78E3D31A,,,0,0,model,vz.wad,1,1,blocks\VZ\c30264_P000_Q3.block
@@ -14847,7 +14847,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x7CB40751,,,0,0,font,shell.wad,1,1,blocks\Shell\russian_P000_Q3.block
 0x7CB5ADA0,vzoutpost_bld_hangarbunker_ruin_lod,vzoutpost_bld_hangarbunker_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\c34535_P000_Q3.block
 0x7CB72AEB,vz_state_all_fuel_amazon_tinygeometry_tgr06_tgc10_0x001439a6,vz_state_all_fuel_amazon_tinygeometry_tgr06_tgc10_0x001439a6,1,1,model,vz.wad,1,1,blocks\VZ\c34145_P000_Q3.block
-0x7CB86FC9,,,0,0,model,vz.wad,1,1,blocks\VZ\c32155_P000_Q3.block
+0x7CB86FC9,civ_hum_super_cartworker,civ_hum_super_cartworker,1,1,model,vz.wad,1,1,blocks\VZ\c32155_P000_Q3.block
 0x7CB9B4EB,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
 0x7CC149A7,gr_hum_soldierfemale_a_head,gr_hum_soldierfemale_a_head,1,1,texture,vz.wad,1,1,blocks\VZ\c31034_P000_Q3.block
 0x7CC413C4,global_vendingmachine01,global_vendingmachine01,1,1,model;texture,vz.wad,2,1,blocks\VZ\c30018_P000_Q3.block
@@ -16645,7 +16645,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x8BBB8FEB,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x8BC05269,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_mi35solano_P000_Q3.block
 0x8BC08323,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_monstertruck_P000_Q3.block
-0x8BC154D7,,,0,0,model,vz.wad,1,1,blocks\VZ\c30572_P000_Q3.block
+0x8BC154D7,civ_hum_super_protesterfemale,civ_hum_super_protesterfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30572_P000_Q3.block
 0x8BC25675,vz_maracaibo_tiny_tinygeometry_tgr23_tgc31_0x00144e7b,vz_maracaibo_tiny_tinygeometry_tgr23_tgc31_0x00144e7b,1,1,model,vz.wad,1,1,blocks\VZ\c30753_P000_Q3.block
 0x8BC48393,mountain_bld_bunkerdestroyed_floor_nm,mountain_bld_bunkerdestroyed_floor_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c32856_P000_Q3.block
 0x8BC61F98,,,0,0,model,vz.wad,1,1,blocks\VZ\effects_P000_Q3.block
@@ -17677,7 +17677,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x9486F4D0,vz_mar_trash01_r12_c15_0x00102a5d,vz_mar_trash01_r12_c15_0x00102a5d,1,1,scrub,vz.wad,1,1,blocks\VZ\c39999_P000_Q3.block
 0x9487F0E7,,,0,0,font,vz.wad,1,1,blocks\VZ\english_P000_Q3.block
 0x948A6719,civ_hum_doctorfemale_glassesa_sm,civ_hum_doctorfemale_glassesa_sm,1,1,texture,vz.wad,1,1,blocks\VZ\civ_hum_doctorfemale_P000_Q3.block
-0x949187D0,,,0,0,model,vz.wad,1,1,blocks\VZ\c30791_P000_Q3.block
+0x949187D0,civ_hum_super_industrialfemale,civ_hum_super_industrialfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30791_P000_Q3.block
 0x94922184,port_cranegantry_c_sm,port_cranegantry_c_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30144_P000_Q3.block
 0x9493BED0,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
 0x9494EAE2,cartel_hum_officer_uba_sm,cartel_hum_officer_uba_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32046_P000_Q3.block
@@ -19572,7 +19572,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xA3BA5377,gr_veh_towed_m101a_lod_dm,gr_veh_towed_m101a_lod_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30524_P000_Q3.block
 0xA3BBDFCE,city_bld_corner16x16a_wall02_sm,city_bld_corner16x16a_wall02_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30917_P000_Q3.block
 0xA3BDAB31,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0xA3BFC1E6,,,0,0,model,vz.wad,1,1,blocks\VZ\c30556_P000_Q3.block
+0xA3BFC1E6,vz_hum_hvt03,vz_hum_hvt03,1,1,model,vz.wad,1,1,blocks\VZ\c30556_P000_Q3.block
 0xA3C1FABC,pmc_hum_mattias_v3,pmc_hum_mattias_v3,1,1,model,vz.wad,1,1,blocks\VZ\pmc_hum_mattias_v3_P000_Q3.block
 0xA3C4B3DC,ocoutpostinterior_interiordetailb_sm,ocoutpostinterior_interiordetailb_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c33036_P000_Q3.block
 0xA3CA0184,global_gui_failed,global_gui_failed,1,1,texture,vz.wad,1,1,blocks\VZ\c32443_P000_Q3.block
@@ -19866,7 +19866,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xA64D5C4A,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xA656A99F,vzoutpost_bld_guardtower_wall_ruin_dm,vzoutpost_bld_guardtower_wall_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30884_P000_Q3.block
 0xA6590940,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0xA6591585,,,0,0,model,vz.wad,1,1,blocks\VZ\c30665_P000_Q3.block
+0xA6591585,global_pole,global_pole,1,1,model,vz.wad,1,1,blocks\VZ\c30665_P000_Q3.block
 0xA659CB2D,civ_veh_car_taxi_sign_nm,civ_veh_car_taxi_sign_nm,1,1,texture,vz.wad,1,1,blocks\VZ\civ_veh_car_taxi_P000_Q3.block
 0xA65A1655,margarita_bld_club01_text_ruin_nm,margarita_bld_club01_text_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31491_P000_Q3.block
 0xA65E06D1,vz_terrainglobal_r13_c00_0x000746aa,vz_terrainglobal_r13_c00_0x000746aa,1,1,texture,vz.wad,1,1,blocks\VZ\c30202_P000_Q3.block
@@ -20785,7 +20785,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xADCD07C4,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xADCDCA45,groutpost_bld_earthmover_cabinwall_nm,groutpost_bld_earthmover_cabinwall_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30526_P000_Q3.block
 0xADCE244B,,,0,0,model,vz.wad,1,1,blocks\VZ\resident2_P000_Q3.block
-0xADD11AC5,,,0,0,model,vz.wad,1,1,blocks\VZ\c33693_P000_Q3.block
+0xADD11AC5,vz_hum_hvt04,vz_hum_hvt04,1,1,model,vz.wad,1,1,blocks\VZ\c33693_P000_Q3.block
 0xADD263E1,vz_state_jetcon001_pristine_tinygeometry_0x00143c52,vz_state_jetcon001_pristine_tinygeometry_0x00143c52,1,1,texture,vz.wad,1,1,blocks\VZ\c30839_P000_Q3.block
 0xADD4D0F0,industrial_bld_warehouse01c_sm,industrial_bld_warehouse01c_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31448_P000_Q3.block
 0xADD6E3F3,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -20916,7 +20916,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xAEE03C7C,maracaibo_env_bushleaves01,maracaibo_env_bushleaves01,1,1,texture,vz.wad,1,1,blocks\VZ\c30520_P000_Q3.block
 0xAEE10F54,civ_hum_rich_b_lb_sm,civ_hum_rich_b_lb_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
 0xAEE2ACC8,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_autolargec_P000_Q3.block
-0xAEE44824,,,0,0,model,vz.wad,1,1,blocks\VZ\c30893_P000_Q3.block
+0xAEE44824,merida_bld_oilwellland,merida_bld_oilwellland,1,1,model,vz.wad,1,1,blocks\VZ\c30893_P000_Q3.block
 0xAEE67E5D,island_bld_boothrefreshments01_roof_ruin_nm,island_bld_boothrefreshments01_roof_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30263_P000_Q3.block
 0xAEEAD3EE,Vz_State_AllJob001_04_Staging,Vz_State_AllJob001_04_Staging;vz_state_alljob001_04_staging,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_alljob001_04_staging_P000_Q3.block
 0xAEEAEB60,commercial_road_whiteline_nm,commercial_road_whiteline_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c39999_P000_Q3.block
@@ -21098,7 +21098,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xB09DEE2A,civ_hum_industrialfemale_ub_a,civ_hum_industrialfemale_ub_a,1,1,texture,vz.wad,1,1,blocks\VZ\c30791_P000_Q3.block
 0xB09EBEB3,ocoutpost_bld_hq_ruin_lod,ocoutpost_bld_hq_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\c30919_P000_Q3.block
 0xB09F3E02,chinaoutpost_bld_rail01_sm,chinaoutpost_bld_rail01_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32120_P000_Q3.block
-0xB0A0930E,,,0,0,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
+0xB0A0930E,civ_hum_super_casual,civ_hum_super_casual,1,1,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
 0xB0A1BE0D,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xB0A3B301,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xB0A4CFF8,margarita_bld_club01_roof_sm,margarita_bld_club01_roof_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31491_P000_Q3.block
@@ -21310,7 +21310,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xB29236B2,island_att_battlement_pristine_lod,island_att_battlement_pristine_lod,1,1,texture,vz.wad,1,1,blocks\VZ\c30702_P000_Q3.block
 0xB292EEFB,vz_state_alljob001_02_captured,vz_state_alljob001_02_captured,1,1,layer,vz.wad,1,1,blocks\VZ\vz_state_alljob001_02_captured_P000_Q3.block
 0xB2939941,village_bld_farming05_roof_dm,village_bld_farming05_roof_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c31165_P000_Q3.block
-0xB29423EA,,,0,0,scaleformgfx,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
+0xB29423EA,controller_map,controller_map,1,1,scaleformgfx,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xB2977E68,vz_hum_blanco_head_sm,vz_hum_blanco_head_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c33688_P000_Q3.block
 0xB29AC474,,,0,0,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xB29BC5BF,vehicles_light_urban_commando,vehicles_light_urban_commando,1,1,texture,vz.wad,1,1,blocks\VZ\scaleform_pdavehiclesicons_P000_Q3.block
@@ -22514,7 +22514,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xBC5DF554,,,0,0,animation,vz.wad,1,1,blocks\VZ\characternameanimgroup_soldier_P000_Q3.block
 0xBC5F3B23,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xBC62C0C7,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0xBC65582A,,,0,0,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
+0xBC65582A,ch_hum_super_sailor,ch_hum_super_sailor,1,1,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0xBC6681BD,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xBC6709CB,city_bld_segment32x32d_pavement_sm,city_bld_segment32x32d_pavement_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30285_P000_Q3.block
 0xBC67A330,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_ztz98_P000_Q3.block
@@ -22554,7 +22554,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xBCB3DAA6,Vz_State_PirJob002_02_Pristine,Vz_State_PirJob002_02_Pristine;vz_state_PirJob002_02_Pristine;vz_state_pirjob002_02_pristine,3,1,layer,vz.wad,1,1,blocks\VZ\vz_state_pirjob002_02_pristine_P000_Q3.block
 0xBCB45902,global_weapon_fae_nm,global_weapon_fae_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31079_P000_Q3.block
 0xBCB4EDDD,village_bld_windmill01_metal_sm,village_bld_windmill01_metal_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30385_P000_Q3.block
-0xBCBA07EE,,,0,0,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
+0xBCBA07EE,civ_hum_super_casualfemale,civ_hum_super_casualfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30403_P000_Q3.block
 0xBCBA1B28,pickup_combat,pickup_combat,1,1,texture,vz.wad,1,1,blocks\VZ\c33100_P000_Q3.block
 0xBCBADB1C,global_weapon_suppressor_nm,global_weapon_suppressor_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c32581_P000_Q3.block
 0xBCBDCDA2,global_crateaid,global_crateaid,1,1,model;texture,vz.wad,2,1,blocks\VZ\resident2_P000_Q3.block
@@ -23644,7 +23644,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xC5BEC4CE,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xC5C112A9,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xC5C19F74,Global_Job_Briefing_Eva,Global_Job_Briefing_Eva,1,1,facefxanimationset,vz.wad,1,1,blocks\VZ\pmc_interior_P000_Q3.block
-0xC5C23603,,,0,0,model,vz.wad,1,1,blocks\VZ\c33693_P000_Q3.block
+0xC5C23603,vz_hum_hvt02,vz_hum_hvt02,1,1,model,vz.wad,1,1,blocks\VZ\c33693_P000_Q3.block
 0xC5C2BCF2,pr_hum_thug_a_ub_sm,pr_hum_thug_a_ub_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
 0xC5C65E4C,merida_bld_hotel_sm,merida_bld_hotel_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c32831_P000_Q3.block
 0xC5C8F9BE,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -26677,7 +26677,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xDF66F90C,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xDF6921B1,common_18_objectives,common_18_objectives,1,1,texture,shell.wad;vz.wad,2,2,blocks\Shell\common_P000_Q3.block
 0xDF698C63,vz_state_mar_city_pristine_tinygeometry_tgr25_tgc33_0x00143c5f,vz_state_mar_city_pristine_tinygeometry_tgr25_tgc33_0x00143c5f,1,1,model,vz.wad,1,1,blocks\VZ\c30752_P000_Q3.block
-0xDF6ACBC3,,,0,0,model,vz.wad,1,1,blocks\VZ\resident2_P000_Q3.block
+0xDF6ACBC3,global_fencechainlong,global_fencechainlong,1,1,model,vz.wad,1,1,blocks\VZ\resident2_P000_Q3.block
 0xDF72D27B,commercial_bld_corner8x16b_wall_sm,commercial_bld_corner8x16b_wall_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30545_P000_Q3.block
 0xDF74DBB2,caracas_bld_cathedral_statue_nm,caracas_bld_cathedral_statue_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30735_P000_Q3.block
 0xDF75362D,chinaoutpost_interior_computer,chinaoutpost_interior_computer,1,1,texture,vz.wad,1,1,blocks\VZ\c32130_P000_Q3.block
@@ -27641,7 +27641,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xE7D2DAF0,caracas_bld_cathedralstatue_dbr_dm,caracas_bld_cathedralstatue_dbr_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c32039_P000_Q3.block
 0xE7D3B446,,,0,0,animation,vz.wad,1,1,blocks\VZ\characternameanimgroup_jennifer_P000_Q3.block
 0xE7D3FD64,civ_hum_latin_headf,civ_hum_latin_headf,1,1,texture,vz.wad,1,1,blocks\VZ\c30094_P000_Q3.block
-0xE7D6462D,,,0,0,model,vz.wad,1,1,blocks\VZ\c32155_P000_Q3.block
+0xE7D6462D,civ_hum_super_cartworkerfemale,civ_hum_super_cartworkerfemale,1,1,model,vz.wad,1,1,blocks\VZ\c32155_P000_Q3.block
 0xE7D6B071,japanese_18_20,japanese_18_20,1,1,texture,vz.wad,1,1,blocks\VZ\japanese_P000_Q3.block
 0xE7D8F9DF,global_decal_generic_bullet_01,global_decal_generic_bullet_01,1,1,texture,vz.wad,1,1,blocks\VZ\resident2_P000_Q3.block
 0xE7D90ED1,village_bld_farmhouse_wall_ruin_dm,village_bld_farmhouse_wall_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30387_P000_Q3.block
@@ -27873,7 +27873,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xE9B40140,global_env_rocksmoss01,global_env_rocksmoss01,1,1,model;texture,vz.wad,2,2,blocks\VZ\c30946_P000_Q3.block
 0xE9B7C7E6,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_vanquish_P000_Q3.block
 0xE9BA02DF,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehicleclassanimgroup_bench_P000_Q3.block
-0xE9BAAC86,,,0,0,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
+0xE9BAAC86,global_fruitboxd,global_fruitboxd,1,1,model,vz.wad,1,1,blocks\VZ\c39998_P000_Q3.block
 0xE9BC41CA,pmc_veh_truck_ext_hood_damage_dm,pmc_veh_truck_ext_hood_damage_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c33265_P000_Q3.block
 0xE9BE1781,vz_state_chijob001_04_staging_tinygeometry_tgr21_tgc03_0x00143aee,vz_state_chijob001_04_staging_tinygeometry_tgr21_tgc03_0x00143aee,1,1,model,vz.wad,1,1,blocks\VZ\c31308_P000_Q3.block
 0xE9BFC5F8,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c31503_P000_Q3.block
@@ -27952,7 +27952,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xEA7B1826,jungle_bld_ruinshotelback_roof_ruin_nm,jungle_bld_ruinshotelback_roof_ruin_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c31214_P000_Q3.block
 0xEA7B472B,,,0,0,scrub,vz.wad,1,1,blocks\VZ\c30100_P000_Q3.block
 0xEA7CF147,Vz_State_PirJob007_C_Staging,Vz_State_PirJob007_C_Staging;vz_state_pirjob007_c_staging,2,1,layer,vz.wad,1,1,blocks\VZ\vz_state_pirjob007_c_staging_P000_Q3.block
-0xEA7F9F3F,,,0,0,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
+0xEA7F9F3F,civ_hum_super_business,civ_hum_super_business,1,1,model,vz.wad,1,1,blocks\VZ\c31090_P000_Q3.block
 0xEA81D2EA,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xEA81E7BD,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xEA8601E0,vz_veh_truck_m35_cab2_nm,vz_veh_truck_m35_cab2_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30571_P000_Q3.block
@@ -27967,7 +27967,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xEAA2B1E9,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xEAA636F9,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xEAA69AAF,estate_walllong_ruin_lod,estate_walllong_ruin_lod,1,1,texture,vz.wad,1,1,blocks\VZ\estate_walllong_P000_Q3.block
-0xEAA71CCB,,,0,0,model,vz.wad,1,1,blocks\VZ\c33017_P000_Q3.block
+0xEAA71CCB,oc_hum_super_executivefemale,oc_hum_super_executivefemale,1,1,model,vz.wad,1,1,blocks\VZ\c33017_P000_Q3.block
 0xEAAA295F,spiel_minorcontract_oil04_chris,spiel_minorcontract_oil04_chris,1,1,script,vz.wad,1,1,blocks\VZ\oil004_con_P000_Q3.block
 0xEAAC7346,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xEAAC95E4,vz_terrainglobal_r03_c12_0x0003fd1b,vz_terrainglobal_r03_c12_0x0003fd1b,1,1,texture,vz.wad,1,1,blocks\VZ\c31238_P000_Q3.block
@@ -28886,7 +28886,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF2405AD1,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_turbosquid_P000_Q3.block
 0xF2423255,estate_bld_mansion03_03,estate_bld_mansion03_03,1,1,texture,vz.wad,1,1,blocks\VZ\c30612_P000_Q3.block
 0xF242434B,global_weapon_chainfeed01_sm,global_weapon_chainfeed01_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31100_P000_Q3.block
-0xF245AC63,,,0,0,model,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
+0xF245AC63,pr_hum_super_thug,pr_hum_super_thug,1,1,model,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
 0xF2478F9A,global_ropeties_nm,global_ropeties_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30254_P000_Q3.block
 0xF2485070,global_weapon_c4land_15thsec,global_weapon_c4land_15thsec,1,1,animation,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xF2497140,pmcoutpost_bld_hqinterior_wall03_livedin,pmcoutpost_bld_hqinterior_wall03_livedin,1,1,texture,vz.wad,1,1,blocks\VZ\c30680_P000_Q3.block
@@ -29107,7 +29107,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF4106885,vz_state_chijob006_e_pristine_tinygeometry_0x00143b70,vz_state_chijob006_e_pristine_tinygeometry_0x00143b70,1,1,texture,vz.wad,1,1,blocks\VZ\c30180_P000_Q3.block
 0xF4124EF4,ch_veh_truck_sx2150_tanker_nm,ch_veh_truck_sx2150_tanker_nm,1,1,texture,vz.wad,1,1,blocks\VZ\ch_veh_truck_sx2150_tanker_P000_Q3.block
 0xF41801F3,caracas_skytramcolumn_stair_ruin_sm,caracas_skytramcolumn_stair_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30081_P000_Q3.block
-0xF419FFEB,,,0,0,model,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
+0xF419FFEB,pr_hum_super_thugfemale,pr_hum_super_thugfemale,1,1,model,vz.wad,1,1,blocks\VZ\c30952_P000_Q3.block
 0xF41B95A0,margarita_bld_condo01_banner_dm,margarita_bld_condo01_banner_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c31491_P000_Q3.block
 0xF41D412A,margarita_bld_hotelresort01_railway_ruin_dm,margarita_bld_hotelresort01_railway_ruin_dm,1,1,texture,vz.wad,1,1,blocks\VZ\c30263_P000_Q3.block
 0xF4225DC6,city_bld_corner32x32d_wall_nm,city_bld_corner32x32d_wall_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30914_P000_Q3.block
@@ -29319,7 +29319,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF5CB97C2,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_m151_P000_Q3.block
 0xF5CC877A,margarita_bld_club01_text_ruin_sm,margarita_bld_club01_text_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31491_P000_Q3.block
 0xF5CD5B8B,global_env_leaves04,global_env_leaves04,1,1,texture,vz.wad,1,1,blocks\VZ\c32383_P000_Q3.block
-0xF5CEDCD6,,,0,0,model,vz.wad,1,1,blocks\VZ\c33014_P000_Q3.block
+0xF5CEDCD6,oc_hum_mercenaryelite_a,oc_hum_mercenaryelite_a,1,1,model,vz.wad,1,1,blocks\VZ\c33014_P000_Q3.block
 0xF5D17C20,,,0,0,lineregion,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xF5E11933,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xF5E1372C,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
@@ -29442,7 +29442,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF6C5A261,ALL_Job_Briefing_Conrad,ALL_Job_Briefing_Conrad,1,1,facefxanimationset,vz.wad,1,1,blocks\VZ\allstarter2_P000_Q3.block
 0xF6C9B450,jungle_ruinhotelpool_metal_sm,jungle_ruinhotelpool_metal_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c31215_P000_Q3.block
 0xF6C9C92A,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_ztz98_P000_Q3.block
-0xF6CA6AA1,,,0,0,model,vz.wad,1,1,blocks\VZ\c30536_P000_Q3.block
+0xF6CA6AA1,industrial_pipesstacked,industrial_pipesstacked,1,1,model,vz.wad,1,1,blocks\VZ\c30536_P000_Q3.block
 0xF6CB1070,merida_signfoldb,merida_signfoldb,1,1,model,vz.wad,1,1,blocks\VZ\c30784_P000_Q3.block
 0xF6CD058A,wpn_rpg,wpn_rpg,1,1,soundbank;sounddb;wavebank,vz.wad,3,1,blocks\VZ\wpn_rpg_P000_Q3.block
 0xF6CD47BA,merida_bld_plazachurch03_sm,merida_bld_plazachurch03_sm,1,1,texture,vz.wad,1,1,blocks\VZ\merida_bld_plazachurch_P000_Q3.block
@@ -29713,7 +29713,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF8E34B9C,vz_hum_solano_head,vz_hum_solano_head,1,1,texture,vz.wad,1,1,blocks\VZ\c33694_P000_Q3.block
 0xF8E3A470,,,0,0,lowresterrain,vz.wad,1,1,blocks\VZ\low_res_terrain_P000_Q3.block
 0xF8E5C512,,,0,0,terrainmesh,vz.wad,1,1,blocks\VZ\c31486_P000_Q3.block
-0xF8E7B7F4,poi_up_introduction,poi_up_introduction,1,1,scaleformgfx,vz.wad,1,1,blocks\VZ\pmc_interior_P000_Q3.block
+0xF8E7B7F4,POI_UP_Introduction,POI_UP_Introduction,1,1,scaleformgfx,vz.wad,1,1,blocks\VZ\pmc_interior_P000_Q3.block
 0xF8E7D7C0,caracas_fountainparquecentral_parts_ruin_sm,caracas_fountainparquecentral_parts_ruin_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30286_P000_Q3.block
 0xF8E9288A,allcon004_briefing_ia,allcon004_briefing_ia,1,1,texture,vz.wad,1,1,blocks\VZ\scaleform_allcon004briefing_P000_Q3.block
 0xF8EA0746,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_scooter_P000_Q3.block
@@ -29833,7 +29833,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0xF9E7D665,groutpost_bld_shackcave06_nm,groutpost_bld_shackcave06_nm,1,1,texture,vz.wad,1,1,blocks\VZ\c30532_P000_Q3.block
 0xF9E81CC9,_bold_italic_font_f0,_bold_italic_font_f0,1,1,texture,shell.wad;vz.wad,2,2,blocks\Shell\resident_P000_Q3.block
 0xF9E8A9D9,civ_veh_car_r90_sm,civ_veh_car_r90_sm,1,1,texture,vz.wad,1,1,blocks\VZ\civ_veh_car_r90_P000_Q3.block
-0xF9EA3B44,,,0,0,model,vz.wad,1,1,blocks\VZ\c30791_P000_Q3.block
+0xF9EA3B44,civ_hum_super_industrial,civ_hum_super_industrial,1,1,model,vz.wad,1,1,blocks\VZ\c30791_P000_Q3.block
 0xF9EAF8CE,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0xF9EB20B7,vz_state_gurjob011_04_destroyed_tinygeometry_0x00143c20,vz_state_gurjob011_04_destroyed_tinygeometry_0x00143c20,1,1,texture,vz.wad,1,1,blocks\VZ\c34333_P000_Q3.block
 0xF9F19570,global_windowbars01,global_windowbars01,1,1,texture,vz.wad,1,1,blocks\VZ\c39999_P000_Q3.block
