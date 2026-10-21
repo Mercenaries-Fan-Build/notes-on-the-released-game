@@ -12,8 +12,8 @@ Bytecode analysis of `gurcon*` / `pircon*` contract scripts and related job scri
 
 | Contract | Role | Starter (wifmissiondata) | Flow unlock trigger (wifmissionflow) |
 |----------|------|---------------------------|--------------------------------------|
-| **GurCon005** | Minor UP assassination (4 destroy targets) | **GurStarter2** (Huang @ GurOutpost2) | After GurCon001 fortress arc (`vz_state_gurcon001_fortress_destroyed`); calls **`RequestStarter` + GurStarter4** (Vega) |
-| **PirCon004** | Co-op organ delivery / VZ chase | **PirStarter4** (Stoosh @ PirOutpost4) | Unlocked in pirate act flow after **PirCon002 → PirCon003** chain; references **PirJob012** / **PirJob020** targets |
+| **GurCon005** | Minor UP assassination (4 destroy targets) | **GurStarter2** (Huang @ GurOutpost2) | Unlocked by the `GurCon050` rule (outpost GurCon050 completed), `wifmissionflow.lua:944` |
+| **PirCon004** | Co-op organ delivery / VZ chase | **PirStarter4** (Stoosh @ PirOutpost4) | Unlocked by the `PirCon052` rule (outpost PirCon052 completed), `wifmissionflow.lua:1377` |
 
 Both contracts live in retail `scripts_vz` (not DLC-only bytecode). They use standard `inherit MrxTaskContract` and do **not** call `UnlockMission`, `Refresh`, or `dynamic_import` internally — unlock is entirely driven by `wifmissionflow` + `wifmissiondata`.
 
@@ -57,36 +57,39 @@ Milestone keys exist for main contracts: `GurCon003_Milestone{1-3}`, `PirCon004_
 
 ### wifmissionflow — runtime unlock
 
-**GurCon005** appears in the guerrilla act-1 progression block:
+Read from the rule bodies in `docs/mercs2-luacd/src/vz/wifmissionflow.lua`. (The string order in
+the bytecode's constant pool is not the unlock order.)
+
+**GurCon005** — the `GurCon050` rule, once outpost GurCon050 is completed (`:938-948`):
 
 ```
-vz_state_gurcon001_fortress
-vz_state_gurcon001_staging
-Vz_State_GurCon001
-vz_state_gurcon001_fortress_destroyed
-→ GurCon005
-→ RequestStarter
-→ GurStarter4          ← flow requests that exposes Vega as contact
-→ GurJob002_* / GurJob012_* targets
+GurIntro  → GurCon053 (outpost)
+GurCon053 → GurCon002, GurCon050, GurJob001, GurJob002, GurJob006, GurJob020
+GurCon050 → GurCon005, GurCon052
+GurCon052 → MrxStarterManager.RequestStarter("GurStarter4")      (:955)
 ```
 
-Layer hooks referenced in flow (not in contract script itself):
+The `vz_state_gurcon001_*` layers belong to the `GurCon001` rule (fortress and staging removed,
+`fortress_destroyed` added, `:930-935`). The `vz_state_gurcon005_airportdefbase*` layers are
+swapped by the `PmcCon001` rule (staging added, `:155`) and the `OilCon002` rule (staging removed,
+base added, `:708-710`), not by a Gur rule.
 
-- `vz_state_gurcon005_airportdefbase`
-- `vz_state_gurcon005_airportdefbase_staging`
-
-**PirCon004** appears after the PirCon002/003 chain:
+**PirCon004** — the `PirCon052` rule, once outpost PirCon052 is completed (`:1371-1380`):
 
 ```
-PirCon002
-PirJob020
-PirCon003
-→ PirCon004
-→ PirJob012_Target_01 .. _10
-→ SetFlowData / GetStarter / AddIntro
+GurCon002 → (intro Pir @ PmcBoss) → PirIntro
+PirIntro  → PirCon001
+PirCon001 → PirCon002, PirCon051, PirJob012, PirJob020
+PirCon051 → PirCon003, PirCon052
+PirCon052 → PirCon004
 ```
 
-Cross-faction link: `OilCon001_GurCon001` ties Oil intro to GurCon001 unlock in flow graph.
+`PirJob012_Target_01 .. _10` belong to the `PirJob012` rule's verify-target bookkeeping
+(`:1389-1405`).
+
+Cross-faction link: the `OilCon001_GurCon001` rule unlocks **PmcCon002** once both OilCon001 and
+GurCon001 are completed (`:807-815`). Full graph:
+[`reverse_engineer/mission_progression_graph.md`](reverse_engineer/mission_progression_graph.md) §2.
 
 ### In-contract mission flow calls
 

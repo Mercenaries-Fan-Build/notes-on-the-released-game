@@ -16,10 +16,13 @@ isolation — no game boot, no WAD rebuild round-trip.
   the *game-layer*: the engine stays asset-agnostic (pangea_engine_alignment §6).
 - `index.rs` — the asset catalog: WAD ASET table × name resolution (rainbow table 733k preimages,
   overlaid by the 82k live-registry dump; ~82% of vz.wad ASETs resolve to names).
-- `app.rs` — the workbench itself. UI is a mouse-driven INSPECTOR (egui, `gui.rs`): left
-  browser (search + tabs), right Unreal-style Details panel (Info / States-LODs / Materials with
-  per-group visibility / Animation with a scrubbable timeline / Skeleton / Sandbox with editable
-  transforms), toolbar for import-merge-export-scene ops. egui paints through the engine's
+- `app.rs` — the workbench itself. A rail switches pages: Inspect · Saves · Driving · Missions ·
+  Systems · Shipment · Settings, with Live (dot = the game's lua-bridge answers) and Log at its
+  foot. World, Characters and Weapons are Lenses on Inspect's Models tab, not pages; the Retarget
+  and Fit benches open from a model's "use as a donor" menu or a Shipment contribution, light
+  Shipment, and write nothing until they save. UI is a mouse-driven INSPECTOR (egui, `gui.rs`): left browser (search + tabs), right
+  Unreal-style Details panel (Info / States-LODs / Materials with per-group visibility /
+  Animation with a scrubbable timeline / Skeleton), toolbar for import-export ops. egui paints through the engine's
   `Scene::render_with` overlay hook — the engine stays GUI-agnostic, and the game's authentic
   `ui_rect`/`ui_text` pass (which the boot screen still uses) is untouched. Every mutation is an
   `Act` queued by widgets and keyboard shortcuts alike, executed once per frame.
@@ -34,8 +37,6 @@ isolation — no game boot, no WAD rebuild round-trip.
 - Inspect layers: HIER bone tree (F1, names resolved), per-material draw groups (F2) with
   isolate/hide per sub-strip (`set_draw_hidden`), full-screen texture plates (F3 / Enter on a
   texture row) at streamed full resolution.
-- Editable sandbox: place instances (F6), select/move/rotate/scale/delete them (Tab edit mode),
-  save/load the arrangement as `workshop_scene.json` (F5/F9).
 
 ## Roadmap — future workbenches (user-set vision, 2026-07-04)
 
@@ -53,7 +54,7 @@ Each mounts into the same loop as a mode; the asset workbench is the pattern.
      `MrxUtil.*`) → Blueprint IR: event/condition/action nodes, control+data edges. Unrecognized
      Lua stays as opaque "script nodes" (never lossy).
    - **Edit**: egui node-graph (egui-snarl) inside the workshop, alongside the 3D viewport so
-     spawns/objectives can be placed spatially (the sandbox already does placement).
+     spawns/objectives can be placed spatially.
    - **Emit**: IR → Lua source (via the same AST library) → LuaQ compile → ship through the
      PROVEN patch path (`wad_builder build-skin` / vz-patch overlay — the wardrobe scripts
      already went through it).
@@ -63,9 +64,8 @@ Each mounts into the same loop as a mode; the asset workbench is the pattern.
    vertex-decl translation, BLENDINDICES palette mapping, weight transfer, MTRL binding — with
    the oracle renderer right there to verify.
    **v1 SHIPPED (2026-07-05):** drag-drop `.obj`/`.gltf`/`.glb` → engine-rendered preview
-   (glTF base-color textures BC-compressed on the fly, `texenc.rs`); **F7** merges the placed
-   sandbox (transforms baked, WAD assets + imports mixed) into one new model; **F10** exports
-   any preview (game asset / import / merge) to `workshop_export/<label>/` OBJ+MTL+PNGs —
+   (glTF base-color textures BC-compressed on the fly, `texenc.rs`); **F10** exports
+   any preview (game asset / import) to `workshop_export/<label>/` OBJ+MTL+PNGs —
    round-trip verified geometry-exact on mattias_v3. Headless: `--import-check`, `--export`.
    Remaining for "ship in-game": native UCFX-container export (today the OBJ hand-off goes
    through `gltf_to_ucfx_model.py` + `cube_mod`), skinning import/weight transfer.

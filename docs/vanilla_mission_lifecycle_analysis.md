@@ -83,32 +83,43 @@ This is a **full replacement**, not a merge. The accessor functions (`GetMission
 
 ### 3.1 GetOriginalFlowData() — The Core
 
-`wifmissionflow.luac` contains a massive function at line 55 with **93 child closures** — this is `GetOriginalFlowData()`. It returns a table of **flow bindings**, each with this structure:
+`GetOriginalFlowData()` returns a table of **flow bindings** keyed by name. Retail has 67
+(`docs/mercs2-luacd/src/vz/wifmissionflow.lua:34-1405`), each shaped:
 
 ```lua
-{
-    "BindingName",
+BindingName = {
     fPrereq = function() ... end,   -- prerequisite check
     fConseq = function() ... end,   -- consequence when prereq becomes true
 }
 ```
 
 The flow system works as a **reactive binding graph**:
-1. `SetFlowData(bindings)` registers all bindings with the engine
-2. The engine periodically calls `Refresh()` which evaluates each binding's `fPrereq`
-3. When a prereq returns true, the corresponding `fConseq` fires
+1. `SetFlowData(bindings)` registers all bindings
+2. `Refresh()` evaluates each binding's `fPrereq` (`resident/mrxmissionflow.lua:512-561`). It is
+   event-driven, not periodic: world start right after the save loads (`vz/xQ!L.lua:877`), every
+   contract completion (`mrxmissionflow.lua:189`), a job target (`mrxtaskjob.lua:132`), an intro
+   viewed at a starter (`mrxstarter.lua:234`)
+3. When a prereq returns true, the corresponding `fConseq` fires, and the binding is culled
+   (saved in `tFlowData.tCulledBindings`) unless `bRecurring` — no retail binding sets it.
+   `AwardKey` calls made during a pass are deferred to its end; the pass repeats while anything fired
 4. `fConseq` typically calls `UnlockMission(name)` and other setup
+
+Every retail `fPrereq` reads only `HasKey` / `GetKeyValue` (`Start` is `return true`), so which
+bindings fire is a function of `tFlowData.tMyFlowData` alone. The consequences are not: they
+branch on other keys and on skip mode.
 
 ### 3.2 Flow Binding Examples (from bytecode)
 
 **Start → VzaCon001:**
 ```lua
-fPrereq: function() end  -- always true (empty = no prereq)
+fPrereq: function() return true end
 fConseq: function()
+    -- dossiers, grapple/disguise/counters off, intro movie; its callback:
     UnlockMission("VzaCon001")
-    -- setup cheat mode check, state transition
 end
 ```
+
+Most unlocks sit inside movie, teleport or state callbacks rather than at the top of `fConseq`.
 
 **VzaCon001 → PmcCon001:**
 ```lua
@@ -137,7 +148,7 @@ end
 
 ```lua
 function Reset(bResetMore)
-    MrxMissionFlow.Reset()        -- engine-level reset
+    MrxMissionFlow.Reset(bResetMore)  -- base-class reset
     SetFlowData(GetOriginalFlowData())  -- re-register all bindings
 end
 ```
@@ -146,26 +157,60 @@ end
 
 ### 3.4 Full Binding Chain (mission unlock order)
 
-From the bytecode, the flow DAG is:
+Retail flow, read from `docs/mercs2-luacd/src/vz/wifmissionflow.lua` (the PC retail decompile;
+the demo bytecode this document started from differs). Each line is a binding: its prerequisite
+keys → the missions its consequence unlocks. `*Intro` keys are awarded when the player views the
+intro a binding added at a starter (`mrxstarter.lua:229-231`).
 
 ```
-Start
-  └→ VzaCon001
-      └→ PmcCon001
-          └→ OilCon020 (+ OilCon021)
-              └→ OilCon021
-                  └→ OilCon002 + OilJob011
-              └→ PmcCon002
-                  ├→ MecIntro → MecCon001
-                  ├→ JetIntro → JetCon001  
-                  └→ PmcCon003
-                      └→ AllChiIntro → AllCon050 + ChiCon050
-                          └→ PmcCon004 (endgame)
-              └→ OilCon050 → OilCon001 + OilCon051
-                  └→ OilCon001 + GurCon001 → PmcCon002
-              └→ GurCon053 → GurCon002 → GurCon003 → GurCon001
-              └→ PirIntro → PirCon001
+Start                         → VzaCon001
+VzaCon001                     → PmcCon001
+PmcCon001                     → OilCon020, PmcCon031, PmcJob001
+OilCon020                     → OilCon021
+OilCon021                     → OilCon002
+OilCon002                     → OilCon050, OilJob004, OilJob008, OilJob011, PmcCon013, PmcCon034
+                                (adds the Gur intro at PmcBoss, the Mec intro at HelPmcBoss)
+GurIntro                      → GurCon053
+MecIntro                      → MecCon001 (also awards key MonsterV4)
+MecCon001                     → PmcCon016 (adds the Jet intro at MecPmcBoss)
+PmcCon016                     → PmcCon015
+JetIntro                      → JetCon001
+JetCon001                     → PmcCon018
+OilCon050                     → OilCon001, OilCon051
+OilCon051                     → OilCon003, OilCon052
+OilCon052                     → OilCon005 (only without key ChiCon002)
+OilCon001 + GurCon001         → PmcCon002
+GurCon053                     → GurCon002, GurCon050, GurJob001, GurJob002, GurJob006, GurJob020
+GurCon002                     → GurCon003 (adds the Pir intro at PmcBoss)
+GurCon003                     → GurCon001
+GurCon050                     → GurCon005, GurCon052
+PirIntro                      → PirCon001
+PirCon001                     → PirCon002, PirCon051, PirJob012, PirJob020
+PirCon051                     → PirCon003, PirCon052
+PirCon052                     → PirCon004
+PmcCon002 + JetCon001         → PmcCon003
+PmcCon003                     → (awards key Invasion; adds the AllChi intro at PmcBoss)
+AllChiIntro                   → AllCon050, ChiCon050
+AllCon050                     → AllCon002, AllCon052, AllJob002, AllJob003, AllJob020
+AllCon002                     → AllCon001
+AllCon001                     → AllCon003
+AllCon052                     → AllCon008 (only without key PmcCon004), AllCon053
+ChiCon050                     → ChiCon001, ChiCon051, ChiJob002, ChiJob003, ChiJob020
+ChiCon001                     → ChiCon002
+ChiCon002                     → ChiCon003 (destroys OilCon005)
+ChiCon051                     → ChiCon008 (only without key PmcCon004), ChiCon053
+ChiCon053                     → ChiCon009
+AllCon003  /  ChiCon003       → PmcCon004 (either one)
+PmcCon031                     → PmcCon032
+PmcCon032                     → PmcCon033
+PmcCon031..034 completed ×3   → one more outfit each
+PmcCon004                     → destroys 11 open contracts, rolls the credits
 ```
+
+The Workshop's Saves page runs these bindings from the shipped bytecode
+(`mercs2_workshop::game_rules`, `workshop/saves` branch of `tools/wad_simulator`) and its tests
+pin parts of this graph: PmcCon001's unlocks, and `OilCon001_GurCon001` as PmcCon002's only
+unlocker. Where each binding's effects land in a save: `tools/wad_simulator/docs/save_contract_state.md`.
 
 ---
 

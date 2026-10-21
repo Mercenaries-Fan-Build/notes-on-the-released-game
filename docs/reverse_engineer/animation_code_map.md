@@ -132,6 +132,48 @@ decomp-verified address. "Married by": **vftable** = the PC ctor stamps the RTTI
 | sample codec (Wavelet/Delta/Spline) | `mercs2_formats` decoder (168/168 tests) | solved | H | ref |
 | GPU skin shaders `PgSkin*VP`/`PgMesh*Morph*VP`, `BoneMatrixArray`, `rotateBonesForSkinning` | shader-string set (compiled `.sho`); palette upload in render path | string | L/open | — |
 
+**A live `hkaSkeleton`, read from a capture (2026-10-21).** In
+`game-files/memory-dumps/updated-chris-exports/20261021_chris-jacobs-mid-mission.dmp` (Chris in-world)
+the only QsTransform-array copy of Chris's HIER forearm-roll translation `(0.0805, −0.0859, −0.0685)`
+is the reference pose at `0x214F2FC0` (bone #54; byte-identical in the `flying-winch` dump of the
+same process, so static). The one pointer to it sits in an `hkaSkeleton` (32-bit, Havok 5.5) whose
+fields read `parentIndices 0x1F4233C0 / 93`, `bones 0x1F3B5280 / 93`, `referencePose 0x214F2FC0 / 93`,
+`floatSlots 0`, `localFrames 0`. `bones` is an array of pointers to 8-byte `hkaBone` records
+`{char* name, hkBool lockTranslation}`; the names are the lower-case hex name-hashes. **Only bone 0
+`GlobalSRT` (`0xCBC1EB51`) and bone 3 `Bone_Root` (`0xFAEFB386`) have `lockTranslation = 1`**; the
+forearm-roll bones #54 `03719eef` and #75 `328c1f25` have 0 — so Havok applies their animated
+translation, the clips' `(0.172, 0, 0)`, in retail as well. Retail Chris renders without a tear (user, in-game), so
+translation locking is not what spares him. **The inverse-bind source is:** each HIER node carries
+two transforms — the local `+16` (from which the reference pose above is built) and the inverse-bind
+`+80`. For `pmc_hum_chris` (`0x39F47E08`) the binds `+80` gives put bones #54/#75 at local
+T = `(0.1721, 0, 0)` relative to their parents' binds — **the clips' value** — while `+16` says
+`(0.0805, −0.0859, −0.0685)`; for `pmc_hum_mattias` both give `(0.1721, 0, 0)`. Skinning with the `+80`
+inverse-binds therefore matches the animated pose; skinning with the inverse of the `+16` chain is
+143 mm off on Chris's arm chain — the reimpl's former tear. Chris's `+80` binds differ from the `+16`
+chain by ~350–370 mm on the whole arm/hand chain (#58–#83). **Retail skins off `+80` directly:** in the
+`chris-jacobs-mid-mission` capture the inverse of the `+16` chain for bones #53/#54 is in memory 0 times,
+while #54's `+80` row sits once, inside the resident HIER record (`0x21AF7970`) — no derived
+inverse-bind array exists. — H.
+
+**Retail's skin palette, read live (2026-10-21).** In `23fe7f38_cracked-cruise/pmc` (Mattias, base
+`pmc_hum_mattias`, 116 HIER nodes, idle) the palette is a 116-entry array of transposed 4×3 matrices
+(vertex-shader constant layout) at `0x293A3420`, beside a double-buffered copy at `0x293A4AA0`, and his
+model-space pose is a 116-entry row-major 4×4 array at `0x293A5FA0`; an 85-entry trio next to them
+belongs to another character. Solving `palette · pose⁻¹` per bone gives retail's inverse-bind: it is
+the **raw HIER `+80`** on all 116 bones (max residual 0.024, the hands — one frame of lag between the
+arrays). On every bone where `+80` and the `+16` chain differ (#3, #5–#8, #22–#24, #61, #83) the `+16`
+inverse is 0.09–1.5 off. That includes the **ancestor-copy** records (`+80` identical to the parent's:
+mattias 29, chris 15, jen 14, e.g. hip pieces #5–#8 under #4): retail skins them with the parent's
+inverse-bind while its live pose keeps their `+16` local (bone #5 sits 158 mm from #4) — rigid
+accessory pieces placed offset from their authored spot by design, not a decode error. — H.
+
+**Reimpl (2026-10-21):** `mercs2_mesh` builds `BoneRig.world_bind`/`inv_bind` from
+`Bone::bind_world_raw` (raw `+80`) and `local_bind` from `+16`. Guards: `mercs2_probe` retail test
+`retail_skin_matches_the_live_palette` (engine `inv_bind` vs the solved live palette, every bone, 0.03;
+fails at 1.06 on bone #3 if the ancestor-copy rejection is applied), and `mercs2_engine` retail test
+`skin_joints_stay_together_under_animation` (joint continuity under each hero's own idle/walk,
+ancestor-copy children excluded: mattias 0.57 mm, chris 2.82 mm — was 143 mm — jen 9.47 mm).
+
 ---
 
 ## 3. The per-frame animation tick (placement + what's opaque)

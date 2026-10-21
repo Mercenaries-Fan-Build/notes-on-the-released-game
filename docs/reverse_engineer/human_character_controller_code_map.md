@@ -391,6 +391,21 @@ against each other from shipped data, and §2.4 gives the resulting vocabulary �
 named, which retires that doc's "⏳ Name the remaining ActionTable state-value hashes" for the Stance
 column.
 
+**Live state of the hero at the PMC hub, 2026-10-21** (`mercs2_probe dump-pool <capture>
+HumanStateMachine` / `RuntimeSceneObject` / `RuntimeEquipmentLink`, v1.0 captures
+`ada55455_disc/pmc` (Jen, `auto_6A447BF8`) and `23fe7f38_cracked-cruise/pmc` (Mattias,
+`auto_6A0BE454`)): the character GUID at `Players` record `+0x20` (`0x4000543C` / `0x400053FA`)
+owns the `HumanStateMachine` record whose `+0x04` Stance = `0x12C07B18` (Upright) and `+0x08` Action =
+`0xB4DA003B` (idle), in both. Its `RuntimeSceneObject` position is `(3794.04, 450.81, -3911.03)` in
+both — the `MrxUtil._TeleportHero` PMC-interior point. The hero owns 3 (Jen) / 4 (Mattias)
+`RuntimeEquipmentLink` records (`+0x00` the equipment GUID, `+0x04` a hero-skeleton node hash —
+`0x3846CB35` and `0xDF2D0826` are `pmc_hum_mattias` HIER nodes #22/#23, names not in the rainbow
+data; `+0x08` 0/1); for Jen one linked object sits 1.12 m above the feet and ~0.2 m
+ahead, the others at the hero origin. Which clip the `HumanAnimationControllerNEW` record is playing
+is not readable from these captures: the controller object (vtable `0x00BCDA90`) holds no clip
+name-hash inline, and the clip hashes found in memory are table copies. — H (state, position) /
+open (playing clip, what the equipment objects are)
+
 ### 2.2 `FUN_0068CC00` is the HumanStateTable transition engine — H
 
 > **Correction (old claim struck), and the most consequential one in this map.** §8 used to file

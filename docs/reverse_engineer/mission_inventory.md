@@ -2,7 +2,7 @@
 title: Mission inventory — every shipped mission, classified
 status: current
 evidence: proven
-date: 2026-09-22
+date: 2026-10-20
 ---
 
 # Mission inventory — every shipped mission, classified
@@ -14,11 +14,15 @@ patterns); this doc is the concrete inventory that patterns doc's Recipe A–E c
 against.
 
 **Data sources** (verified, not inferred):
-- `inherit(...)` line at the top of each `workshop_data/lua/vz/<mission>.lua`
+- `inherit(...)` line at the top of each `docs/mercs2-luacd/src/vz/<mission>.lua`
 - `sStarter` / `sFactionId` / `bRepeatable` / `bSuppressPdaDisplay` / `bCriticalPathMission` from
-  `workshop_data/lua/vz/wifmissiondata.lua`
-- `UnlockMission("X")` and `HasKey("Y")` from `workshop_data/lua/vz/wifmissionflow.lua`'s flow-rule
-  table.
+  `docs/mercs2-luacd/src/vz/wifmissiondata.lua`
+- `UnlockMission("X")` and `HasKey("Y")` from `docs/mercs2-luacd/src/vz/wifmissionflow.lua`'s
+  flow-rule table. How that table is evaluated, and the full rule-by-rule graph:
+  [`mission_progression_graph.md`](mission_progression_graph.md).
+
+Line numbers are decompiled-corpus lines, not the lines the retail game reports
+([`mission_progression_graph.md` §5.1](mission_progression_graph.md#51-retail-line-numbers-are-not-corpus-line-numbers)).
 
 ## The four lifecycle classes shipped
 
@@ -66,8 +70,8 @@ maps each mission to the closest recipe from
 |---|---|---|---|---|---|---|---|
 | PmcCon001 | MrxTaskContract | *(none)* | | | ✓ | `HasKey("VzaCon001")` → `wifmissionflow.lua:86` | B |
 | PmcCon002 | MrxTaskContract | PmcBoss | | | ✓ | `HasKey("OilCon001") and HasKey("GurCon001")` → `wifmissionflow.lua:813` | A |
-| PmcCon003 | MrxTaskContract | PmcBoss | | | ✓ | `HasKey("PmcCon002")` → `wifmissionflow.lua:308` | A |
-| PmcCon004 | MrxTaskContract | *(none)* | | | ✓ | `HasKey("AllCon003")` OR `HasKey("ChiCon003")` → `wifmissionflow.lua:1026, 1246` | B |
+| PmcCon003 | MrxTaskContract | PmcBoss | | | ✓ | `HasKey("PmcCon002") and HasKey("JetCon001")` (rule `PmcCon002_JetCon001`) → `wifmissionflow.lua:308` | A |
+| PmcCon004 | MrxTaskContract | *(none)* | | | ✓ | two separate rules: `HasKey("AllCon003")` → `wifmissionflow.lua:1026`; `HasKey("ChiCon003")` → `:1246` | B |
 | PmcCon013 | MrxTaskContract | HelPmcBoss | ✓ | | | `HasKey("OilCon002")` → `wifmissionflow.lua:706` | A + wager |
 | PmcCon015 | MrxTaskContract | MecPmcBoss | ✓ | | | `HasKey("PmcCon016")` → `wifmissionflow.lua:528` | A |
 | PmcCon016 | MrxTaskContract | MecPmcBoss | ✓ | | | `HasKey("MecCon001")` → `wifmissionflow.lua:590` | A |
@@ -87,16 +91,16 @@ maps each mission to the closest recipe from
 | ID | Class | Starter | R | H | C | Unlock trigger | Recipe |
 |---|---|---|---|---|---|---|---|
 | OilCon001 | MrxTaskContract | OilStarter0 | | | ✓ | `HasKey("OilCon050")` → `wifmissionflow.lua:780` | A |
-| OilCon002 | MrxTaskContract | OilStarter0 | | | ✓ | `HasKey("OilJob011")` → `wifmissionflow.lua:206` | A |
+| OilCon002 | MrxTaskContract | OilStarter0 | | | ✓ | `HasKey("OilCon021")` → `wifmissionflow.lua:206` | A |
 | OilCon003 | MrxTaskContract | OilStarter3 | ✓ | | | `HasKey("OilCon051")` → `wifmissionflow.lua:822` | A |
-| OilCon005 | MrxTaskContract | OilStarter4 | ✓ | | | `HasKey("OilCon052")` → `wifmissionflow.lua:836` (also gated on `not HasKey("ChiCon002")`) | A |
+| OilCon005 | MrxTaskContract | OilStarter4 | ✓ | | | `HasKey("OilCon052")` → `wifmissionflow.lua:836`, inside `if not HasKey("ChiCon002")` in the consequence (`:835`) | A |
 | OilCon021 | MrxTaskContract | OilStarter5 | | | ✓ | `HasKey("OilCon020")` → `wifmissionflow.lua:182` | A |
-| OilCon050 | MrxTaskContractOutpost | OilStarter1 | | | ✓ | `HasKey("OilCon021")` → `wifmissionflow.lua:195` | A (outpost) |
+| OilCon050 | MrxTaskContractOutpost | OilStarter1 | | | ✓ | `HasKey("OilCon002")` → `wifmissionflow.lua:702` | A (outpost) |
 | OilCon051 | MrxTaskContractOutpost | OilStarter2 | | | | `HasKey("OilCon050")` → `wifmissionflow.lua:781` | A (outpost) |
 | OilCon052 | MrxTaskContractOutpost | OilStarter3 | | | | `HasKey("OilCon051")` → `wifmissionflow.lua:823` | A (outpost) |
-| OilJob004 | MrxTaskJobDestroyType | *(none)* | | | | `HasKey("OilCon050")` → `wifmissionflow.lua:703` | B |
-| OilJob008 | MrxTaskJobDestroySet | *(none)* | | | | `HasKey("OilCon050")` → `wifmissionflow.lua:704` | B |
-| OilJob011 | MrxTaskJobVerifySet | *(none)* | | | | `HasKey("OilCon050")` → `wifmissionflow.lua:705` | B |
+| OilJob004 | MrxTaskJobDestroyType | *(none)* | | | | `HasKey("OilCon002")` → `wifmissionflow.lua:703` | B |
+| OilJob008 | MrxTaskJobDestroySet | *(none)* | | | | `HasKey("OilCon002")` → `wifmissionflow.lua:704` | B |
+| OilJob011 | MrxTaskJobVerifySet | *(none)* | | | | `HasKey("OilCon002")` → `wifmissionflow.lua:705` | B |
 
 ### Gur (Guerrilla)
 
@@ -121,7 +125,7 @@ maps each mission to the closest recipe from
 | ChiCon001 | MrxTaskContract | ChiStarter0 | | | ✓ | `HasKey("ChiCon050")` → `wifmissionflow.lua:1176` | A |
 | ChiCon002 | MrxTaskContract | ChiStarter0 | | | ✓ | `HasKey("ChiCon001")` → `wifmissionflow.lua:1189` | A |
 | ChiCon003 | MrxTaskContract | ChiStarter0 | | | ✓ | `HasKey("ChiCon002")` → `wifmissionflow.lua:1208` | A |
-| ChiCon008 | MrxTaskContract | ChiStarter2 | ✓ | | | `HasKey("ChiCon051")` + `not HasKey("PmcCon004")` → `wifmissionflow.lua:1306` | A |
+| ChiCon008 | MrxTaskContract | ChiStarter2 | ✓ | | | `HasKey("ChiCon051")` → `wifmissionflow.lua:1306`, inside `if not HasKey("PmcCon004")` in the consequence (`:1305`) | A |
 | ChiCon009 | MrxTaskContract | ChiStarter4 | ✓ | | | `HasKey("ChiCon053")` → `wifmissionflow.lua:1318` | A |
 | ChiCon050 | MrxTaskContractOutpost | ChiStarter1 | | | ✓ | `HasKey("AllChiIntro")` → `wifmissionflow.lua:435` | A (outpost) |
 | ChiCon051 | MrxTaskContractOutpost | ChiStarter2 | | | | `HasKey("ChiCon050")` → `wifmissionflow.lua:1177` | A (outpost) |
@@ -137,7 +141,7 @@ maps each mission to the closest recipe from
 | AllCon001 | MrxTaskContract | AllStarter0 | | | ✓ | `HasKey("AllCon002")` → `wifmissionflow.lua:989` | A |
 | AllCon002 | MrxTaskContract | AllStarter0 | | | ✓ | `HasKey("AllCon050")` → `wifmissionflow.lua:1090` | A |
 | AllCon003 | MrxTaskContract | AllStarter0 | | | ✓ | `HasKey("AllCon001")` → `wifmissionflow.lua:999` | A |
-| AllCon008 | MrxTaskContract | AllStarter2 | ✓ | | | `HasKey("AllCon052")` + `not HasKey("PmcCon004")` → `wifmissionflow.lua:1105` | A |
+| AllCon008 | MrxTaskContract | AllStarter2 | ✓ | | | `HasKey("AllCon052")` → `wifmissionflow.lua:1105`, inside `if not HasKey("PmcCon004")` in the consequence (`:1104`) | A |
 | AllCon050 | MrxTaskContractOutpost | AllStarter1 | | | ✓ | `HasKey("AllChiIntro")` → `wifmissionflow.lua:434` | A (outpost) |
 | AllCon052 | MrxTaskContractOutpost | AllStarter2 | | | | `HasKey("AllCon050")` → `wifmissionflow.lua:1091` | A (outpost) |
 | AllCon053 | MrxTaskContractOutpost | AllStarter3 | | | | `HasKey("AllCon052")` → `wifmissionflow.lua:1107` | A (outpost) |
@@ -233,53 +237,64 @@ step; the player just gets a "new job" HUD notification and the counter starts t
   legitimate patterns; the shipped game just didn't need them because its content pipeline was
   narrower.
 
-## Story-flow chains (rough)
+## Story-flow chains
 
-The dependency graph flattens roughly like this (each edge = an fPrereq → fConseq flow-rule):
+Each edge is a flow rule: completing (or holding the key of) the left side unlocks the right side.
+`intro X @ NPC` means the rule adds an intro to that NPC; watching it awards the `XIntro` key.
+Rule-by-rule detail, including non-mission effects: [`mission_progression_graph.md` §2](mission_progression_graph.md#2-the-unlock-graph).
 
 ```
 game start
   └─ VzaCon001 (prologue)
       └─ PmcCon001 (villa takeover — HQ unlock trigger)
-          ├─ PmcCon031 (shooting gallery)  → PmcCon032 → PmcCon033
+          ├─ PmcCon031 (shooting gallery) → PmcCon032 → PmcCon033
           ├─ PmcJob001 (silent vehicle counter)
-          ├─ OilCon020 (Pmc-flavoured Oil intro)
-          │   └─ OilCon021 → OilCon050 (outpost)
-          │       ├─ OilCon001 (Solano hub) → OilCon002 → PmcCon002 (with GurCon001)
-          │       ├─ OilCon051 → OilCon003, OilCon052
-          │       │   └─ OilCon005 (if not ChiCon002)
-          │       ├─ OilJob004, OilJob008, OilJob011
-          │       ├─ PmcCon013 (Helicopter — Ewen)
-          │       └─ PmcCon034 (repeatable)
-          └─ PmcCon002 (critical-path Pmc)
-              ├─ PmcCon003
-              ├─ MecIntro → MecCon001 → recruit Eva → PmcCon016 → PmcCon015
-              └─ JetIntro → JetCon001 → recruit Jet → PmcCon018
-GurIntro (parallel from OilCon050)
-  └─ GurCon053 (outpost) → GurCon002 → GurCon003 → GurCon001
-                        ├─ GurCon050 (outpost) → GurCon052, GurCon005
+          └─ OilCon020 (Pmc-flavoured Oil intro)
+              └─ OilCon021
+                  └─ OilCon002
+                      ├─ OilCon050 (outpost)
+                      │   ├─ OilCon001 (Solano hub) ─┐
+                      │   └─ OilCon051 → OilCon003, OilCon052
+                      │                                └─ OilCon005 (only without ChiCon002)
+                      ├─ OilJob004, OilJob008, OilJob011
+                      ├─ PmcCon013 (helicopter — Ewen)
+                      ├─ PmcCon034 (repeatable)
+                      ├─ intro Gur @ PmcBoss → GurIntro
+                      └─ intro Mec @ HelPmcBoss → MecIntro
+GurIntro
+  └─ GurCon053 (outpost) → GurCon002 → GurCon003 → GurCon001 ─┐
+                        │             └─ intro Pir @ PmcBoss → PirIntro
+                        ├─ GurCon050 (outpost) → GurCon005, GurCon052 (→ RequestStarter GurStarter4)
                         └─ GurJob001/002/006/020
-AllChiIntro (parallel from OilCon050)
-  ├─ AllCon050 (outpost) → AllCon001 → AllCon002 → AllCon003 → PmcCon004
-  │                                → AllCon052 → AllCon008, AllCon053
-  │                                → AllJob002/003/020
+OilCon001 + GurCon001 → PmcCon002 (critical-path Pmc)
+MecIntro
+  └─ MecCon001 → recruit Eva → PmcCon016 → PmcCon015
+               └─ intro Jet @ MecPmcBoss → JetIntro → JetCon001 → recruit Jet → PmcCon018
+PmcCon002 + JetCon001 → PmcCon003 → intro AllChi @ PmcBoss → AllChiIntro
+AllChiIntro
+  ├─ AllCon050 (outpost) → AllCon002 → AllCon001 → AllCon003 → PmcCon004
+  │                    → AllCon052 → AllCon008 (only without PmcCon004), AllCon053
+  │                    → AllJob002/003/020
   └─ ChiCon050 (outpost) → ChiCon001 → ChiCon002 → ChiCon003 → PmcCon004
-                                    → ChiCon051 → ChiCon008, ChiCon053 → ChiCon009
-                                    → ChiJob002/003/020
-PirIntro (parallel, late)
+                       │              └─ destroys OilCon005
+                       → ChiCon051 → ChiCon008 (only without PmcCon004), ChiCon053 → ChiCon009
+                       → ChiJob002/003/020
+PirIntro
   └─ PirCon001 → PirCon002, PirCon051 → PirCon003, PirCon052 → PirCon004
               → PirJob012/020
 ```
 
 Notes on the graph:
-- **PmcCon004 has two OR-gated triggers** (`HasKey("AllCon003") or HasKey("ChiCon003")`) — the
-  player picks which faction's storyline gets there first.
-- **PmcCon001's fConseq is the only place `WifPmcInterior.Unlock()` runs** ([wifmissionflow.lua:144](../../tools/wad_simulator/workshop_data/lua/vz/wifmissionflow.lua#L144)).
+- **PmcCon004 has two unlockers, as two separate rules** (`AllCon003`, `wifmissionflow.lua:1026`;
+  `ChiCon003`, `:1246`) — the player picks which faction's storyline gets there first.
+- **PmcCon001's fConseq is the only place `WifPmcInterior.Unlock()` runs** ([wifmissionflow.lua:144](../mercs2-luacd/src/vz/wifmissionflow.lua#L144)).
   Everything downstream that uses the PMC HQ (all PmcBoss-startered missions, MecCon001,
   JetCon001, garage, transit, shop, wager) implicitly requires this key. This is the invariant
   F11 in the seam-hardening doc trips over.
-- **The `*Intro` keys** (`MecIntro`, `JetIntro`, `PirIntro`, `GurIntro`, `AllChiIntro`) are set by
-  Fiona-narrated intro cutscenes, not by mission completion. They are the "you're now aware this
+- **The `*Intro` keys** (`MecIntro`, `JetIntro`, `PirIntro`, `GurIntro`, `AllChiIntro`) are not
+  mission completions. A flow rule adds the intro to a starter NPC (`_AddIntro`: PmcBoss = Fiona,
+  HelPmcBoss = Ewen, MecPmcBoss = Eva); `SetViewedIntro` awards `<Intro>Intro` when the player
+  watches it there (`resident/mrxstarter.lua:230-231`). They are the "you're now aware this
   faction exists" flags.
 
 ## Notable outliers
@@ -308,8 +323,10 @@ Notes on the graph:
   flow / task lifecycle.
 - [`docs/modding/lua_engine_seam_hardening.md`](../modding/lua_engine_seam_hardening.md) — the F1–F11
   failure modes that shape mod-author choice between recipes.
-- `workshop_data/lua/vz/wifmissiondata.lua` — the authoritative `tMissionData` table.
-- `workshop_data/lua/vz/wifmissionflow.lua` — the authoritative flow-rule table with fPrereq /
+- [`mission_progression_graph.md`](mission_progression_graph.md) — how the flow rules are
+  evaluated, the full rule-by-rule graph, and the retail trace that pins it.
+- `docs/mercs2-luacd/src/vz/wifmissiondata.lua` — the authoritative `tMissionData` table.
+- `docs/mercs2-luacd/src/vz/wifmissionflow.lua` — the authoritative flow-rule table with fPrereq /
   fConseq for every unlock edge above.
-- `workshop_data/lua/vz/wifstarterdata.lua` — every starter's `bPmcStarter` / `sHqName` / voice
+- `docs/mercs2-luacd/src/vz/wifstarterdata.lua` — every starter's `bPmcStarter` / `sHqName` / voice
   set / `bFemale` flags.

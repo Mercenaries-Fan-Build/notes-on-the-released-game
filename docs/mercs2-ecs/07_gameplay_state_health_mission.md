@@ -180,6 +180,13 @@ the component contracts use for their 768 state-machine pool slots (one record p
 ### Faction\* family
 
 - **FactionMarker** (0x9b98cb09, FUN_0065c0f0): 1 int32 default 0 — the **faction id** tagging an entity.
+  In retail `worldentity` the id is `pandemic_hash_m2` of the faction's HUD icon name (verified
+  2026-10-21 by hashing each name against the stored values): `HUD_faction_AN` 0x6AD45C01, `_CH`
+  0x1A21DCED, `_CV` 0xF1FF0BB3, `_GR` 0x5D30A81B, `_OC` 0x41ED2636, `_PR` 0xC9CE166E, `_VZ` 0x443432FC,
+  `_PMC` 0x9FADA550, and `global_pickupmarker` 0x5B9DE759 on the 14 police/taxi templates. It is a
+  property of the template, not of its model: one kit model is worn by templates of different
+  factions (e.g. "VZ Oil Company Defector" wears `oc_hum_super_executive`). Dump: `mercs2_probe --bin
+  kit_templates -- --factions`.
 - **FactionValue** (0x8bfc69d6, FUN_0065c7d0): 1 float default 0 — a per-entity faction **scalar**
   (reputation / influence / contribution).
 - **FactionZone** (0x67267cc1, FUN_0065c490): 1 int32 default 0 — id of a **faction-owned zone**.

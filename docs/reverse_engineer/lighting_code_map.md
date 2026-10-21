@@ -56,6 +56,19 @@ on-disk COMP record prefixes a `u32` entity key → 56-byte stride (`parse_light
 into the ECS component table by the bulk builder `FUN_0064ee60` (plants `FUN_006622e0` at the reflection
 slot). 1,197 lights extracted from `layers_static`/`vz_state` (the villa `global_portablelight` etc.).
 
+**Live pool, 2026-10-21** (`mercs2_probe dump-pool <capture> LightObject`, v1.0 PMC captures
+`ada55455_disc/pmc` (Jen) and `23fe7f38_cracked-cruise/pmc` (Mattias), hero standing in the PMC
+interior at `(3794.04, 450.81, -3911.03)`): 1439 records — 76 keyed by template GUIDs, 1363 by layer
+entity keys; `+0x00` type ∈ {2 ×1424, 3 ×15}. The `Light_small_*` **template** records equal the
+worldentity (block 3185) values (e.g. `Light_small_darkblue` `0x80008640`: rgb (0.408, 0.663, 0.976),
+`+0x10..` 2.5, 1.0, 4.0, 1.0, 0.524, 0.785, …; its `+0x28` reads 0.83 in one capture and 0.66 in the
+other — a field that moves at runtime). **Instance** records keep the template colour but carry their
+own `+0x10..+0x18` (e.g. yellow_dim instances 1.5/1.0/8.0 vs template 1.5/1.0/10.0); only 2 of 1363
+are byte-identical to a template. Of the 364 `Light_small_*` placements (`find-placement`), 328 have
+a live instance record; **the five in the PMC interior state blocks — 667 (`0xCC69E` yellow_dim,
+`0xCC70D` darkblue, `0xCC70F` blue, `0xCC764` blue_dim) and 711 (`0xCC70A` orange) — have none in
+either capture**, although the hero is inside the interior. — H (two captures, two saves)
+
 ### 1.2 LightAnimation — hash `0xbd5349f7`, schema `FUN_00662ee0`, stride 0x2c
 
 Descriptor base `0x017be488`, `CopyFromStream = PTR_00bc1270`, stride `0x2c`, seed `0x9e3779b9`.

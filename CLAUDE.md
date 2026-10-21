@@ -347,7 +347,9 @@ bytecode compiler).
 
 **RE / probe / diagnostics:** `mercs2_probe` (the only home for probe/mint/forge/verify bins),
 `loadprobe`, `mercs2_reassemble`, `mercs2_bridge` (live TCP REPL into the running game via
-Wally's lua-bridge ASI, `127.0.0.1:27050`), `mercs2_poc`.
+Wally's lua-bridge ASI, `127.0.0.1:27050`), `mercs2_poc`, `mercs2_autoplay` (runs the shipped Lua
+headless on the engine's script host against real `vz.wad` data and records every call as NDJSON —
+the execution-based alternative to grepping the decompiled Lua).
 
 **Mod runtime:** `mercs2_mod_runtime` builds `m2-sdk.dll`, the one runtime every mod shares in the
 game process (MinHook, the log stream, load triggers, the shader registry). 32-bit Windows only, so it

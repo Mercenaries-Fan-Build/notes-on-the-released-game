@@ -278,6 +278,21 @@ ownerBackPtr@+0x18}`. The back-pointer is decisive: for `RuntimeSceneObject`, bo
 | `+0x74` | zeroed by the ctor | every ctor | H |
 | `+0x7C` | shared **zero record** returned on miss | `FUN_00423DC0` `lea eax,[esi+0x7c]` | H |
 
+> ⚠ **Measured in-world, 2026-10-21** (`mercs2_probe dump-containers`, v1.0 PMC captures
+> `ada55455_disc/pmc` and `23fe7f38_cracked-cruise/pmc` in `game-files/memory-dumps/`):
+> **`+0x04 == 0xFFFF` holds only in the boot-time image.** In the in-world captures 81 of the 102
+> `0x80`-class containers carry other values there (e.g. `ModelName` `0x006F`, `Path` `0x00D2`) —
+> consistent with `+0x04` being the non-negative i16 the §1.4 cross-registration hook tests. Use the
+> name accessor plus the two owner back-pointers (`+0x4C == +0x68 == container`) as the fingerprint;
+> with it all 102 + 232 containers are found, and every `0x80` walk of index 1 (`+0x48` bucket → dense
+> index, `-1` empty; `+0x44[index]` = owner GUID) returns exactly the live count at `+0x18`. — H
+>
+> **The `0x50` class's `+0x34` table holds the key itself, and the record sits at its bucket**
+> (`FUN_0064A090` compares `[+0x34][bucket]` to the probe argument; `FUN_005857E0` addresses the
+> record by that bucket). In the captures those keys are GUIDs: `RuntimeHealth` is keyed by
+> `0x4000556B` and by layer entity keys (`0x000C7435`); `Health` and the `Light_small_*` templates by
+> negative template GUIDs. — H
+
 > **This collapses four rows of the old table into one repeated structure.** The old map listed
 > `+0x44` "dense owner-GUID array", `+0x48` "bucket → packed record key", `+0x60` "dense
 > secondary-key array" and `+0x64` "hash bucket table" as four ad-hoc arrays at **M**. Every offset
@@ -798,6 +813,12 @@ docs that had copied it (`mercs2-ecs/07_gameplay_state_health_mission.md`, `merc
 `ecs_reflection_registry_code_map.md`, `state_machine_destruction_code_map.md`,
 `weapons_combat_code_map.md`). Verified still corrected as of this pass.
 
+- **Live values, 2026-10-21** (`mercs2_probe dump-pool <capture> RuntimeHealth` / `Health`, v1.0 PMC
+  captures, Jen and Mattias saves): `RuntimeHealth` holds 32–33 records, `max == current` for all
+  (100 ×29, 200 ×3, plus one 120 in the Mattias capture), `+0x08 = 0`. The authored **`Health`**
+  container (`0x017BBF58`, stride 8) holds **2727 records, every one keyed by a negative template
+  GUID** — HP is per-template data — with **48 distinct values** (100 ×1006, 300 ×202, 0 ×201,
+  25 ×171, 50 ×162, 200 ×138, …) and byte `+0x04` ∈ {0, 1, 2, 3, 4}. Identical in both captures. — H
 - **The record is 12 bytes, so `+0x08` is a third field no document identifies.** That is what
   remains open, not the ordering — §8.6.
 - The **full-health→damaged edge fires a dedicated notify**, `FUN_00665BE0` (the map previously

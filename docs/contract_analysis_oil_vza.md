@@ -228,7 +228,7 @@ Opening tutorial contract; largest VZA script (49 KB).
 |--------|-----------|---------------------------|-------|
 | **oiljob004** | `MrxTaskJobDestroyType` | Milestone1–4 | Minimal (438 B); destroy-type template |
 | **oiljob008** | `MrxTaskJobDestroySet` | Milestone1–5 | Heavy VZ layer staging for multi-site destroys |
-| **oiljob011** | `MrxTaskJobVerifySet` | Milestone1–10 | 5 verify targets + staging/pristine per target; unlocked alongside OilCon002 from OilCon021 path |
+| **oiljob011** | `MrxTaskJobVerifySet` | Milestone1–10 | 5 verify targets + staging/pristine per target; unlocked with OilJob004/OilJob008 by the `OilCon002` flow rule (`wifmissionflow.lua:703-705`) |
 
 ---
 
@@ -308,15 +308,22 @@ Scripts with **identical** string pools PC↔Xbox: oilcon050, oilcon051, oilcon0
 
 ## Quick Reference: Oil Mission Unlock DAG (from wifmissionflow)
 
+Read from the rule bodies in `docs/mercs2-luacd/src/vz/wifmissionflow.lua`:
+
 ```
 Start → VzaCon001
   → PmcCon001
-    → OilCon020, OilCon021
-      → OilCon002 + OilJob011
-    → OilCon050
-      → OilCon001 + OilCon051
-        → (with GurCon001) → PmcCon002
-      → OilCon052 (parallel outpost chain via OilStarter2)
+    → OilCon020
+      → OilCon021
+        → OilCon002
+          → OilCon050 (outpost)
+            → OilCon001 ─ (with GurCon001) → PmcCon002
+            → OilCon051 (outpost)
+              → OilCon003, OilCon052 (outpost)
+                → OilCon005 (only without ChiCon002)
+          → OilJob004, OilJob008, OilJob011
 ```
 
-See [`vanilla_mission_lifecycle_analysis.md`](vanilla_mission_lifecycle_analysis.md) §3.4 for full binding graph.
+See [`reverse_engineer/mission_progression_graph.md`](reverse_engineer/mission_progression_graph.md)
+§2 for the full graph and [`vanilla_mission_lifecycle_analysis.md`](vanilla_mission_lifecycle_analysis.md)
+§3.4 for the binding list.

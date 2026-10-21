@@ -220,6 +220,27 @@ of what currently fails, not a plan — plans live under `.claude/plans/`.
    Xbox DOH (and the deployed `output/data/Audios/*.pws` matches). The PS3
    route produces a smaller WAD with worse coverage; it is not currently a
    drop-in replacement for the Xbox-sourced overlay.
+7. **Quartermaster lifecycle hooks do not cover DLC01 levels.** The QM hook
+   catalogue (2026-10-19 session) found, from the decompiled Lua:
+   - The engine resolves the level master script by name at call time
+     (`DAT_01175B78`, PROVEN), so a DLC01 level calls `dlc01`'s
+     `Init`/`LoadSingleton`/`ResetSingleton`/`_StartPlayerVisibleGameplay`
+     (`dlc01.lua:95`, `:384`, `:267`, `:680`), not `vz`'s. Every
+     master-script hook needs a `dlc01` copy.
+   - The DLC hub has its own `_GlobalEnter`/`_GlobalExit`
+     (`dlc01_missionhub.lua:1929-1963`) and never calls
+     `MrxHq.GlobalEnter`, so an `hq.enter` hook in `mrxhq` stays silent there;
+     `MrxSound.EnterInterior`/`ExitInterior` fire in both.
+   - `dlc01missionflow` replaces `UnlockMission` and `LoadSingleton`
+     (`dlc01missionflow.lua:476`, `:519`).
+   - The DLC decompiles contain `goto` (Lua 5.2+; the game VM is 5.1.2), so
+     `dlc01.lua` and the replacement modules do not recompile as they stand,
+     and the cleaned `src/dlc01/dlc01.lua:428-431` drops an assignment that
+     `raw/dlc01/dlc01.lua:889-893` keeps (an inverted boot gate). Hook work has
+     to start from `raw/`.
+   - Which block serves the `dlc01_*` replacement modules, and whether resident
+     `vz` patches reach DLC01 levels, are open; a live DLC01 load is needed and
+     DLC01 does not load yet.
 
 ## Artifacts
 

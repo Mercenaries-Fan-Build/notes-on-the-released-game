@@ -178,7 +178,11 @@ Four load-bearing facts fall out of this body:
 2. **The in-memory blob is big-endian** (`ntohl` on every header word) — an Xbox-360 heritage
    artifact: the singleton is serialized in network/BE order even on PC. Header `{u32 ver==1, u32 ?,
    u32 size}`. This is the **engine SaveData blob**, distinct from the little-endian on-disk
-   `.profile` header written by `saveProfile` (§4) — there are two serialization layers.
+   `.profile` header written by `saveProfile` (§4) — there are two serialization layers. On disk the
+   blob header sits at `.profile@0x45C`: `{ver = 1, compressed length, inflated Lua length}`, all
+   big-endian, matching the zlib stream at `0x468` exactly in all 8 vendored fixtures
+   (`mercs2_formats::save_write` test `every_retail_save_records_its_payload_lengths`). That the
+   in-memory word[1] is the same compressed length is INFERRED from the on-disk match.
 3. **The payload is Lua source, not bytecode** — it is prefixed literally `"return "`
    (`s_return_00bb464c`), so the deserialized text is `return { … }`, exactly what
    `save.rs::decompress_lua()` yields (24.8K–54K of readable Lua `SaveSingleton` text). The engine
@@ -348,9 +352,10 @@ the six retail saves: `const=4363 / vary=9041` bytes.
 | `0x24` | u32 | `timestamp` | FACT | Unix timestamp (2008 devsave `0x48F2C77C` … 2026 `0x6A45586A`). |
 | `0x2C` | 16B | `active_contract` | FACT | NUL-padded ASCII mission id (`PmcCon001`, `OilCon003`, `PmcJob001`). |
 | `0x4C` | u32 | `flags_0x4C` | FACT | Raw dword; **byte `@0x4D` = hero** (1 Mattias / 2 Chris / 3 Jen = `Get/SetProfileCharacter`, runtime obj `+0x61`). |
-| `0x4F` | u8 | `upgrade_index` | INFERRED (strong) | Hero UPGRADE tier 0..3 (`Get/SetProfileUpgrade`, runtime obj `+0x62`) — drives the spawn template / the LOOK. 0 fresh, 3 endgame. |
+| `0x4E` | u8 | upgrade tier | FACT (live, 2026-10-21) | `Get/SetProfileUpgrade`, runtime obj `+0x62`. **0 in every fixture, including the 98 %-complete end-game save.** |
+| `0x4F` | u8 | **costume** | FACT (live, 2026-10-21) | `Get/SetProfileCostume`, runtime obj `+0x63`: 1-based index into `mrxplayer.lua` `_tCharacterMap[hero].models` (0 = none). The end-game `Mattias Nilsson_6A0E523C` stores 3 = `pmc_hum_mattias_v4` "Jacket". Proven by `game-files/memory-dumps/updated-chris-exports/20261021_mattias-nilson-jacket-skin.dmp` (that save loaded: cash/fuel match the fixture; singleton `+0x62` = 0, `+0x63` = 3) — `mercs2_probe` test `dump::tests::costume_is_singleton_0x63_and_header_0x4f`. Every header field with a known singleton offset sits at singleton offset − `0x14` (cash `+0x2C`↔`0x18`, fuel `+0x30`↔`0x1C`, hero `+0x61`↔`0x4D`). An earlier revision called `0x4F` the upgrade tier; that was wrong. |
 | `0x20A` | UTF-16z | `save_name` | FACT | Slot label (`auto_634304EA`), NOT the display name. |
-| `0x24A` | u8 | `unlocked_costumes` | FACT | Unlocked-costume count (1 fresh, 5 = all base outfits); feeds `Player.GetAvailableCostumes`. Runtime obj `+0x63` = `Get/SetProfileCostume`. |
+| `0x24A` | u8 | `unlocked_costumes` | FACT | Unlocked-costume count (1 fresh, 5 = all base outfits); feeds `Player.GetAvailableCostumes`. Runtime obj `+0x25E` (`0x24A` + `0x14`; `player_code_map.md` §4) — not `+0x63`, which is the costume itself (`0x4F`). |
 | `0x2F8` | u16 | `fuel_capacity` | INFERRED | Max fuel; tracks/exceeds `fuel`. |
 | `0x462`–`0x467` | 2×u16 | pre-zlib unknown | open | Not lengths; meaning unresolved. |
 | `0x468` | — | zlib stream | FACT | CMF `0x78`; inflates to the `return { … }` Lua `SaveSingleton` text. |
@@ -497,8 +502,6 @@ is the Lua↔engine bridge.
   `0x7BC190/1A0/6C4/628`) are **registration/binding-table anchored, not decompiled bodies** — treat as
   "where the table entry lives", confirm-live for the real prologue. (Consistent with [[shell-menu-and-save-browser]]:
   binders missing from the ghidra export are binding-table-only refs.)
-- **`.profile@0x462–0x467`** (two u16 immediately before the zlib) — not lengths; meaning unresolved.
-- **The BE `SaveData` blob header word[1]** (between `ver==1` and `size`) — purpose unread.
 - **The load-side corruption compare** — `hasCorruptedSave` is *raised* by `FUN_00614080`, but the
   byte-level check that sets it (hash/version mismatch in `loadProfile`) is unlocated until §3.2 lands.
 - **Xbox save code bodies** — as everywhere in the Jul-08 build, the `saveProfile`/`loadProfile`/…
