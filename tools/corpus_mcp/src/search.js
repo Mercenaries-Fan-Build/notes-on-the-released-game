@@ -1,8 +1,9 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import { openTable, esc } from './db.js';
+import { openTable, esc, checkColumns } from './db.js';
 import { embedQuery } from './embed.js';
 import { normAddr } from './chunk.js';
-import { sourceFreshness } from './sources.js';
+import { sourceFreshness, ghidraExportState } from './sources.js';
 import { readMeta, standingWeight, STATUS } from './knowledge.js';
 import { allArtifacts, resolveInheritChain, analyzeFile } from './lua_analyzer.js';
 
@@ -13,13 +14,35 @@ function sourceFilter(sources, pathPrefix) {
   return parts.join(' AND ') || null;
 }
 
+let columnsChecked = false; // a table with an older row shape fails here, not as a missing-column error mid-query
+
 async function requireTable() {
   const table = await openTable();
   if (!table) throw new Error('corpus table does not exist yet — run the ingester first (npm run ingest in tools/corpus_mcp)');
+  if (!columnsChecked) {
+    await checkColumns(table);
+    columnsChecked = true;
+  }
   return table;
 }
 
-const RESULT_COLS = ['id', 'source', 'path', 'title', 'chunk', 'text', 'fn_addr', 'meta', 'mtime'];
+const RESULT_COLS = ['id', 'source', 'path', 'title', 'chunk', 'text', 'image_id', 'va', 'meta', 'mtime'];
+
+/** SQL predicate: `col` (a space-delimited token list) holds exactly the token `tok` — not a
+ *  substring of another token (`ps3-v100` must not match `ps3-v100-jp`). */
+export function tokenPredicate(col, tok) {
+  if (!/^[0-9A-Za-z.:-]+$/.test(tok)) {
+    throw new Error(`token '${tok}' has characters a LIKE pattern cannot match literally (allowed: letters, digits, '.', ':', '-')`);
+  }
+  return `(${col} = '${tok}' OR ${col} LIKE '${tok} %' OR ${col} LIKE '% ${tok}' OR ${col} LIKE '% ${tok} %')`;
+}
+
+/** Parse FUN_00478120 / 0x478120 / 00478120 into the normalized 8-hex form. */
+export function parseAddr(ref) {
+  const m = String(ref).match(/([0-9a-fA-F]{5,8})\s*$/);
+  if (!m) throw new Error(`could not parse an address out of '${ref}' — pass FUN_00478120, 0x478120, or a hex address`);
+  return normAddr(m[1]);
+}
 
 /**
  * Per-source authority, applied as a multiplier on the fusion score.
@@ -110,7 +133,8 @@ function pick(r) {
     unreviewed: UNREVIEWED.has(r.source) || undefined,
     // Gitignored by intent = the author has not committed to this finding yet.
     draft: m.untracked || undefined,
-    fn_addr: r.fn_addr || undefined, text: r.text,
+    // '' on every non-ghidra row (prose is not attributed to an image).
+    image_id: r.image_id, va: r.va || undefined, text: r.text,
   };
 }
 
@@ -127,13 +151,20 @@ export async function status({ force = false } = {}) {
   const table = await openTable();
   if (!table) return { indexed: false, stale: true, reason: 'corpus table does not exist — run npm run ingest' };
 
-  const rows = await table.query().select(['source', 'mtime']).toArray();
+  await requireTable();
+  const rows = await table.query().select(['source', 'mtime', 'image_id']).toArray();
   const indexedNewest = {};
   const counts = {};
+  const imageChunks = {};  // ghidra code image -> indexed chunks
+  const imageNewest = {};  // ghidra code image -> newest indexed mtime (its export files' mtime)
   for (const r of rows) {
     counts[r.source] = (counts[r.source] ?? 0) + 1;
     const m = Number(r.mtime) || 0;
     if (m > (indexedNewest[r.source] ?? 0)) indexedNewest[r.source] = m;
+    if (r.source === 'ghidra') {
+      imageChunks[r.image_id] = (imageChunks[r.image_id] ?? 0) + 1;
+      if (m > (imageNewest[r.image_id] ?? 0)) imageNewest[r.image_id] = m;
+    }
   }
 
   const disk = sourceFreshness(indexedNewest);
@@ -150,9 +181,28 @@ export async function status({ force = false } = {}) {
       entry.changedSinceIngest = d.newerThanIndex;
       if (d.newerThanIndex > 0) { entry.examples = d.examples; staleTotal += d.newerThanIndex; }
     } else {
-      entry.changedSinceIngest = null; // special walker (conversations/commits/ghidra) — not stat-able cheaply
+      entry.changedSinceIngest = null; // special walker (conversations/commits) — not stat-able cheaply; ghidra is filled in below
     }
     sources[name] = entry;
+  }
+
+  // Ghidra, per code image: indexed (and whether its export files changed since), exported but
+  // not indexed, and not exported at all (with the variants that share its code).
+  const gx = ghidraExportState();
+  const exported = new Map(gx.pairs.map((p) => [p.image.id, p]));
+  const images = { indexed: {}, exportedNotIndexed: [], changedSinceIngest: [], notExported: gx.notExported };
+  for (const [id, chunks] of Object.entries(imageChunks)) images.indexed[id] = chunks;
+  for (const [id, p] of exported) {
+    if (!(id in imageChunks)) { images.exportedNotIndexed.push(id); continue; }
+    const filesAt = Math.max(fs.statSync(p.files.functions).mtimeMs, fs.statSync(p.files.annotate).mtimeMs);
+    if (filesAt > imageNewest[id] + 1000) images.changedSinceIngest.push(id);
+  }
+  const ghidraStale = images.exportedNotIndexed.length + images.changedSinceIngest.length;
+  sources.ghidra.changedSinceIngest = ghidraStale;
+  sources.ghidra.images = images;
+  if (ghidraStale) {
+    sources.ghidra.examples = [...images.exportedNotIndexed, ...images.changedSinceIngest];
+    staleTotal += ghidraStale;
   }
 
   const value = {
@@ -170,20 +220,23 @@ export async function status({ force = false } = {}) {
 export function clearFreshness() { freshCache = { at: 0, value: null }; }
 
 /** Exact cross-reference: every chunk in the corpus mentioning an address,
- *  regardless of spelling (FUN_00478120, 0x478120, 0x00478120...). */
-export async function xref({ ref, sources, limit = 40 }) {
+ *  regardless of spelling (FUN_00478120, 0x478120, 0x00478120...). Matches the normalized
+ *  address as a whole token of the `addrs` column. With `image`, only the ghidra rows of that
+ *  image (a variant resolves to its code image's rows) — prose rows carry no image. */
+export async function xref({ ref, image, sources, limit = 40 }) {
   const table = await requireTable();
-  const m = String(ref).match(/([0-9a-fA-F]{5,8})\s*$/);
-  if (!m) throw new Error(`could not parse an address out of '${ref}' — pass FUN_00478120, 0x478120, or a hex address`);
-  const addr = normAddr(m[1]);
-  let q = table.query().where(
-    [`addrs LIKE '%${addr}%'`, sourceFilter(sources, null)].filter(Boolean).join(' AND '),
-  ).select(RESULT_COLS).limit(limit);
+  const addr = parseAddr(ref);
+  const where = [tokenPredicate('addrs', addr), sourceFilter(sources, null)];
+  if (image) {
+    await resolveImage(table, image);
+    where.push(`source = 'ghidra'`, tokenPredicate('images', image));
+  }
+  const q = table.query().where(where.filter(Boolean).join(' AND ')).select(RESULT_COLS).limit(limit);
   const rows = await q.toArray();
   // Group by source for a readable coverage picture.
   const groups = {};
   for (const r of rows) (groups[r.source] ??= []).push(pick(r));
-  return { addr: `0x${addr}`, mentions: rows.length, bySource: groups };
+  return { addr: `0x${addr}`, image: image || undefined, mentions: rows.length, bySource: groups };
 }
 
 /** All chunks of one document (optionally a window around one chunk). */
@@ -198,8 +251,9 @@ export async function getDoc({ path, chunk, context = 1 }) {
 }
 
 // In-process caches for the graph/coverage scans (cleared after ingest).
-let fnCache = null;       // fn_addr -> {name, size, callers[], callees[]}
-let mentionCache = null;  // fn_addr -> Set(source)
+let fnCache = new Map();    // code image_id -> Map(8-hex va -> {name, size, callers[], callees[]})
+let imageCache = new Map(); // any image_id (code image or variant) -> its code image_id
+let mentionCache = null;    // 8-hex addr -> Set(source)
 // Lua static-analysis caches. The chunk-0 artifact rows go into luaClassCache / luaDataCache
 // keyed by title; the per-record rows go into luaRecordCache keyed by `${module}.${table}`.
 // All three load lazily on first query, from the LanceDB corpus if the lua_api source has been
@@ -213,33 +267,68 @@ const LUA_ROOTS = [
 ];
 
 export function clearCaches() {
-  fnCache = null;
+  fnCache = new Map();
+  imageCache = new Map();
   mentionCache = null;
+  columnsChecked = false;
   luaClassCache = null;
   luaDataCache = null;
   luaRecordCache = null;
   clearFreshness(); // an in-session ingest changes what "stale" means
 }
 
-/** All decompiled functions with their call-graph edges (chunk 0 carries identity). */
-async function loadFns(table) {
-  if (fnCache) return fnCache;
+/** The chunk-0 `meta` of a ghidra row; a row that does not carry it is a broken index. */
+function ghidraMeta(r) {
+  let meta;
+  try { meta = JSON.parse(r.meta); } catch (e) {
+    throw new Error(`ghidra row ${r.path} has unparseable meta (${e.message}) — re-ingest it with npm run ingest -- --sources ghidra --full`);
+  }
+  for (const k of ['names', 'size', 'callers', 'callees', 'translations', 'graph_images', 'untranslatable_images']) {
+    if (!(k in meta)) throw new Error(`ghidra row ${r.path} meta has no '${k}' — re-ingest it with npm run ingest -- --sources ghidra --full`);
+  }
+  return meta;
+}
+
+/** Map an image id (a code image or one of its variants) to the code image whose rows hold its
+ *  functions. An image with no ghidra rows is a hard failure listing the indexed images. */
+async function resolveImage(table, image) {
+  if (!image) throw new Error('`image` is required (an images.tsv image_id)');
+  if (imageCache.has(image)) return imageCache.get(image);
   const rows = await table.query()
-    .where(`source = 'ghidra' AND chunk = 0`)
-    .select(['fn_addr', 'path', 'meta'])
+    .where(`source = 'ghidra' AND chunk = 0 AND ${tokenPredicate('images', image)}`)
+    .select(['image_id'])
+    .limit(1)
     .toArray();
-  fnCache = new Map();
+  if (!rows.length) {
+    const all = await table.query().where(`source = 'ghidra' AND chunk = 0`).select(['images']).toArray();
+    const known = [...new Set(all.flatMap((r) => r.images.split(' ')))].sort();
+    throw new Error(`image '${image}' has no ghidra rows in the index (indexed images: ${known.join(', ') || 'none — is the ghidra source ingested?'})`);
+  }
+  imageCache.set(image, rows[0].image_id);
+  return rows[0].image_id;
+}
+
+/** One image's functions with their direct call-graph edges (chunk 0 carries identity). Only
+ *  VA-to-function edges are graph edges; imports, indirect and unresolved callees stay in meta. */
+async function loadFns(table, codeImage) {
+  if (fnCache.has(codeImage)) return fnCache.get(codeImage);
+  const rows = await table.query()
+    .where(`source = 'ghidra' AND chunk = 0 AND image_id = '${esc(codeImage)}'`)
+    .select(['va', 'path', 'meta'])
+    .toArray();
+  const fns = new Map();
+  const isVa = (s) => /^0x[0-9a-f]{8}$/.test(s);
   for (const r of rows) {
-    let meta = {};
-    try { meta = JSON.parse(r.meta || '{}'); } catch { }
-    fnCache.set(r.fn_addr, {
-      name: r.path.replace('ghidra/', ''),
-      size: meta.size ?? 0,
-      callers: meta.callers ?? [],
-      callees: meta.callees ?? [],
+    const meta = ghidraMeta(r);
+    fns.set(r.va.slice(2), {
+      name: [...new Set(meta.names.map((x) => x.name))].join(' / '),
+      size: meta.size,
+      callers: [...new Set(meta.callers.filter((c) => c.function !== null).map((c) => c.function.slice(2)))],
+      callees: [...new Set(meta.callees.filter(isVa).map((c) => c.slice(2)))],
     });
   }
-  return fnCache;
+  fnCache.set(codeImage, fns);
+  return fns;
 }
 
 /** Every address mentioned outside the decompilation itself -> which sources mention it. */
@@ -259,10 +348,13 @@ async function loadMentions(table) {
   return mentionCache;
 }
 
-/** Which decompiled functions are / are not referenced anywhere else in the corpus. */
-export async function coverage({ top = 30, sort = 'size', prefix } = {}) {
+/** Which of one image's functions are / are not referenced anywhere else in the corpus. A mention
+ *  is an address token in a non-ghidra row; prose carries no image, so it counts for every image
+ *  that has a function at that VA. */
+export async function coverage({ image, top = 30, sort = 'size', prefix } = {}) {
   const table = await requireTable();
-  const fns = await loadFns(table);
+  const codeImage = await resolveImage(table, image);
+  const fns = await loadFns(table, codeImage);
   const mentioned = await loadMentions(table);
   let covered = 0;
   const uncovered = [];
@@ -279,6 +371,8 @@ export async function coverage({ top = 30, sort = 'size', prefix } = {}) {
   coveredList.sort((a, b) => b[key] - a[key]);
   const total = covered + uncovered.length;
   return {
+    image,
+    codeImage,
     totalFunctions: total,
     covered,
     coveredPct: total ? Number(((covered / total) * 100).toFixed(2)) : 0,
@@ -291,16 +385,15 @@ function normPrefix(p) {
   return p.replace(/^0x/i, '').toLowerCase();
 }
 
-/** Depth-limited BFS over the decompilation call graph, each node annotated
+/** Depth-limited BFS over one image's call graph, each node annotated
  *  with whether (and where) the rest of the corpus documents it. */
-export async function callgraph({ ref, direction = 'both', depth = 2, maxNodes = 150 }) {
+export async function callgraph({ image, ref, direction = 'both', depth = 2, maxNodes = 150 }) {
   const table = await requireTable();
-  const m = String(ref).match(/([0-9a-fA-F]{5,8})\s*$/);
-  if (!m) throw new Error(`could not parse an address out of '${ref}'`);
-  const root = normAddr(m[1]);
-  const fns = await loadFns(table);
+  const root = parseAddr(ref);
+  const codeImage = await resolveImage(table, image);
+  const fns = await loadFns(table, codeImage);
   const mentioned = await loadMentions(table);
-  if (!fns.has(root)) throw new Error(`0x${root} is not a decompiled function in the index (is the ghidra source ingested?)`);
+  if (!fns.has(root)) throw new Error(`0x${root} is not a decompiled function of image ${image}${codeImage !== image ? ` (code image ${codeImage})` : ''} in the index`);
 
   const node = (addr, dist) => {
     const f = fns.get(addr);
@@ -340,12 +433,52 @@ export async function callgraph({ ref, direction = 'both', depth = 2, maxNodes =
     frontier = next;
   }
   return {
+    image,
+    codeImage,
     root: `0x${root}`,
     direction,
     depth,
     truncated,
     nodes: [...seen.values()].sort((a, b) => a.dist - b.dist || b.size - a.size),
     edges: [...new Set(edges)],
+  };
+}
+
+/** The `exemap annotate` names and cross-image translations of one function, from its indexed
+ *  chunk-0 row. `to` keeps only translations into that image (variants resolve to code images). */
+export async function translate({ image, va, to } = {}) {
+  if (va === undefined || va === null || va === '') throw new Error('`va` is required');
+  const table = await requireTable();
+  const addr = parseAddr(va);
+  const codeImage = await resolveImage(table, image);
+  const rows = await table.query()
+    .where(`source = 'ghidra' AND chunk = 0 AND image_id = '${esc(codeImage)}' AND va = '0x${addr}'`)
+    .select(['path', 'title', 'meta'])
+    .limit(2)
+    .toArray();
+  if (!rows.length) throw new Error(`0x${addr} is not a function of image ${image}${codeImage !== image ? ` (code image ${codeImage})` : ''} in the index`);
+  if (rows.length > 1) throw new Error(`0x${addr} has ${rows.length} chunk-0 rows in image ${codeImage} — the index is corrupt; re-ingest it with npm run ingest -- --sources ghidra --full`);
+  const meta = ghidraMeta(rows[0]);
+  let translations = meta.translations;
+  let toCode;
+  if (to) {
+    toCode = await resolveImage(table, to);
+    const keep = [];
+    for (const t of translations) if (await resolveImage(table, t.image) === toCode) keep.push(t);
+    translations = keep;
+  }
+  return {
+    image,
+    codeImage,
+    va: `0x${addr}`,
+    path: rows[0].path,
+    title: rows[0].title,
+    names: meta.names,
+    to: to || undefined,
+    toCodeImage: toCode,
+    translations,
+    graph_images: meta.graph_images,
+    untranslatable_images: meta.untranslatable_images,
   };
 }
 
