@@ -10,19 +10,17 @@
     which analyzer phase is running, when it started, and when it finished.
 
   How to use (opt-in — default launches are unaffected):
-    GHIDRA_LOG_CONFIG=tools/ghidra_x360/log4j2-verbose.xml \
-      bash scripts/ghidra_analyze_ps3_retail.sh
+    JAVA_TOOL_OPTIONS="-Dlog4j.configurationFile=$PWD/tools/ghidra_x360/log4j2-verbose.xml" \
+      <analyzeHeadless> ... 2>&1 | tee <run.log>
 
-    The analyze shell scripts route GHIDRA_LOG_CONFIG into
-    JAVA_TOOL_OPTIONS=-Dlog4j.configurationFile=..., which the JVM picks up
-    before Ghidra bootstraps its own logging.
+    The JVM picks up JAVA_TOOL_OPTIONS before Ghidra bootstraps its own logging.
 
   Caveats:
     * Promoting a logger to DEBUG only surfaces lines Ghidra's own code actually
       LOGS at DEBUG. Not every method emits. The loggers below are the ones
       documented or observed to carry per-phase breadcrumbs; a few in this list
       may stay quiet on a given run — that's not a config error.
-    * The appender writes to SYSTEM_OUT so the script's `tee $RUN_LOG` captures
+    * The appender writes to SYSTEM_OUT so a `tee` of the run captures
       everything.
     * This is a FULL log4j2 config, not a fragment — it defines the root
       logger too, so Ghidra's default config isn't layered under it. Baseline
