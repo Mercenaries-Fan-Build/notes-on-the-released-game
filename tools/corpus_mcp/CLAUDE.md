@@ -12,20 +12,24 @@ Run from `tools/corpus_mcp/`:
 npm install                                   # deps: transformers.js, lancedb, mcp sdk, zod
 npm run ingest                                # (re)index all sources; incremental via hash-skip
 node src/ingest.js --sources doc,memory,tool  # only some sources
-node src/ingest.js --full                     # ignore hash cache, re-embed everything
+node src/ingest.js --full                     # ignore hash cache, re-embed everything (same table)
 
 node src/query.js search "hibernation streaming distances" -k 5   # CLI smoke test
-node src/query.js xref FUN_00478120
-node src/query.js callgraph 0x478120 --dir callees --depth 2
-node src/query.js coverage --top 40 --sort callers
+node src/query.js xref FUN_00478120 [--image pc-v11]
+node src/query.js callgraph 0x478120 --image pc-v11 --dir callees --depth 2
+node src/query.js coverage --image pc-v11 --top 40 --sort callers
+node src/query.js translate pc-v11 0x478120 [--to x360-retail]
+node src/query.js ghidra pc-v10 decompile 0x478120   # live Ghidra (starts a bridge, stops it on exit)
 node src/query.js stats
 
 node src/server.js                            # the MCP server (stdio); normally launched via .mcp.json
 
 npm test                                      # full suite (node:test); includes the e2e pipeline
 npm run test:unit                             # pure-function + config tests only (no model needed)
-CORPUS_SKIP_INTEGRATION=1 npm test            # skip the embedding-backed e2e test
+CORPUS_SKIP_INTEGRATION=1 npm test            # opt out of the embedding-backed e2e test
 ```
+
+The e2e test (`test/pipeline.test.js`) fails — it does not skip — when its ingest fails, including when the embedding model cannot be loaded. Its ghidra input is the committed fixture pair set in `test/fixtures/ghidra/` (two images, a variant, a translation, a duplicate name, a decompile failure).
 
 No linter, no build step — pure ESM Node (`"type": "module"`), run directly. Tests use the built-in `node:test` runner (no dependency); files live in `test/*.test.js`.
 
@@ -33,7 +37,7 @@ There is no way to add or verify data other than `ingest`; if search/xref return
 
 ## Architecture
 
-One LanceDB table named `corpus` at `../../storage/corpus_lancedb` (repo-root-relative, gitignored). Everything is a **row = one chunk**; a **document = one ingestion unit** (a file, a conversation, a commit, or a single decompiled function) that expands into N chunk rows.
+One LanceDB table named `corpus` at `../../storage/corpus_lancedb` (repo-root-relative, gitignored). Everything is a **row = one chunk**; a **document = one ingestion unit** (a file, a conversation, a commit, or one function of one executable image) that expands into N chunk rows.
 
 Data flow, one file per stage:
 
@@ -43,26 +47,27 @@ config.js SOURCES  →  sources.js allDocs()  →  ingest.js  →  db.js (LanceD
                                                 embed, upsert)                    graph, coverage)
 ```
 
-- **`config.js`** — the single source of truth for what exists: `SOURCES` (the 8 edges and how each is walked), paths (`DB_PATH`, `TRANSCRIPTS_DIR` computed from the Claude-Code project-dir encoding of the repo root), the embedding model, and chunk sizes. Adding a source or changing an exclude list happens here. Every scalar is overridable via a `CORPUS_*` env var (see `.env.example`); `env.js` loads `tools/corpus_mcp/.env` at import, but a real process env var always wins over the file. Point `CORPUS_REPO_ROOT` at another tree to reuse the whole tool on a different project.
-- **`sources.js`** — one generator per source shape: `fileDocs` (doc/mod/tool/project trees), `memoryDocs`, `conversationDocs`, `commitDocs`, `ghidraDocs`, `luaApiDocs`. `allDocs(names)` dispatches. Each yields the uniform doc shape `{ source, path, title, mtime, fileHash, chunks[], fnAddr?, meta? }`. `luaApiDocs` runs the AST analyzer in `lua_analyzer.js` and stuffs structured ClassAPI/DataAPI records into `meta`, mirroring how `ghidraDocs` stuffs call-graph edges in — same chunk-0 convention, same in-process cache in `search.js`.
+- **`config.js`** — the single source of truth for what exists: `SOURCES` (the 8 edges and how each is walked), paths (`DB_PATH`, `GHIDRA_EXPORTS`, `GHIDRA_IMAGES`, `TRANSCRIPTS_DIR` computed from the Claude-Code project-dir encoding of the repo root), the embedding model, and chunk sizes. Adding a source or changing an exclude list happens here. Every scalar is overridable via a `CORPUS_*` env var (see `.env.example`); `env.js` loads `tools/corpus_mcp/.env` at import, but a real process env var always wins over the file. Point `CORPUS_REPO_ROOT` at another tree to reuse the whole tool on a different project.
+- **`sources.js`** — one generator per source shape: `fileDocs` (doc/mod/tool/project trees), `memoryDocs`, `conversationDocs`, `commitDocs`, `ghidraDocs`, `luaApiDocs`. `allDocs(names)` dispatches. Each yields the uniform doc shape `{ source, path, title, mtime, fileHash, chunks[], meta?, imageId?, imageSha256?, va?, images? }` (the image fields from `ghidraDocs` only). `verifyGhidraExports` checks the whole export set against `images.tsv` before anything is yielded; `ingest.js` calls it before touching the table and hands the result to `ghidraDocs`. `luaApiDocs` runs the AST analyzer in `lua_analyzer.js` and stuffs structured ClassAPI/DataAPI records into `meta`, mirroring how `ghidraDocs` stuffs call-graph edges in — same chunk-0 convention, same in-process cache in `search.js`.
 - **`emmylua_emit.js`** — walks the same artifact set as `luaApiDocs` and writes one `---@class` stub per class + per data module into `tools/emmylua_stubs/mercs2/`, plus a `.luarc.json` at the repo root wiring sumneko at the stub libraries. Hungarian-prefix typed (`b*/n*/s*/t*/v*/f*/u*/o*`). Globals default to every artifact name + every imported-module name discovered in the walk.
 - **`lsp_server.js`** — an LSP endpoint (stdio) over the same index. Pure handlers (`symbolAt`, `hoverFor`, `definitionFor`, `referencesFor`, `workspaceSymbol`, `diagnoseBuffer`) are exported so tests drive them without the transport. The server is entered only when run as the entrypoint — importing the file from a test does not start a listener.
 - **`chunk.js`** — chunking + address handling, shared by ingest and search. Three chunkers picked by extension: `chunkMarkdown` (prefixes each chunk with its nearest heading), `chunkCode` (line-window with overlap), `chunkText` (paragraph-boundary). `normAddr`/`extractAddrs` power cross-referencing (see below).
-- **`ingest.js`** — the incremental engine. `search.js` — all query logic. `server.js` — thin MCP wrapper (each tool = try/catch → `search.js` fn → JSON). `query.js` — the same functions behind a CLI. `db.js` — LanceDB connection + the `esc()` SQL-quote helper.
+- **`ingest.js`** — the incremental engine. `search.js` — all query logic. `server.js` — thin MCP wrapper (each tool = try/catch → `search.js` fn → JSON). `query.js` — the same functions behind a CLI. `db.js` — LanceDB connection, `ROW_COLUMNS` + `checkColumns` + `migrateColumns`, and the `esc()` SQL-quote helper.
+- **`ghidra_bridge.js`** — the `ghidra_*` tools, outside the index: one detached headless Ghidra per code image (`scripts/ghidra_scripts/GhidraBridge.java` as the postScript on the project named in `scripts/ghidra_projects.tsv`), NDJSON over a Unix socket, started on first request, killed as a process group. `server.js` stops every bridge on SIGINT/SIGTERM/stdin end and kills them on `exit`; `query.js ghidra` stops them in `finally`. Its tests (`test/ghidra_bridge.test.js`) run against `test/fixtures/fake_headless`, which speaks the same protocol — keep the two in step when an op or a reply field changes.
 
-### Row schema (implicit, defined by the object built in `ingest.js`)
+### Row schema (`ROW_COLUMNS` in `db.js`; the README has the per-column table)
 
-`id` (`path#chunkIndex`), `source`, `path`, `title`, `chunk`, `text`, `text_hash`, `file_hash`, `mtime`, `fn_addr`, `addrs`, `meta`, `vector` (384-dim). No migration tooling — changing this shape means re-ingesting `--full`.
+`id` (`path#chunkIndex`), `source`, `path`, `title`, `chunk`, `text`, `text_hash`, `file_hash`, `mtime`, `image_id`, `image_sha256`, `va`, `images`, `addrs`, `meta`, `vector` (384-dim). The four image columns are `''` on every non-ghidra row. LanceDB infers columns from the rows a table is created with, so `ingest.js` checks the row keys against `ROW_COLUMNS` when it creates the table. On an existing table, `ingest` first calls `migrateColumns`, which adds/drops columns in place (`addColumns`/`dropColumns`; rows and vectors kept) for the differences listed in `MIGRATION_ADDED`/`MIGRATION_DROPPED`, and fails on any other; `requireTable()` in `search.js` fails until that ingest has run. Changing the shape = edit `ROW_COLUMNS`, the row object in `ingest.js` and the migration lists in `db.js` together.
 
 ### Cross-referencing engine addresses
 
-The `addrs` column is a space-delimited list of every `FUN_/DAT_/LAB_/SUB_/0x` token in the chunk, each normalized to **8 lowercase hex digits** (`normAddr`). This is why `FUN_00478120`, `0x478120`, and `0x00478120` all match the same `xref`/`callgraph` result — matching is on the normalized token via `LIKE '%<addr>%'`, not on the spelling. Any new address-bearing text is only discoverable if `extractAddrs` runs over it at ingest.
+The `addrs` column is a space-delimited list of every `FUN_/DAT_/LAB_/SUB_/0x` token in the chunk, each normalized to **8 lowercase hex digits** (`normAddr`). This is why `FUN_00478120`, `0x478120`, and `0x00478120` all match the same `xref`/`callgraph` result — matching is on the normalized token as a whole token (`tokenPredicate` in `search.js`), not on the spelling. The same predicate matches an image id in the `images` column, where substring matching would be wrong (`ps3-v100` is a substring of `ps3-v100-jp`). Any new address-bearing text is only discoverable if `extractAddrs` runs over it at ingest.
 
 ### Incremental strategy (three hash levels)
 
 1. **Document skip** — a doc whose `(path, file_hash)` already matches the table is untouched. Changed docs are delete-then-reinsert.
 2. **Chunk-embedding reuse** — within a changed doc, chunks whose `text_hash` is unchanged reuse the stored `vector` instead of re-embedding (embedding is the expensive step).
-3. **Cheap identity for big inputs** — conversation `file_hash` is `sha256("size:mtime")`, not a content hash (transcripts are huge and grow constantly). Ghidra hashes **per-function body**, so regenerating the 27k-function dump only re-embeds functions whose decompilation actually changed.
+3. **Cheap identity for big inputs** — conversation `file_hash` is `sha256("size:mtime")`, not a content hash (transcripts are huge and grow constantly). Ghidra hashes **per function doc** (image sha256, images, meta, text), so regenerating an image's export only re-embeds functions whose doc actually changed.
 
 Docs that vanished from a source are deleted at the end (paths seen this run vs. paths in the table).
 
@@ -70,9 +75,9 @@ Docs that vanished from a source are deleted at the end (paths seen this run vs.
 
 Vector search (`vectorSearch` over the bge embedding) and BM25 full-text (`fullTextSearch`) are run separately, then merged with **reciprocal-rank fusion** (`1/(60+rank)` summed per id). This is what lets one query surface both a semantic paraphrase and an exact token like `FUN_00478120` or a hash. FTS silently degrades to vector-only if the index isn't built yet — `ingest.js` (re)builds the FTS index on `text` after any change.
 
-### Ghidra as a call graph
+### Ghidra as a call graph (one per image)
 
-`ghidraDocs` parses the dump with `FN_HEADER_RE` (`==== NAME @0xADDR size=N callers=[...]`). **Callers** come from the header; **callees** are the `FUN_` refs found in the body (minus self). Both are stored (normalized) in the chunk-0 `meta` JSON. `coverage`/`callgraph` in `search.js` load only chunk-0 rows into in-process `fnCache`/`mentionCache` (address → which non-ghidra sources mention it) and walk the graph there. Those caches are module-level and are cleared via `clearCaches()` after any in-session `corpus_ingest`, otherwise coverage would go stale.
+`ghidraDocs` reads each code image's `functions.jsonl` + `annotate.jsonl` in lockstep (format and checks: README "The ghidra source"). The full `callers` (`{site, function|null}`) and `callees` (VA / `ext:` / `*0x` / `*stack:` / `?` / `sys:` tokens) lists, names and translations are stored in the `meta` JSON. `coverage`/`callgraph`/`translate` in `search.js` take an image: `resolveImage` maps it (or a variant listed in `images`) to its code image (`imageCache`), `loadFns` loads that image's chunk-0 rows into `fnCache` (code image → VA → node; only VA-to-function edges are graph edges), and `mentionCache` maps an address → which non-ghidra sources mention it (prose has no image). A ghidra row whose `meta` does not parse or lacks a field is a hard failure. Those caches are module-level and are cleared via `clearCaches()` after any in-session `corpus_ingest`, otherwise coverage would go stale.
 
 ### Embeddings
 
@@ -81,5 +86,5 @@ Vector search (`vectorSearch` over the bge embedding) and BM25 full-text (`fullT
 ## Conventions
 
 - Keep `SOURCES` in `config.js` and the README's "corpus edges" table in sync — the README documents what `config.js` declares.
-- New MCP tools: register in `server.js`, implement in `search.js`, mirror in `query.js` so there's always a CLI path for humans to reproduce a result.
+- New MCP tools: register in `server.js`, implement in `search.js` (index queries) or `ghidra_bridge.js` + `GhidraBridge.java` (live Ghidra ops), mirror in `query.js` so there's always a CLI path for humans to reproduce a result.
 - SQL predicates are built by string interpolation; always route user/path strings through `esc()` (`db.js`).
