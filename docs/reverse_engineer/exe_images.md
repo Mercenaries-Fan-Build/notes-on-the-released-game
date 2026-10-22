@@ -172,8 +172,8 @@ value new decomp target — the shipped Xbox retail engine, same-arch same-era a
 devkit Profile (so mnemsig cross-match works), same ship-window as PC v1.1 retail (so
 it's a genuine parity oracle for PC).
 
-Pipeline is entirely reusable — same steps as devkit Profile decomp, needs a
-`scripts/ghidra_analyze_x360_retail.sh` added to parallel `ghidra-ps3-eboot`.
+Pipeline is entirely reusable — same steps as devkit Profile decomp, run with the Xenon
+language by `tools/ghidra-xenon/reimport.sh` (`docs/xbox360_ghidra_xenon.md`).
 
 ### `ps3_engine_elf` — third independent engine implementation
 
