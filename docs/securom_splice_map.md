@@ -13,7 +13,21 @@ stay in the DRM-free exe).
 | `pc-v11` | `output/_ghidra/securom_dump/genuine_patched_unpacked.exe` (v1.1 process dump) | `output/_ghidra_pc_v11/proj`, `pc_v11` |
 
 Each project is a clean import with Ghidra's default auto-analysis (`scripts/ghidra_securom_import.sh`),
-plus the functions `CreateMovedFunctions.java` adds (below).
+plus the functions `CreateMovedFunctions.java` adds (below), plus two later changes, each written in
+one headless session with the "Non-Returning Functions - Discovered" analyzer disabled
+(`SetAnalyzerEnabled.java` as preScript and last postScript) and logged under the project's `out/`:
+
+- the false non-returning flag of the x87 helpers `FUN_00401740` (sqrt; all three builds) and
+  `FUN_00401750` (abs; pc-v10, pc-v10-drmfree) cleared and every call site re-disassembled
+  (`RepairFalseNoReturn.java apply`; `noreturn_repair_<date>.tsv`). The helpers are
+  `fld [ebp+8]; fsqrt|fabs; mov esp,ebp; pop ebp; ret`; the analyzer had marked them from call-site
+  heuristics, set `CALL_RETURN` on their calls and cleared the code after them, cutting every
+  float-heavy caller short. With the analyzer enabled, re-analysing the changed code marks the sqrt
+  helper again and clears the code reached only through the calls' fall-through.
+- a function at every rtti vtable slot and luaL_Reg target that had none (`exemap seeds` →
+  `CreateFunctions.java … refuse`; `create_functions_<date>.tsv`): 562 / 508 / 509. Refused, for
+  review: `0x00444954` (inside `FUN_00444700`/`FUN_00444740`, mid-instruction) and, in pc-v10 and
+  pc-v10-drmfree, `0x00417620` (analysis-defined data blocks its disassembly).
 
 ## What a splice is
 
