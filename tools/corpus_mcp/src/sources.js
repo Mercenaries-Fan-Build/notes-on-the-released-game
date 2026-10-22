@@ -3,14 +3,16 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { execFileSync } from 'node:child_process';
 import {
-  REPO_ROOT, SOURCES, MEMORY_DIR, TRANSCRIPTS_DIR, GHIDRA_DUMP,
+  REPO_ROOT, SOURCES, MEMORY_DIR, TRANSCRIPTS_DIR, GHIDRA_EXPORTS, GHIDRA_IMAGES,
   MAX_FILE_BYTES, CONVO_WINDOW,
 } from './config.js';
-import { chunkMarkdown, chunkText, chunkCode, sha256, extractAddrs, normAddr } from './chunk.js';
+import { chunkMarkdown, chunkText, chunkCode, sha256, extractAddrs } from './chunk.js';
 import { knowledgeMeta } from './knowledge.js';
 import { analyzeFile as luaAnalyzeFile } from './lua_analyzer.js';
 
-/** A document = one ingestion unit: { source, path, title, mtime, fileHash, chunks: [text] , fnAddr?, meta? } */
+/** A document = one ingestion unit:
+ *  { source, path, title, mtime, fileHash, chunks: [text], meta?, imageId?, imageSha256?, va?, images? }
+ *  (the image fields are set by ghidraDocs only). */
 
 function rel(p) {
   return path.relative(REPO_ROOT, p).replace(/\\/g, '/');
@@ -288,63 +290,374 @@ export function* commitDocs() {
   }
 }
 
-const FN_HEADER_RE = /^==== (\S+) @0x([0-9a-fA-F]+)\s+size=(\d+)\s+callers=\[([^\]]*)\]/;
+// ---------------------------------------------------------------------------------------------
+// Ghidra: one doc per (image, function VA), from two JSON Lines files per image in GHIDRA_EXPORTS:
+//   <image_id>.functions.jsonl  — the Ghidra exporter: image record, one record per function, end
+//   <image_id>.annotate.jsonl   — `exemap annotate`: image record, names + translations per
+//                                 function in the same order, end
+// The image set is GHIDRA_IMAGES (images.tsv). An image with a `code_image` shares that image's
+// code: it has no files of its own and must be listed in its code image's annotate `variants`.
+// A code image with neither file is not exported yet: it is not indexed, and the plan lists it
+// (with its variants) so ingest and corpus_status report it. Every other check below is a hard
+// failure naming the file (and line) — a partial or mismatched export must never be indexed as if
+// it were whole.
 
-/** Ghidra full-decomp dump -> one doc PER FUNCTION (27k), keyed by address.
- *  fileHash mixes in the function's own text so unchanged functions are
- *  skipped even when the dump file is regenerated. */
-export async function* ghidraDocs() {
-  const file = path.join(REPO_ROOT, GHIDRA_DUMP);
-  if (!fs.existsSync(file)) {
-    console.error(`[ghidra] dump not found: ${file} — skipping`);
-    return;
+const VA_RE = /^0x[0-9a-f]{8}$/;
+const SHA256_RE = /^[0-9a-f]{64}$/;
+/** callee tokens (FnMnemonicSig.java's call-list grammar, parsed by mercs2_exemap `Callee::parse`):
+ *  a direct VA, an import, an indirect call through a memory slot / a stack variable at a signed
+ *  frame offset (`*stack:0x10`, `*stack:-0x68`), an unresolved target, a syscall. */
+const CALLEE_RE = /^(?:0x[0-9a-f]{8}|ext:[^!]+!.+|\*0x[0-9a-f]+|\*stack:-?0x[0-9a-f]+|\?|sys:\d+)$/;
+const EXT_RE = /^ext:[^!]+!.+$/;
+
+const FN_IMAGE_KEYS = ['kind', 'image_id', 'program', 'program_sha256', 'ghidra_version', 'language', 'compiler_spec', 'functions'];
+const FN_KEYS = ['kind', 'va', 'name', 'name_source', 'block', 'size', 'thunk', 'thunk_target', 'callers', 'callees', 'decomp', 'decomp_error'];
+const FN_END_KEYS = ['kind', 'functions', 'decompiled', 'failed'];
+const ANN_IMAGE_KEYS = ['kind', 'image_id', 'sha256', 'variants', 'graph_images', 'untranslatable_images'];
+const ANN_KEYS = ['va', 'names', 'translations'];
+const ANN_END_KEYS = ['kind', 'functions'];
+
+function fail(file, line, msg) {
+  throw new Error(`[ghidra] ${file}${line ? `:${line}` : ''}: ${msg}`);
+}
+
+/** Exact key set: an unknown field is a producer change this reader does not handle yet. */
+function requireKeys(obj, keys, file, line, what) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) fail(file, line, `${what} is not a JSON object`);
+  const have = Object.keys(obj);
+  const missing = keys.filter((k) => !have.includes(k));
+  const extra = have.filter((k) => !keys.includes(k));
+  if (missing.length || extra.length) {
+    fail(file, line, `${what} keys differ from the export contract (missing: ${missing.join(', ') || 'none'}; unknown: ${extra.join(', ') || 'none'})`);
   }
-  const stat = fs.statSync(file);
-  const rl = readline.createInterface({
-    input: fs.createReadStream(file, 'utf8'),
-    crlfDelay: Infinity,
-  });
-  let header = null;
-  let buf = [];
-  const flush = () => {
-    if (!header) return null;
-    const [, name, addr, size, callersRaw] = header;
-    const body = buf.join('\n').trim();
-    const fnAddr = normAddr(addr);
-    // Call-graph edges: callers come from the export header, callees are the
-    // FUN_ symbols referenced in the decompiled body (minus self).
-    const callers = [...new Set(
-      (callersRaw.match(/FUN_([0-9a-fA-F]+)/g) || []).map((s) => normAddr(s.slice(4))),
-    )];
-    const callees = [...new Set(
-      (body.match(/FUN_([0-9a-fA-F]+)/g) || []).map((s) => normAddr(s.slice(4))),
-    )].filter((a) => a !== fnAddr);
-    const doc = {
-      source: 'ghidra',
-      path: `ghidra/${name}`,
-      title: `${name} @0x${fnAddr} size=${size}`,
-      mtime: stat.mtimeMs,
-      fileHash: sha256(body),
-      fnAddr,
-      meta: JSON.stringify({ size: Number(size), callers, callees }),
-      chunks: chunkCode(`${header[0]}\n${body}`, 140, 10),
-    };
-    return doc.chunks.length ? doc : null;
+}
+
+const isCount = (n) => Number.isInteger(n) && n >= 0;
+
+/** Parse images.tsv into Map<image_id, {id, sha256, language, codeImage|null, line}>. */
+export function readImagesTsv(file) {
+  if (!fs.existsSync(file)) fail(file, 0, 'images table not found');
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  if (lines[lines.length - 1] === '') lines.pop(); // the file's trailing newline
+  if (!lines.length) fail(file, 0, 'images table is empty');
+  const header = lines[0].split('\t');
+  const col = (name) => {
+    const i = header.indexOf(name);
+    if (i < 0) fail(file, 1, `header has no '${name}' column`);
+    return i;
   };
-  for await (const line of rl) {
-    const m = line.match(FN_HEADER_RE);
-    if (m) {
-      const doc = flush();
-      if (doc) yield doc;
-      header = m;
-      header[0] = line; // keep full header line (has callers) as chunk prefix
-      buf = [];
-    } else if (header && !line.startsWith('====================')) {
-      buf.push(line);
+  const iId = col('image_id'), iSha = col('sha256'), iLang = col('ghidra_language'), iCode = col('code_image');
+  const images = new Map();
+  for (let n = 2; n <= lines.length; n++) {
+    const f = lines[n - 1].split('\t');
+    if (f.length !== header.length) fail(file, n, `${f.length} fields, header has ${header.length}`);
+    const id = f[iId];
+    if (!id || id === '-') fail(file, n, 'image_id holds no value');
+    if (images.has(id)) fail(file, n, `image_id ${id} repeats line ${images.get(id).line}`);
+    if (!SHA256_RE.test(f[iSha])) fail(file, n, `sha256 '${f[iSha]}' is not 64 lowercase hex digits`);
+    if (!f[iLang] || f[iLang] === '-') fail(file, n, 'ghidra_language holds no value');
+    if (!f[iCode]) fail(file, n, "code_image is empty (no value is written '-')");
+    images.set(id, { id, sha256: f[iSha], language: f[iLang], codeImage: f[iCode] === '-' ? null : f[iCode], line: n });
+  }
+  if (!images.size) fail(file, 0, 'images table has no rows');
+  for (const img of images.values()) {
+    if (!img.codeImage) continue;
+    const code = images.get(img.codeImage);
+    if (!code) fail(file, img.line, `code_image ${img.codeImage} is not an image in this table`);
+    if (code.codeImage) fail(file, img.line, `code_image ${img.codeImage} itself names code_image ${code.codeImage}`);
+  }
+  return images;
+}
+
+/** JSON Lines reader: yields {n, obj}; a blank or unparseable line is a hard failure. */
+async function* jsonLines(file) {
+  const input = fs.createReadStream(file, 'utf8');
+  const rl = readline.createInterface({ input, crlfDelay: Infinity });
+  let n = 0;
+  try {
+    for await (const line of rl) {
+      n++;
+      if (!line) fail(file, n, 'blank line');
+      let obj;
+      try { obj = JSON.parse(line); } catch (e) { fail(file, n, `not JSON: ${e.message}`); }
+      yield { n, obj };
+    }
+  } finally {
+    rl.close();
+    input.destroy();
+  }
+}
+
+function checkImageList(list, images, file, line, what) {
+  if (!Array.isArray(list) || list.some((x) => typeof x !== 'string')) fail(file, line, `${what} is not an array of image ids`);
+  for (const id of list) if (!images.has(id)) fail(file, line, `${what} names '${id}', which is not in images.tsv`);
+}
+
+function checkFunction(o, file, n) {
+  requireKeys(o, FN_KEYS, file, n, 'function record');
+  if (o.kind !== 'function') fail(file, n, `kind '${o.kind}' where a function record (or the end record) belongs`);
+  if (!VA_RE.test(o.va)) fail(file, n, `va '${o.va}' is not 0x + 8 lowercase hex digits`);
+  if (typeof o.name !== 'string' || !o.name) fail(file, n, 'name is not a non-empty string');
+  if (typeof o.name_source !== 'string' || !o.name_source) fail(file, n, 'name_source is not a non-empty string');
+  if (typeof o.block !== 'string' || !o.block) fail(file, n, 'block is not a non-empty string');
+  if (!isCount(o.size)) fail(file, n, `size ${JSON.stringify(o.size)} is not a non-negative integer`);
+  if (typeof o.thunk !== 'boolean') fail(file, n, 'thunk is not a boolean');
+  // A thunk's target is its in-image function's va, or an import named as in the call list.
+  if (o.thunk_target !== null && !VA_RE.test(o.thunk_target) && !EXT_RE.test(o.thunk_target)) {
+    fail(file, n, `thunk_target '${o.thunk_target}' is neither null, a va, nor ext:<library>!<name>`);
+  }
+  if (!o.thunk && o.thunk_target !== null) fail(file, n, 'thunk_target is set on a function that is not a thunk');
+  if (!Array.isArray(o.callers)) fail(file, n, 'callers is not an array');
+  for (const c of o.callers) {
+    requireKeys(c, ['site', 'function'], file, n, 'caller');
+    if (!VA_RE.test(c.site)) fail(file, n, `caller site '${c.site}' is not a va`);
+    if (c.function !== null && !VA_RE.test(c.function)) fail(file, n, `caller function '${c.function}' is neither null nor a va`);
+  }
+  if (!Array.isArray(o.callees)) fail(file, n, 'callees is not an array');
+  for (const c of o.callees) if (typeof c !== 'string' || !CALLEE_RE.test(c)) fail(file, n, `callee ${JSON.stringify(c)} is not a known callee token`);
+  if (o.decomp !== null && typeof o.decomp !== 'string') fail(file, n, 'decomp is neither a string nor null');
+  if (o.decomp_error !== null && typeof o.decomp_error !== 'string') fail(file, n, 'decomp_error is neither a string nor null');
+  if ((o.decomp === null) === (o.decomp_error === null)) fail(file, n, 'exactly one of decomp / decomp_error must be set');
+}
+
+function checkAnnotation(o, images, file, n) {
+  requireKeys(o, ANN_KEYS, file, n, 'annotation record');
+  if (!VA_RE.test(o.va)) fail(file, n, `va '${o.va}' is not 0x + 8 lowercase hex digits`);
+  if (!Array.isArray(o.names)) fail(file, n, 'names is not an array');
+  for (const x of o.names) {
+    requireKeys(x, ['name', 'source', 'detail'], file, n, 'name entry');
+    if (typeof x.name !== 'string' || !x.name) fail(file, n, 'name entry has no name');
+    if (typeof x.source !== 'string' || !x.source) fail(file, n, `name '${x.name}' has no source`);
+    if (x.detail !== null && typeof x.detail !== 'string') fail(file, n, `name '${x.name}' detail is neither a string nor null`);
+  }
+  if (!Array.isArray(o.translations)) fail(file, n, 'translations is not an array');
+  for (const t of o.translations) {
+    requireKeys(t, ['image', 'va', 'direct', 'answering_paths', 'paths'], file, n, 'translation');
+    if (!images.has(t.image)) fail(file, n, `translation image '${t.image}' is not in images.tsv`);
+    if (!VA_RE.test(t.va)) fail(file, n, `translation va '${t.va}' is not a va`);
+    if (typeof t.direct !== 'boolean') fail(file, n, 'translation direct is not a boolean');
+    if (!isCount(t.answering_paths) || !isCount(t.paths)) fail(file, n, 'translation answering_paths / paths are not non-negative integers');
+    if (t.answering_paths > t.paths) fail(file, n, `translation answering_paths ${t.answering_paths} exceeds paths ${t.paths}`);
+  }
+}
+
+/**
+ * Read one image's file pair in lockstep, validating everything. Yields `{header}` once (the two
+ * image records), then `{fn, ann}` per function; returns after both end records check out.
+ */
+async function* readPair(pair, images) {
+  const fFile = pair.files.functions, aFile = pair.files.annotate;
+  const fIt = jsonLines(fFile)[Symbol.asyncIterator]();
+  const aIt = jsonLines(aFile)[Symbol.asyncIterator]();
+  try {
+    yield* readPairRecords(pair, images, fIt, aIt);
+  } finally {
+    // Close both readers on every exit (end, failure, or an abandoned consumer).
+    await fIt.return();
+    await aIt.return();
+  }
+}
+
+async function* readPairRecords(pair, images, fIt, aIt) {
+  const fFile = pair.files.functions, aFile = pair.files.annotate;
+  const img = pair.image;
+
+  const fh = await fIt.next();
+  if (fh.done) fail(fFile, 0, 'empty file (no image record)');
+  const fHead = fh.value.obj;
+  requireKeys(fHead, FN_IMAGE_KEYS, fFile, 1, 'image record');
+  if (fHead.kind !== 'image') fail(fFile, 1, `first record kind is '${fHead.kind}', expected 'image'`);
+  if (fHead.image_id !== img.id) fail(fFile, 1, `image_id '${fHead.image_id}' but the file is named for '${img.id}'`);
+  if (fHead.program_sha256 !== img.sha256) fail(fFile, 1, `program_sha256 ${fHead.program_sha256} differs from images.tsv sha256 ${img.sha256} for ${img.id}`);
+  if (fHead.language !== img.language) fail(fFile, 1, `language '${fHead.language}' differs from images.tsv ghidra_language '${img.language}' for ${img.id}`);
+  for (const k of ['program', 'ghidra_version', 'compiler_spec']) if (typeof fHead[k] !== 'string' || !fHead[k]) fail(fFile, 1, `${k} is not a non-empty string`);
+  if (!isCount(fHead.functions)) fail(fFile, 1, `functions ${JSON.stringify(fHead.functions)} is not a non-negative integer`);
+
+  const ah = await aIt.next();
+  if (ah.done) fail(aFile, 0, 'empty file (no image record)');
+  const aHead = ah.value.obj;
+  requireKeys(aHead, ANN_IMAGE_KEYS, aFile, 1, 'image record');
+  if (aHead.kind !== 'image') fail(aFile, 1, `first record kind is '${aHead.kind}', expected 'image'`);
+  if (aHead.image_id !== img.id) fail(aFile, 1, `image_id '${aHead.image_id}' but the file is named for '${img.id}'`);
+  if (aHead.sha256 !== img.sha256) fail(aFile, 1, `sha256 ${aHead.sha256} differs from images.tsv sha256 ${img.sha256} for ${img.id}`);
+  checkImageList(aHead.variants, images, aFile, 1, 'variants');
+  checkImageList(aHead.graph_images, images, aFile, 1, 'graph_images');
+  checkImageList(aHead.untranslatable_images, images, aFile, 1, 'untranslatable_images');
+  const got = [...aHead.variants].sort().join(', ');
+  const want = pair.variants.join(', ');
+  if (got !== want) fail(aFile, 1, `variants [${got}] differ from the images.tsv rows whose code_image is ${img.id}: [${want}]`);
+
+  yield { header: { functions: fHead, annotate: aHead } };
+
+  const seen = new Set();
+  let i = 0, decompiled = 0, failed = 0;
+  for (;;) {
+    const f = await fIt.next();
+    const a = await aIt.next();
+    if (f.done) fail(fFile, 0, `ended after ${i} functions with no end record`);
+    if (a.done) fail(aFile, 0, `ended after ${i} functions with no end record`);
+    const fo = f.value.obj, ao = a.value.obj;
+    const fEnd = fo && fo.kind === 'end';
+    const aEnd = ao && ao.kind === 'end';
+    if (fEnd || aEnd) {
+      if (!aEnd) fail(aFile, a.value.n, `has a function here but ${fFile} ends at line ${f.value.n} after ${i} functions`);
+      if (!fEnd) fail(fFile, f.value.n, `has a function here but ${aFile} ends at line ${a.value.n} after ${i} functions`);
+      requireKeys(fo, FN_END_KEYS, fFile, f.value.n, 'end record');
+      requireKeys(ao, ANN_END_KEYS, aFile, a.value.n, 'end record');
+      if (i !== fHead.functions) fail(fFile, f.value.n, `${i} function records but the image record says ${fHead.functions}`);
+      if (fo.functions !== i) fail(fFile, f.value.n, `end record says ${fo.functions} functions, the file has ${i}`);
+      if (fo.decompiled !== decompiled) fail(fFile, f.value.n, `end record says ${fo.decompiled} decompiled, the file has ${decompiled}`);
+      if (fo.failed !== failed) fail(fFile, f.value.n, `end record says ${fo.failed} failed, the file has ${failed}`);
+      if (ao.functions !== i) fail(aFile, a.value.n, `end record says ${ao.functions} functions, the file has ${i}`);
+      if (!(await fIt.next()).done) fail(fFile, f.value.n + 1, 'content after the end record');
+      if (!(await aIt.next()).done) fail(aFile, a.value.n + 1, 'content after the end record');
+      return;
+    }
+    checkFunction(fo, fFile, f.value.n);
+    checkAnnotation(ao, images, aFile, a.value.n);
+    if (ao.va !== fo.va) fail(aFile, a.value.n, `va ${ao.va} but ${fFile} line ${f.value.n} is ${fo.va} — the files are not in the same order`);
+    // annotate lists the functions file's own name first: {name, source "ghidra:<name_source>",
+    // detail "thunk" | null}. It is the one source of every name, so it must agree.
+    const g = ao.names[0];
+    const want = { name: fo.name, source: `ghidra:${fo.name_source}`, detail: fo.thunk ? 'thunk' : null };
+    if (!g || g.name !== want.name || g.source !== want.source || g.detail !== want.detail) {
+      fail(aFile, a.value.n, `first name ${JSON.stringify(g ?? null)} is not the functions file's own name ${JSON.stringify(want)} (${fFile} line ${f.value.n})`);
+    }
+    if (seen.has(fo.va)) fail(fFile, f.value.n, `va ${fo.va} appears twice`);
+    seen.add(fo.va);
+    i++;
+    if (fo.decomp !== null) decompiled++; else failed++;
+    yield { fn: fo, ann: ao };
+  }
+}
+
+/**
+ * Which images.tsv code images have their export files, from the file names alone (no file is
+ * read): `pairs` for the exported ones, `notExported` (each with its variants) for the code images
+ * with neither file. A code image with one of its two files, a variant with files of its own, and a
+ * file for an image outside images.tsv are hard failures.
+ */
+export function ghidraExportState({
+  exportsDir = path.join(REPO_ROOT, GHIDRA_EXPORTS),
+  imagesTsv = path.join(REPO_ROOT, GHIDRA_IMAGES),
+} = {}) {
+  const images = readImagesTsv(imagesTsv);
+  if (!fs.existsSync(exportsDir) || !fs.statSync(exportsDir).isDirectory()) {
+    fail(exportsDir, 0, `exports directory not found (set by CORPUS_GHIDRA_EXPORTS; images from ${imagesTsv})`);
+  }
+  const own = new Map();
+  for (const name of fs.readdirSync(exportsDir)) {
+    const m = name.match(/^(.+)\.(functions|annotate)\.jsonl$/);
+    if (!m) continue;
+    if (!images.has(m[1])) fail(path.join(exportsDir, name), 0, `image '${m[1]}' is not in ${imagesTsv}`);
+    if (!own.has(m[1])) own.set(m[1], {});
+    own.get(m[1])[m[2]] = path.join(exportsDir, name);
+  }
+  const pairs = [];
+  const notExported = [];
+  for (const img of images.values()) {
+    const files = own.get(img.id);
+    if (img.codeImage) {
+      if (files) fail(Object.values(files)[0], 0, `${img.id} shares the code of ${img.codeImage} (images.tsv line ${img.line}) and must have no export files of its own`);
+      continue;
+    }
+    const variants = [...images.values()].filter((v) => v.codeImage === img.id).map((v) => v.id).sort();
+    if (!files) {
+      notExported.push({ image: img.id, variants });
+      continue;
+    }
+    for (const kind of ['functions', 'annotate']) {
+      if (!files[kind]) {
+        fail(path.join(exportsDir, `${img.id}.${kind}.jsonl`), 0,
+          `missing — image ${img.id} (images.tsv line ${img.line}) has its ${kind === 'functions' ? 'annotate' : 'functions'} file; an image is exported as both files or neither`);
+      }
+    }
+    pairs.push({ image: img, variants, files });
+  }
+  return { exportsDir, imagesTsv, images, pairs, notExported };
+}
+
+/**
+ * Check the whole export set against images.tsv before anything is indexed: `ghidraExportState`,
+ * then every exported pair passes `readPair` end to end. Returns the plan `ghidraDocs` walks.
+ * Throws on the first violation.
+ */
+export async function verifyGhidraExports(opts = {}) {
+  const plan = ghidraExportState(opts);
+  for (const pair of plan.pairs) for await (const _ of readPair(pair, plan.images)) { /* validation only */ }
+  return plan;
+}
+
+/** Wrap a list into lines of `per` entries so chunkCode can split a long list on line bounds. */
+function wrapList(items, per = 8) {
+  const out = [];
+  for (let i = 0; i < items.length; i += per) out.push(`  ${items.slice(i, i + per).join(', ')}`);
+  return out;
+}
+
+function ghidraDoc(pair, header, fn, ann, mtime) {
+  const img = pair.image;
+  const images = [img.id, ...pair.variants].join(' ');
+  // Every name with its source, as `exemap annotate` lists them (Ghidra's own name first — checked
+  // against the functions file in readPairRecords).
+  const names = ann.names;
+  const title = `${[...new Set(names.map((x) => x.name))].join(' / ')} @${fn.va} [${img.id}]`;
+  const lines = [
+    title,
+    `image: ${img.id} sha256 ${img.sha256}${pair.variants.length ? ` (same code: ${pair.variants.join(', ')})` : ''}`,
+    'names:',
+    ...names.map((x) => `  ${x.name} (${x.source}${x.detail ? `: ${x.detail}` : ''})`),
+    `block: ${fn.block}  size: ${fn.size}${fn.thunk ? `  thunk -> ${fn.thunk_target ?? 'no target'}` : ''}`,
+    `callers (${fn.callers.length}):`,
+    ...wrapList(fn.callers.map((c) => (c.function ? `${c.function} (site ${c.site})` : `site ${c.site} (no function)`))),
+    `callees (${fn.callees.length}):`,
+    ...wrapList(fn.callees),
+    `translations (${ann.translations.length}):`,
+    ...ann.translations.map((t) => `  ${t.image} ${t.va} (${t.direct ? 'direct' : 'indirect'}, ${t.answering_paths}/${t.paths} paths)`),
+    '',
+    fn.decomp !== null ? fn.decomp : `decompile failed: ${fn.decomp_error}`,
+  ];
+  const text = lines.join('\n');
+  const meta = JSON.stringify({
+    names,
+    block: fn.block,
+    size: fn.size,
+    thunk: fn.thunk,
+    thunk_target: fn.thunk_target,
+    callers: fn.callers,
+    callees: fn.callees,
+    translations: ann.translations,
+    graph_images: header.annotate.graph_images,
+    untranslatable_images: header.annotate.untranslatable_images,
+  });
+  return {
+    source: 'ghidra',
+    path: `ghidra/${img.id}/${fn.va}`,
+    title,
+    mtime,
+    // Per-function identity: an unchanged function skips even when the export is regenerated.
+    fileHash: sha256(`${img.sha256}\0${images}\0${meta}\0${text}`),
+    chunks: chunkCode(text, 140, 10),
+    meta,
+    imageId: img.id,
+    imageSha256: img.sha256,
+    va: fn.va,
+    images,
+  };
+}
+
+/** One doc per (image, function VA) across every exported image. `plan` is a
+ *  `verifyGhidraExports()` result already computed in this run; without one, it verifies first. */
+export async function* ghidraDocs(plan = null) {
+  plan ??= await verifyGhidraExports();
+  for (const pair of plan.pairs) {
+    const mtime = Math.max(fs.statSync(pair.files.functions).mtimeMs, fs.statSync(pair.files.annotate).mtimeMs);
+    let header = null;
+    for await (const rec of readPair(pair, plan.images)) {
+      if (rec.header) { header = rec.header; continue; }
+      yield ghidraDoc(pair, header, rec.fn, rec.ann, mtime);
     }
   }
-  const doc = flush();
-  if (doc) yield doc;
 }
 
 // Roots the Lua analyzer walks. Shipped game Lua + mod Lua. These are the only trees whose Lua
@@ -443,12 +756,12 @@ export async function* luaApiDocs() {
 }
 
 /** Unified async iterator over requested source names. */
-export async function* allDocs(names) {
+export async function* allDocs(names, { ghidraPlan = null } = {}) {
   for (const name of names) {
     if (name === 'memory') yield* memoryDocs();
     else if (name === 'conversation') yield* conversationDocs();
     else if (name === 'commit') yield* commitDocs();
-    else if (name === 'ghidra') yield* ghidraDocs();
+    else if (name === 'ghidra') yield* ghidraDocs(ghidraPlan);
     else if (name === 'lua_api') yield* luaApiDocs();
     else yield* fileDocs(name);
   }
