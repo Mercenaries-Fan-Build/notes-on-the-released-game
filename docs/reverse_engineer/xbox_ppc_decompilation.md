@@ -32,7 +32,8 @@ work on both). String literals resolve inline as `s_<name>_<addr>` references.
 3. **Create functions** from the `.pdata` exception table (8-byte big-endian absolute-VA
    records) — Ghidra can't auto-parse machine 0x1F2 exceptions, so `CreateFunctions.java` seeds
    all 38,919 entry points (catches even uncalled leaf functions).
-4. **Auto-analyze**, then **decompile-export** every function (`DecompileExport.java`).
+4. **Auto-analyze**, then **decompile-export** every function (`DecompileExport.java`, since
+   replaced by `scripts/ghidra_scripts/ExportFunctions.java`, which writes JSON Lines).
 5. **Name** functions two ways:
    - `NameFromStrings.java` — a `Class::Method`/CamelCase identifier string referenced by exactly
      one function is that function's own assert/registration name (458 named; +~80 from analysis).
@@ -43,8 +44,9 @@ work on both). String literals resolve inline as `s_<name>_<addr>` references.
      vtable bridge — but done on the build's own RTTI.
    Total: **863 named functions** (the rest remain `FUN_<va>`).
 
-Tooling: `tools/ghidra_x360/` (`fix`/`CreateFunctions`/`DecompileExport`/`NameFromStrings` +
-`Validate`/`Diag`). Ghidra 12.1 at `tools/ghidra_12.1_PUBLIC` (Java scripts — PyGhidra not enabled).
+Tooling: `tools/ghidra_x360/` (`fix`/`CreateFunctions`/`NameFromStrings` +
+`Validate`/`Diag`); the export is now `scripts/ghidra_scripts/ExportFunctions.java`, run on a saved
+project by `scripts/ghidra_export_functions.sh <image id>`. Ghidra 12.1 at `tools/ghidra_12.1_PUBLIC` (Java scripts — PyGhidra not enabled).
 Run via `analyzeHeadless.bat` with `JAVA_HOME=tools/jdk21/...` and `MAXMEM=8G`.
 
 ## Known limitation — VMX128
