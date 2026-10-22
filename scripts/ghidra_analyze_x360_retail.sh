@@ -16,14 +16,19 @@
 #   GHIDRA_ANALYSIS_TIMEOUT Per-file analysis timeout in seconds (default 14400 = 4h)
 #   SKIP_FIX_PE             Skip the PE-fixup step (default: run if fixed image missing/stale)
 #
+# Required env:
+#   GHIDRA_THREADS          ExportFunctions.java decompiler threads (-Dcpu.core.override)
+#
 # Pipeline (per docs/reverse_engineer/xbox_ppc_decompilation.md):
 #   1. tools/fix_xbox_pe_for_ghidra.py rewrites PointerToRawData=VirtualAddress
 #   2. analyzeHeadless imports PE at 0x82000000, PowerPC:BE:64:A2ALT-32addr
 #   3. -preScript CreateFunctions.java seeds from .pdata (38k+ entry points)
 #   4. Auto-analyze runs (long — hours)
-#   5. -postScript DecompileExport.java writes decomp.c (raw FUN names)
+#   5. -postScript ExportFunctions.java writes the raw-name export (FUN names)
 #   6. -postScript NameFromStrings.java applies string-anchored names
-#   7. -postScript DecompileExport.java writes decomp_named.c
+#   7. -postScript ExportFunctions.java writes the named export
+#   ExportFunctions stops unless the program's sha256 is images.tsv's x360-retail sha256; its
+#   call lists read output/_exemap_exports/x360-retail.imports.tsv.
 #
 # NOT run in this pipeline (follow-up work):
 #   - RttiNameCtors.java   needs per-image rtti_vtables.txt (Phase 2 follow-up)
@@ -39,8 +44,11 @@ IMAGE_FIXED="${REPO_ROOT}/output/_scratch/x360_retail/default.pe_ghidra.bin"
 OUT_DIR="${REPO_ROOT}/output/_ghidra_x360_retail"
 PROJECT_DIR="${OUT_DIR}/proj"
 PROJECT_NAME="mercs2xenon_retail"
-DECOMP_RAW="${OUT_DIR}/xenon_retail_decomp.c"
-DECOMP_NAMED="${OUT_DIR}/xenon_retail_decomp_named.c"
+IMAGE_ID="x360-retail"
+DECOMP_RAW="${OUT_DIR}/xenon_retail.functions_raw.jsonl"
+DECOMP_NAMED="${OUT_DIR}/xenon_retail.functions.jsonl"
+IMPORTS="${REPO_ROOT}/output/_exemap_exports/${IMAGE_ID}.imports.tsv"
+ORDINALS="${REPO_ROOT}/scripts/ghidra_scripts/pe_import_ordinals.tsv"
 RUN_LOG="${OUT_DIR}/run.log"
 
 # --- Toolchain (bundled, per CLAUDE.md) -----------------------------------
@@ -48,6 +56,7 @@ export JAVA_HOME="${REPO_ROOT}/tools/jdk21/jdk-21.0.11+10"
 GHIDRA_HOME="${REPO_ROOT}/tools/ghidra_12.1_PUBLIC"
 HEADLESS="${GHIDRA_HOME}/support/analyzeHeadless.bat"
 SCRIPT_PATH="${REPO_ROOT}/tools/ghidra_x360"
+EXPORT_SCRIPT_PATH="${REPO_ROOT}/scripts/ghidra_scripts"
 
 # --- Runtime knobs --------------------------------------------------------
 export MAXMEM="${MAXMEM:-8G}"
@@ -68,8 +77,20 @@ _die() { echo "error: $*" >&2; exit 1; }
   || _die "analyzeHeadless.bat not found at $HEADLESS (expected tools/ghidra_12.1_PUBLIC/support/)"
 [[ -f "${REPO_ROOT}/tools/fix_xbox_pe_for_ghidra.py" ]] \
   || _die "fix_xbox_pe_for_ghidra.py not found in tools/"
-for js in CreateFunctions.java DecompileExport.java NameFromStrings.java; do
+for js in CreateFunctions.java NameFromStrings.java; do
   [[ -f "${SCRIPT_PATH}/${js}" ]] || _die "Ghidra script missing: ${SCRIPT_PATH}/${js}"
+done
+[[ -f "${EXPORT_SCRIPT_PATH}/ExportFunctions.java" ]] \
+  || _die "Ghidra script missing: ${EXPORT_SCRIPT_PATH}/ExportFunctions.java"
+[[ -f "$IMPORTS" ]] || _die "missing imports sidecar $IMPORTS (exemap imports)"
+[[ "${GHIDRA_THREADS:-}" =~ ^[1-9][0-9]*$ ]] \
+  || _die "GHIDRA_THREADS (ExportFunctions decompiler threads) is '${GHIDRA_THREADS:-}'"
+# shellcheck source=scripts/ghidra_tables.sh
+source "${REPO_ROOT}/scripts/ghidra_tables.sh"
+IMAGE_SHA=$(image_export_sha256 "$IMAGE_ID") || _die "no images.tsv sha256 for $IMAGE_ID"
+export GHIDRA_HEADLESS_JAVA_OPTIONS="${GHIDRA_HEADLESS_JAVA_OPTIONS:-} -Dcpu.core.override=${GHIDRA_THREADS}"
+for f in "$DECOMP_RAW" "$DECOMP_NAMED"; do
+  if [[ -e "$f" ]]; then echo "removing the previous $f"; rm "$f"; fi
 done
 if [[ -n "$GHIDRA_LOG_CONFIG" ]]; then
   [[ -f "$GHIDRA_LOG_CONFIG" ]] || _die "GHIDRA_LOG_CONFIG points at missing file: $GHIDRA_LOG_CONFIG"
@@ -123,12 +144,16 @@ echo ""
   -processor "PowerPC:BE:64:A2ALT-32addr" \
   -loader PeLoader \
   -analysisTimeoutPerFile "$ANALYSIS_TIMEOUT" \
-  -scriptPath "$SCRIPT_PATH" \
+  -scriptPath "$SCRIPT_PATH;$EXPORT_SCRIPT_PATH" \
   -preScript CreateFunctions.java \
-  -postScript DecompileExport.java "$DECOMP_RAW" \
+  -postScript ExportFunctions.java "$IMAGE_ID" "$IMAGE_SHA" "$DECOMP_RAW" "$ORDINALS" "$IMPORTS" \
   -postScript NameFromStrings.java \
-  -postScript DecompileExport.java "$DECOMP_NAMED" \
+  -postScript ExportFunctions.java "$IMAGE_ID" "$IMAGE_SHA" "$DECOMP_NAMED" "$ORDINALS" "$IMPORTS" \
   < /dev/null 2>&1 | tee "$RUN_LOG"
+if grep -q "REPORT SCRIPT ERROR" "$RUN_LOG"; then _die "a Ghidra script stopped; see $RUN_LOG"; fi
+for f in "$DECOMP_RAW" "$DECOMP_NAMED"; do
+  [[ -f "$f" ]] || _die "$f was not written; see $RUN_LOG"
+done
 
 echo ""
 echo "================================================================"
