@@ -16,7 +16,6 @@
 | `verify_ucfx_endian.py` | `--report-blind-swaps` | — | strict raise vs permissive count | VERIFIED | Trend `fallback_u32_count` → 0 |
 | `verify_ucfx_endian.py` | `_check_flgs` / vertex | f32 heuristic | See placements note | SUSPECT | |
 | `extract_amazon_dlc.py` | STRM/IBUF extra swap | u16 bodies | Post-pass for mesh | VERIFIED | |
-| `ps3_wad_header_crack.py` | `bswap32_256` | probe | Reverses first 256 B as experiment | VERIFIED OK | Not production port path |
 
 ## Deleted / forbidden patterns
 
