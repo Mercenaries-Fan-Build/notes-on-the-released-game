@@ -100,9 +100,9 @@ export const SOURCES = {
   },
   // Git commit messages (all branches).
   commit: { special: 'commits' },
-  // Ghidra decompilation of the unpacked PC exe — one row per function,
-  // keyed by address, with callers/callees extracted for cross-referencing
-  // against the docs corpora (pdb-analysis coverage work).
+  // Ghidra exports of every analysed executable image (PC / X360 / PS3) — one doc per
+  // (image, function VA), built from the per-image `<image>.functions.jsonl` (Ghidra exporter)
+  // and `<image>.annotate.jsonl` (`exemap annotate`) pair in GHIDRA_EXPORTS.
   ghidra: { special: 'ghidra' },
   // Static Lua API facts. One doc per class/module (chunk 0 carries the full ClassAPI/DataAPI
   // in `meta`), plus one doc per high-cardinality data-record so individual registry entries
@@ -111,8 +111,30 @@ export const SOURCES = {
   lua_api: { special: 'lua_api' },
 };
 
-/** Authoritative full-decompilation dump (unpacked exe, 27k functions). */
-export const GHIDRA_DUMP = str('CORPUS_GHIDRA_DUMP', 'output/_ghidra/mercs2_unpacked.exe_decomp.txt');
+/** Directory holding the per-image `<image_id>.functions.jsonl` + `<image_id>.annotate.jsonl`
+ *  pairs, relative to REPO_ROOT. */
+export const GHIDRA_EXPORTS = str('CORPUS_GHIDRA_EXPORTS', 'output/_ghidra_exports');
+
+/** The image table (one row per executable image; `code_image` marks a regional variant that
+ *  shares another image's code), relative to REPO_ROOT. An image with no export pair is listed
+ *  as not exported. */
+export const GHIDRA_IMAGES = str('CORPUS_GHIDRA_IMAGES', 'tools/wad_simulator/crates/mercs2_exemap/data/images.tsv');
+
+// --- Ghidra bridge (ghidra_bridge.js): one live headless Ghidra per image -------------------
+/** The per-image Ghidra project table (scripts/ghidra_projects.tsv), relative to REPO_ROOT. */
+export const GHIDRA_PROJECTS = str('CORPUS_GHIDRA_PROJECTS', 'scripts/ghidra_projects.tsv');
+/** The machine-local config whose `ghidra_headless` key names analyzeHeadless, relative to REPO_ROOT. */
+export const GHIDRA_LOCAL_CONFIG = str('CORPUS_GHIDRA_LOCAL_CONFIG', 'tools/wad_simulator/.mercs2-local.toml');
+/** Script directories the bridge's headless run loads (GhidraBridge.java + CallList.java). */
+export const GHIDRA_SCRIPTS = str('CORPUS_GHIDRA_SCRIPTS', 'scripts/ghidra_scripts');
+/** The ordinal table CallList.java names ordinal imports from. */
+export const GHIDRA_ORDINALS = str('CORPUS_GHIDRA_ORDINALS', 'scripts/ghidra_scripts/pe_import_ordinals.tsv');
+/** Java heap of each bridge's headless run (analyzeHeadless reads GHIDRA_HEADLESS_MAXMEM). */
+export const GHIDRA_BRIDGE_MAXMEM = str('CORPUS_GHIDRA_BRIDGE_MAXMEM', '16G');
+/** How long a bridge may take to open its project and start listening (ms). */
+export const GHIDRA_BRIDGE_START_MS = num('CORPUS_GHIDRA_BRIDGE_START_MS', 300_000);
+/** How long one request may take (ms); a decompile is bounded at 120 s inside the bridge. */
+export const GHIDRA_BRIDGE_REQUEST_MS = num('CORPUS_GHIDRA_BRIDGE_REQUEST_MS', 180_000);
 
 /** Skip any file bigger than this (bytes) for plain file sources. */
 export const MAX_FILE_BYTES = num('CORPUS_MAX_FILE_BYTES', 4 * 1024 * 1024);
