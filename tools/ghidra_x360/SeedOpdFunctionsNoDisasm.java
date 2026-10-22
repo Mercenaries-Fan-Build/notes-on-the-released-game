@@ -2,7 +2,8 @@
 // pre-disassembling. Paired variant of SeedOpdFunctions.java — designed to
 // escape the super-linear register-context walk that bulk DisassembleCommand
 // triggers on ~40k entries (crashes with ClosedException after hours of 100%
-// single-core, per the 2026-09-07 diagnosis in exe_images.json).
+// single-core, per the 2026-09-07 diagnosis: 6 attempts on the 39,676-entry .opd; the
+// register-context store is single-threaded, so more cores do not help that loop).
 //
 // PS3 PPU 32-bit ABI: each 8-byte .opd entry = {u32 code, u32 toc}; the first
 // word is the real code entry point. Section names are stripped from the EBOOT,
