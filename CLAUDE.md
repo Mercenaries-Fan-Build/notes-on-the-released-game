@@ -31,16 +31,27 @@ corpus of knowledge and one asset-format layer:
 **`mcp__corpus__corpus_search` is the FIRST action on any non-trivial task** — before grep, before
 Read, before spawning readers, before re-deriving anything. The corpus (`corpus` MCP server,
 registered in `.mcp.json`) is a LanceDB index over docs + memory + past conversations + mods +
-tools + commits + the Ghidra decomp. Three questions, in order:
+tools + commits + the Ghidra decomp of every exported `mercs2_exemap` image (one doc per
+`(image, va)`). Three questions, in order:
 
 1. **Have we already solved this?** (Don't redo work.)
 2. **What's related / where does it live?**
 3. **Do the results match what I expected?** (Nothing returned is itself a finding.)
 
 Tools: `corpus_search`, `corpus_xref` (chunks mentioning an address — `FUN_…`/`0x…`
-spelling-independent), `corpus_get` (full chunks of one doc), `corpus_callgraph` (BFS
-callers/callees), `corpus_coverage` (which fns are documented — the naming queue), `corpus_stats`,
-`corpus_status`, `corpus_ingest`.
+spelling-independent; optional `image`), `corpus_get` (full chunks of one doc; Ghidra docs are
+`ghidra/<image_id>/0x<va>`), `corpus_callgraph` (BFS callers/callees of one `image`),
+`corpus_coverage` (which fns of one `image` are documented — the naming queue), `corpus_translate`
+(a function's names with their sources + its match-graph counterparts in the other images),
+`corpus_stats`, `corpus_status` (per-image Ghidra coverage under `sources.ghidra.images`),
+`corpus_ingest`.
+
+Live Ghidra on the same server (one bridge per image, started on first use, holds that image's
+project open — stop it with `ghidra_bridge_stop` before a batch headless run on the project):
+`ghidra_function`, `ghidra_decompile`, `ghidra_disassemble`, `ghidra_xrefs_to`, `ghidra_strings`,
+`ghidra_read_bytes`, `ghidra_rename_function` / `ghidra_set_comment` (need a `reason`; logged to the
+project's `out/bridge_edits.tsv` and saved per edit), `ghidra_bridges`, `ghidra_bridge_stop`. CLI:
+`node tools/corpus_mcp/src/query.js ghidra <image> <op> <va>`.
 
 - Every hit carries a `date`. Transcripts are `unreviewed` and rank **below** written-up docs.
   Docs declare `status:` and `evidence:` — prefer current + proven + recent over merely confident.
@@ -121,19 +132,29 @@ Each is a correction after a real failure. They override defaults.
 
 The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
 
-- **Ghidra decomp**: `output/_ghidra/securom_dump/mercs2_unpacked.exe` (unpacked, rebuilt PE)
-  decompiled to `output/_ghidra/mercs2_unpacked.exe_decomp.txt`, indexed in the corpus as source
-  `ghidra`.
-  - Headless run: set `JAVA_HOME` to `tools/jdk21/…`, then
-    `tools/ghidra_12.1_PUBLIC/support/analyzeHeadless.bat <proj> <name> -import <exe> -scriptPath scripts/ghidra_scripts -postScript <Script>.java`.
-  - Post-scripts in `scripts/ghidra_scripts/`: `DecompileAllByName.java`,
-    `DecompileAllFunctions.java` (both call `clearFalseNoReturn()` — fix for x87 sqrt/abs
-    helpers that truncate float-heavy fns), `RecoverSecuromCode.java`, `CoverageReport.java`,
-    `FnMnemonicSig.java` (build matching).
-  - `DecompileAllByName.java` decompiles in parallel (Ghidra's `ParallelDecompiler`) and requires
-    Ghidra's `cpu.core.override` Java property as its thread count, e.g.
-    `GHIDRA_HEADLESS_JAVA_OPTIONS="-Dcpu.core.override=4"` for `support/analyzeHeadless`; without
-    it the script stops.
+- **Ghidra decomp, per image**: every `mercs2_exemap` image
+  (`tools/wad_simulator/crates/mercs2_exemap/data/images.tsv`) is analysed in its own saved
+  project, listed in `scripts/ghidra_projects.tsv`. `scripts/ghidra_export_functions.sh <image_id>…`
+  runs `scripts/ghidra_scripts/ExportFunctions.java` (JSON Lines: every function with its decomp,
+  every caller, and its call list in `FnMnemonicSig.java`'s grammar via the shared `CallList.java`)
+  into `output/_ghidra_exports/<image_id>.functions.jsonl`; `exemap annotate` adds names with their
+  sources and match-graph translations (`<image_id>.annotate.jsonl`); the corpus indexes both as
+  source `ghidra`. Xbox 360 projects use the Xenon language: `docs/xbox360_ghidra_xenon.md`.
+  - Headless: the `analyzeHeadless` path is the `ghidra_headless` key of
+    `tools/wad_simulator/.mercs2-local.toml`; the heap is `GHIDRA_HEADLESS_MAXMEM` (analyzeHeadless
+    ignores `MAXMEM`); decompiler threads are Ghidra's `cpu.core.override`
+    (`GHIDRA_THREADS` for the runner).
+  - Other post-scripts in `scripts/ghidra_scripts/`: `FnMnemonicSig.java` (matcher input),
+    `RepairFalseNoReturn.java` (`report` lists functions marked non-returning; `apply <list>`
+    repairs reviewed false ones and their call sites), `SetAnalyzerEnabled.java`,
+    `AnalyzeChanges.java`, `RecoverSecuromCode.java`, `CoverageReport.java`, and SecuROM's
+    `SpliceMap`/`SecuromFunctionRefs`/`CreateMovedFunctions` (`docs/securom_splice_map.md`).
+    `tools/ghidra_x360/CreateFunctions.java <starts> <out.tsv> <split|refuse>` creates functions at
+    a start list (`exemap seeds` lists the rtti/luareg targets Ghidra has no function at).
+  - Ghidra's "Non-Returning Functions - Discovered" analyzer is what marked the PC x87 sqrt/abs
+    helpers (`fld; fsqrt|fabs; ...; ret`) non-returning and cut every caller after the call;
+    re-analysis with it enabled undoes `RepairFalseNoReturn` — disable it around any script run that
+    changes code in the PC projects (`SetAnalyzerEnabled.java` as preScript and last postScript).
   - `mercs2_reassemble` (`cargo run -p mercs2_reassemble --release`) left-joins every attribution
     source onto the decomp by virtual address (`FUN_00478120` == `0x478120`), then propagates
     residue by locality + call-graph. Output: `output/engine_reassembled/`. Evidence is **graded**
@@ -152,7 +173,7 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
   - `securom_unwrap` crate turns a decrypted exe (dumped past OEP) into a SecuROM-free PE —
     repoints OEP, rebuilds a clean IAT, preserves every section byte-for-byte.
   - `scripts/ghidra_scripts/RecoverSecuromCode.java` force-disassembles the SecuROM VM partition
-    (indexed in corpus as `ghidra/FUN_02xxxxxx`); dispatcher is `FUN_02a30028`.
+    (indexed in corpus as `ghidra/pc-v10/0x02xxxxxx`); dispatcher is `FUN_02a30028`.
   - `make crack-game RETAIL_EXE=… OUTPUT=./output` + `tools/apply_securom_patch.py` apply the
     retail bypass. DRM never touches data files — modding needs no DRM bypass.
   - Split-thunks: a `thunk_FUN_024xxxxx` is one of three cases: (1) a forwarder that jumps 1–3
