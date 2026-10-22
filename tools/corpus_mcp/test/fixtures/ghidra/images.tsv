@@ -1,0 +1,4 @@
+image_id	platform	ghidra_language	sha256	size	base	build_id	code_image	from_sha256	step
+pc-v1	pc	x86:LE:32:default	110616f7e08ac09b2c7e04f01c221c1d6819eab22d7b59bb21a7fac1c5055000	4096	0x00400000	fixture-v1	-	-	-
+pc-v10	pc	x86:LE:32:default	bedd98693cd64cf845fa867ead0b0e6ea276f5ab663698949a6f0305c15310d8	4096	0x00400000	fixture-v10	-	-	-
+pc-v10-de	pc	x86:LE:32:default	c29b512a9b1cf9c7b41f638a16ea69f347a2c0118d9cd800940afef8178e7c87	4096	0x00400000	fixture-v10-de	pc-v10	-	-
