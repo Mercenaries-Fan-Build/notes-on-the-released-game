@@ -1,0 +1,11 @@
+image_id	project_dir	project_name	program	settings_dir	imports	code_blocks
+pc-v10	output/_ghidra_pc_v10/proj	pc_v10	mercs2_unpacked.exe	-	-	.text,Stext,Sitext,Srdata,Sdata,.securom,reloaded
+pc-v10-drmfree	output/_ghidra_pc_v10_drmfree/proj	pc_v10_drmfree	mercs2_nodrm_v3.exe	-	-	.text,Stext,Sitext,Srdata,Sdata,.securom,reloaded
+pc-v11	output/_ghidra_pc_v11/proj	pc_v11	genuine_patched_unpacked.exe	-	-	.text,Stext,Sitext,Srdata,Sdata,.securom
+x360-retail	output/_ghidra_x360_retail_xenon/proj	mercs2xenon_retail_xenon	default.pe_ghidra.bin	output/_ghidra_x360_retail_xenon/ghidra_settings	output/_exemap_exports/x360-retail.imports.tsv	.text,BINK
+x360-preview-final	output/_ghidra_x360_final_xenon/proj	mercs2xenon_final_xenon	default_xex.pe_ghidra.bin	output/_ghidra_x360_final_xenon/ghidra_settings	output/_exemap_exports/x360-preview-final.imports.tsv	.text,BINK
+x360-preview-profile	output/_ghidra_x360_preview_xenon/proj	mercs2xenon_preview_xenon	mercs2_xenon_p.pe_ghidra.bin	output/_ghidra_x360_preview_xenon/ghidra_settings	output/_exemap_exports/x360-preview-profile.imports.tsv	.text,BINK
+ps3-v100	output/_ghidra_ps3_retail/proj	mercs2cell_retail	EBOOT.elf	-	output/_exemap_exports/ps3-v100.imports.tsv	SECTION1,SECTION2,SECTION3,SECTION4
+ps3-v103-na	output/_ghidra_ps3_retail/proj	mercs2cell_retail	EBOOT_patch103.elf	-	output/_exemap_exports/ps3-v103-na.imports.tsv	SECTION1,SECTION2,SECTION3,SECTION4
+ps3-v100-jp	output/_ghidra_ps3_v100_jp/proj	mercs2cell_v100_jp	EBOOT.elf	-	output/_exemap_exports/ps3-v100-jp.imports.tsv	SECTION1,SECTION2,SECTION3,SECTION4
+ps3-v101-eu	output/_ghidra_ps3_v101_eu/proj	mercs2cell_v101_eu	EBOOT.elf	-	output/_exemap_exports/ps3-v101-eu.imports.tsv	SECTION1,SECTION2,SECTION3,SECTION4
