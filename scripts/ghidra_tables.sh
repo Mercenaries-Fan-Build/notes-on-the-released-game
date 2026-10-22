@@ -1,5 +1,5 @@
-# scripts/ghidra_tables.sh — sourced (not run) by scripts/ghidra_export_functions.sh and the
-# scripts/ghidra_analyze_*.sh scripts. Reads the per-image tables by image id. Every function
+# scripts/ghidra_tables.sh — sourced (not run) by scripts/ghidra_export_functions.sh and
+# tools/ghidra-xenon/build.sh and reimport.sh. Reads the per-image tables by image id. Every function
 # writes its result to stdout; on an error it prints the reason to stderr and exits 1, which stops
 # a caller that assigns the result under `set -e` (x=$(image_export_sha256 pc-v10)).
 #
