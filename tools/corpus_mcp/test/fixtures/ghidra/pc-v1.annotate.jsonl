@@ -1,0 +1,6 @@
+{"kind":"image","image_id":"pc-v1","sha256":"110616f7e08ac09b2c7e04f01c221c1d6819eab22d7b59bb21a7fac1c5055000","variants":[],"graph_images":["pc-v1","pc-v10"],"untranslatable_images":[]}
+{"va":"0x00478000","names":[{"name":"FUN_00478000","source":"ghidra:DEFAULT","detail":null}],"translations":[]}
+{"va":"0x00478120","names":[{"name":"FUN_00478120","source":"ghidra:DEFAULT","detail":null},{"name":"HudMinimap::Draw","source":"rtti","detail":"HudMinimap vtable +0x10"}],"translations":[{"image":"pc-v10","va":"0x00479120","direct":true,"answering_paths":3,"paths":5}]}
+{"va":"0x00478200","names":[{"name":"__break","source":"ghidra:USER_DEFINED","detail":null}],"translations":[]}
+{"va":"0x00478300","names":[{"name":"__break","source":"ghidra:USER_DEFINED","detail":"thunk"}],"translations":[]}
+{"kind":"end","functions":4}
