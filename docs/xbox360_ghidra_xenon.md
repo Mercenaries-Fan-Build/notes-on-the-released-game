@@ -39,13 +39,19 @@ extension is in `ghidra_settings/<user>-ghidra/ghidra_12.1.4_PUBLIC/Extensions/G
 
 `analyzeHeadless -import <PE> -processor PowerPC:BE:64:Xenon` with:
 
-1. preScript `tools/ghidra_x360/CreateFunctions.java <func_starts.txt>`;
+1. preScript `tools/ghidra_x360/CreateFunctions.java <func_starts.txt> <create_functions.tsv> split`
+   (one result row per start; any failed start stops the run). `.pdata` starts are real function
+   starts, so a start inside an earlier-created body splits it (`split`, recorded in the row's
+   detail): 6 such starts in retail;
 2. auto-analysis (no timeout);
 3. postScript `scripts/ghidra_scripts/RecoverReferencedTables.java <recover_tables.log>
    <rtti sidecar> <recover_tables_ledger.tsv>`; the rtti sidecar is
    `output/_exemap_exports/<id>.rtti.tsv`;
-4. postScripts `DecompileExport.java`, `NameFromStrings.java`, `DecompileExport.java`
-   (`tools/ghidra_x360/`).
+4. postScripts `ExportFunctions.java` (`scripts/ghidra_scripts/`), `NameFromStrings.java`
+   (`tools/ghidra_x360/`), `ExportFunctions.java` (`tools/ghidra-xenon/reimport.sh`).
+
+To export a saved project's functions again, run `scripts/ghidra_export_functions.sh <image id>`
+(projects listed in `scripts/ghidra_projects.tsv`).
 
 ## RecoverReferencedTables
 
