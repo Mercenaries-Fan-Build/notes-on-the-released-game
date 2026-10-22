@@ -564,7 +564,7 @@ While formats evolved between games, the **algorithms and design patterns** tran
 
 **PS3 EBOOT ↔ PC EXE:**
 - Both share the same engine code (different compiler, same logic)
-- PS3 EBOOT analyzed via `make ghidra-ps3-eboot`
+- PS3 EBOOTs analysed per image in Ghidra ([`ps3_ppc_re_workflow.md`](ps3_ppc_re_workflow.md))
 - Function signatures identified in one can be searched in the other
 
 ---
