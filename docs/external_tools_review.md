@@ -139,7 +139,7 @@ Curated from [awesome-game-file-format-reversing](https://github.com/) and suppl
 ### Ghidra — **HIGH PRIORITY** (already in use)
 - **URL:** https://github.com/NationalSecurityAgency/ghidra
 - **What it does:** NSA's software reverse engineering framework with disassembly, decompilation, graphing, and scripting.
-- **Relevance:** Already integrated — we have `make ghidra-ps3-eboot` for headless PS3 EBOOT analysis. Essential for understanding `Mercenaries2.exe` internals: FFCS loading, sges decompression, UCFX parsing, Lua VM integration, and the hash-based asset resolution system.
+- **Relevance:** Already integrated — a saved headless project per PC, Xbox 360 and PS3 image (`scripts/ghidra_projects.tsv`). Essential for understanding `Mercenaries2.exe` internals: FFCS loading, sges decompression, UCFX parsing, Lua VM integration, and the hash-based asset resolution system.
 - **Priority:** HIGH — Core tool, already in use.
 
 ### ghidra-delinker-extension — MEDIUM PRIORITY
