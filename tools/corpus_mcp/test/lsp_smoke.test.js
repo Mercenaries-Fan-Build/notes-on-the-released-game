@@ -192,4 +192,18 @@ describe('URI helpers', () => {
     const back = uriToPath(uri);
     assert.equal(back.toLowerCase(), abs.toLowerCase());
   });
+
+  test('a space in a path is %20 in the URI, both ways, on POSIX and Windows paths', () => {
+    const posix = '/Volumes/Projects/game-files/Mercenaries 2 World in Flames/data/a.lua';
+    assert.equal(pathToUri(posix), 'file:///Volumes/Projects/game-files/Mercenaries%202%20World%20in%20Flames/data/a.lua');
+    assert.equal(uriToPath(pathToUri(posix)), posix);
+    const win = 'D:\\Games\\Mercenaries 2\\a.lua';
+    assert.equal(pathToUri(win), 'file:///D:/Games/Mercenaries%202/a.lua');
+    assert.equal(uriToPath('file:///D:/Games/Mercenaries%202/a.lua'), win);
+  });
+
+  test('a relative path or a non-file URI is refused', () => {
+    assert.throws(() => pathToUri('scripts/a.lua'), /not an absolute path/);
+    assert.throws(() => uriToPath('untitled:Untitled-1'), /not a file URI/);
+  });
 });
