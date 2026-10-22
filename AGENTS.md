@@ -12,7 +12,7 @@ This repo is the **research + toolchain hub** for reverse-engineering *Mercenari
 (Pandemic Studios, 2008, "Pangea"/`Pg*`-lineage engine) and rebuilding it. It is **not** one program —
 it is several, sharing one corpus of knowledge and one asset-format layer:
 
-1. **Reverse engineering** — a 27k-function named Ghidra decompilation of the unpacked PC exe, a live
+1. **Reverse engineering** — Ghidra decompilations of every PC, Xbox 360 and PS3 image, a live
    x32dbg oracle bridge, and per-subsystem code maps. The shipped 32-bit exe is the **specification
    and oracle**, never the shipping artifact.
 2. **The 64-bit Rust/wgpu engine reimplementation** — the north star. A ~40-crate Rust workspace
@@ -36,17 +36,26 @@ it is several, sharing one corpus of knowledge and one asset-format layer:
 **`mcp__corpus__corpus_search` is the FIRST action on any non-trivial task — before grep, before
 Read, before spawning readers, before re-deriving anything.** The corpus (`corpus` MCP server,
 registered in `.mcp.json`) is a LanceDB index over **docs + memory + past conversations + mods + tools
-+ commits + the 27k-function Ghidra decomp**. It answers three questions, in order:
++ commits + the Ghidra decomp of every exported `mercs2_exemap` image** (one doc per `(image, va)`).
+It answers three questions, in order:
 
 1. **Have we already solved this?** (Don't redo months of work — it has happened.)
 2. **What's related / where does it live?**
 3. **Do the results match what I expected?** (A search that returns *nothing* is itself a finding.)
 
 Tools: `corpus_search` (hybrid semantic+keyword; filter by `sources`/`path_prefix`), `corpus_xref`
-(every chunk mentioning an address — `FUN_…`/`0x…` spelling-independent), `corpus_get` (full chunks of
-one doc), `corpus_callgraph` (BFS callers/callees, annotated with where documented), `corpus_coverage`
-(which of the 27k fns are documented — the naming queue), `corpus_stats`, `corpus_status`,
-`corpus_ingest`.
+(every chunk mentioning an address — `FUN_…`/`0x…` spelling-independent; optional `image`),
+`corpus_get` (full chunks of one doc; Ghidra docs are `ghidra/<image_id>/0x<va>`), `corpus_callgraph`
+(BFS callers/callees of one `image`, annotated with where documented), `corpus_coverage` (which fns of
+one `image` are documented — the naming queue), `corpus_translate` (a function's names with their
+sources + its counterparts in the other images), `corpus_stats`, `corpus_status`, `corpus_ingest`.
+
+Live Ghidra on the same server (one bridge per image, started on first use, holds that image's
+project open — stop it with `ghidra_bridge_stop` before a batch headless run on the project):
+`ghidra_function`, `ghidra_decompile`, `ghidra_disassemble`, `ghidra_xrefs_to`, `ghidra_strings`,
+`ghidra_read_bytes`, `ghidra_rename_function` / `ghidra_set_comment` (need a `reason`; logged to the
+project's `out/bridge_edits.tsv` and saved per edit), `ghidra_bridges`, `ghidra_bridge_stop`. CLI:
+`node tools/corpus_mcp/src/query.js ghidra <image> <op> <va>`.
 
 - Every hit carries a `date`. Transcripts are `unreviewed` and rank **below** written-up docs. Docs
   declare `status:` (current/superseded/retracted) and `evidence:` (proven/inferred/speculative).
@@ -125,19 +134,23 @@ These are corrections the user has made, each after a real failure. They overrid
 
 The shipped PC exe is symbol-less and SecuROM-packed; three assets make RE tractable:
 
-- **Ghidra decompilation** — `output/_ghidra/securom_dump/mercs2_unpacked.exe` (an unpacked, rebuilt
-  PE), fully decompiled to `output/_ghidra/mercs2_unpacked.exe_decomp.txt` (~27k named fns) and indexed
-  in the corpus as source `ghidra` (one row per function with caller/callee edges).
-  - Headless run (PowerShell): set `JAVA_HOME` to `tools/jdk21/…`, then
-    `tools/ghidra_12.1_PUBLIC/support/analyzeHeadless.bat <proj> <name> -import <exe> -scriptPath scripts/ghidra_scripts -postScript <Script>.java`.
-  - `DecompileAllByName.java` decompiles in parallel (Ghidra's `ParallelDecompiler`) and requires
-    Ghidra's `cpu.core.override` Java property as its thread count, e.g.
-    `GHIDRA_HEADLESS_JAVA_OPTIONS="-Dcpu.core.override=4"` for `support/analyzeHeadless`; without it
-    the script stops.
-  - Key post-scripts in `scripts/ghidra_scripts/`: `DecompileAllByName.java` / `DecompileAllFunctions.java`
-    (both call `clearFalseNoReturn()` — the fix for the x87 sqrt/abs helpers whose bad `noreturn` flag
-    truncated every float-heavy fn), `RecoverSecuromCode.java`, `CoverageReport.java`,
-    `FnMnemonicSig.java` (v1.0↔v1.1 build matching).
+- **Ghidra decompilation, per image** — every `mercs2_exemap` image
+  (`tools/wad_simulator/crates/mercs2_exemap/data/images.tsv`) has a saved project listed in
+  `scripts/ghidra_projects.tsv`. `scripts/ghidra_export_functions.sh <image_id>…` runs
+  `scripts/ghidra_scripts/ExportFunctions.java` into `output/_ghidra_exports/<image_id>.functions.jsonl`
+  (every function with its decomp, callers and call list); `exemap annotate` adds names with their
+  sources and match-graph translations; the corpus indexes both as source `ghidra`.
+  - Headless: `analyzeHeadless` path = `ghidra_headless` key of `tools/wad_simulator/.mercs2-local.toml`;
+    heap = `GHIDRA_HEADLESS_MAXMEM` (analyzeHeadless ignores `MAXMEM`); decompiler threads =
+    `cpu.core.override` (`GHIDRA_THREADS` for the runner).
+  - Key post-scripts in `scripts/ghidra_scripts/`: `FnMnemonicSig.java` (matcher input),
+    `RepairFalseNoReturn.java` (`report` / `apply <reviewed list>` for false non-returning functions —
+    the x87 sqrt/abs helpers that truncated every float-heavy fn), `SetAnalyzerEnabled.java`,
+    `AnalyzeChanges.java`, `RecoverSecuromCode.java`, `CoverageReport.java`; and
+    `tools/ghidra_x360/CreateFunctions.java <starts> <out.tsv> <split|refuse>` (seed functions; `exemap
+    seeds` lists rtti/luareg targets Ghidra has no function at). Ghidra's "Non-Returning Functions -
+    Discovered" analyzer re-marks the sqrt helper when it re-analyses the PC projects: disable it
+    around any code-changing run there (`SetAnalyzerEnabled.java`).
   - **`mercs2_reassemble`** (`cargo run -p mercs2_reassemble --release`) left-joins **every** attribution
     source (code maps, RTTI vtables, FID signatures, the Lua binding surface,
     `scripts/mercs2_annotations.json`) onto the decomp **by virtual address** (`FUN_00478120` == `0x478120`),
@@ -159,7 +172,7 @@ The shipped PC exe is symbol-less and SecuROM-packed; three assets make RE tract
   stated twice.)
   - **Decrypted:** run to the main menu (past OEP → all sections decrypted in memory), dump, rebuild as
     a clean PE. Coverage of the unpacked image ~**87%** overall, **~99% of actual code**.
-  - **Decompiled:** the SecuROM VM partition is in the corpus (`ghidra/FUN_02xxxxxx`, ~5.8k fns); the VM
+  - **Decompiled:** the SecuROM VM partition is in the corpus (`ghidra/pc-v10/0x02xxxxxx`, ~5.8k fns); the VM
     dispatcher is `FUN_02a30028`. `RecoverSecuromCode.java` force-disassembles it.
   - **Removable:** working DRM-free builds already exist (`mercs2_nodrm_v2.exe` / `v3.exe` boot with no
     disc/activation/loader). The crate **`securom_unwrap`** turns a *decrypted* exe into a SecuROM-free
