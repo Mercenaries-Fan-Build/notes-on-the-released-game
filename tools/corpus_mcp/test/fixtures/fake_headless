@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+// Test stand-in for analyzeHeadless + GhidraBridge.java: takes the bridge's headless argument
+// list, serves the bridge protocol on the socket argument, and misbehaves on request.
+//   FAKE_HEADLESS_MODE=exit_early  exit 3 before listening
+//   FAKE_HEADLESS_MODE=script_error  print a script error instead of listening
+// Ops: info, echo (returns its params), fail (error response), hang (never answers), shutdown.
+import fs from 'node:fs';
+import net from 'node:net';
+
+const args = process.argv.slice(2);
+const at = args.indexOf('GhidraBridge.java');
+const [socketPath, imageId] = [args[at + 1], args[at + 2]];
+const mode = process.env.FAKE_HEADLESS_MODE ?? '';
+console.log(`INFO  fake headless for ${imageId} (${args[3]})`);
+if (mode === 'exit_early') { console.log('INFO  fake: exiting before listening'); process.exit(3); }
+if (mode === 'script_error') { console.log('ERROR REPORT SCRIPT ERROR:  fake failure'); setInterval(() => {}, 1000); }
+else {
+  const server = net.createServer((sock) => {
+    let buf = '';
+    sock.setEncoding('utf8');
+    sock.on('data', (chunk) => {
+      buf += chunk;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const req = JSON.parse(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+        const reply = (o) => sock.write(`${JSON.stringify({ id: req.id, ...o })}\n`);
+        if (req.op === 'info') reply({ ok: true, result: { image_id: imageId, writable: true } });
+        else if (req.op === 'echo') reply({ ok: true, result: req });
+        else if (req.op === 'fail') reply({ ok: false, error: 'fake failure' });
+        else if (req.op === 'hang') { /* never answers */ }
+        else if (req.op === 'shutdown') {
+          reply({ ok: true, result: {} });
+          sock.end(() => server.close(() => { fs.rmSync(socketPath, { force: true }); process.exit(0); }));
+        } else reply({ ok: false, error: `unknown op '${req.op}'` });
+      }
+    });
+  });
+  server.listen(socketPath, () => console.log(`INFO  GhidraBridge.java> GhidraBridge: listening on ${socketPath} for ${imageId}`));
+}
