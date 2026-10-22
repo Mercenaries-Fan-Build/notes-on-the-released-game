@@ -264,15 +264,27 @@ function offsetToLine(text, offset) {
   return line;
 }
 
+// A file URI names a Windows path when it carries a drive letter (file:///C:/...) and a POSIX path
+// otherwise, whatever the host; each path segment is percent-encoded in the URI (clients send
+// `%20` for a space).
+const DRIVE_PATH = /^[A-Za-z]:[\\/]/;
+const DRIVE_URI_PATH = /^\/[A-Za-z]:\//;
+
 export function pathToUri(absPath) {
-  const norm = absPath.replace(/\\/g, '/');
-  return norm.startsWith('/') ? `file://${norm}` : `file:///${norm}`;
+  if (DRIVE_PATH.test(absPath)) {
+    const [drive, ...rest] = absPath.split(/[\\/]/);
+    return `file:///${drive}/${rest.map(encodeURIComponent).join('/')}`;
+  }
+  if (!absPath.startsWith('/')) throw new Error(`pathToUri: '${absPath}' is not an absolute path`);
+  return `file://${absPath.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 export function uriToPath(uri) {
-  const p = uri.replace(/^file:\/\//, '');
-  if (/^\/[A-Za-z]:\//.test(p)) return p.slice(1).replace(/\//g, path.sep);
-  return p.replace(/\//g, path.sep);
+  if (!uri.startsWith('file://')) throw new Error(`uriToPath: '${uri}' is not a file URI`);
+  const p = uri.slice('file://'.length);
+  const segments = p.split('/').map(decodeURIComponent);
+  if (DRIVE_URI_PATH.test(p)) return segments.slice(1).join('\\');
+  return segments.join('/');
 }
 
 async function resolveClassPath(className, repoRoot) {
