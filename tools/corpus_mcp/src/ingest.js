@@ -9,12 +9,16 @@
  * untouched. Changed docs are delete+reinserted, reusing embeddings for
  * chunks whose text_hash is unchanged. Docs that disappeared from a source
  * are deleted.
+ *
+ * Columns: an existing table whose columns predate ROW_COLUMNS (db.js) is migrated in place by
+ * `migrateColumns` before anything else — rows and vectors are kept; a difference with no defined
+ * migration is a hard failure.
  */
 import { SOURCES } from './config.js';
-import { allDocs } from './sources.js';
+import { allDocs, verifyGhidraExports } from './sources.js';
 import { sha256, extractAddrs } from './chunk.js';
 import { embedPassages } from './embed.js';
-import { openTable, createTable, esc, lancedb } from './db.js';
+import { openTable, createTable, migrateColumns, ROW_COLUMNS, esc, lancedb } from './db.js';
 
 const argv = process.argv.slice(2);
 function argVal(name) {
@@ -26,7 +30,21 @@ export async function ingest({ sources, full = false, log = (m) => console.error
   const names = sources?.length ? sources : Object.keys(SOURCES);
   for (const n of names) if (!SOURCES[n]) throw new Error(`unknown source '${n}' (valid: ${Object.keys(SOURCES).join(', ')})`);
 
+  // Verify every Ghidra export pair BEFORE touching the table, so a bad export fails the run
+  // without half-updating anything.
+  const ghidraPlan = names.includes('ghidra') ? await verifyGhidraExports() : null;
+  if (ghidraPlan?.notExported.length) {
+    log(`[ingest] ghidra: not exported, so not indexed: ${ghidraPlan.notExported
+      .map((x) => (x.variants.length ? `${x.image} (+ ${x.variants.join(', ')})` : x.image)).join('; ')}`);
+  }
+
   let table = await openTable();
+  if (table) {
+    const m = await migrateColumns(table);
+    if (m.added.length || m.dropped.length) {
+      log(`[ingest] migrated table columns in place: added [${m.added.join(', ')}], dropped [${m.dropped.join(', ')}]`);
+    }
+  }
 
   // Snapshot existing (path -> file_hash) once for skip checks.
   const existing = new Map();
@@ -52,12 +70,17 @@ export async function ingest({ sources, full = false, log = (m) => console.error
   const flushRows = async () => {
     if (!pendingRows.length) return;
     await flushDeletes();
-    if (!table) table = await createTable(pendingRows);
-    else await table.add(pendingRows);
+    if (!table) {
+      const keys = Object.keys(pendingRows[0]);
+      if (keys.join(',') !== ROW_COLUMNS.join(',')) {
+        throw new Error(`ingest row keys [${keys.join(', ')}] differ from ROW_COLUMNS [${ROW_COLUMNS.join(', ')}] (db.js) — update both together`);
+      }
+      table = await createTable(pendingRows);
+    } else await table.add(pendingRows);
     pendingRows = [];
   };
 
-  for await (const doc of allDocs(names)) {
+  for await (const doc of allDocs(names, { ghidraPlan })) {
     seenPaths.add(doc.path);
     if (existing.get(doc.path) === doc.fileHash) {
       stats.skipped++;
@@ -87,7 +110,11 @@ export async function ingest({ sources, full = false, log = (m) => console.error
       text_hash: sha256(text),
       file_hash: doc.fileHash,
       mtime: doc.mtime ?? 0,
-      fn_addr: doc.fnAddr ?? '',
+      // Image identity: set on ghidra rows only; every other source stores '' (empty string).
+      image_id: doc.imageId ?? '',
+      image_sha256: doc.imageSha256 ?? '',
+      va: doc.va ?? '',
+      images: doc.images ?? '',
       addrs: extractAddrs(text),
       meta: doc.meta ?? '',
       vector: null,
