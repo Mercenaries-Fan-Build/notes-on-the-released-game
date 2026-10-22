@@ -359,16 +359,10 @@ you nonsense. Also: the Xbox ASET chunk is mixed-endian — `type_id` is stored 
 inside otherwise-BE rows. See [`docs/aset_format.md`](./aset_format.md) §"Xbox
 layout is MIRRORED".
 
-**PS3 base-game WAD envelope: not literally cracked, but functionally moot.**
-The first `0x80800` bytes of `ps3-VZ.WAD` are enveloped by an unknown stream
-cipher (`tools/ps3_wad_header_crack.py` recovered an 18-byte keystream prefix as
-of 2026-05-21). We haven't gone further because the payoff would be zero: the
-PS3 DLC crack proved **PS3 content == Xbox content** (5287 ASET name-hashes
-identical, 0 platform-only, 36/36 DLC Lua byte-identical). Base-game deltas
-between PS3 and Xbox would live in this envelope, but the identity finding on
-the decrypted portion is strong evidence that nothing gameplay-relevant is
-different. Treat the envelope as "solved for our purposes" — see
-[`memory/ps3-dlc-crack-and-klicensee.md`](../memory/ps3-dlc-crack-and-klicensee.md).
+**PS3 base-game WAD: plain `SCFF`, no envelope.** `ps3-VZ.WAD` is a big-endian
+`SCFF` file from offset 0, like the Xbox one. The "encrypted `0x80800`-byte
+envelope" was read from a 1 GiB slice cut from inside a `VZ.WAD`, not from the
+start of one ([`format_reference.md` §2](./format_reference.md#2-ffcs-wad-container)).
 
 ---
 
