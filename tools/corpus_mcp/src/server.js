@@ -3,7 +3,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { search, xref, getDoc, coverage, callgraph, luaApi, luaXref, luaCallgraph, luaRecords, stats, status, clearCaches } from './search.js';
+import { search, xref, getDoc, coverage, callgraph, translate, luaApi, luaXref, luaCallgraph, luaRecords, stats, status, clearCaches, parseAddr } from './search.js';
+import { ghidraRequest, stopBridge, listBridges, stopAllBridges, killAllBridges } from './ghidra_bridge.js';
 import { ingest } from './ingest.js';
 import { SOURCES } from './config.js';
 import { emitAll as emitLuaStubs, writeLuarc } from './emmylua_emit.js';
@@ -26,8 +27,8 @@ server.registerTool('corpus_search', {
   title: 'Search project corpus',
   description:
     'Hybrid semantic + keyword search over the whole Mercenaries 2 project corpus: research docs, decompiled Lua, ' +
-    'persistent memory, past Claude conversations, tools/mods source, commit messages, and the 27k-function Ghidra ' +
-    'decompilation of the unpacked exe. Use this FIRST when asking "what do we already know about X" before re-deriving anything. ' +
+    'persistent memory, past Claude conversations, tools/mods source, commit messages, and the Ghidra exports of every ' +
+    'analysed executable image (PC / X360 / PS3; one row per image + function VA). Use this FIRST when asking "what do we already know about X" before re-deriving anything. ' +
     'Every hit carries `date`; transcripts are marked `unreviewed` and rank below written-up docs; documents may declare ' +
     '`status` (current/superseded/retracted), `evidence` (proven/inferred/speculative) and `supersedes` - prefer a current, ' +
     'proven, recent hit over an older one that merely sounds confident.',
@@ -69,23 +70,26 @@ server.registerTool('corpus_status', {
 server.registerTool('corpus_xref', {
   title: 'Cross-reference an engine address',
   description:
-    'Exact cross-reference of a PC engine address across the ENTIRE corpus, regardless of spelling ' +
-    '(FUN_00478120 == 0x478120 == 0x00478120). Returns every doc/memory/conversation/commit/decomp chunk mentioning it, ' +
-    'grouped by source — i.e. "everything we have ever written down about this function/global".',
+    'Exact cross-reference of an engine address across the ENTIRE corpus, regardless of spelling ' +
+    '(FUN_00478120 == 0x478120 == 0x00478120; matched as a whole address token). Returns every ' +
+    'doc/memory/conversation/commit/decomp chunk mentioning it, grouped by source; every hit carries its image_id ' +
+    "('' for prose, which is not attributed to an image). Pass `image` to keep only that image's Ghidra rows " +
+    '(a regional variant resolves to its code image).',
   inputSchema: {
     ref: z.string().describe('FUN_/DAT_/LAB_ symbol or hex address'),
+    image: z.string().optional().describe("images.tsv image_id, e.g. 'pc-v11' — restricts to that image's ghidra rows"),
     sources: sourcesParam,
     limit: z.number().int().min(1).max(200).default(40),
   },
-}, async ({ ref, sources, limit }) => {
-  try { return json(await xref({ ref, sources, limit })); } catch (e) { return err(e); }
+}, async ({ ref, image, sources, limit }) => {
+  try { return json(await xref({ ref, image, sources, limit })); } catch (e) { return err(e); }
 });
 
 server.registerTool('corpus_get', {
   title: 'Get corpus document',
   description:
     'Fetch the chunks of one indexed document by its corpus path (as returned by corpus_search/corpus_xref), ' +
-    "e.g. 'docs/modernization/world_streaming_spec.md', 'ghidra/FUN_00478120', 'memory/....md', 'conversations/<session>.jsonl'. " +
+    "e.g. 'docs/modernization/world_streaming_spec.md', 'ghidra/pc-v11/0x00478120', 'memory/....md', 'conversations/<session>.jsonl'. " +
     'Pass chunk+context to get a window instead of the whole doc.',
   inputSchema: {
     path: z.string(),
@@ -99,32 +103,51 @@ server.registerTool('corpus_get', {
 server.registerTool('corpus_coverage', {
   title: 'Decompilation naming coverage',
   description:
-    'Report which of the ~27k decompiled functions are referenced anywhere else in the corpus (docs, memory, ' +
+    "Report which of one image's decompiled functions are referenced anywhere else in the corpus (docs, memory, " +
     'conversations, annotations, commits) and which are still unnamed/undocumented. The uncovered list — sorted by ' +
-    'function size or caller count — is the work queue for naming the remaining assembly surfaces.',
+    'function size or caller count — is the work queue for naming the remaining assembly surfaces. A prose mention is ' +
+    'an address token with no image, so it counts for whichever image has a function at that VA.',
   inputSchema: {
+    image: z.string().describe("images.tsv image_id, e.g. 'pc-v11' (a variant resolves to its code image)"),
     top: z.number().int().min(1).max(500).default(30).describe('how many uncovered functions to list'),
     sort: z.enum(['size', 'callers']).default('size'),
     prefix: z.string().optional().describe("only functions whose address starts with this hex prefix, e.g. '0047'"),
   },
-}, async ({ top, sort, prefix }) => {
-  try { return json(await coverage({ top, sort, prefix })); } catch (e) { return err(e); }
+}, async ({ image, top, sort, prefix }) => {
+  try { return json(await coverage({ image, top, sort, prefix })); } catch (e) { return err(e); }
 });
 
 server.registerTool('corpus_callgraph', {
   title: 'Call-graph neighborhood of a function',
   description:
-    'Walk the decompiled call graph (callers/callees extracted from the Ghidra dump) outward from a function, ' +
+    "Walk one image's call graph (direct caller/callee edges from the Ghidra export) outward from a function, " +
     'depth-limited BFS. Every node is annotated with which corpus sources already document it — so you can see, e.g., ' +
     '"FUN_00478120\'s callees are all named except these two", which is how unnamed functions inherit context for naming.',
   inputSchema: {
+    image: z.string().describe("images.tsv image_id, e.g. 'pc-v11' (a variant resolves to its code image)"),
     ref: z.string().describe('FUN_ symbol or hex address to start from'),
     direction: z.enum(['callers', 'callees', 'both']).default('both'),
     depth: z.number().int().min(1).max(4).default(2),
     max_nodes: z.number().int().min(10).max(500).default(150),
   },
-}, async ({ ref, direction, depth, max_nodes }) => {
-  try { return json(await callgraph({ ref, direction, depth, maxNodes: max_nodes })); } catch (e) { return err(e); }
+}, async ({ image, ref, direction, depth, max_nodes }) => {
+  try { return json(await callgraph({ image, ref, direction, depth, maxNodes: max_nodes })); } catch (e) { return err(e); }
+});
+
+server.registerTool('corpus_translate', {
+  title: 'Translate a function to other images',
+  description:
+    "One function's names (Ghidra's plus every name `exemap annotate` attached, with sources) and its translations " +
+    'to the same function in other executable images (target VA, direct or not, answering/total paths), read from ' +
+    "the indexed row. `to` keeps only translations into that image. Also returns the source image's graph_images and " +
+    'untranslatable_images as exemap reported them.',
+  inputSchema: {
+    image: z.string().describe("images.tsv image_id the VA belongs to, e.g. 'pc-v11'"),
+    va: z.string().describe('function address (FUN_00478120, 0x478120, …)'),
+    to: z.string().optional().describe("keep only translations into this image_id, e.g. 'x360-retail'"),
+  },
+}, async ({ image, va, to }) => {
+  try { return json(await translate({ image, va, to })); } catch (e) { return err(e); }
 });
 
 server.registerTool('corpus_lua_api', {
@@ -240,7 +263,8 @@ server.registerTool('corpus_ingest', {
   description:
     'Incrementally re-index sources into LanceDB (unchanged files are skipped via content hash). ' +
     'doc/memory/tool/mod/commit take seconds-to-minutes; conversation and ghidra can take much longer on first run — ' +
-    'prefer running `npm run ingest` in tools/corpus_mcp for those.',
+    'prefer running `npm run ingest` in tools/corpus_mcp for those. A table whose columns predate the current row ' +
+    'shape is migrated in place first (rows and vectors kept).',
   inputSchema: {
     sources: sourcesParam,
     full: z.boolean().default(false).describe('ignore hash cache and re-embed everything'),
@@ -252,6 +276,98 @@ server.registerTool('corpus_ingest', {
     return json(res);
   } catch (e) { return err(e); }
 });
+
+// --- Ghidra bridge: live queries and edits against an image's saved Ghidra project -----------
+// One headless Ghidra per image starts on the first ghidra_* call for it (a project open takes
+// seconds to a minute) and stays up until ghidra_bridge_stop or server exit. While a bridge holds
+// an image's project, batch headless runs on it (export, fnsig) cannot open it.
+
+const imageParam = z.string().describe("images.tsv image_id, e.g. 'pc-v10' (a regional variant is served by its code image)");
+const vaParam = z.string().describe('address (FUN_00478120, 0x478120, ...)');
+const va = (ref) => `0x${parseAddr(ref)}`;
+const BRIDGE_NOTE = ' Answers come from the live Ghidra project, so they reflect edits made since the last export; the corpus ' +
+  'rows change only after the next export + annotate + ingest.';
+
+function bridgeTool(name, title, description, inputSchema, toRequest) {
+  server.registerTool(name, { title, description: description + BRIDGE_NOTE, inputSchema }, async (args) => {
+    try {
+      const [op, params] = toRequest(args);
+      return json(await ghidraRequest(args.image, op, params));
+    } catch (e) { return err(e); }
+  });
+}
+
+bridgeTool('ghidra_function', 'Function facts (live Ghidra)',
+  'The function containing an address: entry, name and its source, signature, body ranges, thunk target, every caller ' +
+  '(site + calling function) and its call list (the FnMnemonicSig grammar: 0x… direct, ext:<lib>!<name>, *0x… slot, ' +
+  '*stack:<off>, ?, sys:<N>).',
+  { image: imageParam, va: vaParam }, (a) => ['function', { va: va(a.va) }]);
+
+bridgeTool('ghidra_decompile', 'Decompile (live Ghidra)',
+  'Decompiled C of the function containing an address (c, or error when the decompiler fails).',
+  { image: imageParam, va: vaParam }, (a) => ['decompile', { va: va(a.va) }]);
+
+bridgeTool('ghidra_disassemble', 'Disassemble (live Ghidra)',
+  'Instructions (va, bytes, text): the whole function containing va, or `count` instructions starting at va.',
+  { image: imageParam, va: vaParam, count: z.number().int().min(1).max(4000).optional().describe('instructions from va instead of the whole function') },
+  (a) => ['disassemble', a.count === undefined ? { va: va(a.va) } : { va: va(a.va), count: a.count }]);
+
+bridgeTool('ghidra_xrefs_to', 'References to an address (live Ghidra)',
+  'Every reference to an address: from, reference type, and the function containing the reference (or null).',
+  { image: imageParam, va: vaParam }, (a) => ['xrefs_to', { va: va(a.va) }]);
+
+bridgeTool('ghidra_strings', 'Search defined strings (live Ghidra)',
+  'Defined strings matching a Java regex (find), each with the functions that reference it; `truncated` says more matched than `limit`.',
+  { image: imageParam, regex: z.string().min(1), limit: z.number().int().min(1).max(2000).default(200) },
+  (a) => ['strings', { regex: a.regex, limit: a.limit }]);
+
+bridgeTool('ghidra_read_bytes', 'Read bytes (live Ghidra)',
+  'Raw bytes at an address, as hex.',
+  { image: imageParam, va: vaParam, length: z.number().int().min(1).max(65536) },
+  (a) => ['read_bytes', { va: va(a.va), length: a.length }]);
+
+bridgeTool('ghidra_rename_function', 'Rename a function (writes the Ghidra project)',
+  'Rename the function whose entry is va. The reason (the evidence for the name) is required and goes to the ' +
+  "project's out/bridge_edits.tsv ledger with the old and new name; the program is saved before this returns.",
+  { image: imageParam, va: vaParam, name: z.string().min(1), reason: z.string().min(1).describe('the evidence for the name') },
+  (a) => ['rename_function', { va: va(a.va), name: a.name, reason: a.reason }]);
+
+bridgeTool('ghidra_set_comment', 'Set a comment (writes the Ghidra project)',
+  "Set a pre/post/eol/plate/repeatable comment at an address. The reason is required and goes to the project's " +
+  'out/bridge_edits.tsv ledger with the old and new text; the program is saved before this returns.',
+  {
+    image: imageParam, va: vaParam,
+    kind: z.enum(['pre', 'post', 'eol', 'plate', 'repeatable']),
+    text: z.string().min(1), reason: z.string().min(1).describe('why the comment is true'),
+  },
+  (a) => ['set_comment', { va: va(a.va), kind: a.kind, text: a.text, reason: a.reason }]);
+
+server.registerTool('ghidra_bridges', {
+  title: 'Running Ghidra bridges',
+  description: 'The Ghidra bridges this server started: image, project, program, pid, request count, state, ledger and log paths.',
+  inputSchema: {},
+}, async () => {
+  try { return json(listBridges()); } catch (e) { return err(e); }
+});
+
+server.registerTool('ghidra_bridge_stop', {
+  title: 'Stop a Ghidra bridge',
+  description: "Stop the bridge serving an image (its headless run saves and exits), releasing the image's Ghidra project " +
+    'for batch runs (export, fnsig).',
+  inputSchema: { image: imageParam },
+}, async ({ image }) => {
+  try { return json(await stopBridge(image)); } catch (e) { return err(e); }
+});
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    stopAllBridges().then(() => process.exit(0), (e) => { console.error(`[corpus-mcp] stopping bridges: ${e.message}`); process.exit(1); });
+  });
+}
+process.stdin.on('end', () => {
+  stopAllBridges().then(() => process.exit(0), (e) => { console.error(`[corpus-mcp] stopping bridges: ${e.message}`); process.exit(1); });
+});
+process.on('exit', killAllBridges);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
