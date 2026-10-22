@@ -5,7 +5,8 @@
 //   (2) the 3 SecuROM stolen-prologue functions that mercs2_nodrm_v3.exe restores inline
 //       (0x5e9de0 / 0x5e9f40 restored to `55 8bec 83e4`; 0x6d5640 to `33c0 c3`). We patch
 //       only the first 5 bytes in memory (bytes 6+ already match the dump), then create+decompile.
-// Emits the SAME header format as DecompileAllByName so the result splices into the dump:
+// Emits the SAME header format as the PC text dump (<program>_decomp.txt) so the result splices
+// into it:
 //   ==== <name> @0xADDR  size=N  callers=[...] ====
 // Args: <outPath> <targetsFile>  — targetsFile lists one hex VA per line (the DECOMP FAIL set);
 // the decompiled C goes to outPath.
