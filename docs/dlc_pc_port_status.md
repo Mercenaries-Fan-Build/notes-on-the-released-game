@@ -112,9 +112,5 @@ inner WAD; `unself` (APP and NPDRM) is sha256-identical to the Python oracle ELF
 retained only as oracles. The decrypted inner WAD is big-endian `SCFF`, so it
 feeds the same `dlc_input` + `ucfx_byteswap` + `patch_wad` pipeline as `dlc_port`.
 
-### Original note (superseded)
-
-The PS3 `VZ.WAD` has an unknown encrypted/obfuscated header (first 0x80800
-bytes). Big-endian `segs` blocks are visible starting at offset 0x80800. Once
-the header is decoded, the same `ucfx_be_to_le.py` pipeline applies. See
-`docs/ps3_wad_wrapper.md` for details.
+The PS3 base-game `VZ.WAD` is a plain big-endian `SCFF` file as well — no
+encrypted header ([`format_reference.md` §2](format_reference.md#2-ffcs-wad-container)).
