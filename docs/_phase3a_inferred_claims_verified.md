@@ -13,12 +13,11 @@ Phase 2 §2 inferred the PS3 shader TOC entry stride encodes `(vs_hash, vs_offse
 ps_hash, ps_offset)` based on offset-delta consistency. Verifying would require locating
 the shader-loader function in a PS3 Ghidra decomp.
 
-**Status: BLOCKED.** PS3 EBOOT Ghidra decomp is still pending on the user's local
-machine (noted in commit history during the pending-decomp session). The retail
-`output/_ghidra_ps3_retail/` directory doesn't yet exist with a completed run.
-`output/analysis/cross_platform/ps3_eboot/EBOOT.elf` is in place; running
-`./scripts/ghidra_analyze_ps3_retail.sh` from a workstation with the ~6h analysis budget
-is the next concrete step.
+**Status: OPEN.** The artifact it waited on exists: every PS3 code image has a full
+Ghidra project and functions export in the corpus (`scripts/ghidra_projects.tsv`;
+`corpus_search` with `sources: ["ghidra"]`, Ghidra docs `ghidra/ps3-v100/0x<va>`), built as
+`docs/ps3_ppc_re_workflow.md` describes. Verifying the pairs is locating the shader-loader
+function there.
 
 ## A.2 — Codec 0x05 = XMA2 across every retail Xbox wavebank
 
