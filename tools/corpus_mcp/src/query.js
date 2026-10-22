@@ -2,13 +2,23 @@
 /** CLI smoke-test for the corpus index.
  *
  *   node src/query.js search "how does the wavelet decoder work" [--sources doc,memory] [-k 5]
- *   node src/query.js xref FUN_00478120
+ *   node src/query.js xref FUN_00478120 [--image pc-v11]
  *   node src/query.js get docs/coordinate_systems.md
- *   node src/query.js coverage [--top 20] [--sort callers]
+ *   node src/query.js coverage --image pc-v11 [--top 20] [--sort callers]
+ *   node src/query.js callgraph 0x478120 --image pc-v11 [--dir callees] [--depth 2]
+ *   node src/query.js translate pc-v11 0x478120 [--to x360-retail]
  *   node src/query.js stats
  *   node src/query.js status        # index freshness: what changed since the last ingest
+ *   node src/query.js ghidra pc-v10 function|decompile|xrefs_to 0x478120
+ *   node src/query.js ghidra pc-v10 disassemble 0x478120 [--count 20]
+ *   node src/query.js ghidra pc-v10 strings --regex 'SpawnList' [--limit 50]
+ *   node src/query.js ghidra pc-v10 read_bytes 0x478120 --length 32
+ *   node src/query.js ghidra pc-v10 rename_function 0x478120 --name X --reason '...'
+ *   node src/query.js ghidra pc-v10 set_comment 0x478120 --kind plate --text '...' --reason '...'
+ *     (the ghidra_* MCP tools; one bridge is started for the call and stopped after it)
  */
-import { search, xref, getDoc, coverage, callgraph, luaApi, luaXref, luaCallgraph, luaRecords, stats, status } from './search.js';
+import { search, xref, getDoc, coverage, callgraph, translate, luaApi, luaXref, luaCallgraph, luaRecords, stats, status, parseAddr } from './search.js';
+import { ghidraRequest, stopAllBridges } from './ghidra_bridge.js';
 import { emitAll as emitLuaStubs, writeLuarc } from './emmylua_emit.js';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -37,10 +47,11 @@ try {
       console.log(`\n=== ${r.score}  ${r.date ?? '????-??-??'}  [${r.source}]${tag} ${r.path}#${r.chunk}  ${r.title !== r.path ? r.title : ''}`);
       console.log(r.text.slice(0, 500));
     }
-  } else if (cmd === 'xref') out(await xref({ ref: positional[0], limit: Number(flag('--limit', 40)) }));
+  } else if (cmd === 'xref') out(await xref({ ref: positional[0], image: flag('--image'), limit: Number(flag('--limit', 40)) }));
   else if (cmd === 'get') out(await getDoc({ path: positional[0] }));
-  else if (cmd === 'coverage') out(await coverage({ top: Number(flag('--top', 30)), sort: flag('--sort', 'size'), prefix: flag('--prefix') }));
-  else if (cmd === 'callgraph') out(await callgraph({ ref: positional[0], direction: flag('--dir', 'both'), depth: Number(flag('--depth', 2)), maxNodes: Number(flag('--max', 150)) }));
+  else if (cmd === 'coverage') out(await coverage({ image: flag('--image'), top: Number(flag('--top', 30)), sort: flag('--sort', 'size'), prefix: flag('--prefix') }));
+  else if (cmd === 'callgraph') out(await callgraph({ image: flag('--image'), ref: positional[0], direction: flag('--dir', 'both'), depth: Number(flag('--depth', 2)), maxNodes: Number(flag('--max', 150)) }));
+  else if (cmd === 'translate') out(await translate({ image: positional[0], va: positional[1], to: flag('--to') }));
   else if (cmd === 'lua_api') out(await luaApi({ name: positional[0], resolve_chain: flag('--no-chain') === undefined }));
   else if (cmd === 'lua_xref') out(await luaXref({ symbol: positional[0], limit: Number(flag('--limit', 100)) }));
   else if (cmd === 'lua_callgraph') out(await luaCallgraph({ root: positional[0], direction: flag('--dir', 'both'), depth: Number(flag('--depth', 2)), maxNodes: Number(flag('--max', 150)) }));
@@ -62,6 +73,26 @@ try {
   }
   else if (cmd === 'stats') out(await stats());
   else if (cmd === 'status') out(await status({ force: true }));
+  else if (cmd === 'ghidra') {
+    const [image, op, ref] = positional;
+    const num = (name) => (flag(name) === undefined ? undefined : Number(flag(name)));
+    const params = {
+      function: () => ({ va: `0x${parseAddr(ref)}` }),
+      decompile: () => ({ va: `0x${parseAddr(ref)}` }),
+      xrefs_to: () => ({ va: `0x${parseAddr(ref)}` }),
+      disassemble: () => (num('--count') === undefined ? { va: `0x${parseAddr(ref)}` } : { va: `0x${parseAddr(ref)}`, count: num('--count') }),
+      strings: () => ({ regex: flag('--regex'), limit: num('--limit') ?? 200 }),
+      read_bytes: () => ({ va: `0x${parseAddr(ref)}`, length: num('--length') }),
+      rename_function: () => ({ va: `0x${parseAddr(ref)}`, name: flag('--name'), reason: flag('--reason') }),
+      set_comment: () => ({ va: `0x${parseAddr(ref)}`, kind: flag('--kind'), text: flag('--text'), reason: flag('--reason') }),
+    }[op];
+    if (!image || !params) throw new Error('usage: query.js ghidra <image> function|decompile|xrefs_to|disassemble|strings|read_bytes|rename_function|set_comment ...');
+    try {
+      out(await ghidraRequest(image, op, params()));
+    } finally {
+      await stopAllBridges();
+    }
+  }
   else if (cmd === 'emit_stubs') {
     const outDir = flag('--out');
     const emit = emitLuaStubs({ outDir });
@@ -69,7 +100,7 @@ try {
     const luarc = skipLuarc ? null : writeLuarc({ stubRoot: emit.outDir, globals: emit.globals });
     out({ emit, luarc });
   }
-  else console.error('usage: query.js search|xref|get|coverage|callgraph|lua_api|lua_xref|lua_callgraph|lua_records|emit_stubs|stats|status ...');
+  else console.error('usage: query.js search|xref|get|coverage|callgraph|translate|lua_api|lua_xref|lua_callgraph|lua_records|emit_stubs|stats|status|ghidra ...');
 } catch (e) {
   console.error(e.message);
   process.exit(1);
