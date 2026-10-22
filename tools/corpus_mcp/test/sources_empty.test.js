@@ -5,13 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 
 // Points config at an empty, non-git tree with missing memory/transcripts dirs
-// and a missing ghidra dump, so every "source absent" guard branch fires and
-// every generator yields nothing (instead of throwing). No embeddings.
+// and missing ghidra exports, so every "source absent" guard branch fires:
+// the optional sources yield nothing, and the ghidra source (required) throws.
+// No embeddings.
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'corpus-empty-'));
 process.env.CORPUS_ENV_FILE = path.join(root, 'no.env');
 process.env.CORPUS_REPO_ROOT = root;
-process.env.CORPUS_GHIDRA_DUMP = 'missing/dump.txt';
+process.env.CORPUS_GHIDRA_EXPORTS = 'missing/exports';
+process.env.CORPUS_GHIDRA_IMAGES = 'missing/images.tsv';
 process.env.CORPUS_MEMORY_DIR = path.join(root, 'no-memory');
 process.env.CORPUS_TRANSCRIPTS_DIR = path.join(root, 'no-transcripts');
 
@@ -33,8 +35,8 @@ test('conversationDocs: missing transcripts dir yields nothing', async () => {
   assert.deepEqual(await collect(sources.conversationDocs()), []);
 });
 
-test('ghidraDocs: missing dump yields nothing', async () => {
-  assert.deepEqual(await collect(sources.ghidraDocs()), []);
+test('ghidraDocs: a missing images table is a hard failure, not an empty source', async () => {
+  await assert.rejects(() => collect(sources.ghidraDocs()), /missing\/images\.tsv: images table not found/);
 });
 
 test('commitDocs: non-git tree is handled gracefully', async () => {
