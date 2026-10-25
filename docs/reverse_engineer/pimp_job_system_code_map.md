@@ -14,21 +14,64 @@ the only Interlocked op left is the job-completion fence.
 
 ## 1. Worker pool
 
-**Worker thread proc = `FUN_00876400`** (one per CPU):
+**Worker thread proc = `FUN_00876400`** (exactly one worker thread, cpu index 1; see the spawn below):
 - `void FUN_00876400(int cpuIndex)` — first statement `*(*(TLS)+8) = cpuIndex`. **This is how a thread
   becomes a "pimp thread":** it installs its CPU index into its TLS pimp control block. Threads without
   that block are the "non-pimp threads" the Xbox assert rejects.
 - Infinite loop: drain the per-CPU **high-pri queue** fully, then service **one** entry from the
   **low-pri queue**; each pop is `TryEnterCriticalSection(queue+0x18)` → advance packed head /
   decrement count → dispatch → on empty clear the busy flag and `Sleep(0)` (spin-with-yield).
-- `callers=[]` because the `CreateThread(FUN_00876400, cpuIndex)` spawn is in the SecuROM-relocated
-  pimpInit (same island mechanism that hides `FUN_0084af70`'s caller) → **spawn site confirm-live**.
-- **CPU count `FUN_008767b0`** (`pimpGetNumCpus`): `GetProcessAffinityMask` popcount → worker count.
+- **Spawn = `0x00876800`** (in `.text`, outside every function of the Ghidra export; no direct caller
+  in `.text`). Its whole body, from the bytes of `mercs2_unpacked.exe` (sha256 `8c179a99…`):
+  ```
+  876800  mov [0x1176634], eax
+  876805  mov [0x1176638], ecx
+  87680b  mov dword [0x19f9298], 0
+  876815  call FUN_008767b0                 ; popcount of the process affinity mask
+  87681a  push 0x19f902c                    ; lpThreadId
+  87681f  push 0                            ; dwCreationFlags
+  876821  push 1                            ; lpParameter = cpuIndex 1
+  876823  push 0x876400                     ; FUN_00876400
+  876828  push 0x80000                      ; 512 KB stack
+  87682d  push 0
+  87682f  mov [0x19f9298], eax              ; the CPU count is stored, not looped over
+  876834  call [0xb051c0]                   ; CreateThread (the IAT slot every CreateThread site calls)
+  87683a  mov [0x19f9024], eax              ; the worker's handle
+  87683f  ret
+  ```
+  One `CreateThread`, no loop: the PC build runs **one** worker whatever the CPU count. The thread
+  list of a profiler session (`mercs2_profiler`) shows the same: one thread started at the worker proc.
+- **CPU count `FUN_008767b0`** (`pimpGetNumCpus`): `GetProcessAffinityMask` popcount, stored at
+  `0x19f9298`; no instruction in `.text` reads `0x19f9298` by its absolute address.
 
 **Per-CPU control block** array `@0x019f9040`, stride **300 B (0x4b dwords)**: `+0x00` busy flag,
 `+0x04` high-pri queue ptr, `+0x08` low-pri queue ptr, `+0x0c` handler-table base
 (`{handler@+0, jobtypeHash@+4}`, indexed `jobtype*2`). A thread's TLS block also holds `+0x8` cpu
 index and `+0xc` current-job ptr (set around each handler call).
+
+**Queue routing** (`FUN_0084af70` tail, `0x84b1ca–0x84b1e4`): cpu 0 = high `0xff4650`, low `0xff4618`;
+cpu 1 = high none, low `0xff45e8`. A job runs on whichever CPU drains the ring its submitter names:
+render jobs name `0xff45e8` (`FUN_0046a920`), the per-frame game jobs name `0xff4650`/`0xff4618`
+(`FUN_0048e550`, from game update). The main thread drains its own rings while it waits on a job
+(`0x8765cf`); nothing else drains them.
+
+**Per-CPU capacity** — every TLS+8 (cpu index) use, from the decomp, a `.text` `fs:0x2c` sweep and a
+raw byte scan of every section (table of all sites: owner stores, comparisons, indexed arrays):
+
+| slots | structure | evidence |
+|---|---|---|
+| 2 | Pimp control block `0x19f9040` (stride `0x12c`) | registrations write two handler copies (loop `mov ecx,2 / add eax,0x12c` at `0x42958f`); queue pointers set for two (`0x84b1ca`); slot 2 is the CPU count `0x19f9298`, then audio globals |
+| 2 | per-CPU context table `[0xd8a3bc]+0x14` (`FUN_004b7460`, from jobtype handlers `0x4b7760` / `0x4b7780`) | `+0x1c` holds the jobtype index (`0x4b7375`); teardown `FUN_004b73f0` loops 2 (`0x4b73f7`) |
+| 3 | pose-buffer block pool `*(0x14b7e6c)` | `Pool_AllocFast(0x24)` + 3×8 constructor at `0x693a24–0x693a47` |
+| 3 | memo `0x19c6954` | init writes 3 entries; init flag at `0x19c6984` |
+| 4 | scratch `0x14163e0 + cpu*0x6000` | 4 copies initialised; loops end at `0x142e3e0` |
+| 4 | `+0x55c` / `+0x57c` / `+0x58c` arrays of the 0x5b4-byte lookup objects | reset at `0x874d50` writes 4 of each; count-4 constructor at `0x4be0dc` |
+| 10 | 0x84-byte per-CPU lists | `new[10]` at `0x6c0e80`; drain loops 10 |
+
+Comparisons are equality tests (`cpu == 0` frame-budget timing in `FUN_00695b00` / `FUN_00695d10`;
+`cpu == [0xed4520]` deferred-list flush at `0x4fc470`), so a cpu ≥ 2 takes cpu 1's branches. The stored
+CPU count `0x19f9298` is never read. A thread with cpu index *n* needs every structure above with more
+than *n* slots: no index ≥ 2 without moving the two 2-slot structures.
 
 ## 2. Job dispatch (the hot line)
 
@@ -110,7 +153,8 @@ pinned** because the zone-name strings were stripped → confirm-live.
 
 ## 7. CreateThread inventory — Pimp vs not
 
-- **Pimp:** `FUN_00876400` (worker pool), `FUN_008271c0` (timer thread, via `FUN_00826f20`).
+- **Pimp:** `FUN_00876400` (the one worker, spawned at `0x876834`), `FUN_008271c0` (timer thread, via
+  `FUN_00826f20`).
 - **Not Pimp:** `FUN_00831e20 → FUN_00836610` = **PalSoundEngine::MixSources** audio mixer (one-off,
   50 ms poll); the `0x9cxxxx` set = Massive ad-SDK / net / DNS; `0x01b/0x02` island threads =
   Bink / CPUID / SecuROM (`FUN_01b986ea` = per-CPU CPUID feature detection).
@@ -127,9 +171,8 @@ pinned** because the zone-name strings were stripped → confirm-live.
 | Pool allocator | `Pool_Alloc 0x84d760`, `Pool_AllocFast 0x84ac20` (lock `DAT_00ff4570`) |
 | Hash primitives | `Hash_String 0x824270` (+FNV `0x82427f`), `Hash_Probe 0x8242b0` |
 
-**Confirm-live:** (1) worker `CreateThread` spawn + per-CPU block alloc loop (SecuROM-relocated
-pimpInit) — bp `FUN_00876400` entry, read `cpuIndex`, count live workers (expected = numCpus);
-(2) the per-CPU RootTimer profiler node struct (strings stripped); (3) the PC profiler-zone table
+**Confirm-live:** (1) who calls the spawn `0x876800` (no direct caller in `.text`) and what reads
+the stored CPU count `0x19f9298`; (2) the per-CPU RootTimer profiler node struct (strings stripped); (3) the PC profiler-zone table
 global + SyncCPUGPU fence (strings stripped). The `mercs2_core` job/scheduler analog (scoreboard ❌,
 candidate rayon) now has a concrete spec: per-CPU worker pool, 96-B Jobtype+fence+params jobs, a
 guarded ring, and a fork/join `InterlockedExchangeAdd` completion counter.
