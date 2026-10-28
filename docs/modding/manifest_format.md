@@ -646,7 +646,11 @@ and state machine it borrows, read-only.
 
 Without `retarget:` the model is lowered **rigidly**: the geometry goes into one donor draw group
 (`group:`, default 0) and the rest are neutralised. With `retarget:` it takes the skinned path
-([below](#retarget--the-skinned-path-add_model-add_outfit)).
+([below](#retarget--the-skinned-path-add_model-add_outfit)), which splits the mesh one donor draw
+group per source part; there `group:` is the first of those groups: a mesh the split keeps in one
+group goes into it whole, and one split across several starts in it and continues in the donor's
+largest other groups. Without `group:` the split takes the largest groups. A `group:` the donor does
+not draw is a build error naming the groups it does.
 
 `collision:` picks the prop's static collision: `donor` keeps the donor's `PHY2` as is;
 `follow_geometry` regenerates it from your own mesh. It is a rigid-path option — the skinned path's
@@ -762,7 +766,9 @@ vertices sharing a `_TINY_SLOT` merge.
 Without `retarget:` a model is lowered RIGIDLY: hosted on the donor with empty joints. Correct for
 a prop, wrong for anything that animates. `retarget:` selects the skinned lowering, which re-poses
 the source rig onto the donor's and writes palette-relative `BLENDINDICES` plus the matching
-`INFO(56)` range table — the shipped skinning format.
+`INFO(56)` range table — the shipped skinning format. The mesh is split one donor draw group per
+source part, the largest groups first; an `add_model`'s `group:` puts its first part in that group
+instead ([`add_model`](#add_model)).
 
 ```yaml
     retarget:
@@ -1786,12 +1792,13 @@ registered, so one of the two is silently not the one that loads. Names are comp
 
 - With no game: an `add_script` named `qm_modloader` or `qm_shell_modloader` (the loaders `qm link`
   mints), or named like a `behaviour.module` with a `behaviour.script` of the same Shipment.
-- With the game: a name with a script row (`type_id 35`) in a WAD of the game stack — `vz.wad`,
-  whose `scripts_vz` and `resident` blocks both carry scripts, and each language WAD a contribution
-  declares — or in a game WAD present beside `vz.wad`: `shell.wad`, `Loading.wad` and each language
-  WAD (`english.wad`, `spanish.wad`, `italian.wad`, `french.wad`, `german.wad`, `japanese.wad`,
-  `russian.wad`). A present WAD that does not read is an M0197 error; an absent one is not
-  checked. `-patch.wad` overlays are not read: a name another Shipment mints is **M0207**.
+- With the game: a name with a script row (`type_id 35`) in one of the game's own WADs — `vz.wad`,
+  whose `scripts_vz` and `resident` blocks both carry scripts, and each of these present beside it:
+  `shell.wad`, `Loading.wad` and each language WAD (`english.wad`, `spanish.wad`, `italian.wad`,
+  `french.wad`, `german.wad`, `japanese.wad`, `russian.wad`), matched case-insensitively. A present
+  WAD that does not read is an M0197 error; an absent one is not checked. No `-patch.wad` overlay
+  is read, even when the build's stack holds one: it is mod output, the Shipment's own installed
+  build among it, and a name another Shipment mints is **M0207**.
 
 `qm link` refuses the same name when it mints a script into `vz.wad`'s scripts blocks: an
 `add_script`, a novel shop behaviour or `qm_modloader` whose name a script of either block has.
@@ -2259,7 +2266,6 @@ is at no vendor; from then it is at every vendor in `shops`, because the loader 
 (`mrxrewarddata.lua:1489-1528`). A session that starts in the world — an alternate spawn, or a save
 that carries retry locations (`xQ!L.lua:646-657`) — reaches outpost vendors before the PMC.
 
-Fix: none needed when the item is meant to appear after a PMC visit; reference a module the game
-ships (omit `script`) for an item every vendor offers from the start.
+Fix: none — the warning says when the item appears.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
