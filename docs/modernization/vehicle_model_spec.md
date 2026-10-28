@@ -72,8 +72,36 @@ handing the mesh **someone else's bone and someone else's LOD tier**. Symptom, i
 again: geometry is *correct but in the wrong place* — `vz_veh_tank_amx30_elite` hung its treads in
 mid-air at tiers 0/2/4 while tier 1 (where the ordinals coincidentally lined up) rendered perfectly.
 
-**Self-check:** a SEGM row's own `seg_id` field equals the index you reached it by —
-`SEGM[61].seg_id == 61`. Assert this; it catches a mis-binding instantly.
+**Self-check:** a row reached THROUGH `INDX` names itself — `SEGM[INDX[k]].seg_id == INDX[k]`.
+Assert this; it catches a mis-binding instantly. It is **not** true of every row: see §2a.
+
+### 2a. ★ Instance rows — the table is walked by ROW, not by geometry
+
+Retail's draw loop (`FUN_00472a50`) walks **every SEGM row**: row `r` draws `renderable[SEGM[r].seg_id]`
+at `SEGM[r].node`, gated by `SEGM[r].state_mask`. The matrix slot comes from the row's node alone
+(`FUN_004778b0` reads rec+0, never the seg_id). So a row whose `seg_id` names **another** row's
+geometry draws that geometry **again, at its own node** — an instance. A loader that only reaches
+SEGM through `INDX` never draws these rows.
+
+| model | SEGM rows | instance rows | what they are |
+|---|---|---|---|
+| `al_veh_tank_m1a2` | 100 | 26 (rows 74–99 → segs 72/73) | 13 road wheels × 2 LOD tiers; one wheel mesh exists |
+| `civ_veh_car_van_crappy` | 128 | 9 (→ segs 116–118) | 3 wheels × 3 tiers |
+| `0x1FBFBB4B` (PMC resident) | 67 | 54 | repeated structures |
+
+Census: **251 of 3,007 models, 3,739 instance rows** — every tank's road wheels, three of a car's
+four wheels, helicopter rotor blades, repeated building parts. Every one has a rigid (node-placed)
+source with geometry in some loaded rung.
+
+**Placement: the REST pose is the `+16` chain, not the `+80` bind.** An instance node's `+80` is a
+**copy of its source node's**, and an ordinary part node's `+80` is its **parent's** world (the M1A2
+turret's `+80` is the hull origin, 1.63 m below its `+16` mount). Retail's live per-node matrices of
+`0x1FBFBB4B` (capture `23fe7f38_cracked-cruise/pmc`, `OBJ+0x2B8`) equal the `+16` chain on 73/73
+nodes and the `+80` bind on 8/73 — the geometry-owning nodes. Rigid geometry is placed by `+80` and
+skinned by `invBind · pose`, so the rest palette must be `invBind · (+16 chain)`
+(`mercs2_mesh` `SkinData::bones`); an identity rest sinks turrets and stacks every instance on its
+source. Tests: `model_assembly.rs` `every_segm_row_draws_including_instance_rows`,
+`instanced_road_wheels_rest_on_their_own_hubs`; `mercs2_probe` `retail_node_matrices_are_the_plus16_chain`.
 
 **Rigid vs skinned matters.** A `MESH` sub-object is **rigid**: authored in its bone's LOCAL space,
 so it must be multiplied by that bone's world-rest matrix. A `SKIN` sub-object is already in model
@@ -193,7 +221,8 @@ Start from a real vehicle container of the same class and rewrite it.
    Include the two shared body slots: `0x255EAB53` (intact) and `0x75F1F74D` (wreck), as **siblings
    under a common parent** which is the body switch node.
 2. `SEGM` — one 4-byte record per segment `{bone u16, seg_id u8, state_mask u8}`, sized for the
-   **whole chain** (all rungs), with `SEGM[i].seg_id == i`.
+   **whole chain** (all rungs). A row that owns geometry has `SEGM[i].seg_id == i`; an instance row
+   (§2a) names another row's `seg_id` to re-draw that geometry at its own node.
 3. `INDX` — **one u16 per `MESH`/`SKIN` sub-object**, in sub-object order, each naming a SEGM row.
    `INDX.len() == sub_object_count`. This is the single easiest thing to get wrong.
 4. `MTRL`, `PHY2`, and the `SWIT` + `NODE`/`STAT`/`CHDR`/`CEXE` destruction machine.
@@ -234,6 +263,7 @@ Regression tests: `crates/mercs2_engine/tests/model_assembly.rs`.
 **Invariants a valid model must satisfy:**
 - `INDX.len() == sub_object_count` for every rung.
 - Every group's `seg_id < SEGM.len()`, and `SEGM[seg_id].seg_id == seg_id`.
+- Every SEGM row whose `seg_id` has geometry in a loaded rung yields a draw — instance rows included.
 - No `(node, tier)` drawn by two rungs (0 double-drawn triangles).
 - Intact and wrecked draw **different** node sets; the wreck brings in ≥1 node the intact body lacks.
 
