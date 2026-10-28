@@ -247,6 +247,16 @@ locator/starter-name COMP (sub-block 33); consuming only a single NUL slips ever
 byte there. Both fixes are in `mercs2_formats::placement::parse_name_records`. With them, **62,143 of
 62,624** placements resolve a name (481 unnamed) — see the §2.10 correction.
 
+**Correction 2026-10-27: the flag is exactly ONE byte.** A record is `[u32 key][string][NUL][u8
+flag]`, flag `0x00` or `0x01`, and the next key starts right after it. The parser had skipped every
+`0x00`/`0x01` byte after a name, on the assumption that a key's low byte is never `0x00`/`0x01`;
+retail disproves it — `vz_state_pmccon004` places key `0x00105200` right after a `0x00` flag, and
+landing pad `12_chi_hq_lz_playerone` has key `0x000D7901` (the key `data/live_registry_hashes.csv`
+records for it live). The skip ate those low bytes, read wrong keys and dropped the names. The
+one-byte layout tiles every Name COMP of `vz.wad`'s 923 layers exactly
+(`mercs2_formats/tests/placement_keys_retail.rs`, which also pins that none of the 101,299 keys of
+those layers is in two of them). The 62,143-of-62,624 count above predates this correction.
+
 ### 2.9 LowResTerrainObject COMP — tile→mesh mapping
 
 VERIFIED 2026-05-16 from `00029_blocks__VZ__layers_static_P000_Q3.block.bin`.
