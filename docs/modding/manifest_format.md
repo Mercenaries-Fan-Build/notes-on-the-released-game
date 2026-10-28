@@ -136,8 +136,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 |---|---|---|
 | `replace_texture` | Data | `target`, `image` |
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
-| `add_model` | Data | `name`, `model` (`donor`, `group`, `textures`, `retarget` optional) |
-| `add_outfit` | Data + Script | `name`, `slug`, `display`, `wearer`, `model` (`donor`, `textures`, `retarget`, `single_group` optional) |
+| `add_model` | Data | `name`, `model`, `donor` (optional in the schema, required by `qm build`) (`group`, `textures`, `retarget` optional) |
+| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (`model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only) |
 | `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
@@ -178,7 +178,7 @@ inside a placement layer, not a standalone asset.
 hero model (`pmc_hum_mattias` / `pmc_hum_chris` / `pmc_hum_jen`), validated against the game stack
 (Plan 04, resolved Q2). Set `donor:` only for a variant host such as `pmc_hum_mattias_v3`.
 
-On `add_model` `donor:` is still **required** — a prop has no wearer to name its host, and its rig
+On `add_model` `donor:` is optional in the schema and **required by `qm build`** — a prop has no wearer to name its host, and its rig
 must match the geometry class, which is not safe to guess (the weight-transfer history shows a wrong
 host produces a model rigged to nothing). Supply it explicitly.
 
