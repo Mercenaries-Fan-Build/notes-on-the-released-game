@@ -220,11 +220,11 @@ oracle (D4); original exe + Ghidra decomp + x32dbg = **oracle/spec** (D6).
 passes an oracle gate — the constraint is provable behavioral **equivalence**, not implementation
 fidelity.
 
-**On Lua (state it accurately):** the script host (`mercs2_script`) targets **Lua 5.4 via `mlua`** with
-a 5.1 compatibility prelude for behavioral parity (native i64 → money/economy is `i64` for free). A
-parallel **exact Lua 5.1.5** library (`mercs2_luac`, float `lua_Number`, 32-bit `size_t`) also exists
-for byte-exact bytecode/VM work — it emits LuaQ chunks the retail game accepts. When precision matters,
-say which one you mean.
+**On Lua (state it accurately):** the script host (`mercs2_script`) runs the game's own **Lua 5.1.5**
+VM, vendored by `mercs2_luac` (float `lua_Number`, no compat prelude), so the shipped corpus executes as
+authored. That **exact Lua 5.1.5** library (`mercs2_luac`, float `lua_Number`, 32-bit `size_t`) is the
+workspace's single Lua and also serves byte-exact bytecode/VM work — it emits LuaQ chunks the retail
+game accepts. When precision matters, say which one you mean (the host or the library/compiler).
 
 **Regression harness = two oracle surfaces:** *Surface A* (asset→struct, byte-identical vs x32dbg
 dumps), *Surface B* (script→engine-binding **call-trace** equivalence — this is what makes upgrading
