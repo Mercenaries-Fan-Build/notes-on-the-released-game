@@ -103,7 +103,7 @@ FUN_00631670 WinMain → FUN_00630ef0 RunFrame → FUN_0085a9e0 (per-viewport lo
        └─ FUN_00468ca0  RenderShadow           → FUN_004a3db0 tree shadow loop
   draw fns fill DAT_011647xx "current state" globals, then:
   → FUN_008546a0  pack 0x58-byte command packet into ring DAT_00ff4700 (2 buckets × 0x2000)
-       ├─ FUN_008548f0 sort-key by material class    (packet byte +0x44 = DAT_0116474c)
+       ├─ FUN_008548f0 sort-key: phase, class byte (+0x44 = DAT_0116474c), 14-bit term (render_core_code_map.md §6a)
        └─ FUN_008549a0 bucket-sort
   → FUN_00854b38  queue CONSUMER (executes packets) — applies SetRenderState/SetTexture per
                    material-class bucket  ← the GPU-state seam (confirm-live)
