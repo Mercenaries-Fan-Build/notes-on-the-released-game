@@ -51,8 +51,8 @@ The **hka animation runtime is RTTI-named and pinned on PC** (constructors + typ
 are the shared `FUN_0089*`/`FUN_008a*` field-conversion family, the **FaceFX face-graph evaluator**
 is `FUN_00686ce0` (source path `d:\projects\mercs2_pc\mercs2\fxs…`), the **HumanAnimationSystem /
 HumanAnimationSet reflection registrars** are `FUN_0065ade0` / `FUN_0065af90`, and the **clip
-picker** (ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` → `ASTO[index]` → clip) is fully
-solved and validated end-to-end. **Still opaque:** the per-frame VMX/SSE pose-sample-and-blend math
+picker** (ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` query → `ASTO` clip list → one
+clip) is read from the exe and checked against live memory. **Still opaque:** the per-frame VMX/SSE pose-sample-and-blend math
 (vtable-dispatched inside layer 4), the MT job dispatch under the `AnimCpuCap` budget, and the
 FaceFX curve-solver numerics — all **confirm-live** (§8) / **open** (§9).
 
@@ -64,9 +64,9 @@ FaceFX curve-solver numerics — all **confirm-live** (§8) / **open** (§9).
 animation asset (type 0x18166555)                        clip picker (SOLVED §7):
   = Havok 5.5 packfile (hkaAnimationContainer +            game state
     one hkaWavelet/Interleaved/Delta SkeletalAnimation)      └(ActionTable 0x6802C321)→ Handle
-  + Pandemic 'trnm' chunk = track→bone by HIER name-hash     └(AnimationLookup 0xE00B080C
-    (the real transformTrackToBoneIndices; animgroup.rs)         + CharacterName=hash(merc))→ idx
-                                                               └ ASTO[idx] = clip name-hash
+  + Pandemic 'trnm' chunk = track→bone by HIER name-hash     └(AnimationLookup 0xE00B080C query
+    (the real transformTrackToBoneIndices; animgroup.rs)         + Gender/CharacterName/equip)→ idx
+                                                               └ pool[idx] = [count][clips] → draw
         │ load-time field migration                                    │
         │  FUN_0089d280 referencePose builder (48B hkQsTransform/bone)  │ resolve in animgroup
         │  FUN_0089cd40 numberOfBoneTracks · FUN_0089ce90 numberOfPoses │
@@ -128,7 +128,7 @@ decomp-verified address. "Married by": **vftable** = the PC ctor stamps the RTTI
 | `BoneCtrlLookAt/FakeWheel/…` (per-bone controller factories, Xbox `8251be68…`) | PC controller vtable family (post-sample modifiers; individual PC ctors positional) | string | L/open | — |
 | FaceFX face-graph **evaluate/update** (`Fx*`/`PFx*`, `FxActorInstance`) | **`FUN_00686ce0`** (2871 B; walks fg-node list, `(*node+0x18)()` → value array); tick-in `FUN_00686c60` | string (`FxActorInstance.h`, `…mercs2\fxs…`) | M-H | READ |
 | clip picker `ActionTable` | `0x6802C321` resident table | anchor (VERIFIED) | H | ref |
-| clip picker `AnimationLookup` | `0xE00B080C` (CharacterName=hash(merc); `Animation` idx → `ASTO[idx]`=clip) | anchor (VERIFIED e2e) | H | ref |
+| clip picker `AnimationLookup` | `0xE00B080C` (query `FUN_00743CD0`; `Animation` idx → `pool[idx]` = `[count][clips]`) | anchor (live-checked) | H | ref |
 | sample codec (Wavelet/Delta/Spline) | `mercs2_formats` decoder (168/168 tests) | solved | H | ref |
 | GPU skin shaders `PgSkin*VP`/`PgMesh*Morph*VP`, `BoneMatrixArray`, `rotateBonesForSkinning` | shader-string set (compiled `.sho`); palette upload in render path | string | L/open | — |
 
@@ -294,13 +294,15 @@ the FaceFX curve **solver numerics** (the `Fx*LinkFn` transfer-function math ins
 > **The data-driven clip picker (the row-20 "controller" / state machine).** VERIFIED e2e
 > ([[human-animation-selection-system]], [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md)):
 > `ActionTable 0x6802C321` (Stance/Action/AimState/Direction/… → Handle) → `AnimationLookup
-> 0xE00B080C` (keyed by `CharacterName = pandemic_hash_m2(merc)` + equipment → `Animation` u32
-> index) → `ASTO[index]` = clip name-hash → the character's animgroup clip. Chris idle resolves to
-> `0xED37BC56`, matching the independent `LtSampleWave` capture. Transition/crossfade graph =
-> `0xAB8FE34B`; `Min/MaxTimeScale` = playback-rate range; tool `action_table_probe`. **This is the
-> engine's animation state machine** — the native driver assembles the per-character set through the
-> `HumanAnimationSet`/`HumanAnimationSystem` components whose PC reflection registrars are `FUN_0065af90`
-> / `FUN_0065ade0` (§2); `ASTO` *is* the shipped index→clip map (no runtime reconstruction).
+> 0xE00B080C`, queried by `FUN_00743CD0` with a key of the Handle, the template's `HumanAnimationSet`
+> (Gender + `CharacterName = pandemic_hash_m2(merc)`) and its equipment → the winning row's `Animation`
+> pool index → a `[count][clips]` list in the lookup's `ASTO` pool → one clip drawn from the game's
+> random state. Scoring, defaults row and list layout: `human_animation_selection.md` §0, §3. Chris
+> idling with a Rifle (`0x2403F715` row) lists `0xED37BC56`, matching the independent `LtSampleWave`
+> capture. Transition/crossfade graph = `0xAB8FE34B`; `Min/MaxTimeScale` = playback-rate range; tools
+> `mercs2_probe anim-table`, `action_table_probe`. The native driver assembles the per-character set
+> through the `HumanAnimationSet`/`HumanAnimationSystem` components whose PC reflection registrars are
+> `FUN_0065af90` / `FUN_0065ade0` (§2).
 >
 > **Mattias locomotion clips** identified via Havok footstep annotations (block 3154 → 12 walk + 21
 > run clip hashes; [[mattias-locomotion-clips-identified]]).
@@ -358,9 +360,9 @@ half:
   §7); `mercs2_engine` (`pose.rs`/`mesh.rs`/`scene.rs`) composes bone locals and does **4-influence
   LBS GPU skinning** (`SkinPalette`/`bone_matrices`) — the exact `BoneMatrixArray` + `PgSkin*VP`
   role (§3, §9). BLENDINDICES per-group palette + HIER name-hash binding are correct.
-- ✅ **Data-driven clip index.** `mercs2_formats::anim_select` resolves the per-character idle
-  through `ActionTable → AnimationLookup(CharacterName) → ASTO[index]` (§7); `world.rs` feeds it as
-  the player idle. Hardcoded `CLIP_IDLE/WALK/RUN` is gone from the player idle path.
+- ✅ **Data-driven clip selection.** `mercs2_formats::anim_select::AnimSelector::query` is retail's
+  AnimationLookup query (§7); `mercs2_engine::game_world::HumanAnimData` resolves the hero's Upright
+  idle / walk / run from its template identity and `world.rs` loads them.
 - ❌ **Controllers / behavior state machine.** The engine approximates transitions with a fixed
   blend; it does not yet consume the transition graph `0xAB8FE34B`, the `Looping/Driven/Locomotion`
   flags, `Min/MaxTimeScale`, or the `BoneCtrl*` procedural modifiers (LookAt/StrapOn/FakeWheel/…).

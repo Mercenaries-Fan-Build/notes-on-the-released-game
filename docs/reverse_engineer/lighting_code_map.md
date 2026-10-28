@@ -46,10 +46,11 @@ Stream-read helpers (corroborated across all ECS families): `FUN_00656210(defaul
 | +0x00 | int32 | light type / id (point/spot enum) | 0 | layout proven; semantic inferred |
 | +0x04/+0x08/+0x0C | f32×3 | color R / G / B | 0.0 | proven |
 | +0x10 | f32 | intensity | 0.0 | inferred (UE `Intensity`; `placement.rs intensity()=params[0]`) |
-| +0x14 | f32 | radius / attenuation | 0.0 | inferred (UE `AttenuationRadius`; `radius()=params[1]`) |
-| +0x18 | f32 | falloff / atten exp | 0.0 | inferred |
-| +0x1C / +0x20 | f32 | cone inner / outer angle | 0.0 | inferred |
-| +0x24..+0x30 | f32×4 | params 5–8 (unknown) | 0.0 | unknown → confirm-live |
+| +0x14 | f32 | params 1 (~1.0; 0 on spots) | 0.0 | unknown |
+| +0x18 | f32 | range (the render node's radius: `FUN_004A7120` point, `FUN_004A7660` spot) | 0.0 | proven (`hibernation_grid.md` §2; every placed light row of four captures) |
+| +0x1C / +0x20 | f32 | params 3 / 4 | 0.0 | unknown |
+| +0x24 | f32 | cone angle, clamped to 0..π; the spot node's bound uses tan(angle/2) (`FUN_004A7660`) | 0.0 | proven from code |
+| +0x28 / +0x2C / +0x30 | f32×3 | runtime intensity / range / cone scales a LightAnimation writes (`0x4A80DA`); shipped 1.0 | 0.0 | proven from code |
 
 All 9 floats default to **0.0** in shipping `.rdata`; live values arrive from the level stream. The
 on-disk COMP record prefixes a `u32` entity key → 56-byte stride (`parse_light_records`). Registered

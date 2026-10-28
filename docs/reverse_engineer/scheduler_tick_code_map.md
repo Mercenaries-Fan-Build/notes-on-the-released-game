@@ -111,6 +111,26 @@ Parallel render worker `FUN_0046a3c0` sets `view+0x2b94` (active scene) then cal
 reach `cam = view + (*(u16*)(view+0x2B92))*0xE80`. The concrete FUN bodies behind these slots live in
 the `.data` vtable → confirm-live.
 
+**v1.1 live read (2026-10-26, capture `v11-patched-securom`, sha `7a348847…`) — the slot table
+above does not hold as written.** The object the frame-cap function `0x004F5B90` (v1.1 of
+`FUN_004f59a0`) flips through is `[0x00DFB2F8]` = `0x017CEAF0`, vtable `0x00BD38E8`, and its slots
+resolve to:
+
+| slot | v1.1 target | what it is |
+|---|---|---|
+| `+0x10` | `0x006B9360` | **`ret`** — a no-op |
+| `+0x14` | `0x006B9360` | **`ret`** — the same no-op |
+| `+0x34` | `0x008528B0` | records the request: `[this+0x2d0c] = arg0`, `[this+0x2d10] = vsync byte`, `[this+0x2d1c] \|= 1` — it does **not** flip |
+| `+0x44` | `0x008306C0` | `ret 0xc` |
+
+So in v1.1 the flip is a deferred request consumed elsewhere, and if RunFrame's stages 6 and 9
+dispatch through this object they are no-ops. The sampled frame shows where the render is: the Pimp
+worker submits it through job 10's tree (`0x46A420` → … → the per-viewport loop `0x85ABD0`), and
+job 3 (`0x00631510`) is the candidate Present — see `perf_baseline_v11_20261026.md`. Job 21
+(`0x84F0D9C6`) is not a render-command drain: its body `FUN_00876A90` is x87 math. RunFrame itself
+has not been re-read in v1.1; until it is, treat
+stages 6/9 and this table as **v1.0 claims, unverified**, not as the v1.1 frame.
+
 ## 6. Timestep policy
 
 **Decoupled fixed-sim + variable-render.** Real frame dt from **QueryPerformanceCounter**
@@ -118,6 +138,46 @@ the `.data` vtable → confirm-live.
 (`DAT_0175186c`): mode 0 = variable-with-clamp (min `DAT_00b977f8` … **max/cap `DAT_00b92b58`**),
 mode 1 = fixed-step, mode 2 = variable-substep. `FUN_004c14f0` then runs a fixed-step accumulator
 over that dt (integer sim steps + fractional carry). Frame-rate cap/vsync in `FUN_004f59a0`.
+
+### 6.1 v1.1 live read (2026-10-26) — what the retail PC build actually runs
+
+v1.1 addresses (`exemap translate` from v1.0): timestep `0x004F5720`, master tick `0x004C14A0`,
+frame cap `0x004F5B90`. Values are from the `v11-patched-securom` capture, read out of `image.bin`
+/ `process.dmp`, not inferred.
+
+**The mode is 0 — variable step, one sim step per frame.** The selector is
+`[0xDFAD75] ? [0x1750870] : [0x175086C]`; both candidates hold 0. In mode 0 (`0x004F59AD`):
+
+```
+dt = real frame dt
+dt = max(dt, [0xB977F8] = 1e-4)          ; then
+dt = min(dt, [0xB92B58] = 0.1 s)         ; the 100 ms cap
+steps = 1
+dt *= [[0x1174CDC]+0x3c]                 ; time scale (1.0 live)
+dt = max(dt, [0xBEA848] = 0.005 s)       ; ★ 5 ms floor, applied after the scale
+dt /= [0xDFCC98]                         ; second scale (1.0 live; ramped by [0xB9854C])
+```
+
+The 5 ms floor is the frame-rate wall: above 200 fps the sim advances 5 ms per shorter frame and
+runs faster than real time. The master tick then accumulates **integer milliseconds** —
+`x = dt * [0xDFCDC8] (= 1000.0) + frac[0x198CC48]`; `[0x11755CC] += (int)x`; `frac = x - (int)x` —
+so a frame under 1 ms contributes no tick at all. Physics step size = frame time, as the game is
+shipped.
+
+**Mode 1 is a fixed-step controller the engine builds itself** (`0x004F577F`): it allocates a
+`0x8D8`-byte object (`0x0084AE70`) and constructs it with `0x004F4D20(rate=[0x1750874] = 60.0 Hz,
+substep=[0x175088C] = 10.0, [0x1750888] = 10.0, …)`, steps per frame bounded by
+`[0x175087C] + 1 = 7`; `0x004F5B50` tears it down on a mode change. Mode 2 is the
+variable-substep path at `0x004F5970`. The console strings `variable / adaptive / hybrid framerate`
+are these three. Decoupling the sim from the render rate is therefore a switch of `[0x175086C]`
+(or `[0x1750870]`), not a rewrite — but every consumer of the step count (`arg_10h`/`arg_14h` of
+the selector, the `[0x1174D2B]` pause byte) has to be read before relying on it.
+
+**There is no frame cap and vsync is hard-off on this path.** In mode 0 the cap function skips the
+QPC spin (`ecx == 0 → 0x004F5CFA`) and asks for a flip with the vsync bool from
+`[0x1174C7C]->vtable[0x18]` = `0x0054CDE0` = `xor al, al; ret`. The QPC spin exists only in mode 1
+(`[0x17D30C0]` = 10 MHz QPC frequency on the capture machine; tolerance `[0x1175048]` = 0.79 ms).
+The flip itself is deferred (§5).
 
 ## 7. Xbox → PC bindings established
 
