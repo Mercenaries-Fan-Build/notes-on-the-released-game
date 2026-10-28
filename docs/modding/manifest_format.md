@@ -156,6 +156,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
+| `add_placement` | Data | `layer`, `entity` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
+| `add_layer` | Data | `name`, `template`, `entities` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
 | `add_tiny_geometry` | Data | `layer`, `cell`, `key`, `objects`, `model` |
 | `activate_layer` | Script | `layer` (`replaces:` optional) |
 | `native_hook` | Code | `target`, plus a `plugin` or a symbol/detour descriptor, plus `touches` |
@@ -263,6 +265,44 @@ too.
 
 Scope and the step-0/1/2 proof are in
 [`vz_state_world_overlay_scope.md`](vz_state_world_overlay_scope.md).
+
+### `add_placement` and `add_layer`
+
+`add_placement` adds entities to a layer the game ships; `add_layer` mints a new layer, cloning the
+`Transform` / `ModelName` / `Name` scaffolding of a `template` layer:
+
+```yaml
+  - kind: add_placement
+    layer: layers_static            # a needle, matched like edit_world's
+    entity: src/barrel.yaml
+  - kind: add_layer
+    name: vz_state_my_mission       # the new layer's name, hashed to its ASET key
+    template: layers_static         # the layer whose scaffolding is cloned
+    entities: src/my_mission.yaml
+```
+
+The entity file is one record, or a list of records:
+
+```yaml
+- key: 0x0F00A001                   # the entity key, a u32
+  model: al_prop_barrel_red
+  pos: [1240.5, 12.0, -880.25]
+  yaw: 90                           # degrees about Y; or quat: [x, y, z, w]
+  name: my_barrel                   # optional; defaults to modent_<key, 8 hex digits>
+```
+
+`key`, `model` and `pos` are required. A record gives `quat` or `yaw`, not both, and with neither
+it is unrotated. Any other field is refused by name. A file that does not read is a build error
+naming the file, as an `edit_world` edits file is.
+
+Both kinds ship the whole block the layer (or the template) lives in, so each claims that layer:
+two Shipments adding to one layer, or minting from one template, conflict (M0207), and so do an
+`add_placement`, an `add_layer` and an `edit_world` naming one layer.
+
+Retail places every entity key once: none of the 101,299 keys of `vz.wad`'s 923 layers is in two
+layers or twice in one (measured 2026-10-27 over every `type_id 9` layer entry's `Transform`,
+`ModelName` and `Name` records). An `add_placement` key the target layer's block already places, and
+a key two records of one entity file share, are **M0198**.
 
 ### `add_tiny_geometry`
 
@@ -464,6 +504,9 @@ manipulates `_QM.ui["<name>"]` if you need to place or toggle it. For a movie th
 shipped one, use `add_movie` with the exact shipped name instead; a replacement needs no widget of
 its own.
 
+The movie is checked as an `add_movie`'s is: one carrying ActionScript 3 is **M0190**, which the
+game's GFx 2.0.48 runtime cannot execute.
+
 ### `add_script`
 
 Adds a new Lua module the game can `import`:
@@ -475,8 +518,9 @@ Adds a new Lua module the game can `import`:
     exports: [Ess, OnStateChange]   # optional: the globals this module writes on purpose
 ```
 
-`name` is the module name the engine hashes to find the script: bare, no extension, and not the name
-of a shipped script (M0197). `source` is the `.lua` file, compiled when the Shipment is built. The
+`name` is the module name the engine hashes to find the script: bare, no extension, and not a name a
+script of the game, of `qm`'s own loaders or of the Shipment's novel shop behaviours already has
+([M0197](#m0197)). `source` is the `.lua` file, compiled when the Shipment is built. The
 module runs when something first imports it, not at load.
 
 **`exports`.** A module that writes into `_G` competes with the engine's own writes to it (M0302,
@@ -1406,6 +1450,8 @@ they claim one target in a class that cannot be shared:
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
 | `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
 | `add_*` minting a name (`add_model`, `add_movie`, `add_script`, …) | `KeyedSet` — the same new name twice is a conflict |
+| `add_shop_item` with `behaviour.script` | `KeyedSet` on `behaviour.module`, the script it mints: two Shipments minting one module, or one minting it and another an `add_script` of that name, conflict. Items of one Shipment naming one module and one `script` mint it once |
+| `add_placement`, `add_layer` | `KeyedSet` on the layer (`add_layer`: its `template`), whose whole block each ships — another Shipment's `add_placement`, `add_layer` or `edit_world` on it conflicts |
 | `add_sound` | `KeyedSet` on the bank name and on each cue — the same bank or cue name added twice is a conflict |
 | `replace_sound_bank` | `Exclusive` on the bank's entry (`<bank>` or `<bank>.<language>`) and on every cue it declares |
 | `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
@@ -1726,6 +1772,40 @@ the templates that start an effect.
 
 The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
 need the game stack and run in `qm lint --with-game` and in `qm build`.
+
+M0197 and M0198 are errors; M0310 is a warning. M0197 checks `qm`'s own names and the Shipment's
+with no game, and the game's script names in `qm lint --with-game` and in `qm build`. M0198 needs
+the game stack and runs in `qm lint --with-game` and in `qm build`. M0310 needs no game.
+
+### M0197
+
+**An `add_script` name, or the `module` of a novel shop behaviour, is already a script's name.** The
+engine finds a script by its name hash and the script type, and the registry keeps the first one
+registered, so one of the two is silently not the one that loads. Names are compared by
+`pandemic_hash_m2`, so case does not matter.
+
+- With no game: an `add_script` named `qm_modloader` or `qm_shell_modloader` (the loaders `qm link`
+  mints), or named like a `behaviour.module` with a `behaviour.script` of the same Shipment.
+- With the game: a name with a script row (`type_id 35`) in a WAD of the game stack — `vz.wad`,
+  whose `scripts_vz` and `resident` blocks both carry scripts, and each language WAD a contribution
+  declares — or in a game WAD present beside `vz.wad`: `shell.wad`, `Loading.wad` and each language
+  WAD (`english.wad`, `spanish.wad`, `italian.wad`, `french.wad`, `german.wad`, `japanese.wad`,
+  `russian.wad`). A present WAD that does not read is an M0197 error; an absent one is not
+  checked. `-patch.wad` overlays are not read: a name another Shipment mints is **M0207**.
+
+`qm link` refuses the same name when it mints a script into `vz.wad`'s scripts blocks: an
+`add_script`, a novel shop behaviour or `qm_modloader` whose name a script of either block has.
+
+Fix: rename the module.
+
+### M0198
+
+**An entity key is already placed.** An `add_placement` or `add_layer` entity file lists one key in
+two records, or an `add_placement` key is a key the target layer's block already places in a
+`Transform`, `ModelName` or `Name` record. Retail places every key once
+([`add_placement` and `add_layer`](#add_placement-and-add_layer)).
+
+Fix: a key no record of the layer's block uses, once per file.
 
 ### M0214
 
@@ -2167,5 +2247,19 @@ Observed 2026-10-06: an emitter without `GEOM` crashed the game with `INT_DIVIDE
 Fix: give the emitter a `GEOM` naming a shape of the effect, with `word` the shape's record count;
 or, for an emitter that spawns nothing, a constant `rate` of 0 and a `ratevar` of 0, started only by
 templates whose `0x62C7746E` is 0.
+
+### M0310
+
+**A novel shop behaviour is offered only after the host enters the PMC interior** (warning). An
+`add_shop_item` whose `behaviour` carries a `script` mints a new module, and its catalog and reward
+rows are inserted by `qm_modloader`, which runs from the trampoline on `wifpmcinterior`'s `_OnEnter`
+(`wifpmcinterior.lua:386`). Until the host's first entry into the PMC interior in a session the item
+is at no vendor; from then it is at every vendor in `shops`, because the loader also clears
+`MrxRewardData.gtAllSupport`, the per-faction list cache `GetAllPotentialShopItems` fills
+(`mrxrewarddata.lua:1489-1528`). A session that starts in the world — an alternate spawn, or a save
+that carries retry locations (`xQ!L.lua:646-657`) — reaches outpost vendors before the PMC.
+
+Fix: none needed when the item is meant to appear after a PMC visit; reference a module the game
+ships (omit `script`) for an item every vendor offers from the start.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
