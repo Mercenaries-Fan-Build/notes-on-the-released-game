@@ -210,11 +210,11 @@ Ghidra decomp + x32dbg = **oracle/spec** (D6).
 behavioral **equivalence**, not implementation fidelity.
 
 **Lua runtimes:**
-- `mercs2_script` — Lua 5.4 via `mlua` with a 5.1 compatibility prelude for behavioral parity
-  (native i64, so money/economy is `i64` for free).
+- `mercs2_script` — the script host; runs the game's own Lua 5.1.5 VM vendored by `mercs2_luac`
+  (float `lua_Number`, no compat prelude), so the shipped corpus executes as authored.
 - `mercs2_luac` — exact Lua 5.1.5 library (float `lua_Number`, 32-bit `size_t`) for byte-exact
-  bytecode/VM work; emits LuaQ chunks the retail game accepts.
-- When precision matters, say which one you mean.
+  bytecode/VM work; emits LuaQ chunks the retail game accepts. The workspace's single Lua.
+- When precision matters, say which one you mean (the host or the library/compiler).
 
 **Regression harness** — two oracle surfaces: *Surface A* (asset→struct, byte-identical vs x32dbg
 dumps), *Surface B* (script→engine-binding call-trace equivalence). Plus render-golden hashes,
