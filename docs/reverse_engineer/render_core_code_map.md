@@ -277,6 +277,47 @@ lists → confirm-live (break the thunk, walk the caller that populated the buff
 `+0x5e4>>4`, maintains per-object fade accumulator `obj[0x74]` vs `view+0x2be4`, vcalls +0x14.
 `PgJunk::Render`/`PgModelRenderable::CreateDecal` have no static PC anchor.
 
+### 6a. Draw packets and their order (2026-10-28)
+
+There is **one packet ring**, not an opaque list and a translucent list. Every draw is packed by
+`FUN_008546a0` into a 0x58-byte packet in the ring `DAT_00ff4700` (cap 0x2000), and `FUN_00854b38`
+sorts the ring once per frame: `FUN_008548f0` builds the keys and `FUN_008549a0` is a stable LSD radix
+sort (six byte passes), smallest key first. `FUN_00855420` walks the result (**PROVEN**).
+
+**Key** (`FUN_008548f0`, disassembly `0x8548f0`–`0x854965`):
+`W = ((((A<<4 | B) << 14 | C) << 12 | U1) << 8) | U2`, sorted on bits 0–47, where A = packet `+0x46` (the
+phase counter `DAT_0116474e`, bumped at each phase boundary of `FUN_00466d40`), B = `+0x44` (the class
+byte `DAT_0116474c`), C = `+0x34` (14-bit), U1/U2 = `+0x3e`/`+0x40` tie-breaks. So the order is phase,
+then class, then C (**PROVEN**).
+
+**C** (`FUN_00854570`): `if (p < 1 || p > 16383) p = 16383; C = round(16383 / p)`. `FUN_008546a0` stores
+class 6 as `0x3FFF − C`. For class 8, ascending C therefore means descending p; for class 6, ascending p
+(**PROVEN**). Whether p is a distance is **not established**: the model path (`FUN_00472a50`) passes the
+render object's `+0x18 + view·4`, which in the v1.0 PMC capture (`23fe7f38_cracked-cruise/pmc`, object
+`0x1EB7F800`, view index `[[0x00dfc2f8]+0x2b92]` = 0) reads 0.0, so C = 1; no writer of that field was found.
+
+**Class → state** (`FUN_008565b0(class)` per packet sets `DAT_0116a792` = class, then
+`FUN_00855420` picks the state routine; **PROVEN**):
+
+| Class | Routine | State |
+|---|---|---|
+| 0, 4 | `FUN_00858530` | alpha test from `(F & 0x4f)` |
+| 1, 2, 3, 7 | `FUN_00858600` | `ZWRITEENABLE = (F & 0xf) == 0`; depth-only (colour write off via sub-key `+0x48`) |
+| others (5, 6, 8, …) | `FUN_00858320` | material blend factors/op, `ALPHATESTENABLE = (F >> 6) & 1`, cull |
+
+`D3DRS_ALPHABLENDENABLE` (27) changes only on a class change in `FUN_008565b0`: class 1, 5 or 6 → 0,
+class 8 → 1 (**PROVEN**). Class 8 packets also clear Z write (sub-key 2). Within a phase the order is
+depth-only classes, then 4, then 6 (opaque, nearest first), then 8 (blended).
+
+**Who sets the class** (**PROVEN** writers): `FUN_008546a0` remaps 0x0B → 6, and any other class to 8
+when the instance alpha (`DAT_017e5fe0[u16 +0x3a].+0xC`) is below 1. `FUN_008533e0`/`FUN_00852d50`
+set 8 when a vertex alpha byte is not 0xFF; `FUN_0046ddc0` always 8. On the model path, the depth-pass
+submitters `0x478EF0`/`0x47A140` skip any material with `(F & 0x60f) != 0` (blend mode, refraction,
+bit 0x400) and set class 10 (bit 0x4000), 2 (bit 0x40) or 1. `0x478BB0`/`0x47A860` set class 0 for
+bit 0x100. **Not found:** what the colour-pass submitter (`0x479D90`, which writes no class) runs
+under, i.e. whether a material with a blend mode becomes class 8 by itself; class 0 packets are dropped
+unless a debug gate (`DAT_017d3eec` with `…ee4`/`…ee8`) is set.
+
 ## 7. Materials
 
 | Xbox symbol | PC binding | Role | Conf |
@@ -288,7 +329,8 @@ lists → confirm-live (break the thunk, walk the caller that populated the buff
 
 **`Mtrl_Parse` reconciliation** (`FUN_00858790`, `__stdcall`, `ret 8`; callers = mesh loaders
 `FUN_004a0c40`/`004a8f30`/`004ac8e0`/`004a5230`). Runtime material struct (decomp-verified): 104-B
-float preamble; `flags:u16 @+0x50`; **`tex_count:u16 @+0xa2`** (hard-capped 10); raw-hash array
+float preamble; `flags:u16 @+0xA0` (store at `0x858b97`; what the bits do is
+`material_shader_spec.md` §1d); **`tex_count:u16 @+0xa2`** (hard-capped 10); raw-hash array
 `@+0x144+i*4`; **12-B lazy-handle array `@+0xac+i*12` = `{asset_hash, 0xF011157A (TEXTURE_TYPE_HASH),
 resolved_ptr}`**; `flags&0x200` → one extra env texture `@+0xA4` (via `FUN_008242b0(0x100)`);
 inter-record stride `116 + tex_count*4`. Slot order 0=diffuse, 1=specular/gloss, 2=normal, 3+=extra.
