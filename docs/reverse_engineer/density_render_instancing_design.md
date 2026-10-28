@@ -188,8 +188,8 @@ The stream-freq route (§2.1, thousands/draw) is the ceiling-lifter layered on t
 
 ### 3.1 Why source-side for the transform, sink-side for the mechanics
 
-The render spine is `submission → pack 0x58B packets (FUN_008546a0) → sort by material class
-(FUN_008548f0/9a0, key = packet+0x44 = DAT_0116474c) → consumer FUN_00854b38 (applies
+The render spine is `submission → pack 0x58B packets (FUN_008546a0) → sort by phase, class byte
+(packet+0x44 = DAT_0116474c) and a 14-bit term (FUN_008548f0/9a0; render_core_code_map.md §6a) → consumer FUN_00854b38 (applies
 SetRenderState/SetTexture per bucket) → interpreter FUN_007518b0 → the one DIP FUN_007512f0`.
 
 - **At submission**, the per-instance transform is still a **structured array** (veg species batch
@@ -219,8 +219,9 @@ So: **own the transform representation at submission (Tier A); do the mechanical
 
 ### 3.3 Tier B — sink-side coalescer (the generic "collapse the engine's own draws")
 
-The enabling fact: **packets are already sorted by material class** (`FUN_008548f0`), so
-identical-state draws are already *adjacent* by the time the consumer `FUN_00854b38` walks them. The
+`FUN_008548f0` sorts by phase, class byte and a 14-bit term, **not** by material
+(render_core_code_map.md §6a), so identical-material draws are adjacent only where those keys tie by
+the time the consumer `FUN_00854b38` walks them. The
 design:
 
 1. **Extend the sort key** from `material-class (packet+0x44)` to the full tuple
@@ -431,7 +432,7 @@ committing a seam. **No resume; no conditional bp on hot fns** (`x32dbg-mcp-no-r
 | `FUN_00752a50` | 0x00752a50 | stream bind incl. `SetStreamSourceFreq` | PROVEN |
 | `FUN_00748e00` | @0x751c71 | `SetVertexShaderConstantF` (device+0x178) — the transform-delivery call | PROVEN |
 | `FUN_008546a0` | 0x008546a0 | pack 0x58B command packet → ring `DAT_00ff4700` | PROVEN |
-| `FUN_008548f0` / `FUN_008549a0` | — | packet **sort by material class** (key = packet+0x44 = `DAT_0116474c`) / bucket-sort — **extend this sort key** | PROVEN |
+| `FUN_008548f0` / `FUN_008549a0` | — | packet sort by phase (`+0x46`), class (`+0x44` = `DAT_0116474c`) and a 14-bit term (`+0x34`) / LSD radix sort (render_core_code_map.md §6a) — **extend this sort key** | PROVEN |
 | `FUN_00854b38` | 0x00854b38 | packet **consumer** (GPU-state seam) — **Rust-replace for Tier B coalescer** | PROVEN |
 | `FUN_0074d6d0` / `FUN_00856360` / `FUN_00752b30` | — | vertex-decl build / create (device+0x158) / bind (device+0x15c) — append stream-1 elements | PROVEN |
 | `FUN_00468bb0` | 0x00468bb0 | `RenderFadingTrees` — Tier A veg hook | PROVEN |
