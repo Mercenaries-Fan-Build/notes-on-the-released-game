@@ -60,7 +60,8 @@ offset  size          field
 `FUN_00858790(material* p1, stream* p2)` (`__stdcall`, `ret 8`) deserializes the record:
 
 - Reads the 104-byte preamble as float vectors (color/emissive/specular; see 1c).
-- `flags` (u16) → `FUN_0084ee70` (pure bit-permute, 0 stream bytes) → `p1+0x50`.
+- `flags` (u16) → `FUN_0084ee70` (pure bit-permute, 0 stream bytes) → `p1+0xA0` (`mov word ptr
+  [esi+0xa0], ax` at `0x858b97`, **PROVEN**). What the bits do at draw time is §1d.
 - `tex_count` (u16) → `p1+0xA2`.
 - Loop `i in 0..tex_count`, **hard-capped at 10** (`if 9 < i goto done`):
   - raw hash → `p1 + 0x144 + i*4` (parallel raw-hash array).
@@ -79,25 +80,72 @@ offset  size          field
 gloss**, slot 2 = **normal map**, slots 3+ = extra maps (detail/env/mask). This ordering
 is the project's working convention (`material_probe.py`, `tools/ucfx_mesh_codec.py`
 docstring). Characters are typically `tex_count = 3` (diffuse+spec+normal). For a
-`PgDiffEmis*` material slot 1 is the **emissive** map (**INFERRED**: those materials carry zero
-preamble words 4–6 and non-zero words 10–12). The extra runtime `flags&0x200` texture is the
+`PgDiffEmis*` material slot 1 is the **emissive** map: `PgDiffEmisFP` (`shader3.bin` record 65)
+samples `emissiveMap` at `s1` and adds `emissiveMap.rgb · c96` after the lit diffuse, untouched by
+shadow or N·L (**PROVEN** from its disassembly). The extra runtime `flags&0x200` texture is the
 refraction source (above). **For the minimal renderer, bind slots 0–2.**
 
 ### 1c. Preamble float params (offsets into the runtime struct, `p1`)
 
-`Mtrl_Parse` reads 26 u32/f32 and computes a fresnel/spec-highlight setup:
+`Mtrl_Parse` reads the 26 words in order; on-disk word `k` is the u32/f32 at byte `4k` (**PROVEN**,
+each read and store address in the `Mtrl_Parse` disassembly, 2026-10-28):
 
-| Runtime off | Meaning (reconstructed) |
+| On-disk word | Runtime off | Transform |
+|---|---|---|
+| 0 | `+0x64` | raw |
+| 1, 2, 3 | `+0x00`, `+0x04`, `+0x08` | raw; `+0x0C` = 1.0 |
+| 4, 5, 6 | `+0x10`, `+0x14`, `+0x18` | raw; `+0x1C` = 1.0 |
+| 7, 8, 9 | `+0x20`, `+0x24`, `+0x28` | raw |
+| 10, 11, 12 | `+0x30`, `+0x34`, `+0x38` | raw; `+0x3C` = 1.0 |
+| 13 | `+0x5C` | raw |
+| 14 | `+0x58` | `max(w, 9.99e-5)` (`DAT_00b977f8` = `0x38D1B717`) |
+| 15 | `+0x50` | raw |
+| 16 | `+0x54` | raw **IOR**; also `+0x2C` = `pow((IOR−1)/(IOR+1), 2.0)` = Fresnel F0 (`call 0x466010` → `__libm_sse2_pow`) |
+| 17..20 | `+0x40..+0x4C` | raw |
+| 21..25 | `+0x68..+0x78` | raw |
+
+### 1d. Flags → render state (PROVEN from `FUN_00858320` / `FUN_00855420`)
+
+`FUN_0084ee70` (`mercs2_formats::texture::runtime_material_flags`) turns on-disk `flags & 7` into a
+one-hot (1..4 → 1, 2, 4, 8; else 0) and moves the other bits (`0x008→0x40`, `0x010→0x80`,
+`0x020→0x10`, `0x040→0x20`, `0x080→0x100`, `0x100→0x200`, `0x200→0x400`, `0x400→0x800`,
+`0x800→0x4000`; `0x1000+` dropped). At draw time, with `F` the runtime word:
+
+| Runtime bit | On-disk bit | Effect |
+|---|---|---|
+| nibble `0x1/0x2/0x4/0x8` | `flags & 7` = 1..4 | blend mode. BLENDOP = `[0xce8d48][nibble]` = ADD, ADD, SUBTRACT, REVSUBTRACT for 1, 2, 4, 8 (nibble 0 reads as 1). Nibble `0x1` forces SRCBLEND = SRCALPHA, DESTBLEND = INVSRCALPHA |
+| `0x10`, `0x20` | `0x020`, `0x040` | SRC = `[0xce8d28][(F>>4)&3]` = ONE, SRCALPHA, DESTALPHA, ONE; DEST = `[0xce8d38][…]` = ONE, ONE, ONE, INVSRCALPHA (both set: BLENDOP 1, SRC 2, DEST 6 literal) |
+| `0x40` | `0x008` | ALPHATESTENABLE; ALPHAFUNC 5 (GREATER), ALPHAREF `0x4D` (77) |
+| `0x80` | `0x010` | CULLMODE = NONE (two-sided); otherwise a value read at draw time from `*(PTR_PTR_00dfc2fc+0x3fd0)` (unresolved) |
+| `0x200` | `0x100` | refraction source texture bound at `+0xA4` (§1b) |
+
+Render-state numbers are D3D9's: SRCBLEND 19, DESTBLEND 20, BLENDOP 171, ALPHATESTENABLE 15,
+ALPHAFUNC 25, ALPHAREF 24, CULLMODE 22, set through `FUN_00484310` (device vtable `+0xE4`). Retail
+model census (`mercs2_probe mtrl_census`): 15,586 materials mode 0, 503 mode 1 (alpha blend), 72
+mode 2 (additive ONE/ONE, mostly `PgDiffEmis*`), none 3 or 4.
+
+### 1e. `materialData` (pixel constants c93..c98)
+
+The pixel CTAB declares `materialData` = `{diffuse, specular, ambient, emissive, subsurface,
+constant0}` at c93..c98. The draw uploads it with `SetPixelShaderConstantF` (`0x855f4e`, start and
+count from the shader record `+0xbc`/`+0xc0`). In terms of on-disk words (**PROVEN**):
+
+| Register | Source |
 |---|---|
-| `p1+0x00..0x1F` | 4 float4 vectors — diffuse color, emissive, spec color, params |
-| `p1+0x54` | **IOR** (index of refraction), clamped ≥ `DAT_00b977f8` |
-| `p1+0x2c` | `(IOR-1)/(IOR+1)` → **Fresnel F0** (Schlick base reflectance) |
-| `p1+0x5c`,`+0x6c`,`+0x74` | spec-lobe params → feed highlight math |
-| `p1+0x84..0x9c` | derived spec-highlight coefficients (two lobes) |
-| on-disk prop[16], prop[17] | **specular_power** (gloss exponent), **specular_intensity** |
+| c93 diffuse | (w1, w2, w3, 1) |
+| c94 specular | (w4, w5, w6, 1) |
+| c95 ambient | (w7, w8, w9, F0) |
+| c96 emissive | (w10, w11, w12, 1) |
+| c97 subsurface | (w17, w18, w19, w20) |
+| c98 constant0 | (w15, IOR = w16, max(w14, 9.99e-5), w13) |
 
-The minimal renderer can ignore the two-lobe derivation and use `specular_power` +
-`specular_intensity` + a Schlick-Fresnel `F0` directly (see §3).
+When the draw entry's u16 at `+0x3a` is 1 these go up raw. Otherwise c93..c97 (rgb, and w) are
+multiplied by a per-instance colour (`p0..p3`), c96 gets a per-instance offset (`q0..q3`), and
+c98.w becomes `p3 · w13`. With runtime bit `0x2` set, c93..c97 are also scaled by `p3 · w13`. The
+instance entries (`_DAT_0116a778 + idx·0x20`) are written by `FUN_00854b38`; their meaning is not
+yet decoded. The pixel shaders use c93.rgb as the diffuse tint, c95 as ambient, c96 as the emissive
+colour, c98.w as the alpha multiplier (`oC0.w = diffuse.a · c98.w` in `PgDiffFP`/`PgDiffEmisFP`, the
+constant itself in `PgDiffRefractNormFP`) and c98.y (the IOR) to scale the refraction offset.
 
 ---
 
