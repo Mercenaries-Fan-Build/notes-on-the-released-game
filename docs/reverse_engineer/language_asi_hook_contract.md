@@ -83,7 +83,7 @@ Every reader of the index is an ordinary, thunk-free function, verified in the c
 |---|---|---|
 | **`FUN_004bfe20`** | `sprintf(".\Data\%s.wad", …[*idx])` → **language WAD mount** | mount SM state 10 (`FUN_004bfaf0`) |
 | `FUN_004bfef0` | `".\Data\%s-patch.wad"` → language patch mount | state 12 |
-| `FUN_004b87a0` | hashes the slot string → stringdb key `× 0x39E5E978` | shell↔gameplay transitions |
+| `FUN_004b87a0` | hashes the slot string → stringdb key (name hash, type hash `0x39E5E978`) | shell↔gameplay transitions |
 | `FUN_0060e9c0` | `*idx == 8 → fonts_ru (Cyrillic); else → fonts_enext` | font selection |
 
 Because these read the *same* `*DAT_01176018`, forcing it once (persistently) at the first
@@ -256,7 +256,7 @@ last gap before any ASI ships.
 | `0x00630b20` | `FUN_00630b20` — allocs + zeroes the struct (index → 0 = English) |
 | `0x004bfe20` | `FUN_004bfe20` — **detour target**; language WAD mount (`.\Data\%s.wad`) |
 | `0x004bfef0` | `FUN_004bfef0` — language patch mount (`.\Data\%s-patch.wad`) |
-| `0x004b87a0` | `FUN_004b87a0` — stringdb request (name hash × `0x39E5E978`) |
+| `0x004b87a0` | `FUN_004b87a0` — stringdb request (name hash, type hash `0x39E5E978`) |
 | `0x0060e9c0` | `FUN_0060e9c0` — font switch (`idx==8` Cyrillic else Latin) |
 | `0x004bfaf0` | `FUN_004bfaf0` — mount state machine (calls the openers) |
 | `0x004bf8c0` | `FUN_004bf8c0` — close-all→reopen-all swap driver |
