@@ -136,12 +136,13 @@ The trace pins that table:
 - **Lua-side globals** (compiled by the bootstrap chunk): `_G._MODULES = {}`, `_MODULESMETATABLE =
   { __index = _SYS._MODULEINDEX }`, and `import`/`dynamic_import`/`inherit`/`dynamic_remove`
   wrappers that call the `_SYS._*` hooks with `getfenv(2)`/`_SYS._GETFENV(2)`.
-- **Semantics** (from the 370-script corpus [[decompiled-lua-corpus]] + the reimpl [[mercs2-script-lua-host]]):
-  `import(m)` loads module `m` into the caller's env once (cached in `_MODULES`, lazy via the
-  metatable `__index`); `inherit(base)` sets the caller module's `__index → base` (prototype
-  chain — every contract does `inherit("MrxTaskContract")`); `dynamic_import(m, cb, data)` is the
-  async variant with a completion callback; `dynamic_remove` unloads. Every game script is a module
-  that `inherit`s a base class and `import`s helpers (`MrxUtil`, `MrxObjectiveHelper`, …).
+- **Semantics** (read from the bodies, 2026-10-22 — `object_script_modules.md` §5–§6): `import(m)`
+  only binds the already-built module env into the caller's env and returns nothing; a body runs only
+  when its script resource is queued (boot, DEPS, `Sys.RequiredAsset`, the dynamic-import pump, an
+  ObjectScript AddRef). `inherit(base)` appends the base env to the caller env's `[2]` list and binds
+  it by name; the env's metatable `_MODULESMETATABLE` (`__index = _SYS._MODULEINDEX`) searches those
+  bases, then raw `_G`. `_MODULES` has no metatable. `dynamic_import(m, cb, data)` takes a slot and
+  calls back on a later pump; `dynamic_remove` releases the edge and unbinds the name.
 - **The `_SYS` bodies (PC, READ).** The table at `0x00B9A854` maps `_IMPORT` → `0x005AE2D0`,
   `_INHERIT` → `0x005AE3B0`, `_DYNAMIC_IMPORT` → `0x005AE580`, `_DYNAMIC_REMOVE` → `0x005AEA50`,
   `_MODULEINDEX` → `0x005AEB90`, `_GETFENV` → `0x005AE160` (name/function pairs read from the

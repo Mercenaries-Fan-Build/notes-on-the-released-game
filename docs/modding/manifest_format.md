@@ -141,6 +141,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
+| `replace_sound_wave` | Data + Script | `wavebank`, `line`, `wave` (`language` on a `vo_*` wavebank) |
 | `add_animation` | Data | `name`, `clip`, `trnm` (`events` optional) |
 | `add_shader` | Data + Code | `family`, `classes` ([`add_shader`](#add_shader)) |
 | `replace_shader` | Data | `target`, `shader` (`shader_low` when the stem has a low record) |
@@ -1130,7 +1131,8 @@ Lua corpus.
 A cue named like a cue the game already has never plays: FindCue answers from the first loaded table
 that has the guid, which is the game's (**M0220**). To change a game cue, use
 [`replace_sound_cue`](#replace_sound_cue). A bank named `vo_*` is refused (**M0215**): retail Lua
-appends the language to such a name before loading it.
+appends the language to such a name before loading it. So is a bank or cue written as a bare hash:
+a new identity's hash is the hash of its name.
 
 ### Sound cue fields
 
@@ -1142,7 +1144,7 @@ through one single-track cue — the shape of retail `ui_PDA_Open_01_st` (cue 57
 
 | field | type | written to | what the engine does with it | evidence |
 |---|---|---|---|---|
-| `name` | string | cue `+0x00` guid = `m2(name)`; the sounddb entry's guid | `Sound.CueSound(name)` looks up `m2(name)` | FindCue `FUN_00835a70` (PROVEN) |
+| `name` | string | cue `+0x00` guid = `m2(name)`, or the bare hash itself in an override ([Sound overrides by name or hash](#sound-overrides-by-name-or-hash)); the sounddb entry's guid | `Sound.CueSound(name)` looks up `m2(name)` | FindCue `FUN_00835a70` (PROVEN) |
 | `wave` | `src/` path | wave record and its embedded PCM16 data | the samples the wave plays | the strict reader `mercs2_audio::wav::read_pcm16_wav`: RIFF/WAVE, format 1, 16 bits, 1 or 2 channels, rate above 0, whole frames (M0214) |
 | `group_gain_db` | number, dB | group `+0x2C`, as the f32 `10^(dB/20)` | base volume of the sound instance | `FUN_0083d770` (PROVEN); −4 dB gives `0x3F21866C` and −6 dB `0x3F004DCE`, retail `ui_PDA_Open_01_st`'s bits |
 | `cue_gain_db` | number, dB | cue `+0x08`, as the f32 `10^(dB/20)` | multiplies the cue's volume each frame | `FUN_00835060` (PROVEN) |
@@ -1234,6 +1236,63 @@ the game's sounddb beside it). The cue must be in the bank (**M0218**).
 Two Shipments replacing different cues of one bank compose: `qm link` merges every
 `replace_sound_cue` of the set into one soundbank per bank ([Sound banks are
 merged](#sound-banks-are-merged)). One cue replaced by two Shipments conflicts (M0207).
+
+A cue that picks among several waves (1,431 of the `vo_*` cues pick among 2–14 takes of a line)
+becomes a cue of one wave. To replace one take and keep the others, use
+[`replace_sound_wave`](#replace_sound_wave).
+
+### `replace_sound_wave`
+
+Replaces one line — one wave record of a wavebank the game ships — wherever it plays.
+
+```yaml
+  - kind: replace_sound_wave
+    wavebank: vo_stream            # as the groups name it, or its entry's hash
+    language: english              # vo_* wavebanks only (M0217)
+    line: "0x96FFDF9F"             # the record's clip hash, or the name it is the hash of
+    wave: src/new_line.wav
+```
+
+The build finds the wavebank's entry (`<wavebank>.<language>` for a `vo_*` one) in each WAD that
+carries it, and the one record whose `+0x00` clip hash is `line`. In every soundbank of those WADs,
+each group's reference to that record is pointed at the new wave, keeping its weight and every other
+wave of the group, and every cue that reaches a moved reference gets its length `+0x0C` recomputed
+by [the length rule](#sound-cue-fields). The forked soundbanks ship as a `replace_sound_cue`'s do;
+the new wave goes where an override's waves go (the override wavebank `qm_<shipment>_<entry>` of each
+bank retail Lua loads, the bank's own wavebank for a bank the engine loads), with the record's clip
+hash.
+
+The record cannot change in place: a wavebank streams or embeds by its own `+0x0A` kind, not per
+record (`FUN_0082e8b0` returns that byte, and `FUN_0082e8f0` gives the `.pws` name only when it is
+set), so a record of the streamed `vo_stream` cannot become embedded PCM.
+
+Refused (**M0218**): a wavebank no WAD carries; no record, or several, with the line's clip hash; a
+line no group plays (replacing it would change nothing — 34 of `vo_stream`'s 12,988 records); and a
+cue that plays the line through a group of another soundbank, whose length its own bank's fork
+could not recompute.
+
+Which banks play a line is the game's answer, so the [load plan](#placementjson) of a set with a
+`replace_sound_wave` needs the game folder (`--game`), and without one refuses, naming the item. Two
+Shipments replacing one line conflict (M0207); `qm link` merges a line's banks with the set's other
+cue and line overrides ([Sound banks are merged](#sound-banks-are-merged)).
+
+### Sound overrides by name or hash
+
+`replace_sound_bank`, `replace_sound_cue` and `replace_sound_wave` name a bank, cue, wavebank or
+line the game ships, so each takes a name or a bare hash, quoted in YAML, like every other asset
+reference ([Names and hashes](#names-and-hashes)). Most shipped audio has no known name — 41 of
+`English.wad`'s 68 soundbank entries, and the only `vo_*` cue of 9,850 voice-over lines.
+
+- A bank or wavebank written as a hash is its **entry's** hash: for a `vo_*` one, the hash of
+  `<bank>.<language>`. Whether it is a language's copy follows from where the game carries it: with
+  a `language`, it is looked up in that language's WAD only; without one, in `vz.wad` and
+  `shell.wad`. A hash the declared WAD does not carry is **M0218**.
+- A cue or line written as a hash is its guid or clip hash itself.
+- `add_sound` mints its bank and cues, and a new identity's hash is the hash of its name, so there a
+  bare hash is **M0215**.
+
+A hash with a known name gets **M0130**'s suggestion; for a localized entry the suggested name drops
+the `.<language>` suffix.
 
 ### Where a sound override ships
 
@@ -1409,6 +1468,7 @@ they claim one target in a class that cannot be shared:
 | `add_sound` | `KeyedSet` on the bank name and on each cue — the same bank or cue name added twice is a conflict |
 | `replace_sound_bank` | `Exclusive` on the bank's entry (`<bank>` or `<bank>.<language>`) and on every cue it declares |
 | `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
+| `replace_sound_wave` | `Exclusive` on the line; replacements of different lines, and of cues, in one bank compose ([below](#sound-banks-are-merged)) |
 | `native_hook`, `place_file`, `add_runtime_dll` file names | `Exclusive` per game-folder path, **compared lowercased** (Windows file names are case-insensitive) |
 | `native_hook` `touches` | `Exclusive` per hooked address or symbol, exactly as spelled (see the Code layer) |
 | `add_tiny_geometry` | `KeyedSet` on the model; `Exclusive` on the layer's cell; `KeyedSet` on the layer, claimed by the first stand-in of each layer in a Shipment — another Shipment's stand-in, `add_placement` or `edit_world` on the layer conflicts, and one Shipment's stand-ins in several cells of a layer compose |
@@ -1450,15 +1510,17 @@ plan's `link_block_paths` names it so a deploy step drops the per-Shipment copie
 ### Sound cues are claimed by guid and language
 
 A sound contribution claims each cue as `SoundCue { guid, language }`: `guid` is `m2` of the cue's
-name, and `language` is the declared language of a `vo_*` override (none otherwise). Each language's
-`vo_*` banks are separate entries (`<bank>.<language>`), so claims in different languages never
-conflict.
+name (or the bare hash it is written as), and `language` is the declared language of a `vo_*`
+override (none otherwise). Each language's `vo_*` banks are separate entries (`<bank>.<language>`),
+so claims in different languages never conflict. A replaced line is claimed as
+`SoundLine { wavebank, clip, language }`: the wavebank's entry hash and the record's clip hash.
 
 | kind | claims | intent | class |
 |---|---|---|---|
 | `add_sound` | the bank (an asset) and each cue | additive | `KeyedSet` |
 | `replace_sound_bank` | the bank's entry (an asset) and every declared cue | replace | `Exclusive` |
 | `replace_sound_cue` | the cue | replace | `Exclusive` |
+| `replace_sound_wave` | the line | replace | `Exclusive` |
 
 An added cue name is a key across the set because FindCue answers from the first loaded table that
 has the guid (`FUN_00835a70`): of two banks adding one cue name, one is never heard. A replaced cue
@@ -1476,11 +1538,12 @@ Shipment loads through (`replace_lua wifpmcinterior` beside a `ui_hud` override)
 
 Each Shipment's build ships a whole soundbank per bank it overrides, and of several copies of one
 bank the last mounted is the one the game reads. `qm link` merges every bank a
-`replace_sound_cue` in the set targets: per carrier (the overlay, the shell patch, each language
-patch), one soundbank at `blocks\VZ\mod_<entry hash>.block`, starting from the set's
-`replace_sound_bank` of that entry when there is one and the game's bank otherwise, with every
-`replace_sound_cue` applied in load order. The load plan's `link_block_paths` lists these blocks,
-so a deploy step drops the per-Shipment copies. The link writes them to
+`replace_sound_cue` in the set targets, and every bank whose groups play a line a
+`replace_sound_wave` replaces: per carrier (the overlay, the shell patch, each language patch), one
+soundbank at `blocks\VZ\mod_<entry hash>.block`, starting from the set's `replace_sound_bank` of
+that entry when there is one and the game's bank otherwise, with every `replace_sound_cue` and then
+every replaced line applied in load order. The load plan's `link_block_paths` lists these blocks,
+so a deploy step drops the per-Shipment copies; the banks a line reaches are read from the game. The link writes them to
 `zz-quartermaster-link.wad` (overlay), `zz-quartermaster-link.shell-patch.wad` (shell patch) and
 `language_patch/<language>.wad` (language patch), each recorded in `placement.json`.
 
@@ -1730,7 +1793,7 @@ need the game stack and run in `qm lint --with-game` and in `qm build`.
 ### M0214
 
 **A sound cue's WAV is not uncompressed 16-bit mono or stereo PCM.** Fires when the strict reader
-(`mercs2_audio::wav::read_pcm16_wav`) refuses a cue's `wave`: the file cannot be read, is not
+(`mercs2_audio::wav::read_pcm16_wav`) refuses a cue's or replaced line's `wave`: the file cannot be read, is not
 RIFF/WAVE, its format is not 1 (PCM), its bits per sample are not 16, its channels are not 1 or 2,
 its rate is 0, its block align is not `channels × 2`, its `data` chunk is empty or ends inside a
 frame, it lacks or repeats a `fmt ` or `data` chunk, `data` comes before `fmt `, or its RIFF size
@@ -1744,15 +1807,19 @@ Fix: export the sound as uncompressed 16-bit PCM WAV, mono or stereo.
 
 - two cues of one bank whose names hash to one guid — `m2` folds case, so `Click` and `click`
   collide;
-- a bank or cue name that is empty, written as a bare `0xHHHHHHHH` hash, or has surrounding
-  whitespace (the whitespace is hashed with the name);
+- a bank, cue, wavebank or line name that is empty or has surrounding whitespace (the whitespace is
+  hashed with the name);
+- an `add_sound` bank or cue written as a bare `0xHHHHHHHH` hash: it mints a new identity, whose
+  hash is the hash of its name. An override may write a hash ([Sound overrides by name or
+  hash](#sound-overrides-by-name-or-hash)), and a cue declared once by name and once by its hash is
+  two cues of one guid;
 - a bank with no cues;
 - an `add_sound` bank whose name starts with `vo_`: retail Lua appends the language to such a name
   before loading it (`_GetLocalizedName`, `mrxsoundbanks.lua:80-87`), so the loader would ask for
   `<bank>.<language>` and find nothing.
 
-Fix: give each cue a distinct name, write names as plain trimmed text, declare at least one cue, and
-name an added bank without the `vo_` prefix.
+Fix: give each cue a distinct name, write names as plain trimmed text, name what `add_sound` adds,
+declare at least one cue, and name an added bank without the `vo_` prefix.
 
 ### M0216
 
@@ -1768,9 +1835,11 @@ Fix: use one of the 14 names; the diagnostic suggests the nearest.
 ### M0217
 
 **A sound override's `language` does not match its bank.** Fires on `language` on a
-`replace_sound_bank` / `replace_sound_cue` whose bank is not `vo_*` (the game has one copy of it for
-every language), or on no `language` on one whose bank is `vo_*` (each language has its own copy,
-`<bank>.<language>`). See [The `language` field](#the-language-field).
+`replace_sound_bank` / `replace_sound_cue` / `replace_sound_wave` whose bank or wavebank is not
+`vo_*` (the game has one copy of it for every language), or on no `language` on one whose bank or
+wavebank is `vo_*` (each language has its own copy, `<bank>.<language>`). See [The `language`
+field](#the-language-field). A bank or wavebank written as a hash names its entry; whether the
+declared language's WAD carries it is M0218's.
 
 Fix: remove `language` from a non-`vo_*` override; name the language on a `vo_*` one.
 
@@ -1784,10 +1853,12 @@ loads only the banks its front end's Lua loads, and `vz.wad` loads every bank it
 `ui_shell`, which retail Lua loads only in the front end (the engine loads the banks no Lua names,
 [Banks the engine loads](#banks-the-engine-loads)); or when a
 `replace_sound_cue`'s cue is not in that bank (a cue the same Shipment's `replace_sound_bank`
-declares for the bank counts as in it).
+declares for the bank counts as in it). For a `replace_sound_wave`, when no carrier holds the
+wavebank, when no record or several carry the line's clip hash, when no group plays the line, or
+when a cue plays it through another soundbank's group ([`replace_sound_wave`](#replace_sound_wave)).
 
-Fix: write the bank name exactly as the game's Lua loads it (`ui_hud`, `vo_mattias`) and, for a
-`vo_*` bank, the right `language`. To add a cue the bank does not have, use
+Fix: write the bank name exactly as the game's Lua loads it (`ui_hud`, `vo_mattias`), or its entry's
+hash, and, for a `vo_*` bank, the right `language`. To add a cue the bank does not have, use
 [`add_sound`](#add_sound).
 
 ### M0219

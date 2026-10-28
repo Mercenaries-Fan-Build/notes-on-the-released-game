@@ -545,7 +545,8 @@ transform component and stops will silently desync spatial partitioning.
 `FUN_0059F780` (float), `FUN_0059F820`/`FUN_0059FB00` (integer/string-hash), `FUN_0059FC30` (vector);
 results reserved with `FUN_0085D5D0` then pushed with the `*(L+8) += 8` idiom; errors via
 `FUN_004B2A50`. **Lua tags:** `1` = boolean, `2` = lightuserdata (**GUIDs**), `3` = number (32-bit
-float — a pushed `3` appears as `4.2039e-45`), `7` = table.
+float — a pushed `3` appears as `4.2039e-45`), `7` = full userdata (the reader takes its payload,
+`[obj]+0x18` — the Lua 5.1 `Udata` header size).
 
 **⬤ = Ghidra decompiled a body (63)** · ○ = **Ghidra-blind, body readable by disassembly (24)** ·
 *calls* = script call sites (1272 total; 18 names are never called).
@@ -695,6 +696,59 @@ Not in that table but resolved through a worker: all `XF-read`/`XF-write` cfuncs
 ---
 
 ## 4. Identity, naming and labels
+
+### 4.0 A script guid is the entity's u32 key — H
+
+Decoded 2026-10-22 from the pc-v10 code and the four `updated-chris-exports` captures.
+
+**What gets pushed.**
+- Every guid pusher hands Lua the entity's container key as light userdata (tag 2). `0x4B1270`
+  (`0x4B1281..0x4B12A0`) does `mov [ecx],edi; mov [ecx+4],2`; a 0 key pushes nil.
+- Callers: ObjectScript `OnActivate` (`0x66C307`), `Pg.Spawn` (`0x5D5FF7`, the spawn worker's
+  return), and `Player.GetPrimaryCharacter` (`[player+0x20]`, `0x5DD99B`).
+
+**Key spaces.**
+- Placed entities use their WAD key; templates their bit-31 key.
+- Runtime spawns use `0x4000xxxx` keys. In the captures the players are `0x40000014` / `0x40000015`
+  and a character is `0x40005398`. `Object.Remove` tests `(g & 0xF0000000) == 0x40000000` at
+  `0x5CDCB6`.
+- A runtime key outlives deactivation (25,551 runtime keys have SceneObject rows, 491 have
+  RuntimeSceneObject rows), so `OnActivate` and `OnDeactivate` see the same guid.
+
+**`Pg.GetGuidByName`** (`0x5D3220`):
+- It hashes the argument (`FUN_0059FB00`), probes the `Name` container's index 2 (`Name+0x50`,
+  keyed by name hash), and returns the owner key (`+0x44`). A miss or a stored 0 pushes nil.
+- Placed `Name` records register under `m2` of the FULL string, `"<name> 0x<KEY>"`. All 60,136 such
+  records of `layers_static` do, and none under the bare name, so 58,271 placements that share
+  2,874 bare names never collide. A suffix-less placed name (e.g. `01_pmc_hq_lz_playerone`)
+  registers as-is.
+- A template registers its template name: `VZ Soldier` → `0x80004385`. So a bare shared name
+  resolves to the template, never a placement.
+- Insert takes the first empty bucket without dedup and the probe returns the first match, so the
+  earliest registration wins. Two capture duplicates resolve to the lower dense index.
+- A name whose entity is not live returns nil.
+- The `guidmap` resource (`0x385EA82C`) is not read by this path.
+
+**Consumers.** `Object.GetPosition` (`0x5CC410` → `FUN_00665AF0`) resolves in this order:
+1. the entity's RuntimeSceneObject row;
+2. else, for a key ≥ 0, its SceneObject `+0x14` template alias (`0x6654B0`);
+3. else its SceneObject row (`0x665B76`), which is how a sleeping entity's position is read;
+4. else nil.
+
+`Object.IsAwake` (`0x5CF300`) reads the SceneObject row: nil without one (every template key), else
+state == 2.
+
+**Allocator.** One counter, `[world+0x10]` with world `[0x1176108]` = `0xD8A41C`, i.e. `0xD8A42C`. The
+static image holds `0x40000000` there; every allocation takes the counter's value and stores value + 1
+(`0x6746D0`: `key = ctr; ctr = key + 1`), with no wrap check and no free list. A spawn that fails
+still consumes its key (the key is taken before the out-of-range early return; Xbox `0x82409B38`
+alike). `Pg.Spawn` reaches it as `0x5D5D20` → `0x5D5580` → `[0x245F054]` = `0x59E3C0` →
+`0x6746D0(world, template, xform, &key, flags, 0)`; the same read-then-increment of `0xD8A42C` is in
+`0x49AFB0` (template spawn), `0x66CAC0` (TerrainObject complete), `0x66C500` (child entities), and a
+dozen other sites (`0x619CE0`, `0x4FE750`, `0x5BFB00` `Junk.CreateRegion`, …); which of them allocate
+player, projectile and population keys is not mapped. In all four captures the highest live runtime
+key is counter − 1, and the counter is not reset by a level reload (the Mattias capture, same process
+as mid-mission, has `0x4005F839`).
 
 ### 4.1 `SetName` → the `Name` container `0x00DF6B88` — H
 
@@ -971,12 +1025,17 @@ Hardpoint naming is already covered by [`dialect_hardpoints.md`](dialect_hardpoi
 ### 6.3 Attachment — `RuntimePhysicalLink` `0x00DF9110` — H
 
 ```c
-// Attach(child, hardpointName, parent)
-if (parent < 0) { FUN_008244D0(); FUN_006746D0(PTR_PTR_01176108, parent, buf, &parent, 0, 0); }  // template deref
+// Object.Attach(parent, hardpointName, child)   — cfunc 0x5D1060
+if (child < 0) { FUN_008244D0(); FUN_006746D0(PTR_PTR_01176108, child, buf, &child, 0, 0); }  // template: spawn, attach the instance
 FUN_0042C1E0(DAT_017BAEF3);
 FUN_00824790();
-FUN_00649180(&PTR_PTR_00DF9110, child, parent, parent, &{hardpointHash, parent});
+FUN_00649180(&PTR_PTR_00DF9110, parent, child, …);   // 0x5D121A: parent → link +0x44 (owner), child → +0x60
 ```
+
+Argument order audited 2026-10-21: Lua argument 1 reaches `FUN_00649180` param_2 (stored at the
+owner keys `+0x44`), argument 3 its param_3 (the attached keys `+0x60`); shipped Lua agrees
+(`mrxactionhijack.lua:414` `Object.Attach(ParentObject, AttachPoint, ChildGuid)`, `mrxutil.lua:481`,
+the `vz_hijacks` `Object.Attach(vehicleObject, sBone, uGunTemplate)` calls).
 
 - A **negative GUID is a template handle** and is dereferenced through `PTR_PTR_01176108` before use
   — consistent with `object_assembly_model.md` §3's "value bit-31 = template handle", and

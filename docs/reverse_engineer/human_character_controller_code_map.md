@@ -21,7 +21,7 @@ are **cited**, not repeated.
 | Belongs to | Not here |
 |---|---|
 | [`physics_code_map.md`](physics_code_map.md) | `HumanPhysics::Activate` `FUN_004255c0` (7 capsules + phantom + proxy), `hkpCharacterProxy` `FUN_0094f2c0` + `hkpCharacterContext` `FUN_0094d2e0` and the 5-state machine (OnGround `FUN_0094ce90` / InAir `FUN_0094d7b0` / Jumping `FUN_00951ef0`), the ragdoll builder `FUN_009463a0`, the grapple/winch **constraint** layer |
-| [`animation_code_map.md`](animation_code_map.md) · [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md) | the ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` → `ASTO[index]` clip picker and its 14 key columns. This map supplies the **upstream state graph** that produces two of those columns, not the picker |
+| [`animation_code_map.md`](animation_code_map.md) · [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md) | the ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` → `ASTO` clip-list picker and its 14 key columns. This map supplies the **upstream state graph** that produces two of those columns, not the picker |
 | [`player_code_map.md`](player_code_map.md) | the player object, `player+0x20` = attached character GUID, `FUN_006a4060` attach-by-marker-component, the 107-cfunc `Player` table |
 | [`weapons_combat_code_map.md`](weapons_combat_code_map.md) | weapon state, damage, `RuntimeWeapon`. The 9 `Human.Inventory.*` cfuncs are a **marker-delimited sub-table inside this same array** (§3.1) and are not among the 21 |
 | [`vehicle_code_map.md`](vehicle_code_map.md) | seats and ride mechanics; `ForceExitSeatNoSnap` only *calls into* them |

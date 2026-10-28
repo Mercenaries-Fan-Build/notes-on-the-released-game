@@ -179,8 +179,18 @@ Offset  Size  Type     Field            Description
 +0x18   4     float32  quat_y           Quaternion Y = sin(yaw/2)
 +0x1C   4     float32  quat_z           Quaternion Z (pitch/roll component)
 +0x20   4     float32  quat_w           Quaternion W = cos(yaw/2)
-+0x24   6     bytes    tail             Near-zero tail bytes
++0x24   4     uint32   parent           Template key (field `Parent`, 0x79450675); 0 = none
++0x28   2     bytes    flags            Read as flag bits by FUN_0063d7c0 (0x63d886) when [0x1176078] >= 0x2a
 ```
+
+**`Parent`** (schm field 2, `0x79450675`, payload `+0x20`) is the entity's worldentity template. The
+Transform reader `FUN_0063d7c0` copies it unchanged into the runtime SceneObject `+0x14`
+(`0x63d84b` / `0x63d880`); component lookups fall back to it (`FUN_00649a80` `0x649afc–0x649b1b`)
+and level load instantiates the template's children from it (`FUN_00654940` `0x655705` →
+`FUN_00673070`). Verified 2026-10-21: across 63,312 records (layers_static + 25 other blocks) it is
+0 (234) or a worldentity template key (63,078), nothing else; 54,502 placed Names equal their
+template's Name; all 62,773 live SceneObjects of the mid-mission capture that share a key with those
+blocks hold the same value at `+0x14`.
 
 **Rotation encoding:** The four floats at +0x14..+0x20 form a **unit quaternion** `(qx, qy, qz, qw)`.  VERIFIED: `qx² + qy² + qz² + qw² ≈ 1.0` across all 62k records.  For pure Y-axis rotation, `qy = sin(yaw/2)` and `qw = cos(yaw/2)`, so true yaw = `2 * atan2(qy, qw)`.  ~16% of entities have non-trivial qx/qz (tilted objects with pitch/roll).  The decoder exports all four components as `rotation_quat_x/y/z/w` and pre-computes `rotation_y_rad` (the full yaw angle).
 
@@ -708,7 +718,7 @@ seven are now closed.*
    → **CLOSED (2026-07-21): it is the high half of the u32 entity key.** Keys are dense mid-range ids; a sub-block whose entities are numbered around `0x000Exxxx` shows `0x000E` in the u16 at record +2 (or +0 under the shifted §3.3 window). Not a type field. All 62,624 keys in layers_static are distinct, which a 2-value enum could not be.
 
 7. **UNVERIFIED: type_hash mapping**: The `type_hash` field in vz_state records (values like `0x800084b3`, `0x80005422`) maps to COMP component indices, but the mapping table is file-specific and not fully decoded.
-   → **Moot (2026-07-21):** there is no `type_hash` field in a placement record; doc offset +0x08 falls in the previous record's 6-byte tail. The tail's meaning is genuinely still open — it is 6 bytes, its first 4 look like a small id and the last 2 vary; that remains the one *real* unknown in the 42-byte record.
+   → **Moot (2026-07-21):** there is no `type_hash` field in a placement record; doc offset +0x08 falls in the previous record's 6-byte tail. The tail is `Parent` (the template key, §2.5) plus 2 flag bytes.
 
 ---
 

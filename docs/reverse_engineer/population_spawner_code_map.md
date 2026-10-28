@@ -63,7 +63,7 @@ message-type switch / call-shape + role) · **M** role + call-position match, on
 | Region cache-out msg pump (types 3/7/0xB) | `FUN_82365828`→`FUN_823647a8` | **`FUN_005017b0`** | **identical `msg==3 / ==7 / !=0xB` switch**; event-7 clears driver-data + faction cleanup | H |
 | Region cache-in / KeptPopulation drain | `FUN_8235f580`→`FUN_8235f470` | **`FUN_00502fc0`**→`FUN_00502960`,`FUN_005002b0` | ring/kept-list drain, one lump/tick, ambient placement math (see §5) | M |
 | Spawn-density decay (`>>1 & 0x7f7f7f7f`) | under DensityUpdate (`FUN_82367d28`) | `FUN_004df000`→**`FUN_004e0510`** | halve spawn-history bytes on the sim-seconds overflow accumulator | H |
-| **UpdateSimpleSpawners** (4 families) | `FUN_82338768` | **`FUN_004e4100`** → 4 procs | 4 family updaters, each cap-128 queue, spawner terminal state **5**, `OccupiedBuildingSpawnCallback` | H |
+| **UpdateSimpleSpawners** (4 families) | `FUN_82338768` | **`FUN_004e4100`** → 4 procs | 4 family updaters over the active-spawner lists (caps 200/100/200/64), `OccupiedBuildingSpawnCallback` | H |
 | SpawnUnitInstantiate | `FUN_82367a78`/`FUN_823649e8` | **`FUN_004e4150`** (from `FUN_004e1590`) | builds the final spawn record → instantiate; drained from a deferred queue | M |
 | QueuedSpawning / SpawningUnits drain | `FUN_82365a70`/`FUN_823631a0` | **`FUN_004b4590`** (3600 B) | view-edge placement (atan2), LCG-filled request, request-pool alloc, name→registry resolve | M |
 | Heli-wave spawner update | `FUN_8232b9e8` (start `FUN_8232b2b8`) | (native side of cfunc `0x005DA4D0`) | state block + ≤15 waves; see §6 | M |
@@ -152,33 +152,97 @@ RegisterStats phase strings (Xbox) that are **stripped on PC**, and the mechanic
 ## 6. Simple-spawner families + spawn workers (H core)
 
 **UpdateSimpleSpawners: Xbox `FUN_82338768` ↔ PC `FUN_004e4100`.** Both dispatch **four** family
-updaters, each gated by its own tunable-hash flag, each draining a **128-cap** queue:
+updaters — PC `FUN_004e4100`: return if Net.IsClient (`0xDFBD77`), pending-owner poll `0x4e4460`, then
+Window / NoModel / Hardpoint / Path with the same dt, no other branch (the Xbox function's hash
+constants are profiler scope markers, ring `0x83E1DA10`, not flags) — each walking its family's list of **active
+runtime spawners** (pointers into the 256-slot pool, not pending requests):
 
-| Xbox family | Xbox fn | Xbox list | PC proc | PC queue (cap 0x80) |
-|---|---|---|---|---|
-| WindowSpawners | `FUN_82335c00` | `0x82C1F488` | `FUN_004e1590` (1107 B) | `DAT_00dccb00` / cnt `DAT_00dcce24` |
-| NoModelSpawners | `FUN_823370a8` | `0x82C1F7B8` | `FUN_004e1ad0` (640 B) | `DAT_00dcce30` / cnt `DAT_00dccfc4` |
-| HardpointSpawners | `FUN_82337958` | `0x82C1F958` | `FUN_004e2110` (870 B) | `DAT_00dccfd0` / cnt `DAT_00dcd2f4` |
-| PathSpawners | `FUN_82337498` | `0x82C1FC88` | `FUN_004e1d50` (950 B) | `DAT_00dcd300` / cnt `DAT_00dcd404` |
+| Xbox family | Xbox fn | Xbox list | PC proc | PC creator | PC active list / count / cap |
+|---|---|---|---|---|---|
+| WindowSpawners | `FUN_82335c00` | `0x82C1F488` | `FUN_004e1590` (1107 B) | `FUN_004e4c50` | `DAT_00dccb00` / `DAT_00dcce24` / **200** (`DAT_00dcce28`) |
+| NoModelSpawners | `FUN_823370a8` | `0x82C1F7B8` | `FUN_004e1ad0` (640 B) | `FUN_004e4e50` | `DAT_00dcce30` / `DAT_00dccfc4` / **100** (`DAT_00dccfc8`) |
+| HardpointSpawners | `FUN_82337958` | `0x82C1F958` | `FUN_004e2110` (870 B) | `FUN_004e5090` | `DAT_00dccfd0` / `DAT_00dcd2f4` / **200** (`DAT_00dcd2f8`) |
+| PathSpawners | `FUN_82337498` | `0x82C1FC88` | `FUN_004e1d50` (950 B) | `FUN_004e4f70` | `DAT_00dcd300` / `DAT_00dcd404` / **64** (`DAT_00dcd408`) |
 
-> The **PC family↔queue mapping order is unproven** — the four PC procs are structurally
-> interchangeable; the pairing above is by size/position, not proof. Confirm which queue holds
-> window vs hardpoint vs path vs nomodel live. (Xbox `FUN_82335c00` = Window is anchored by its
-> `'Have %d window Spawners'` debug string + the `OccupiedBuildingSpawnCallback` dispatch, so PC's
-> `FUN_004e1590` — the only one whose chain reaches the occupied-building callback — is the safest
-> Window match.)
+The caps are static `.data` (one read-only reference each: `0x4e4c87`, `0x4e4e6b`, `0x4e50db`,
+`0x4e4f8b`; same values in the untouched v1.1 exe and live in every capture) and each creator bails
+when its list is full. The Xbox arrays have the same sizes. The family↔list pairing is proven by the
+creators (each fills one list) and by live data (all 54 mid-mission spawners sit in the list of
+their record's family).
 
-Shared spawner constants (**both builds**): terminal **state byte = 5** (`SimpleSpawnerStateEnum`
-has 5 members; PC `spawner+0x89 == 5` ⇒ exhausted/removed), **≤8 groups** (PC `spawner+0x8b < 8`;
-Xbox 8-group bit loop), Window radius² = **25600 = 160²**. PC spawner instance layout (from the
-consumers): `+0x20` guid, `+0x2c` adjust-target, `+0x58` faction/list index, `+0x5c`/`+0x60`/`+0x6c`
-interval+countdown+reload, `+0x63`/`+0x64`/`+0x68` the 3 type discriminators → 4 categories,
-`+0x78`/`+0x7c` radii (× scale `DAT_00b97eec`), `+0x89` state, `+0x8b` group, `+0x8c` done.
+Function-level specifications of every piece below (activation, tweaks, the four families, the
+shared helpers): [`population_spawner/`](population_spawner/README.md).
+
+**Lifecycle (PC, audited twice 2026-10-21; Xbox `FUN_82338330` / PS3 twins).** A placed record is
+inert; a runtime spawner exists only after
+- **(A) its owner goes live:** the owner's activation begin — the PopulationSimpleSpawner /
+  DangerousBuilding activation listeners (indices 71 / 73 of the array `0xED3D20`, vtables `0xBCCB38` /
+  `0xBCCAF0`, slot `+0xC` `0x66B5C0` → `0x4e5590` → `0x59E830`; `hibernation_grid.md` §6a) — queues
+  the owner on a pending list (`0x16D6970`, cap 900); each frame `FUN_004e4100` polls it (`0x4e4460`)
+  and on readiness 2 (`0x4e43c0`: owner SceneObject state 2 and its Path/model resources ready) walks the owner's own records, then its template's (`FUN_00649a80`:
+  when the owner's rows run out, `0x649af1`, it re-keys the walk on `SceneObject+0x14` =
+  `Transform.Parent`, `0x649b0a–0x649b1b`, once — a template key has bit 31 set, so it never hops
+  again), then its `DangerousBuilding`-linked entity's — through
+  `FUN_004e48d0` / `FUN_004e4620` to the activators `0x248E940` / `0x2928000`, gated by DefaultState
+  (or the owner's SpawnerAdjust state for the group), uniqueness (owner, SpawnerName)
+  `FUN_004e4af0` and the ChanceNotActive roll `FUN_004e2480`; `0x248E940` also needs the HardPoint
+  to resolve (`FUN_006886a0`). Readiness 0 releases the owner's spawners (`0x4e54f0`).
+- **(B) a script tweak:** `Ai.TweakAttachedSpawners` / `…InGroup` → `FUN_004e2d80` (merges into the
+  owner's stored SpawnerAdjust; acts only when the owner is live) → `FUN_004e32b0` → the creators.
+Distance never creates a spawner. A spawner returns to the pool on state 0, owner gone or
+cache-out, `FUN_004e3dd0 ≤ 0` (Window/Hardpoint), Hardpoint owner's physics actor reporting true
+on vtable `+0x9c` (only Car `0xBA94A0` → `0x437280`, value < 0.5, and Prop `0xBA9C28` → `0x43ce80`,
+tilted past up-dot 0.87, override it; the other 13 return false), a −1 unit choice
+(`FUN_004e0e80` / `FUN_004e0eb0` / `FUN_004e0f20`), its group tweaked off, or state 5 once its unit is
+gone (Window/NoModel/Hardpoint; a Path spawner at state 5 stays listed).
+
+Shared spawner constants (**both builds**): **≤8 groups** (PC `spawner+0x8b < 8`; Xbox 8-group bit
+loop). **25600 = 160²** (`DAT_00d1e410`) gates only the post-spawn event `0x7962CAF5` (nearest-camera
+XZ distance² from `FUN_00505e90`); activation is ActiveRadius² by SpawnerRadiusType (`FUN_004e38d0`).
+
+**PC runtime spawner (148 B / `0x94`)**, written by init `FUN_004e2840(record)` (`eax` = owner),
+called by the four creators `FUN_004e4c50` → Window queue `DAT_00DCCB00`, `FUN_004e4e50` → NoModel
+`DAT_00DCCE30`, `FUN_004e4f70` → Path `DAT_00DCD300`, `FUN_004e5090` → Hardpoint `DAT_00DCCFD0`. The
+dispatchers `FUN_004e32b0` / `FUN_004e3130` pick the creator from record `+0x64` IgnoreModel, `+0x68`
+WindowSpawner, `+0x63` PathCount. Audited 2026-10-21 against the disassembly and all 54 live spawners
+of `updated-chris-exports/…mid-mission` (each matched to its source record):
+
+| off | written from | meaning |
+|---|---|---|
+| `+0x00..0x1f` | record Position | (Window: xyz offset by constants, `0x4e2b71`) |
+| `+0x20` | record `+0x20` SpawnerName | a designer name hash, not unique ("A", "AA" live); identity = (`+0x24`, `+0x20`), deduped by `FUN_004e4af0` |
+| `+0x24` | creator's owner argument | owner object; `FUN_004e3dd0` reads its `RuntimeHealth` / `RuntimeNodeHealth` |
+| `+0x28` / `+0x30` / `+0x34` / `+0x3c` | record HardPoint / Door / SquadName / WakeupEffect | hashes |
+| `+0x2c` | record `+0x2C` UnitList | list key; SpawnerAdjust overwrites it (`0x4e3623`) |
+| `+0x38` | owner's `Path` component, else 0 | |
+| `+0x40` | 0 | the spawned unit (`0x4e1a1b`) |
+| `+0x44` | 8-slot unit array (pool `0xdcc5e0`) when PathCount > 0, else 0 | |
+| `+0x48` | -1 (IgnoreModel, NoModel/Path), or `FUN_004df5d0(owner, HardPoint)` (Window/Hardpoint; may be 0) | node-health key of the HardPoint node's nearest ancestor |
+| `+0x4c` | 0, -1 (IgnoreModel), Hardpoint: `FUN_004df4f0(owner, HardPoint)` | |
+| `+0x5c` | 0.0 | spawn-cycle countdown: `-= dt` (`FUN_004e11f0`), reloaded from `+0x6c` each cycle |
+| `+0x60` | WakeupFixedCountdown + U[0,1)·WakeupRandomCountdown | one-shot wakeup countdown (fires `FUN_004e0ca0`); 0.01 after a failed placement |
+| `+0x64` / `+0x68` | 0.0 | float timers (`FUN_004e0c00`) |
+| `+0x6c` | record SecondsPerCycle | |
+| `+0x70` / `+0x74` | record EscapeRadius / ActiveRadius | the radii |
+| `+0x78` / `+0x7c` / `+0x80` | record SkipPercentChance / ChanceNotActive / ChanceToDeactivate × 0.01 (`DAT_00b97eec`) | probabilities; `+0x78` vs an LCG draw in `FUN_004e2770`, gated by MaxSkips/MaxNoSkips |
+| `+0x84` | record PathSpacing | |
+| `+0x88` / `+0x8a` / `+0x8d` | record SpawnerRadiusType / SpawnerType / PathCount | |
+| `+0x89` | record DefaultState | state: 0 returns the spawner to the free pool (`0x4e15fd`, `0x4e1b0c`, `0x4e1d9e`); 5 = no further spawns, still queued (`0x4e1deb`); SpawnerAdjust rewrites it per group |
+| `+0x8b` | record `+0x58` SpawnerGroup | group |
+| `+0x8c` | (not written by init) | latch: the `+0x84` ramp reached 1.0 (`0x4e1636`) |
+| `+0x8e` | record `+0x48` UnitListWeighting | the `FUN_004e4150` switch selector |
+| `+0x8f` / `+0x90` | min(MaxSkips, 100) / min(MaxNoSkips, 100) | |
+| `+0x91` / `+0x92` | 0 | skip / no-skip run counters |
+| `+0x93` | flags | bit0 IgnoreModel, bit1 WindowSpawner, bit3 TrafficSpawner, bit4 owner has `AiPatrol`, bit5 PathCount > 0 |
+
+`+0x63`, `+0x64` and `+0x68` are **record** offsets (PathCount, IgnoreModel, WindowSpawner) — at
+runtime `+0x63` is the top byte of the `+0x60` float.
 
 **PopulationSimpleSpawner is a class-manager, not a flat descriptor** — which is why it never
 appeared in the 231-class registry TSVs. PC manager `@0x00DF8510` (vtable `0x00BC03C0`, static ctor
 `FUN_00a7afc0`), instance list head `PTR_PTR_00df855c`, iterate `FUN_006499f0(&mgr,1,1)` +
-`FUN_00649a80`, register/unregister `FUN_004e4620`/`FUN_004e48d0`, field walker `FUN_00660be0`.
+`FUN_00649a80`, per-owner record walkers `FUN_004e4620`/`FUN_004e48d0` (§6 lifecycle), field
+walker `FUN_00660be0`.
 Xbox component ctor `PopulationSimpleSpawner@0x8251dda0` (vtable `0x82040678`). Pool cap **768**
 (`cdbsizes.ini`, both builds).
 
@@ -193,6 +257,59 @@ pool `PTR_DAT_00edbac0`, name→registry via `DAT_00df6b24/28` (the `0xDF6B88` f
 `0x24F3200` routes through the SecuROM VM dispatcher `FUN_02a30028`** — but the `Pg.Spawn` driver
 `FUN_005d5d20` (739 B) is **fully decompiled**; only the terminal commit is VM-dispatched, **read live
 in the unpacked image** ([[securom-decompiled-not-a-blocker]]), NOT a wall.
+
+### 6.1 Which unit a spawner spawns (`FUN_004e4150`)
+
+The `PopulationSimpleSpawner` record (112 B; field names from its `schm` through the rainbow table,
+`mercs2_probe we-template --class PopulationSimpleSpawner`) names its list and its choice rule:
+`UnitList` `+0x2C` (a `PopulationList` key) and `UnitListWeighting` `+0x48` (`SpawnerWeightTypeEnum`).
+A `PopulationList` record is `{UnitId, ProbabilityWeight}` (Hash, Int), one per entry of a list key —
+e.g. "Spawnlist (Guerilla Ground)" `0x8000720A` holds five templates weighted 4/2/2/1/2.
+
+`FUN_004e4150` switches on the weighting (jump table `0x004E4388`):
+
+| `SpawnerWeightTypeEnum` | handler | rule |
+|---|---|---|
+| None (0), AutoSquadComposition (11) | `FUN_004e8730` | `units[draw % n]` over the runtime list — weights ignored |
+| Simple (1) | `FUN_004e8e10` → `0x0247AB90` | `r = draw % Σmax(w,1)` (unsigned); first unit whose running `max(w,1)` sum is `>= r` (signed), else the last — unreachable, as the sum ends at `Σ > r`. So unit 0 owns `max(w0,1)+1` outcomes and the last unit `max(w,1)−1`: a last unit of weight ≤ 1 never spawns. Same body in the demo build behind a plain forwarder (`0x4E93B0` → `0x024F70D0`), and in Xbox profile `0x8233d270`, Xbox retail `0x82243dd4`, PS3 `0x003b9a50` |
+| Exhaustive (2) | `FUN_004e8a90(list, bag)` → `FUN_004e8ab0` | bag keyed by the spawner's `+0x24`: one slot per entry (data order) holding `max(w,1)`; `r = draw % Σremaining`; the slot whose running sum exceeds `r` loses one; an empty bag refills |
+| ExhaustiveOnce (3) | same | as Exhaustive; a result `<= 0` **as a signed int** ends the spawn (`-1`) — so a level template key (`0x8…`, top bit set) never spawns through it |
+| ExhaustiveGlobal (4) | `FUN_004e8a90(list, list)` | as Exhaustive with the bag keyed by the list itself |
+| HealthHigh (5) | `FUN_004e8ed0` → `FUN_004e88b0` | `t = health × 100` (`DAT_00B92870`); `c` = last index with weight `<= t`; `c == 0` → that unit, else `units[draw % c]` |
+| HealthLow (6) | → `FUN_004e8920` | the `k` units with weight `> t`; `units[n − 1 − draw % k]` |
+| HealthBucket (7) | → `FUN_004e8790` | `c` as HealthHigh; `c == 0` → that unit; else one of the run of equal weights ending at `c` |
+| HealthBucketLow (8) | → `FUN_004e8820` | `l` = first index with weight `> t`; `l == n − 1` → that unit; else one of the run of equal weights starting at `l` |
+| MiniBoss, MiniBossLinked (9, 10) | — | spawns nothing |
+
+`draw` is the global random state's two-step value `(x & 0xFFFF0000) | (u >> 16)` (`DAT_00DFCBAC`).
+A Health rule with no weight on the needed side of `t` spawns nothing, without a draw. A chosen unit
+of 0 spawns nothing (`0x004E4209`); so does a spawner whose `+0x24` is 0 (checked before the switch)
+or whose list is 0 (`FUN_004e8510` finds no runtime list).
+
+**The runtime spawner** (`ESI`/`EDI` in these functions) is not the 112-byte `PopulationSimpleSpawner`
+record but a separate 148-byte (`0x94`) struct from a pool of 256 (free list `DAT_00DCC6F0`, count
+`DAT_00DCCAF4`; the per-category active queues `DAT_00DCCE30` / `DAT_00DCCFD0` / `DAT_00DCD300`).
+In the `updated-chris-exports/…mid-mission` capture: `+0x24` a small object id (`0x0013C338`), `+0x2C`
+the UnitList key, `+0x48` either `-1` or a hash (`0x5E3BCF7B`). Which record fields fill `+0x24` and
+`+0x48` is not traced.
+
+**Health source `FUN_004e3dd0`** (disassembled from the unpacked image; returns in `xmm0`): no spawner
+→ 0. If `+0x48 == -1`: the owner's (`+0x24`) `RuntimeHealth` (container `0x017BEF78`, `{f32 max, f32
+cur, …}`) → `cur / max` clamped to `0..=1`; no component or `max < 1e-4` (`DAT_00B977F8`) → 0. Else: the
+owner's `RuntimeNodeHealth` (`0x017BEFC8`) → node `FUN_00435140(+0x48)` → u16 `max` `+4`, u16 `cur`
+`+6`, the same clamp and floor.
+
+The runtime list (`FUN_004e8510` cache → `FUN_004e83f0` build, at most 64 entries, table
+`0x016E51F0` stride `0x24`, count `DAT_01175D18`) is `{key, n, Σmax(w,1), units*, weights*, next}`
+(`FUN_004e8130`), its arrays sorted ascending by weight by `FUN_004dc870` — an iterative quicksort
+(stack of `(hi, lo)` pairs, Hoare partition on the middle element, left range first) handing ranges
+shorter than 8 to an insertion sort (`FUN_00685df0` → `0x00630D50`). Equal weights therefore keep
+data order only on short lists. All 30 runtime lists of the four `updated-chris-exports` captures
+equal the lists built this way (`mercs2_probe dump-spawnlists`; test
+`live_unit_lists_match_the_built_lists`). Implementation: `mercs2_formats::unit_list` (lists and rules),
+`mercs2_population::units` (bags, the choice), `mercs2_engine::runtime::spawner_owner_health` (the
+`+0x48 == -1` health branch; the reimpl keys a spawner's owner by the placement entity key carrying
+its `PopulationSimpleSpawner` record).
 
 ---
 
@@ -221,9 +338,24 @@ PC cfunc VAs recovered by walking the Ai/Pg name-string→cfunc-pointer tables i
 | `SpawnPlayer` / `SpawnPlayerAdvanced` | `Pg` | — | `0x5D6740`/`0x5D6800` | — |
 | `CheckSpawnPos` / `GetDistantSpawnPointOnPath` | `Pg` | — | `0x5DB6A0`/`0x5D7EA0` | — |
 
-**Change-log capacities match:** Xbox spawn-list change log = **0x100 (256)** entries, change-query
-out = **0x40 (64)** rows; the PC `SetSpawnList`/`GetSpawnListChangeInfo` pair carries the same
-256/64 shape (confirm the exact PC constants when the undecompiled cfunc bodies are recovered).
+**Spawn-list overrides** (PC `Ai.SetSpawnList` cfunc `0x5A5180` → `FUN_004E85F0` → `FUN_004E82C0`;
+Xbox retail `FUN_8230D910` → `FUN_82249098`, PS3 `FUN_00511358` → `FUN_003BC1C8`). There is no change
+log. `Ai.SetSpawnList(sName, hList, bReplace, {[hUnit]=weight, …})` pushes an override node
+`{id = Hash_String(sName), n, Σmax(w,1), units, weights, next}` onto the list entry's head; only the
+head is effective (None/AutoSquad `0x4E873E`, Simple `0x247ABB5`, Health* `0x4E8EDE` read it), while the
+Exhaustive bags fill from the `PopulationList` data directly (`FUN_004E89A0`). An existing id is
+re-initialised in place (`bReplace` false) or unlinked and re-pushed (`bReplace` true).
+`Ai.ResetAllSpawnLists` (`0x5A5860`) pops every override; `Ai.ClearSpawnListChanges(sId?, hList?)`
+(`0x5A56F0`) clears one list, one id everywhere, or one id on one list; `Ai.GetSpawnListChangeInfo`
+(`0x5A5010`) returns the chain's ids (clamped to `0x40`) and the unclamped count; `Ai.GetSpawnList(hList,
+idx)` returns `{{unit, weight}, …}`. No shipped Lua (base, DLC, Xbox) calls any of them, and every live
+capture has `head == entry+8`.
+
+**Runtime list table:** 256 entries (`0x016E51F0`, stride `0x24`, count `DAT_01175D18`, key map
+`0x016E79F8` / `0x016E75F8`), built lazily on first lookup (`FUN_004E8510`), never reset; a 257th list
+or a list with no records is not built and head-reading rules spawn nothing (`cmp ecx,0x100`
+`0x4E84BD`; Xbox `FUN_8233C7D0`, PS3 `FUN_003B8AB0`). At most 64 entries per list (`cmp edi,0x40`
+`0x4E8428`; later entries dropped). Shipped data: 279 list keys, the largest 31 entries.
 
 **Script usage (shipped Lua).** `Ai.TweakAttachedSpawners{SpawnerState=…}` and
 `…InGroup{SpawnList=…}` are used heavily (`docs/mercs2-luacd/src/vz/gurcon002.lua:538`,
@@ -270,20 +402,20 @@ caller to walk from, so it never formed a function; the bytes are ordinary `.tex
 | `PopulationDensity` / `Flow` / `DynamicRoad` pools | 128/64, 192/64, 32/32 | `cdbsizes.ini` |
 | `SkirmishSpawnList` / `SpawnerAdjust` pools | 16/16 each | `cdbsizes.ini` |
 | `SpawnOnDeath` pool | 384/128 | PC image strings |
-| Simple-spawner terminal state | **5** (`SimpleSpawnerStateEnum` = 5 members) | both |
 | Spawner type discriminators | **4** categories (`SimpleSpawnerTypeEnum` = 4) | both |
 | Spawner groups | **8** | both (bit loop) |
-| Pending-spawn queues | **4 × cap 128** | PC `DAT_00dcc*`; Xbox 4 family lists |
+| Active spawners per family | Window **200**, NoModel **100**, Hardpoint **200**, Path **64**; pool **256** | PC `DAT_00dcc*`; Xbox 4 family lists |
 | DeathCheck budget | **20/frame** | Xbox `li 0x14`; PC round-robin |
 | DensityUpdate budgets | 10/10/2/2 (people far/near, veh far/near) | Xbox `FUN_82367d28` |
 | Kept/cache ring | 64 (Xbox) / 8 (PC) — **confirm-live** | §5 |
 | Deferred-instantiate queue | 32 × 0xBC bytes | Xbox `@0x837D39A8` |
-| Spawn-list change log / query | 256 / 64 | Xbox; PC shape matches |
+| Runtime list table / entries per list | 256 / 64 | PC `0x4E84BD` / `0x4E8428`; Xbox, PS3 |
+| `GetSpawnListChangeInfo` id clamp | 64 | PC `0x5A5010`; Xbox, PS3 |
 | Heli waves | ≤15 | Xbox `StartHeliWaveSpawner` |
 | Faction table | skips types **7 & 8** | Xbox density loop |
 | Spawn event hash | `0x7962caf5` | PC `FUN_004b7ab0` |
 | Density-decay op | `>>1 & 0x7f7f7f7f` | PC `FUN_004e0510` |
-| Spawner radius scale | `DAT_00b97eec` | PC |
+| Spawner chance scale (`+0x78/+0x7c/+0x80`) | `DAT_00b97eec` = 0.01 | PC |
 | vz_state overlay carrier | COMP type 3 = PopulationSimpleSpawner definitions | `docs/vz_state_analysis.md` |
 
 Spawn-list faction abbreviations (both builds): **VZ / Pir / Oil / Gur / Chi / Ali / Ped**
