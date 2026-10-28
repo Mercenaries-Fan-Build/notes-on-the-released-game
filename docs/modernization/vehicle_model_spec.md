@@ -100,8 +100,11 @@ turret's `+80` is the hull origin, 1.63 m below its `+16` mount). Retail's live 
 nodes and the `+80` bind on 8/73 — the geometry-owning nodes. Rigid geometry is placed by `+80` and
 skinned by `invBind · pose`, so the rest palette must be `invBind · (+16 chain)`
 (`mercs2_mesh` `SkinData::bones`); an identity rest sinks turrets and stacks every instance on its
-source. Tests: `model_assembly.rs` `every_segm_row_draws_including_instance_rows`,
-`instanced_road_wheels_rest_on_their_own_hubs`; `mercs2_probe` `retail_node_matrices_are_the_plus16_chain`.
+source. Every spawned instance starts at it: `Scene::model_rest_palette` hands out
+`SkinData::rest_palette` (the rest palette of a rigged model, identity for an unrigged one, sized to
+every joint the verts reference) and a clip replaces it per frame. Tests: `model_assembly.rs`
+`every_segm_row_draws_including_instance_rows`, `instanced_road_wheels_rest_on_their_own_hubs`,
+`an_undriven_vehicle_spawns_at_its_rest_palette`; `mercs2_probe` `retail_node_matrices_are_the_plus16_chain`.
 
 **Rigid vs skinned matters.** A `MESH` sub-object is **rigid**: authored in its bone's LOCAL space,
 so it must be multiplied by that bone's world-rest matrix. A `SKIN` sub-object is already in model
