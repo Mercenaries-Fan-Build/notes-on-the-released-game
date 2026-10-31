@@ -271,9 +271,101 @@ walks the actor's face-graph node list, evaluates each node's output via the vta
 values (bone-pose nodes → per-bone deltas). The tick-advance sibling is `FUN_00686c60`
 (accumulates face time at obj+0x84, state-gated on obj+0x64==4). Source path
 `d:\projects\mercs2_pc\mercs2\fxs…` confirms a first-party FaceFX integration module. The Lua/asset
-binding path is `@ Binding FaceFx` / `@!! No global FaceFx for actor` (game log strings). **Open:**
-the FaceFX curve **solver numerics** (the `Fx*LinkFn` transfer-function math inside each node's
-`+0x18` evaluate) and the morph-target application are not decoded → **§9**.
+binding path is `@ Binding FaceFx` / `@!! No global FaceFx for actor` (game log strings).
+
+**Which actor an entity has.** The entity template's `HumanAnimationSystem` record (0x34 bytes,
+descriptor `0x17bccc8`, reader `FUN_0065ade0`) holds three names then ten floats:
+`ActionAnimationTable +0`, `HumanStateTable +4`, **`FaceFXActor +8`** (read at `0x65ae10`, stored
+`0x65ae2c`). Every actor resolver passes record `+8` with type `0x1CF649BB`: BindFaceAnimSet
+`0x5adb4d`, UnbindFaceAnimSet `0x5adc10`, residency request `0x668530`, release `0x6686f0`, ready
+check `0x668440` (the actor is optional when `+8` is 0), dependency list `0x4e9cae`, component ctor
+`0x686aa6` → `FUN_007274c0`. It is not the model's name, though most characters share one:
+`pmc_hum_jen` wears `pmc_hum_jennifer`, the recruits' kit models wear `pmc_hum_ewan` and
+`pmc_hum_misha`, and `Allied Starter 03` has none. Reader: `KitTemplate::face_actor`.
+
+**Which set an entity plays.** A set names no actor (all 86 archives say `NewActor`);
+`Animation.BindFaceAnimSet(guid, set)` binds it to an entity. The bindings are data:
+`WifBriefingData.<mission>.tFaceAnimSets` (`Player1[<hero>]`, `Starter` =
+`tMissionData[<mission>].sStarter`, whose `tActors.Starter` the mission's own may replace,
+`mrxstarter.lua:428`), `WifStarterData.<starter>.sFaceFxSet`,
+`WifPmcInterior._tAssetPreload.facefxanimationset[<hero>]`, and the hijack script's
+`tFaceAnimSets`. A hero is its `Original` outfit (`WifPmcInterior._tOutfits`). The PMC staff have no
+`tActors`: the speaker is `Vehicle.GetRiders(sSourceObject)[1]` (`wifpmcinterior.lua:1205`), so the
+placed object's `Transform` `Parent` (`placement_data_format.md` §2.5) gives its template and that
+template's `Rider` record (`seat hash, template key`) the speaker. `HqInterior` is entity
+`0x000C73AD` in `vz_state_pmcinterior`, template `PmcHq_Interior`, rider `Fiona Taylor`.
+`mercs2_engine::facecast` runs those tables; `mercs2_probe facefx --all` lists all 86 sets with their
+speaker, each of whose actors exists, and the workshop's retail test checks each speaker's model
+carries the actor's face bones.
+
+**Text.** A take's name is also the key of its line in the `english` string table: 1,119 of 1,122
+(`facefx --all`; not `Huang.ActiveJob03`, `Mattias-In-Mission-Contract-Pmc04-20`, `-30`). The
+`vz_subtitles/*.lua` tables write the same names as `[keys]`.
+
+### 6a. The archives (READ; decoder `mercs2_formats::facefx`)
+
+Both assets are a UCFX container whose `data` chunk is a FaceFX archive: `FACE`, u32 version 1610
+(the SDK opens ≤ 1610), two FxStrings (`Pandemic Studios, Inc.`, `Mercenaries 2 World In Flames`),
+u32 1000, then (version ≥ 1600) the name table, `u16 0, u16 0, u32 n, n × {u16 0, FxString}`, and a
+u32 object-table size. FxString = `u16 1, u32 len, bytes`; FxName = `u16` (0 → inline FxString, else
+`u32` name index). Every class writes its base, then its own u16 version, which gates its fields.
+Object pointers are `u32 index` (`0xFFFFFFFF` null) + FxName class + u32 descriptor size. Readers:
+PS3 `ps3-v100` open `0x897b80`, name table `0x897028`, FxActor `0x88cd68`, FxMasterBoneList
+`0x8a9238`, FxBone `0x8af590`, FxFaceGraph `0x89cc70`, FxFaceGraphNode `0x89f3b8`, FxBonePoseNode
+`0x899790`, link `0x8a06e8`, FxAnimSet `0x894e18`, FxAnimGroup `0x8927b0`, FxAnim `0x890460`,
+FxAnimCurve `0x8937a8`; PC `pc-v10` open `0x730310`, FxActor `0x726910`, FxFaceGraphNode `0x729ea0`,
+FxBonePoseNode `0x72c600`, FxAnim `0x72aff0`. The full field list is the module doc of
+`mercs2_formats::facefx`. FxBone rotations are `w, x, y, z` (the constructor puts 1.0 in slot 0). An
+FxAnim's curve keys are one bulk block of `{f32 time, value, slopeIn, slopeOut}`, handed to the
+curves in order by a per-curve count list. Every retail archive (31 actors, 86 sets) reads to its
+last byte (`mercs2_formats/tests/facefx_retail.rs`). Their face graphs hold only `FxBonePoseNode`
+(1023) and `FxCombinerNode` (223) nodes, and every link uses `linear` (344).
+
+### 6b. The solve (READ; evaluator `mercs2_anim::facefx`)
+
+| Step | PC `pc-v10` | PS3 `ps3-v100` |
+|---|---|---|
+| curve value: held outside the keys; Hermite (interp 0) with slopes × segment length, or linear (1) | `0x7341a0` | `0x892e68` |
+| an anim's end = the greatest last-key time over its curves (computed at load; 1.0 for no curves) | `0x72b630` | `0x88f5e0` |
+| `FxAnim::Tick`: past the end no curve is evaluated, so every node is 0 | `0x72af60` | — |
+| curve → node by exact FxName (`FxAnim::Link`, `FindNode`); a curve with no node is evaluated and dropped | `0x72afb0`, `0x72d2c0` | — |
+| node value (`GetValue`, vtable `+0x18`, shared by FxFaceGraphNode, FxBonePoseNode, FxCombinerNode): no links → track; links → sum (op 0) or product (op 1) of each link's function of its input, plus the track; clamp to [min, max]; unset → 0 | `0x729b80` | `0x89d3b8` |
+| `linear` link: `x·p0 + p1` (2 params), `x·p0` (1), `x` | `0x731950` | `0x8a15d0` |
+| bone-pose contributions: per pose node and same-named bone, `pos − ref`, the pose's absolute rotation, `scale − ref` | `0x72ea80` | — |
+| per master bone: positions and scales add `w·Δ`; the rotation composes `conj(ref)·s` per contribution, `s` the slerp (dot ≤ 0.55) or lerp from the running rotation to the pose's by `w`; renormalised once | `0x686ce0` | — |
+| write: the bone's LOCAL hkQsTransform, X mirrored — `(−x, y, z)`, rotation `(x, y, z, w) = (−x, y, z, −w)` — replacing the body clip's | `0x6877de`–`0x68784d` | — |
+| PlayFaceAnim handler: time to 0, the anim whose name hashes to the message, `stop` stops | `0x687890` | — |
+
+The other link functions occur in no retail archive; their archive spellings are unread. Their
+`Evaluate(x, params)` (PC vtable index 8 / PS3 RTTI slot 9, vtables PC `0xbd2984`–`0xbd2b30`), read
+on both builds:
+
+| Function | `y` | PC | PS3 |
+|---|---|---|---|
+| Null | 0 | `0x42c060` | `0x8a0bf0` |
+| Quadratic | `sgn(x)·x²` (·p0 with 1 param) | `0x731a60` | `0x8a1448` |
+| Cubic | `x³` (·p0 with 1 param) | `0x731b80` | `0x8a1418` |
+| Sqrt | 0 at 0, else `sgn(x)·√|x|` (·p0 with 1 param) | `0x731c40` | `0x8a16a8` |
+| Negate | `−x` | `0x731d90` | `0x8a0ca8` |
+| Inverse | 0 at 0, else `1/x` | `0x731e50` | `0x8a0cd0` |
+| OneClamp | 1 for `x ≤ 1`, else `1/x` | `0x731f20` | `0x8a0d18` |
+| Constant | p0, or 1 with no params | `0x731ff0` | `0x8a13e0` |
+| Corrective | p0, or 0 with no params | `0x7320c0` | `0x8a15a8` |
+| Custom | its curve evaluated at `x`, or 0 | `0x732180` | `0x8a0f38` |
+| ClampedLinear | 4 params: `p0·(x − p1) + p2` on the active side (`x > p1` when `p3 > 0`, else `x < p1`), `p2` otherwise; 1 param: `p0·x` for `x > 0`, else 0; otherwise `x` | `0x732250` | `0x8a14d0` |
+
+A corrective link (its function's byte `+0x20` set) does not add into the sum: `GetValue` runs it
+through `0x733de0` — `c` = the running correction (0 at first), `n` = the input's value over its max
+(or its min for a negative value), result `min(p·n + c, 1)` — and scales the node by `1 − c` at the
+end. A node's "user value" (`+0x1c`, op at `+0x20`: 0 add, 1 multiply, 2 replace) applies after the
+links and track. Face time is advanced by the frame's dt from the PlayFaceAnim message on,
+open-loop from the audio. A take names its voice line: `pandemic_hash_m2` of an anim's name is the
+clip hash of a wavebank record for 1,116 of the 1,122 retail takes (`mercs2_probe facefx --all`;
+the six that do not are `<Name>.JenNeutralOnce01`), 961 in per-scene embedded banks and 155 in
+`vo_stream`. Check: with
+every pose at 0 the solve gives each of `pmc_hum_mattias`'s 20 face bones its HIER `+16` local to
+1e-5 (`mercs2_anim` retail test `the_reference_pose_is_the_models_face_bones`), which pins the mirror
+and the space. Open → §9.
 
 ---
 
@@ -323,8 +415,9 @@ the FaceFX curve **solver numerics** (the `Fx*LinkFn` transfer-function math ins
 4. **Ragdoll blend** — bp `FUN_0043d800` (ragdoll setup) and the `hkaSkeletonMapper::createMapping`
    `FUN_0087c560`; watch the anim↔ragdoll pose exchange and read `referencePoseWeightThreshold`
    live (its default is not in the decomp).
-5. **FaceFX solve** — bp `FUN_00686ce0`; on a briefing/cutscene dump the face-graph node value array
-   and one `Fx*LinkFn` evaluate (`node+0x18`) to recover the transfer-function form.
+5. **FaceFX solve** — bp `FUN_00686ce0` during a briefing; the bone-pose weights it writes at
+   actor `+0x1c` and the face bones' hkQsTransforms it writes into the pose buffer are the oracle the
+   `mercs2_anim::facefx` port is compared against (§6b).
 6. **Skin palette** — bp the render-path `BoneMatrixArray` upload; confirm 4-influence LBS and the
    `PgSkinMorph*VP` permutation chosen per material.
 
@@ -338,8 +431,11 @@ the FaceFX curve **solver numerics** (the `Fx*LinkFn` transfer-function math ins
   arithmetic itself is confirm-live (§8.2), not read.
 - **MT job dispatch** — the `AnimCpu*Job` post into the Pimp worker ring; the spawn/enqueue endpoint
   is SecuROM-relocated (like the pimpInit spawn, `pimp_job_system_code_map.md`) → confirm-live.
-- **FaceFX curve solver** — the `Fx*LinkFn` transfer-function numerics and morph-target apply inside
-  `FUN_00686ce0`'s `node+0x18` vcalls; the driver (`FUN_00686ce0`) is READ, the leaf math is not.
+- **FaceFX runtime edges** (the solve itself is READ, §6b) — who calls the face component's tick and
+  solve slots and with what dt; who sets `comp+0x64` and the registers whose "user values"
+  `0x7276f0` copies into nodes; the PC PlayFaceAnim post (`0x5addb0`) runs through a SecuROM
+  split-thunk into the VM on `pc-v10` (the drm-free build calls `0x515e90`); the meaning of the
+  master bone list's i32 (`+0x40`) and the FxAnim floats at `+0x20`/`+0x24`.
 - **IK/ragdoll runtime blend weights** — field *names* migrate through `FUN_008a7280`/`FUN_008a7690`;
   `referencePoseWeightThreshold`, powered-ragdoll motor gains have no readable default in the decomp
   (only the `0xffff` no-bone sentinel).
@@ -368,7 +464,8 @@ half:
   flags, `Min/MaxTimeScale`, or the `BoneCtrl*` procedural modifiers (LookAt/StrapOn/FakeWheel/…).
 - ❌ **IK.** No foot-placement IK (`hkaFootPlacementIkSolver` / `FUN_009ef650` unported).
 - ❌ **Ragdoll / catch-fall.** No ragdoll instance, anim↔ragdoll mapper, or get-up blend.
-- ❌ **FaceFX.** No facial animation (`FUN_00686ce0` unported; `facefx*` assets unparsed).
+- ❌ **FaceFX.** `mercs2_formats::facefx` reads the assets and `mercs2_anim::facefx` solves the face
+  bones (§6); no engine component plays them on an entity.
 
 **Net for the reimpl:** the faithful next steps are (1) build `HumanAnimationSet`/
 `HumanAnimationSystem` that drive the full ActionTable→AnimationLookup state key each tick (walk/run,
