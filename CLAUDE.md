@@ -190,6 +190,16 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
   - Name registry / spawn-by-hash: `pandemic_hash_m2` keys events, templates, tunables, spawn.
     PC impl `Hash_String FUN_00824270`; rainbow at `tools/rainbow_table.json.bak` +
     `docs/data/aset_discovered_names.json`.
+  - Hash reverse map: `exemap hash-sites <image_id>` (every constant's sites and roles, data-section
+    hash tables, function strings incl. X360 string addresses and PS3 TOC loads) →
+    `exemap hash-join <image_id>…` (hash consumers by chance test, candidates, names proven by
+    code context). Rules: the `mercs2_exemap::hashsites` / `hashjoin` module docs. Per-image output
+    `output/_exemap_exports/hashes/`; tracked summary `docs/data/hash_candidates_by_consumer.tsv`.
+    Context cracks are reviewed before they enter the rainbow files.
+  - Clip names: `mercs2_probe clip-names docs/data/clip_name_proposals.tsv` proposes names for
+    AnimationLookup clips from the rows that list them (grammar and evidence columns: its module doc,
+    `crates/mercs2_probe/src/clip_names.rs`); the workshop's Animation card shows each proposal
+    beside the playing clip, and Accept writes it to the name homes.
 
 - **Tracing ASI mods** in `mods/`: `engine_trace_asi` (INT3 audio call-chain capture),
   `lua_trace_asi`, `surface_a_probe` (asset→struct dumps for the reimpl's Surface-A gate),
