@@ -15372,7 +15372,7 @@ asset_hash,name,name_candidates,candidate_count,resolved,types,wads,aset_rows,bl
 0x80F39CED,vz_hum_soldier_a_ub,vz_hum_soldier_a_ub,1,1,texture,vz.wad,1,1,blocks\VZ\c30940_P000_Q3.block
 0x80F51F71,port_docklong_01_sm,port_docklong_01_sm,1,1,texture,vz.wad,1,1,blocks\VZ\c30147_P000_Q3.block
 0x80F665D3,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
-0x80F7BF4D,,,0,0,facefxactor;model,vz.wad,2,2,blocks\VZ\c33013_P000_Q3.block
+0x80F7BF4D,oc_hum_lifestylestarter,oc_hum_lifestylestarter,1,1,facefxactor;model,vz.wad,2,2,blocks\VZ\c33013_P000_Q3.block
 0x80FC92AB,,,0,0,path,vz.wad,1,1,blocks\VZ\resident_P000_Q3.block
 0x81073B28,,,0,0,animation,vz.wad,1,1,blocks\VZ\vehiclenameanimgroup_mi35_P000_Q3.block
 0x81091660,,,0,0,texture,shell.wad,1,1,blocks\Shell\scaleform_shell_P000_Q3.block
