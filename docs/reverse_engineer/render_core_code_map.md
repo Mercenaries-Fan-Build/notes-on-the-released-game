@@ -314,9 +314,23 @@ when the instance alpha (`DAT_017e5fe0[u16 +0x3a].+0xC`) is below 1. `FUN_008533
 set 8 when a vertex alpha byte is not 0xFF; `FUN_0046ddc0` always 8. On the model path, the depth-pass
 submitters `0x478EF0`/`0x47A140` skip any material with `(F & 0x60f) != 0` (blend mode, refraction,
 bit 0x400) and set class 10 (bit 0x4000), 2 (bit 0x40) or 1. `0x478BB0`/`0x47A860` set class 0 for
-bit 0x100. **Not found:** what the colour-pass submitter (`0x479D90`, which writes no class) runs
-under, i.e. whether a material with a blend mode becomes class 8 by itself; class 0 packets are dropped
-unless a debug gate (`DAT_017d3eec` with `…ee4`/`…ee8`) is set.
+bit 0x100. The colour-pass submitter (`0x479D90`) writes no class, and the static read stops there;
+class 0 packets are dropped unless a debug gate (`DAT_017d3eec` with `…ee4`/`…ee8`) is set.
+
+**A blended material's colour draw is class 8 (PROVEN from a dump).** A packet's material is
+`[DAT_00ff46f4 + u16(packet+0x3C) * 4]` (`FUN_00855420`, `0x85565a`–`0x85568d`); `FUN_00854b38` sets
+`DAT_00ff46f4 = 0x01164770 + parity * 0x3000` each frame (`0x854bc3`). In the v1.0 capture
+`updated-chris-exports/20261021_chris-jacobs-flying-winch.dmp` (Chris flying `global_veh_uh1huey`),
+the last frame's 3,676 sorted packets sit at `DAT_0116a77c` = `0x010A4700` with the material table at
+`0x01167770`. Joining every packet to its material's runtime flags (`+0xA0`): all 39 colour-phase
+packets whose material has a nonzero blend nibble are class 8 (31 alpha, 6 additive, 2 alpha), and no
+class 5 or 6 packet has one. The Huey's canopy glass (material `0x0081`, alpha × 0.51) and rotor disc
+(`0x0091`) are packets 2931–2950: class 8, sub-key 2 (colour on, Z write off), phase 34, C = 5365.
+Class 8 also holds draws with no blend-mode material (41 packets, sub-key 2 or 1/0) and the
+instance-alpha fade pairs (sub-key 1 then 0: a depth-only pass, then colour; their `u16 +0x3A` names
+the alpha record). Classes 5 and 6 are the opaque colour draws (class 5 mostly C = 0). What fills the
+material table, and the unit of the model path's C (`obj+0x18+view*4`), are still open; the Huey's
+C = 5365 gives p ≈ 3.05 under `C = round(16383/p)`.
 
 ## 7. Materials
 
@@ -331,8 +345,9 @@ unless a debug gate (`DAT_017d3eec` with `…ee4`/`…ee8`) is set.
 `FUN_004a0c40`/`004a8f30`/`004ac8e0`/`004a5230`). Runtime material struct (decomp-verified): 104-B
 float preamble; `flags:u16 @+0xA0` (store at `0x858b97`; what the bits do is
 `material_shader_spec.md` §1d); **`tex_count:u16 @+0xa2`** (hard-capped 10); raw-hash array
-`@+0x144+i*4`; **12-B lazy-handle array `@+0xac+i*12` = `{asset_hash, 0xF011157A (TEXTURE_TYPE_HASH),
-resolved_ptr}`**; `flags&0x200` → one extra env texture `@+0xA4` (via `FUN_008242b0(0x100)`);
+`@+0x144+i*4`; **12-B lazy-handle records `{asset_hash @+0xA4+12i, 0xF011157A (TEXTURE_TYPE_HASH)
+@+0xA8+12i, flags @+0xAC+12i}`**; `flags&0x200` → the refraction source written over slot 0's record
+`@+0xA4`; `FUN_00858320` binds slot `i` to texture stage `i` (`material_shader_spec.md` §1b);
 inter-record stride `116 + tex_count*4`. Slot order 0=diffuse, 1=specular/gloss, 2=normal, 3+=extra.
 This is the engine side of the project's `convert_mtrl` walker (memory
 [[mtrl-flags-count-transposition]]) and the `0x84DD5B` overrun (count>10). See also
