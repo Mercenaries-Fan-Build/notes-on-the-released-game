@@ -718,6 +718,9 @@ Decoded 2026-10-22 from the pc-v10 code and the four `updated-chris-exports` cap
 **`Pg.GetGuidByName`** (`0x5D3220`):
 - It hashes the argument (`FUN_0059FB00`), probes the `Name` container's index 2 (`Name+0x50`,
   keyed by name hash), and returns the owner key (`+0x44`). A miss or a stored 0 pushes nil.
+- If `FUN_0059FB00` fails (hash 0), `FUN_0059FF50` reads the argument as a guid and that raw value
+  keys the same index, so a handle is probed as a name hash, not resolved to itself. Neither reader
+  taking the argument pushes nil. `mrxbunkerbuster.lua:31` reaches this by passing `uDeliveryVehicle`.
 - Placed `Name` records register under `m2` of the FULL string, `"<name> 0x<KEY>"`. All 60,136 such
   records of `layers_static` do, and none under the bare name, so 58,271 placements that share
   2,874 bare names never collide. A suffix-less placed name (e.g. `01_pmc_hq_lz_playerone`)
