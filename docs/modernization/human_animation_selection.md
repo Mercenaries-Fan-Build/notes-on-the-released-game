@@ -108,6 +108,32 @@ Per-merc unarmed (`Bare`) clips:
 | chris | `0x835DA06A` | `0x3EFF5F5B` | `0xB5679590` | `0x4F69D6D5` | `0x73E90A02` |
 | jennifer | `0x24F8C8E6` | `0xEB36DB0F` | `0x94B1E4AC` | `0xA1FEF731` | `0xF23B92C6` |
 
+#### Every stance's table (v1.0, image `pc-v10`)
+
+The stance dispatcher at `0x00689B9D` compares the stance hash and builds one controller per
+stance; every branch joins at `0x00689D73`, which calls the controller's vtable `+0x50` init with
+`push 0x00CFFE58` as its third argument. Four classes' `+0x50` slots are thunks that overwrite that
+argument with their own table and jump to the shared init `0x0073B550`
+(`mov [esp+0xC], imm32; jmp`). Bytes read from `game-files/canonical/dumps/mercs2_unpacked.exe`
+(sha256 `8c179a99…`); each table ends at the word `0x00BBCF80` (a pointer to "bad allocation"), which
+is not part of it.
+
+| Stance | Compare | Class vtable → `+0x50` | Table | Words |
+|---|---|---|---|---|
+| Upright `0x12C07B18` | `0x00689C07` | (joins; table pushed at `0x00689CD1` / `0x00689D7E`) | `0x00CFFE58` | 33 |
+| Upright, flag `[ebp+0xC2] != 0` | — | `0x00BD2ED0` → `0x00738E00` | `0x00CFFECC` (pushed at `0x00689C9D`) = entries 29–32 of `0x00CFFE58` | 4 |
+| scuba `0x4BE8214B` | `0x00689C0E` | `0x00BD3160` → `0x00741230` | `0x00CFFC78` | 29 |
+| Swim `0x614DB965` | `0x00689BE8` | `0x00BD3100` → `0x00741190` | `0x00CFFCF0` | 29 |
+| crouched `0xC8886020` | `0x00689D0F` | `0x00BD30A0` → `0x00741180` | `0x00CFFD68` | 29 |
+| carrying `0xE7B64876` | `0x00689D16` | `0x00BD3040` → `0x00741040` | `0x00CFFDE0` | 29 |
+
+InVehicle `0x5E2CD838` is compared there too and builds no controller. The prone / KnockedDown /
+Subdued / crouchcover / UprightCover* set is tested by the predicate `0x004D6AE0`, which builds no
+controller. Not read: whether cower, carried or onladder have tables of their own. The words are
+in `mercs2_formats::anim_select::STANCE_LOCOMOTION_TABLES`; which entries beyond Upright's 0–13 are
+Handles is not identified, so `AnimSelector::locomotion_handles` keeps the words the AnimationLookup
+has rows for.
+
 ### 5. Transition graph — `0xAB8FE34B` (497 rows)
 
 `FromHandle, ToSequence, SequenceIndex, TransitionType, TransitionDuration, TransitionAnimation` —
