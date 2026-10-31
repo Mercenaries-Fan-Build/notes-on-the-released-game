@@ -256,8 +256,9 @@ Several registrations sit in islands that the decompiler renders as empty (`FUN_
 `FUN_005726e0`, `FUN_006188b0`, `FUN_02485980`, reached from `FUN_0084f130` through `jmp [stub]`
 thunks). The islands are plaintext relocated into `.securom`, their blocks joined by
 `push <continuation>; push <target>; ret`, and they call `FUN_0085ac90` the same way; disassembly
-reads them. The committed table `crates/mercs2_quartermaster/data/registered_shaders.tsv` is written
-by executing the registry under each configuration (`tools/extract_shader_registry.py`), because a
+reads them. The committed table `crates/mercs2_formats/data/registered_shaders.tsv`
+(`mercs2_formats::shader_registrations`) is written by executing the registry under each
+configuration (`mercs2_quartermaster/tools/extract_shader_registry.py`), because a
 row's `.sho` depends on the caps bits, the ShaderLevel byte and the `_li` handle tests, and some call
 sites take the `.sho` from two or three branches.
 
