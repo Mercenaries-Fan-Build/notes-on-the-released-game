@@ -65,16 +65,27 @@ offset  size          field
 - `tex_count` (u16) → `p1+0xA2`.
 - Loop `i in 0..tex_count`, **hard-capped at 10** (`if 9 < i goto done`):
   - raw hash → `p1 + 0x144 + i*4` (parallel raw-hash array).
-  - a **12-byte lazy-handle record** at `p1 + 0xAC + i*12` = `{ asset_hash:u32,
-    type_hash=0xF011157A, resolved_ptr:u32 }`. `0xF011157A` is `TEXTURE_TYPE_HASH` —
-    each slot is a deferred **texture** asset reference resolved by the streaming system.
+  - a **12-byte lazy-handle record** for slot `i` = `{ asset_hash @ +0xA4+12i, type_hash
+    0xF011157A @ +0xA8+12i, flags @ +0xAC+12i }` (the loop's `pbVar14` starts at `+0xAC` and writes
+    the hash and type at `-8`/`-4`; **PROVEN**). `0xF011157A` is `TEXTURE_TYPE_HASH` — each slot is a
+    deferred **texture** asset reference resolved by the streaming system. A hash of 0 gets no handle.
   - unused slots (i..10) are zero-filled.
-- If the runtime `flags & 0x200` (on-disk `0x100`; `FUN_0084ee70` moves bits `0x780` up one): binds
-  one extra texture at `p1+0xA4`, not from the record: the texture asset hash
-  `[[0x00dfc2f8]+0x2cf0]`, typed `0xF011157A` (decomp of `Mtrl_Parse`, the block after the texture
-  loop). `FUN_008242b0(0x100)` there only finds and releases the handle a previous bind left. The
-  five retail materials with on-disk `0x100` are all `PgDiffRefractNormFP` (**PROVEN**), so this is
-  the refraction source texture (**INFERRED**).
+- If the runtime `flags & 0x200` (on-disk `0x100`; `FUN_0084ee70` moves bits `0x780` up one): writes
+  the texture asset hash `[[0x00dfc2f8]+0x2cf0]` and type `0xF011157A` into `p1+0xA4`/`+0xA8`, **slot
+  0's** handle record, after the texture loop (**PROVEN**). `FUN_008242b0(0x100)` there only finds
+  and releases the handle a previous bind left. The five retail materials with on-disk `0x100` are all
+  `PgDiffRefractNormFP` (**PROVEN**) and leave slot 0 empty; their shader samples the "scene behind" at
+  `s0`, so this is the refraction source (**INFERRED**; the global is the colour-buffer copy per the
+  render code map).
+- **Binding at draw time** (`FUN_00858320`, **PROVEN**): for `i in 0..tex_count`, `FUN_00484280(i, tex)`
+  at `0x858390` sets texture **stage `i`** (device `SetTexture`, vtable `+0x104`) from the resident
+  runtime entry at `p1+0x11C+4i` (writer not yet found), or unbinds stage `i` when that entry is empty
+  or not resident. No default texture is bound, and stages at or past `tex_count` are left as they
+  were. Stage 13 (`reflectionMap`) is bound per draw call from key `0x5E84EA6D`, stage 14 from
+  `0x16085A8D`, and stage 15 is the shadow atlas (`FUN_00855420`, stream opcode `0x12`). So a slot's
+  meaning is the sampler the material's pixel shader declares at that stage: over every retail model
+  material, slot 0 is `diffuseMap`, slot 1 `specularMap` or `emissiveMap`, slot 2 `normalMap`
+  (`mercs2_engine/tests/material_shaders.rs`).
 
 **Slot semantics (index → role):** slot 0 = **diffuse (albedo)**, slot 1 = **specular /
 gloss**, slot 2 = **normal map**, slots 3+ = extra maps (detail/env/mask). This ordering
@@ -122,7 +133,19 @@ one-hot (1..4 → 1, 2, 4, 8; else 0) and moves the other bits (`0x008→0x40`, 
 Render-state numbers are D3D9's: SRCBLEND 19, DESTBLEND 20, BLENDOP 171, ALPHATESTENABLE 15,
 ALPHAFUNC 25, ALPHAREF 24, CULLMODE 22, set through `FUN_00484310` (device vtable `+0xE4`). Retail
 model census (`mercs2_probe mtrl_census`): 15,586 materials mode 0, 503 mode 1 (alpha blend), 72
-mode 2 (additive ONE/ONE, mostly `PgDiffEmis*`), none 3 or 4.
+mode 2 (additive ONE/ONE, mostly `PgDiffEmis*`), none 3 or 4. No mode 1 or 2 material carries
+on-disk `0x020`/`0x040`, so retail blending is SRCALPHA/INVSRCALPHA ADD or ONE/ONE ADD only. Tables
+read from the v1.0 image: `DAT_00ce8d28` = 2, 5, 7, 2; `DAT_00ce8d38` = 2, 2, 2, 6; `DAT_00ce8d48` =
+1, 1, 1, 1, 2, 1, 1, 1, 3 (**PROVEN**; `mercs2_formats::texture::material_blend_state`).
+
+The default `CULLMODE` at `*(PTR_00dfc2fc) + 0x3fd0` reads 2 (`D3DCULL_CW`) in the v1.0 capture
+`updated-chris-exports/20261021_chris-jacobs-flying-winch.dmp`. No instruction writing it was found:
+the 58 functions that load `PTR_00dfc2fc` only read it, and `FUN_00858320`, `FUN_00858530` and
+`FUN_00858600` are its only readers. Since the default applies to every one-sided material, opaque
+ones included, it is the cull that keeps a model's outward faces.
+
+ZENABLE is `!(F & 0x2000)` (`FUN_00484310(7, …)`); no on-disk bit maps to runtime `0x2000`, so every
+material depth-tests.
 
 ### 1e. `materialData` (pixel constants c93..c98)
 
@@ -146,6 +169,25 @@ instance entries (`_DAT_0116a778 + idx·0x20`) are written by `FUN_00854b38`; th
 yet decoded. The pixel shaders use c93.rgb as the diffuse tint, c95 as ambient, c96 as the emissive
 colour, c98.w as the alpha multiplier (`oC0.w = diffuse.a · c98.w` in `PgDiffFP`/`PgDiffEmisFP`, the
 constant itself in `PgDiffRefractNormFP`) and c98.y (the IOR) to scale the refraction offset.
+
+**Output alpha by family (PROVEN from the programs).** Over every retail model material's pixel shader
+(16,161 materials, `tests/material_shaders.rs`), the final `oC0.w` write is one of five shapes, with
+`d` = diffuse texel alpha (`texld …, s0`), `k` = c98.w, `v` = COLOR0 alpha:
+
+| Shape | Shaders | Materials (of them blended) |
+|---|---|---|
+| `k` | `PgDiffRefract*` | 5 (0) |
+| `d · k` | `PgDiff*`, `PgDiffEmis*`, `PgFast*`, rim variants | 6,001 (206) |
+| `d · k · v` | non-specular `*AmbOcc*` | 1,148 (43) |
+| `saturate(max(d · k, spec))` | `*Spec*` | 6,654 (301) |
+| `saturate(max(d · k · v, spec))` | `*Spec*AmbOcc*` | 2,353 (25) |
+
+`spec` is `dp3(specular, (0.299, 0.587, 0.114))`: the luminance of the direct specular term
+(light × N·H^c98.z × specularMap × c94), taken before the reflection, vertex-colour and fog terms are
+added (read in `PgDiffSpecMetalNormFP` and `PgDiffSpecNormAmbOccFP`). So blended glass turns opaque
+where a highlight is brighter than its alpha. `PgMeshVP` passes the vertex COLOR to COLOR0 unchanged
+(`mov o1, v1`), so `v` is the mesh's vertex alpha. `OutputAlpha::of_program`
+(`mercs2_formats::shader_registrations`) classifies a program by tracing its `oC0.w` write.
 
 ---
 
