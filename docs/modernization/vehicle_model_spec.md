@@ -203,6 +203,96 @@ crumpled hull is high-poly. Never assert `intact > wrecked`. The real invariant 
 draw **different** geometry: the wreck is *swapped in*, not added. Verified across car/tank/heli/AA:
 **0 triangles drawn identically intact vs destroyed.**
 
+### 5a. ★ Template states — a variant's loadout on a shared model
+
+Most switch nodes' `InitState` runs `SetState(0xCDE0B80F, <node>)`. The `SetState` handler
+`0x004D1C70` resolves `0xCDE0B80F` to the state the entity's **`OSMStateParameter`** records name for
+that switch node (pool `0xDF8B90`; schema `+0` switch-node hash, `+4` state hash) — the entity's own
+records first, then its template's (`SceneObject+0x14`), first match — else `PristineState`
+(`0x004D1CBE`). The lookup `0x00649440` → `0x0050026C` is read on x360 (`FUN_8231A0E8` →
+`FUN_824FC4A0`); the PC body is not read. `0x004D4010` enters any state: one the node does not list is
+recorded with no script run.
+
+This is how a variant template picks its loadout on one model: `UH1 Transport (GR)` (`0x80008205`) sends
+all 14 of `global_veh_uh1huey`'s kit switches to `0x46F79D30`, a state with no enter script, so the
+`SWIT`-controlled kits are never shown; `UH1 Attack` names 11 (six kits show), `UH1 Elite` 4 (the nose
+kit shows). `al_veh_truck_hmmwv_armored`'s weapon variants send the other weapon's mount to a state
+hashed as the switch node itself, which it does not list — hidden the same way. **Proven against a
+live capture:** the template's records plus the rotors (§5b) reproduce both live Huey tables of
+`20261021_chris-jacobs-flying-winch.dmp` node for node (`mercs2_engine` test `rotor_retail`;
+`orchestrator::template_states` / `machine_run_in` / `default_state_index_in`). A model viewed with no
+template takes `PristineState` for every such node and shows every kit.
+
+### 5b. ★ Rotors — blades, blur discs, and the spin
+
+A helicopter rotor ships **two versions on two nodes**: the solid blades and the motion-blur discs (the
+discs are blended materials, see `material_shader_spec.md` §1d). Both are always in the container; a
+**bone controller** shows one, the other, or both by rotor speed. Its node writes go into the **same
+node-enable records** the destruction machine's do (clause 3), so the swap is not a separate hide pass.
+
+**Data — the `Rotor` component of the `worldentity` templates** (version 82, 28 bytes, one record per
+rotor; boats carry records for their propellers with no blur nodes). Read by `0x006570A0`
+(`mercs2_formats::rotor`):
+
+| off | field | used by the controller |
+|---|---|---|
+| `+0x00` | `RotorHubBoneName` | spun |
+| `+0x04` | `SpinDir` | scales the spin (`±1` in retail) |
+| `+0x08` | `FirstRotorBladeBoneName` | not copied |
+| `+0x0C` | `MinRotorAngle` | not copied (0 in every retail record) |
+| `+0x10` | `MaxRotorAngle` | not copied (0 in every retail record) |
+| `+0x14` | `RotorBlurOnBone` | shown when fast |
+| `+0x18` | `RotorBlurOffBone` | shown when slow |
+
+The bone names are per template: most helicopters use `bone_bluron`/`bone_bluroff` (tail:
+`bone_tailbluron`/`bone_tailbluroff`); the Ka-29B's coaxial rotors name their own nodes
+(`0x39A44BCE`/`0xD22DF6A4` upper, `0x9BABA1D9`/`0xEC2BE0FB` lower). A template can carry records for
+hubs of a sibling model it also serves (`UH1 Transport` carries `bone_rotor`/`bone_tailrotor` beside the
+template rig's hubs); over the 28 rotor models in `vz.wad`, every record whose hub a model has also
+names blur nodes it has (`mercs2_engine` test `rotor_retail`).
+
+**The controller — `PgRotorBoneController`** (class name from PS3 v1.01-eu RTTI). The bone-controller
+builder `FUN_00683D70` makes one 0x2C-byte controller per record (vtable `0x00BCD5F8`, priority 10):
+`+0x14` angle, `+0x18` kill latch, `+0x1C` hub, `+0x20` SpinDir, `+0x24` blur-on, `+0x28` blur-off.
+Update, slot 2 `0x00638000` (x360 `0x824CDB70`, PS3 `0x001E8B28`):
+
+```text
+speed = HelicopterPhysics+0x3C                     // 0..1, via PhysicsActor vfunc +0x64 (0x00439250)
+kill  = actor.u8[+0x15] | ctl.u8[+0x18]
+angle = wrap_pi(angle + SpinDir*speed*dt*30.0)     // 30.0 @0x00B977D0
+set_node(obj, node(blur-on),  speed > 0.3 && !kill)    // 0.3 @0x00B9B688
+set_node(obj, node(blur-off), speed < 0.9 && !kill)    // 0.9 @0x00BB3E44
+```
+
+Strict compares: **between 0.3 and 0.9 both show**; a NaN speed shows neither; no hysteresis, no fade.
+`set_node` is `0x00472960` → `0x004B7630`: it replaces the node's record and the table rebuild
+`FUN_004727B0` runs (a node with no record under a recorded parent copies its parent, so the Ka-29B's
+blades, children of its blur-off nodes, follow). Slot 5 `0x006381F0` turns the hub's local transform
+by `angle` about its own +Y (the multiply order is INFERRED). **Proven against a live capture:** the two
+Hueys of `20261021_chris-jacobs-flying-winch.dmp` (speed 1.0 and 0.0) have node-enable tables that differ
+in exactly the four blur nodes, and the controllers over the pristine machine reproduce that difference.
+
+**Kill latch.** The state machine's command `0xBA20F82C(event, node)` reaches `FUN_004B16B0`; on event
+`0xB4A26AA7` (main rotor, issued from the Huey's rotor switch when `DestroyMsg` arrives) or `0x6CCBB80A`
+(tail) it sets `+0x18` on every controller whose hub is that node, its ancestor or its descendant. Both
+meshes then hide; the broken blades are the machine's own `CreateObject` debris. Nothing clears it.
+
+**Rotor speed — `HelicopterPhysics+0x3C`**, stepped by `FUN_004517B0` inside applyAction `0x00453760`
+(`mercs2_vehicle::rotor::HeliRotor`):
+
+- vertical control `+0x28` (verb `0xE6FA6B1B`, the player's every frame, -1..1) above 0 → `+0.25/s`
+  (full speed in 4 s); exactly `5.0` (AI) → `0.95`;
+- otherwise the rotor runs down **only after 0.5 s of contact** (`+0x4C`, the contact listener at
+  `+0xD8`); airborne with no input the speed **holds** (the flying Huey above: speed 1.0, input 0, no
+  contacts);
+- run-down is the decay `0x00453B30` at 0.975/tick pushing down, 0.99 idle above 0.1, else 0.95; a lost
+  main rotor (`+0x48`) runs down at 0.925 regardless;
+- created at 0, or at 1.0 when the vehicle is created crewed (`+0x68`, a seat/rider test, partly read).
+
+**Open:** what sets `+0x44 = 3` (an object looked up by key `0x2001`), who sends event `0x9CC8AF58`,
+the `+0xA0` pool behind the actor's `+0x15` latch, whether the AI's `5.0` is `MaintainRotorSpeed`, and
+what a boat's propeller reads for speed (its actor's vfunc `+0x64`).
+
 ---
 
 ## 6. Materials
