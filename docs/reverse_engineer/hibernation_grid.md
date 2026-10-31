@@ -187,6 +187,8 @@ Per slot with `R = (r14 & 0x3FFF)·k`:
 1. Clear the cancel latch `0xED3B18`.
 2. Begin (`0x4F7210`): a no-op unless the SceneObject state is 0. It calls every component listener's
    `+0xC`, recursing into link children; a listener whose asset is missing writes `e` to the latch.
+   ModelName's (`0x6695E0`) requests nothing for a model hash of 0 (`0x669633`), which is no asset
+   rather than a missing one.
 3. Latch == `e`: deactivate, return 0, enqueue nothing (`0x4F8DBB`, `0x4F8E12`).
 4. A1 ≠ 0: enqueue, return 0.
 5. Otherwise, if CanActivate (`0x4F7710`, every polling listener's `+0x10`, e.g. ModelName's model
