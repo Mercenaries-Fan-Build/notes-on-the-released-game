@@ -200,8 +200,10 @@ nothing in the record says so. `Parent` is the template only, and no flag bit ma
 - Every other entity sits at its `Transform`: all 75,427 and 75,542 of them within 1 cm in the two
   captures where nothing had disturbed the world; the mid-mission two add 46 and 54 movable props
   (trash cans, dumpsters) that physics had shifted.
-- A link child's `Transform` is not used. Its live position is parent × hard point × offset up the
-  chain of links, every one of the 679 to 882 children held in each capture within 1 cm. The stored
+- A link child's `Transform` is not where it ends up. Its live position is parent × hard point ×
+  offset up the chain of links, every one of the 679 to 882 children held in each capture within
+  1 cm, positions only (rotation is untested). INFERRED: the solve overwrites the value the Transform
+  reader stores, since the writer's body is a VM stub and no edited child has been run. The stored
   value is up to 2.8 km away and for some children is the hard point's local position (light
   `0x0010D532` stores (0, 5.97, 0); it sits on telephone pole `0x00102868`).
 - The hard point counts once the parent has been awake. A child of a parent asleep since load sits at
