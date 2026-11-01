@@ -364,18 +364,78 @@ INDX + HIER are found in multi-part assets: vehicles, characters, buildings with
 
 ---
 
-### 4.3 UCFX texture INFO (minimal)
+### 4.3 UCFX texture INFO and rungs
 
-**Tool:** [`tools/texture_extractor.py`](../tools/texture_extractor.py)
+**Tools:** `mercs2_formats::be_to_le::texture`, `mercs2_probe tex-rungs`, `mercs2_probe tex-compare`.
 
-| Offset (in INFO body) | Field |
-|------------------------|--------|
-| `+0`, `+2` | width, height (u16) |
-| `+6` | mip_count (u16) |
-| `+14` | FourCC (DXT1 / DXT3 / DXT5 for supported path) |
-| `+22` | total_size (u32) | Bytes for full mip chain in BODY |
+A texture lives in up to four blocks. Rung `_P000` holds `NAME`, `INFO` and `BODY`; each finer rung
+`_P001`..`_P003` holds a lone `BODY`. The ASET row names the blocks (`aset_format.md`).
 
-Bytes between documented fields are **read but not exported** as named fields.
+PC `INFO` is 34 bytes, read by `Tex_ConsumeChunk FUN_00750a30` (object field in brackets, the object
+being resource `+0x1c`):
+
+| Offset | Field |
+|---|---|
+| `+0`, `+2` | width, height, u16 (`+4`, `+6`) |
+| `+4` | u16, stored at `+8`, 1 on every texture read |
+| `+6` | mip count, u16 (`+0xa`) |
+| `+8` | flags, u16 (`+0x28`). The only PC reader found is bit 0, in the sampler setter `FUN_00751030` |
+| `+10` | kind, low byte only (`+0x2a`): 1 plain, 2 cube. Any other value drops `BODY` |
+| `+12` | u16, skipped by the reader |
+| `+14` | D3DFORMAT or FourCC, u32 (`+0x24`) |
+| `+18` | f32 (`+0x20`), meaning not read |
+| `+22` | linear size of the whole chain, u32, skipped by the reader |
+| `+26`, `+28`, `+30`, `+32` | mip masks of `_P003`, `_P002`, `_P001`, `_P000`, u16 (`+0x2c`..`+0x32`) |
+
+**A rung's `BODY` is exactly its masked mips, largest first.** 36,722 of 36,723 PC bodies equal the sum of
+their masked linear mip sizes; the other is the cube, whose `_P000` mask of `0xFFFF` means every mip of
+all six faces, stored face by face. PC's `_P000` mask is never 0.
+
+The rung comes from the ASET slot, not the path or a mip count: the slot travels through the stream
+node (`node+0x5a`) into `FUN_004b1000` and `FUN_00750a30`, which indexes the masks with it. Nothing
+compares `BODY`'s size to its mask: the reader is a bare `memcpy`. So on PC:
+
+- A rung with a non-zero mask and a size-0 `BODY` faults (reader is NULL, `0x750bd9`).
+- A rung with a zero mask whose block holds this hash corrupts the texture: `first` stays -1, so the
+  surface is 1×1 with `mips + 1` levels, and `FUN_0085cbd0` discards `CreateTexture`'s HRESULT.
+- A mask with a gap lands its mips consecutively, so they shift silently.
+- A mask with no block never arrives: the texture stays coarser.
+
+None of `INFO` or `BODY` reaches stream-node state: `FUN_004b1000` ignores the reader's result. What can
+stall is the rung order. Rungs install coarsest first: the ring consumer `0x4b1160` takes an item only
+when `((res+0x16 >> 6) & 7) - 1 == node+0x5a`, and otherwise re-queues it and loops, so a rung that
+arrives before the one above it spins. Every block a chain names must therefore hold the asset exactly
+once, which retail does on 35,582 of 35,582 rungs and `aset_refcheck` enforces.
+
+**Xbox** `INFO` is the same fields big-endian, 34 or 42 bytes, with the D3DFORMAT word at `+14` (low byte
+`0x52` DXT1, `0x53` DXT3, `0x54` DXT5, `0x86` A8R8G8B8) and the tiled size at `+22`. Bodies are tiled:
+
+- Each mip takes `(w, h)` in blocks rounded up to 32, in a 32-block macrotile.
+- Mips under 32 texels on a side share one surface, the tail, sized from the first of them. In blocks,
+  the n-th tail mip sits `(16 >> n) / 4` along the short axis, along X when the texture is not wider.
+- A texture of one mip sits at the origin of its surface.
+- A cube stores every face of a mip before the next mip, then the faces' tails.
+- Words are big-endian: 16-bit in a DXT block, 32-bit in A8R8G8B8.
+
+Proven against PC twins over 88,448 mips: all 5,218 resident tail mips of unflagged DXT5 pairs are
+byte-identical, 3 of their 4,753 full mips differ in alpha, and DXT1 pairs differ by codec noise (median 3
+of 255). PC clears the colour under fully transparent texels, and PC and each console compressed their
+own blocks, so most bodies differ in bytes. `mercs2_probe tex-compare` lists every mip.
+
+A 42-byte `INFO` is a map flagged `0x10` or `0x20` (all 5,808): the runtime has a flat stand-in for it
+(`FUN_822047f0`: `(0.5, 0.5, 1)` for `0x10`, black for `0x20`), so the bake empties `_P000`, folds its
+mips into `_P001` and sets the first mask table to match. The second table at `+34` keeps the split:
+`_P003` and `_P002` are equal in both tables and first `_P001` = second `_P001 | _P000` on all 5,808.
+Nothing in the Xbox reader touches the second table. PC cannot read this form, for the reasons above,
+so conversion moves the folded mips back to `_P000`. 90 of them have no `_P001` and so no pixels at all
+on Xbox; PC retail has all 90, and the 7 in the DLC are all in the base game.
+
+Xbox flag `0x10` on DXT1 is a normal map with X and Y in red and green. All 2,770 are DXT5 on PC, with Y
+in the colour block and X in alpha. Bit `0x10` is clear on 2,872 of 2,901 PC twins and PC has no reader of it.
+
+**PS3** `INFO` is 25 bytes, big-endian, with no `NAME` row: width, height, depth and mips as PC, `+8` kind
+(2 plain, 4 cube), `+10` format (`0x86` DXT1, `0x88` DXT5, `0x85` A8R8G8B8), `+12` the f32, masks at `+17`.
+Bodies are linear, in the same byte order as PC, and the masks equal PC's on all 13,253 shared textures.
 
 ### 4.4 Texture streaming index
 
