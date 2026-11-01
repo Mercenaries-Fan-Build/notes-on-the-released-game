@@ -59,7 +59,7 @@ Retail: `0, 0x33, 1`. `FUN_00654940` (CHDR arm, PROVEN):
 | Flag bit | Effect |
 |---|---|
 | 0 | `data` chunks are grouped records (§3.3); after the container, every `UNIQ` key without a `HibernationControl` record goes to `thunk_FUN_024ECAB0` |
-| 2 | `DAT_01176053`: class names and `Name` strings are stored as hashes. Clear in retail; the codec refuses it |
+| 2 | `DAT_01176053`: the compact form of §7, in which class names and `Name` strings are stored as hashes. Clear on PC, set on console |
 
 The codec refuses any other bit (no meaning established).
 
@@ -93,6 +93,8 @@ their keys' classes give). A key whose classes give no bit has no `flgs` record 
 The loader (`flgs` arm, PROVEN) puts each 32-byte set into the `Flags` component container
 `0x00DF6D08` (stride 32) through `FUN_00649180`, ORing it with the set of the entity's source when
 `SceneObject` names one.
+
+The bitset is four u64 words: a console bake stores each big-endian (§7).
 
 ---
 
@@ -196,6 +198,10 @@ container `0x00DF6B88` through `FUN_00649180(container, key, h, h, …)` with
 `pandemic_hash_m2` is INFERRED: the same function hashes the class names the deserializer tables are
 keyed by, and every retail class hash is `pandemic_hash_m2` of its name.
 
+With CHDR bit 2 set the payload is `[u32 hash]`, with no flag byte (`0x6569BC`–`0x656A0B`). The registry
+call is `FUN_00649180(0x00DF6B88, key, h, h, "NO_NAME")`, where `h` is the stored hash only when bit 1
+of `DAT_00DF6B90` is set, else 0 (PROVEN). What sets that bit on PC is unread.
+
 ---
 
 ## 4. Templates and the name lookup
@@ -256,8 +262,28 @@ template appended made that template's name resolve and spawn (§4).
 
 **guidmap** (`0x385EA82C`, type `0x140E8728`, same block): its keys are the 6,126 template keys plus
 one zero slot. Neither the template lookup (`FUN_00672F70`) nor `FUN_00654940` reads it, so a new
-template needs no guidmap row (INFERRED). Its own loader is behind `thunk_FUN_024F08A0` and was not
-read.
+template needs no guidmap row (INFERRED).
+
+One `CHDR` row holds the whole map:
+
+```text
++0   u16  version            8
++2   u16
++4   u32  a                  6,127
++8   u32  b                  59,686
++12  u8, u8                  0x0D, 0x10
++14  u16
++16  u32                     read at version 7 and above
++20  a × u32  keys, the zero slot first
+     a × u8
+     b × u32
+     b × u16
+```
+
+The field order is `PgGuidMap`'s reader on PS3 (`FUN_001EDDB0`, its class's vtable slot 5). The PC
+reader is not located: `0x004CBC90` returns the type hash, and its class's vtable is unread. Sizes fit
+exactly on both bakes (PC 20 + 5 × 6,127 + 6 × 59,686 = 388,771; Xbox, b = 59,684, 388,759), and the
+converted PS3 guidmap equals PC's byte for byte (PROVEN). What `+16` and the `b` arrays hold is unread.
 
 ---
 
@@ -292,3 +318,57 @@ carries the linked scripts (`mercs2_quartermaster::fx::merge`). The merge refuse
 
 Every other record of the container is the game's, byte for byte, and every row of the resident
 block is copied from the game's.
+
+---
+
+## 7. The compact form (console bakes)
+
+Every `worldentity` and layer of the Xbox and PS3 bakes, and the DLC's `worldentity`, have CHDR bit 2
+set. The Xbox and PS3 base `worldentity` are byte-identical, and so are the DLC's on Xbox, on PS3 and in
+the Nov 25, 2008 prototype. The Nov 6, 2008 prototype and Pack B store the DLC's `worldentity` named,
+with `schm`, `enum` and strings. The retail DLC keeps 15 Xbox layers named and 5 compact; on PS3, 4 and
+16.
+
+```text
+CHDR
+UNIQ                  worldentity only
+COMP ×N               info, data
+flgt, flgs
+```
+
+No `enum` row, no `schm`. `info` is `[u32 hash][u32 version][u32 count][u32 flags]`, with no class name
+(`0x654B8C`–`0x654BD0`). The hash selects the exe's native table (`0x017C0B58`, `FUN_008242B0`
+`0x654C0A`). A `Name` record holds a hash (§3.4). `flgt` keeps its strings, and in a layer is the single
+trailer word. A layer's `data` is `[u32 key][payload]`, a `worldentity`'s grouped (§3.3). Most console
+layers have no `Name` group; the PC bake has one in each.
+
+**Layouts.** The PC bake's `schm` of the same class hash and version gives each record, 207 classes in
+all (`mercs2_formats::be_to_le::ecs::ComponentSchemas`).
+
+**Big-endian.** Every field swaps at its own width, and three things need more than that:
+
+| What | Console | PC |
+|---|---|---|
+| A fixed record's unit of bit fields | the whole unit bit-reversed, so a `WeaponHint` 2-bit field holds 1 where PC holds 2 | |
+| `NetCategoryInfo`'s u16 | a field at bit `s` of width `w` sits at bit `16 - s - w` and keeps its value | as `schm` declares |
+| `flgs` bitset | four big-endian u64 | four little-endian u64 |
+
+`schm` declares the same bit positions in a console prototype as on PC, so it does not show this.
+PROVEN by the join below; which code writes or reads the console order is unread.
+
+**Proof.** `mercs2_probe ecs-compare` joins two archives by container, class and key, and
+`tests/ecs_console_retail.rs` gates the result:
+
+| Compared | Records equal | `flgs`, `flgt`, `UNIQ` | Guidmap |
+|---|---|---|---|
+| PS3 retail, converted, against PC retail | 220,085 of 220,085 | all equal | byte-identical |
+| Xbox retail, converted, against PC retail | 220,081 of 220,081 | `flgs` 923 of 924 | differs |
+| Xbox DLC against PS3 DLC | 104,852 of 104,852 | all equal | differs |
+| Xbox DLC against the Nov 6 prototype | 108,052 of 108,061 | `flgs` 17 of 21 | differs |
+
+The Xbox bake lacks the two entities PS3 and PC hold (`Transform`, `Anchor`). The 9 prototype records
+are 8 `Transform` and 1 `Road`. Each `Name` hash compares with its twin's string.
+
+**Reading.** `WorldEntity::parse_compact` reads the form and writes back its bytes.
+`ComponentSchemas::inflate` turns a compact container into the named form, with each `Name` string the
+PC bake or a rainbow file knows for its hash, else `0xHHHHHHHH`. The game reads the compact bytes.
