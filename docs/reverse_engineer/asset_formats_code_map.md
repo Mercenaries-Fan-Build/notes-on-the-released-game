@@ -250,10 +250,10 @@ count field **`@mat+0xa2`**, array **`@mat+0x144`** — matches Part C.2 exactly
 Loops the block, dispatching `NAME`(0x454d414e, → `Chunk_ReadCString` into a 0x100 buf),
 `INFO`(0x4f464e49), `BODY`(0x59444f42). The INFO arm reads the texture header into the resource at
 `unaff_EDI`: `u16 @+4` (width), `u16 @+6` (height), further u16s `@+8/+0xa/+0x28`, a **byte `@+0x2a`
-= surface/DXT flag**, `u32 @+0x24` and `@+0x20`, then u16s `@+0x2c/+0x2e/+0x30/+0x32` (surface-array
-descriptors). The BODY arm branches on `@+0x2a == 1` (build the DXT block mip chain via
-`FUN_0085cbd0`, halving w/h per mip with `>> (bitcount)`) vs `== 2` (6-face cubemap path,
-`FUN_0085ccd0`, loop `< 6`). This is the concrete engine reader behind `format_reference.md` §4.3's
+= kind, `INFO +10`'s low byte**, `u32 @+0x24` and `@+0x20`, then u16s `@+0x2c/+0x2e/+0x30/+0x32` (the mip
+masks of rungs `_P003`..`_P000`, indexed by the rung slot). The BODY arm branches on `@+0x2a == 1` (build
+the rung's mips via `FUN_0085cbd0`: `first` = lowest set mask bit, `n` = popcount, `w >> first`) vs `== 2`
+(6-face cubemap path, `FUN_0085ccd0`, loop `< 6`, ignoring masks and slot). This is the concrete engine reader behind `format_reference.md` §4.3's
 tool-view (`w@+0, h@+2, mip@+6, fourcc@+14, total@+22`) — the tool offsets are relative to the INFO
 *body*, the exe offsets are relative to the texture *resource object*.
 
