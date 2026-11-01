@@ -75,6 +75,10 @@ let single_block = entry.packed_block_ref & 0xFFFF == 0xFFFF
                 && entry.secondary_ref == 0xFFFF_FFFF;
 ```
 
+Every block a chain names holds the asset exactly once: 35,582 of 35,582 rungs in retail `vz.wad`. The
+engine installs rungs coarsest first and re-queues one that arrives early
+(`reverse_engineer/render_core_code_map.md` §8), so `aset_refcheck` enforces it.
+
 Clone a multi-rung asset by copying only its `_P000` block and you ship the coarsest tier with no
 finer rungs behind it. Use `AsetEntry::lod_chain()` (`mercs2_formats::ffcs`) rather than
 re-deriving the packing.
