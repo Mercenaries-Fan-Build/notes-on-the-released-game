@@ -233,6 +233,17 @@ exactly; `TerrainObject` 3,200 / (4+4) = 400 exactly.
 
 Repro: `cargo run --release -p mercs2_probe --bin docaudit -- part2 <vz.wad> layers`.
 
+**Over every layer of `vz.wad` and `vz-patch.wad` there is a third exception, `PointLocation`**
+(2026-10-31): `[u32 key][32 bytes][cstring]`, the worldentity layout (native reader `FUN_00656AD0`), in
+18 layers. Its `schm` declares 36, and a blob's size says nothing about its records.
+
+**`PhysicalLink`** (2026-10-31; `mercs2_formats::physical_link`): `[u32 key]` then 44 bytes, `+0` child,
+`+4` `HardPoint`, `+8` `NAME`, `+0x0C` the 32-byte `Position` blob: x, y, z, a padding word, quaternion
+xyzw. The template records' quaternions are all unit, which pins the layout. Of 1,687 template links
+with a hard point on a parent with a model, 1,670 name a HIER node of that model; the other 17 are
+unexplained. The 901 placed records resolve with no remainder: 891 children are entities of the same
+layer, 10 are templates (`mercs2_probe layer --all`).
+
 ### 2.7 Name ↔ Transform pairing (layers_static)
 
 Within each UCFX sub-block, the Name COMP and Transform COMP both use the same u32 entity keys. Entities are matched **by key** — Name records contain `[u32_le key][entity_name_string 0xKEY\x00][\x00 pad]` and Transform records contain `[u32_le key][38 bytes position/rotation]`. The decoder emits both `entity_id` (as `0xKEY` hex string) and `entity_name` (the bare name portion) on each placement record.
