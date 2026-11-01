@@ -44,8 +44,12 @@ and an undetected-content guard.
 - **`LOADED X%` + VERDICT** is the headline. Verdicts:
   - `REACHED-WORLD` (exit 0) — load completed (`GlobalExit - Complete`). A crash noted as
     POST-LOAD is gameplay/exit, not a load blocker.
-  - `CRASH @0xEIP` (exit 10) — a *real* terminal crash that blocked the load (non-teardown EIP,
-    before GlobalExit). The report names the suspected subsystem.
+  - `CRASH @0xEIP` (exit 10) — a *real* terminal crash (non-teardown EIP, before GlobalExit). The
+    report names the suspected subsystem. With milestones logged it blocked the load. With
+    `LOADED n/a` nothing says how far the load got, so never report it as a load blocker.
+  - `LOADED n/a` — the log has no `[lua]` or `[world]` lines, which is every run without
+    `PMC_VERBOSE_LOG`. The ladder measured nothing; a first-chance record in such a run is terminal
+    only if it is `UNHANDLED` or the log stops with it.
   - `HANG` (exit 11) — the load wedged (steady `[pool] free=N`, no progress). This is the common
     real blocker; note the `free=` value and last phase.
   - `TRUNCATED` (exit 12) — log ends mid-load with no crash/hang signature (or a hard-close).
@@ -59,6 +63,9 @@ and an undetected-content guard.
   been taught — add it to `tools/wad_simulator/crates/loadprobe/src/phases.rs` (the milestone
   ladder / `KNOWN_EIPS` are the single source of truth).
 - **LAST ACTIVITY** — always shows what the log was doing at the end (the lead for any wedge).
+- **ADDRESS SPACE** — whether the exe is large-address-aware, the lowest free space and smallest
+  largest-hole across the `[vmem]` samples, and both at the crash. A failed D3D create with little
+  free or only small holes is address-space exhaustion; plenty free points at a driver limit instead.
 
 ## Critical gotcha
 
