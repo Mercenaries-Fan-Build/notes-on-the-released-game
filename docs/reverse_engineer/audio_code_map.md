@@ -723,12 +723,19 @@ offset  type  field
 0x08    u16   R = record count (≥ 1 in every retail bank)
 0x0A    u16   bank kind: 0 = embedded, 1 = streamed
 0x0C    u32   bank hash (repeated)
-0x10    u32   record table offset: 24 (embedded) or 40 (streamed)
+0x10    u32   record table offset: 24 (embedded); 40 (streamed); 56 (the DLC's streamed banks)
 0x14    u32   0
-0x18    16 B  streamed banks only: the .pws file name, ASCII, NUL-padded (≥ 1 NUL)
+0x18    16 B  streamed banks only: the .pws file name, ASCII, NUL-padded (≥ 1 NUL); 32 B in the
+              DLC's, whose names outgrow 16 (`vo_stream_DLCTest.pws`)
               record table: R × 36-byte records
               embedded banks only: the blob area
 ```
+
+The engine reads the table offset from the bank, not a constant: `FUN_0082e790` `0x0082E7B6` `add ecx,
+[eax+0x10]`. `FUN_0082e8f0` returns `bank + 0x18` as a bare pointer, with no copy or length check, and
+`FUN_00837830` `0x00837A9D` passes it on, so no fixed 16-byte buffer sits on that path. PROVEN. What
+the callee (slot 0 of the vtable at `[0x011763F4]`) does with it, and how `vo_stream.pws` becomes the
+file `vo_stream.english.pws`, is not read.
 
 Record (36 bytes):
 
