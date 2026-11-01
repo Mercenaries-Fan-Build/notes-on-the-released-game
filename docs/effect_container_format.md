@@ -8,7 +8,9 @@ EffectContainer}`.
 **Loader:** `mercs2_unpacked.exe` — effect driver `FUN_00491920`, PTYP-child reader `FUN_00492af0`,
 EMIT walker `FUN_0048cc30`, TRFM-channel reader `FUN_00493150`. **Runtime:** spawner
 `FUN_00488d70`, per-frame spawn count `FUN_0048f4f0`, particle spawn `FUN_0048f900` →
-`FUN_0048ae80` → `FUN_00488770` (§2.1).
+`FUN_0048ae80` → `FUN_00488770` (§2.1). What each field means at run time, in units, with the
+integrator `FUN_00876840`: [`reverse_engineer/particle_sim_units.md`](reverse_engineer/particle_sim_units.md),
+ported in `mercs2_engine::fx_sim`.
 
 Confidence labels: **PROVEN** = checked against retail bytes or a decomp read this pass;
 **INFERRED** = reasoned from the decomp or the data, not exercised; **UNKNOWN** = carried verbatim,
@@ -112,7 +114,7 @@ There is no `POFF` in any retail effect.
 | `EMTR/GEOM` | `4 + 52·k` bytes; each record is 13 f32, a triangle particles spawn on (§2.1) | PROVEN; loader allocates `k × 0x34`, copies 13 words |
 | `EMIT` | marker; children `TRFM` then optional `GEOM` (811 of 820 have one; §2.1 says when an emitter may go without) | PROVEN |
 | `EMIT/GEOM` | u16 shape index into the EMTR table, then u16 count: the number of the shape's records the emitter samples (§2.1) | PROVEN, decomp `FUN_0048cc30`, disassembly `FUN_0048ae80` |
-| `PTYP` | u32 flags: bit 0 → emitter `+0x205`, bit 1 → `+0x206`; no other bit is read; retail uses 0–3 | decomp `FUN_00491920` |
+| `PTYP` | u32 flags: bit 0 → emitter `+0x205` (sprite turns to the screen-projected velocity), bit 1 → `+0x206` (flipbook); no other bit is read; retail uses 0–3 | decomp `FUN_00491920`, `0x00494802`, `0x00500F0A` |
 | `TEXT` | u32 n, then n frames; `4 + 4n` bytes; n ≥ 1 (the loader reads one frame when n ≤ 1) | PROVEN sizes; decomp `FUN_00492af0` |
 
 **A frame is the key of an `fxdict` record, and the record is the frame's rectangle of the `vfx`
@@ -130,8 +132,9 @@ retail effects, 546 are records of the 630-record `fxdict` and none is a texture
 **Several frames.** With `PTYP` bit 1 clear, `FUN_004911a0` writes 100 rectangles: the frame index
 starts at 0 and advances by `n × 0.01` (`DAT_00B97EEC`) per rectangle, wrapping to 0 at `n`, so each
 of the `n` frames fills about `100 / n` consecutive slots of the 100. With bit 1 set, it writes the `n`
-rectangles once, in order (and the loader reserves `2·n` stream words, §3). PROVEN by the decomp;
-how the renderer indexes the slots over a particle's life was not read.
+rectangles once, in order (and the loader reserves `2·n` stream words, §3). PROVEN by the decomp.
+Bit 1 clear, a particle draws slot `trunc(99 · age01)`; bit 1 set, rectangle `counter / scale`, the
+counter advancing one per sim update (`particle_sim_units.md` §10).
 
 ### 2.1 Emitter shapes: where particles spawn
 
@@ -313,24 +316,24 @@ Before `COLR`:
 | 4 | `0x47035D90` | massvar | f32 | — |
 | 5 | `0xD3AE67AF` | life | f32 | linear |
 | 6 | `0xC7CFE6AA` | lifevar | f32 | not counted |
-| 7 | `0x497A1895` | *unresolved* | f32 | resampled |
-| 8 | `0x1792B524` | *unresolved* | f32 | — |
-| 9 | `0x10831673` | *unresolved* | f32 | — |
-| 10 | `0xB6197EFE` | *unresolved* | f32 | — |
-| 11 | `0x6CF0BE14` | *unresolved* | f32 | — |
-| 12 | `0xBE968D3B` | *unresolved* | f32 | — |
-| 13 | `0xC558C9D8` | *unresolved* | f32 | — |
-| 14 | `0xD80DF37F` | *unresolved* | f32 | — |
-| 15 | `0x720F22F8` | *unresolved* | f32 | — |
-| 16 | `0x4712719F` | *unresolved* | f32 | — |
-| 17 | `0xB3DBB6C0` | *unresolved* | f32 | — |
-| 18 | `0x4C49B137` | *unresolved* | f32 | — |
+| 7 | `0x497A1895` | *unresolved*: spin, degrees a second | f32 | resampled |
+| 8 | `0x1792B524` | *unresolved*: its variance | f32 | — |
+| 9 | `0x10831673` | *unresolved*: factor on attractors | f32 | — |
+| 10 | `0xB6197EFE` | *unresolved*: its variance | f32 | — |
+| 11 | `0x6CF0BE14` | forcedrag | f32 | — |
+| 12 | `0xBE968D3B` | forcedragvar | f32 | — |
+| 13 | `0xC558C9D8` | forcegravity | f32 | — |
+| 14 | `0xD80DF37F` | forcegravityvar | f32 | — |
+| 15 | `0x720F22F8` | *unresolved*: factor on vortices | f32 | — |
+| 16 | `0x4712719F` | *unresolved*: its variance | f32 | — |
+| 17 | `0xB3DBB6C0` | forcewind | f32 | — |
+| 18 | `0x4C49B137` | forcewindvar | f32 | — |
 
 After `COLR`:
 
 | # | Hash | Name | Value | Curve |
 |---|---|---|---|---|
-| 19 | `0xC3592BB7` | *unresolved* | u32 (2 in all retail) | — |
+| 19 | `0xC3592BB7` | *unresolved*: material index into `0xD2AE50` | u32 (2 in all retail) | — |
 | 20 | `0xEEE1A341` | scale | u32 (loader clamps to ≥ 1) | — |
 | 21 | `0x062F0D37` | rate | f32 | linear |
 | 22 | `0x70653182` | ratevar | f32 | — |
@@ -340,8 +343,8 @@ After `COLR`:
 | 26 | `0x9BE62E41` | speedvar | f32 | not counted |
 | 27 | `0xB4247BF3` | inheritvel | f32 | linear |
 | 28 | `0xB15ABB7E` | inheritvelvar | f32 | not counted |
-| 29 | `0x35ACBAB7` | *unresolved* | f32 | resampled |
-| 30 | `0x1B878602` | *unresolved* | f32 | — |
+| 29 | `0x35ACBAB7` | *unresolved*: start angle, degrees | f32 | resampled |
+| 30 | `0x1B878602` | *unresolved*: its variance | f32 | — |
 | 31 | `0x270C9E9D` | emissiondir | u32 (0, 1, 2 in retail) | — |
 
 "—" = no retail effect has a curve there and the loader's handling of one is not decoded; the
@@ -355,14 +358,15 @@ appear on `ampl` and `pos*` (linear).
 | Kind | Extra attributes |
 |---|---|
 | gravity, wind | none |
-| drag | `0x2F68CD8F` (unresolved, f32) |
+| drag | `0x2F68CD8F` (unresolved, f32: radius, metres) |
 | attractor | `local` `0x201B5A86` (u32), `range` `0xE0686A68`, `decay` `0xC2783A55` |
 | vortex | `local`, `range`, `decay`, `radial` `0xB46F1F0C` |
 
 ### 5.4 Names
 
-Every name above is `pandemic_hash_m2(name) == hash`, PROVEN. Sixteen hashes (15 PTYP positions
-and the drag extra) are unresolved and kept as hashes.
+Every name above is `pandemic_hash_m2(name) == hash`, PROVEN. Ten hashes (9 PTYP positions and the
+drag extra) are unresolved and kept as hashes; what the code does with each is
+[`particle_sim_units.md`](reverse_engineer/particle_sim_units.md) §1.
 
 ---
 
@@ -392,7 +396,9 @@ of 8 bytes, spread over the particle's life (key `i` at age `i / 99`):
 - Authors give red, green, blue, alpha. `mercs2_formats::fxdict::ColrKey::rgba` holds them in that
   order, and `Colr::to_bytes` / `Colr::from_bytes` are the one place the stored order is mapped, so
   retail keys still re-encode byte for byte.
-- The binary16 is `0x3C00` (1.0) or `0xBC00` (−1.0) in the samples read. Its role is UNKNOWN.
+- The binary16 multiplies the colour by its magnitude, and below 0 writes alpha 0, which adds (`PgFXVP`;
+  the blend factors are INFERRED). It is taken from the floor key, not lerped. All of a body's keys
+  share one sign: 638 bodies positive, 182 negative. PROVEN; `particle_sim_units.md` §9.
 
 Earlier notes gave COLR as 200 bytes of 50 RGBA stops (the 200 is the stream-word reservation, not
 the byte size) and as an 8-byte record `[0xBC, 0, 0, R, G, B, A, 0]` (that reading is the key
