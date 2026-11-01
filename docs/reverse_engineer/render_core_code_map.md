@@ -362,7 +362,7 @@ fully mapped from the streaming-buffer chain (all decomp-verified):
 |---|---|---|---|
 | `LoadTexture` (resource-load FSM) | **`FUN_00874fb0`** (`__fastcall`) | two-phase async loader: open → read 0x48-B header → copy INDX (`FUN_00875140`/`008751d0`) → request body | high |
 | `ReadTextureData`/`ReadTextureBody`/`getCompTexLOD3D` (residency LOD select) | **`FUN_00875760`** (`__thiscall`) | counts present LOD levels **backward** from `descriptor+10` (4-entry u16 table, `0xFFFF` sentinel), picks page from `descriptor+4+lods*2`, decodes the 0xC-B page record at `param_1[0x113]+page*0xc` | high (parse) / med (getCompTexLOD3D name-inference) |
-| request→node | **`FUN_008759c0`** | `node[6]=src[9]`; `node+0x36 bit2 = dxt flag`; `node+0x5a = type-class`; geometry `node+0x40/44/48` | high |
+| request→node | **`FUN_008759c0`** | `node[6]=src[9]`; `node+0x36 bit2 = dxt flag`; `node+0x58` = block index; `node+0x5a` = rung slot, the index `FUN_00750a30` takes the mip mask with; geometry `node+0x40/44/48` | high |
 | `CreateTexture` / alloc+async-read (**buffer-sizing root**) | **`FUN_00875b00`** | `alloc = FUN_0084ac20(node+0x4c,0) → node+0x60`; `FUN_008273f0(PTR_DAT_0117634c, node+0x40, +0x44, +0x48, 1, node+0x60, dxtflag)`. **Dest buffer = `page_count(u24 @page+4) << 15`** (32-KB pages); gate checks only free-list → `0xC0000023` BUFFER_TOO_SMALL if the page descriptor under-claims | high (hand-verified) |
 | async-read shim | **`FUN_008273f0`** | tail-calls IO ptr `(*_DAT_0244f9b4)(…)` = NTSTATUS syscall | high |
 | `SwapMipTextures` / sub-resource walk | **`FUN_00875cc0` → `FUN_00875d80`** | walks `node+0x60` sub-records (0x10-B, advance `record[+0xc]`), pushes onto completion ring `DAT_0117662c` (returns 3 if full) = the mip-body install/swap-in | high |
@@ -372,10 +372,33 @@ fully mapped from the streaming-buffer chain (all decomp-verified):
 **externalTextures vs inplaceTextures = the residency split:** the resident ASET block ships only a
 coarse mip tail (`inplaceTextures`, fixed budget ~2728 B BC1 / 1360 B BC3); higher mips
 (`externalTextures`) are lone `BODY` UCFX chunks in the finer c3-cell LOD blocks of the texture's own
-cell subtree (one mip per block). See memory [[texture-high-mip-streaming]],
-[[engine-streaming-buffer-sizing-chain]] and `docs/engine_load_path_map.md`. The buffer-sizing livelock
-on small/non-square textures (`page_count` must cover the full self-describing sub-record chain) remains
-OPEN as a converter fidelity issue.
+cell subtree. `INFO`'s four masks say which mips each rung holds (`format_reference.md` §4.3). See memory
+[[texture-high-mip-streaming]], [[engine-streaming-buffer-sizing-chain]] and `docs/engine_load_path_map.md`.
+
+**The status nibble** (page record `+4`, top 4 bits, read by provider slot `+0x30`, `0x8755d0`): 1 queued, 2
+reading, 3 read and consuming, 4 cancel, 0 clear. `0x875620` alone writes 4, on the finer rungs of a
+dropped rung, over any non-zero status, so a resident rung's 3 can become 4. Status 4 is not "ready".
+`FUN_008739e0` (`0x873af6`) calls the slot with `node+0x58`, the block index, and drops the node on 4 or
+when `node+0x20` and `node+0x24` are both 0; anything else goes on to priority selection and issue.
+Disassembly-verified by an adversarial audit, statically.
+
+**The rung gate.** The ring consumer `0x4b1160`, the only pop site, takes an item only when
+`((res+0x16 >> 6) & 7) - 1 == node+0x5a`, so rungs install coarsest first. A mismatch re-pushes the item
+at the ring tail and jumps back to the pop, with no yield. It runs on the loading frame at `0x4c9c7b`,
+before the manager update at `0x4c9cbd`, so a lone mismatched item never exits unless another thread moves
+the level. `node+0x5c` rises only at `0x874278` or `0x875e43`, and `FUN_00875d80` returns 2 until it reaches
+`+0xc`. A chain rung whose block lacks the asset, or a block holding one (hash, type) twice, fails this gate
+(read from the code; not reproduced live). The recorded livelock sat in this branch: main at `0x4b1240`,
+`0x4b1234`, `0x4b1215`, ring `count` 1 (`docs/streaming_livelock_analysis.md`).
+
+No `INFO` field, mask or `BODY` size reaches this: `FUN_004b1000` ignores the reader and neither it nor
+`FUN_00750a30` writes `res+0x16` or `node+0x5a`. They crash or corrupt (`format_reference.md` §4.3). The other
+undrained conditions are block-level: `FUN_00875b00` returns 0 while `node+0x4c` exceeds the largest free
+run, the dangling-rung case; `FUN_00872e60` is false while `node+0x50` will not fit and nothing can be
+evicted; `FUN_00873530` re-queues while `node+0x50+0x54` exceeds the budget; `FUN_00875cc0` returns 3 while
+the completion ring has fewer free slots than the block has entries; `FUN_00873300` returns 1 when a ring
+push fails; the budget gates at `0x873a40` and `0x873c16`, the half-free-run gate at `0x873c63`, and the
+in-flight cap `mgr+0x4c358` = 1 at `0x873a79`. A blocking D3D driver call cannot be excluded statically.
 
 ## 9. Render config — Mercs2.ini `[Render]` (`FUN_00753280`)
 
