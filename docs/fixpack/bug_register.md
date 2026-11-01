@@ -317,6 +317,45 @@ death event the objective listens to; or have `CompletePart` reject GUIDs alread
 
 ---
 
+## BUG-013 — A failed D3D create is never tested, and the texture pool can never shed memory (crash)
+
+- **Tier:** T3 (exe) · **Status:** `confirmed` · **Reported by:** user (community crash bundle,
+  `game-files/laa-exes-caution/mercs2-modkit-debug-2026-10-23-082141-ferdilanz-save.zip`)
+- **Symptom:** the game dies after a long session with `EAX=8007000E` (`E_OUTOFMEMORY`). Two crashes on
+  record: v1.1 `0x85C999` after 29m37s (a texture), and v1.0 code `0x85C8D0` after 18m47s (a vertex buffer).
+- **Vanilla code.** Both defects are in the shipped exe. Layouts and citations:
+  [`d3d_resource_pool.md`](../reverse_engineer/d3d_resource_pool.md).
+- **Root cause 1: no HRESULT test.** None of the four pool create wrappers tests the result, so any failure
+  reaches the tracker as a NULL object. v1.1 addresses:
+
+  | Wrapper | Creates | Faults in | Faulting instruction |
+  |---|---|---|---|
+  | `FUN_0085cdf0` | texture | `FUN_0085c990` | `0x85C999 mov eax,[ebp]` |
+  | `FUN_0085cef0` | cube texture | `FUN_0085c990` | `0x85C999 mov eax,[ebp]` |
+  | `FUN_0085cfb0` | vertex buffer | `FUN_0085caf0` | `mov eax,[esi]` |
+  | `FUN_0085d050` | index buffer | `FUN_0085ca50` | `mov eax,[esi]` |
+
+  Five direct creates are untested too: `0x751300`, `0x46d46e`, `0x48270e`, `0x482d72`, `0x482e58`.
+- **Root cause 2: nothing frees a texture.** `FUN_0085d0f0` only moves a released texture to a free list keyed
+  by exact shape. It never reaches `IUnknown::Release`, not even on device reset (`FUN_0085d460` drops free
+  vertex and index buffers only), and nothing trims the lists. A failed create therefore has nothing to give
+  back.
+- **The failed request was ordinary.** The v1.1 crash asked for 2048×2048, 10 levels, DXT1, `MANAGED`:
+  2,796,200 B, decoded from ESI/EDI. It came through the loader and `FUN_00750c40`.
+- **Why the device ran out is not proven.** 2 GB address-space exhaustion is the leading inference (610 MiB is
+  committed at startup and the v1.1 PMC dump has a largest hole of 140 MiB), but that dump is not crash-time
+  data, and a driver-side limit is not excluded.
+
+### Fix direction (not yet designed)
+
+On a failed create, release free-list entries and retry. If the retry fails too, stop with a message naming
+the failed request rather than a NULL dereference. Open before design: whether the texture lists are touched
+by more than one thread, which of the five direct creates need the same treatment, and the delivery route,
+since no T3 route is settled for the fix pack. An `.asi` Shipment built on `m2_hook` is the existing precedent
+(`mods/dontcry_native/`).
+
+---
+
 ## Latent traps — real defects, NOT reachable from shipped content
 
 Recorded so the fix pack does not ship a fix for something no player can hit, and so a future modder does
