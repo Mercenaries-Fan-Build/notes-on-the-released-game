@@ -192,6 +192,27 @@ and level load instantiates the template's children from it (`FUN_00654940` `0x6
 template's Name; all 62,773 live SceneObjects of the mid-mission capture that share a key with those
 blocks hold the same value at `+0x14`.
 
+**The position is a world position, except on a link child** (2026-10-31; `mercs2_probe layer --frames
+<capture>`, all four `updated-chris-exports` captures, ~76,000 of the 101,299 placed entities held in
+each). An entity is a link child when a placed `PhysicalLink` of its layer names its key as `child`;
+nothing in the record says so. `Parent` is the template only, and no flag bit marks the relation.
+
+- Every other entity sits at its `Transform`: all 75,427 and 75,542 of them within 1 cm in the two
+  captures where nothing had disturbed the world; the mid-mission two add 46 and 54 movable props
+  (trash cans, dumpsters) that physics had shifted.
+- A link child's `Transform` is not used. Its live position is parent × hard point × offset up the
+  chain of links, every one of the 679 to 882 children held in each capture within 1 cm. The stored
+  value is up to 2.8 km away and for some children is the hard point's local position (light
+  `0x0010D532` stores (0, 5.97, 0); it sits on telephone pole `0x00102868`).
+- The hard point counts once the parent has been awake. A child of a parent asleep since load sits at
+  parent × offset. In the mid-mission captures 100 children of parents no longer awake still sit at
+  the hard point's position (INFERRED: the node applied while the parent was awake and stays).
+- 7 links name a child another link in the layer already named; the last record wins.
+
+The child's own link is a `RuntimePhysicalLink` row (`0x6732C8`, `0x673389`), which also takes the
+child out of the hibernation grid. The solve runs when the root's SceneObject changes
+(`0x4FD400`, `0x4FD540`, job `0x4FD190`); the body it calls, `0x4FC470`, is a SecuROM VM stub.
+
 **Rotation encoding:** The four floats at +0x14..+0x20 form a **unit quaternion** `(qx, qy, qz, qw)`.  VERIFIED: `qx² + qy² + qz² + qw² ≈ 1.0` across all 62k records.  For pure Y-axis rotation, `qy = sin(yaw/2)` and `qw = cos(yaw/2)`, so true yaw = `2 * atan2(qy, qw)`.  ~16% of entities have non-trivial qx/qz (tilted objects with pitch/roll).  The decoder exports all four components as `rotation_quat_x/y/z/w` and pre-computes `rotation_y_rad` (the full yaw angle).
 
 **RE-VERIFIED 2026-07-21 — this section is correct, field for field.** Measured on
@@ -242,7 +263,20 @@ Repro: `cargo run --release -p mercs2_probe --bin docaudit -- part2 <vz.wad> lay
 xyzw. The template records' quaternions are all unit, which pins the layout. Of 1,687 template links
 with a hard point on a parent with a model, 1,670 name a HIER node of that model; the other 17 are
 unexplained. The 901 placed records resolve with no remainder: 891 children are entities of the same
-layer, 10 are templates (`mercs2_probe layer --all`).
+layer, 10 are templates (`mercs2_probe layer --all`). A placed child's `Transform` is not its position
+(§2.5). The `Position` padding word is a version counter (`max(a, b) + 1`, `0x673282`, `0x665AF0`).
+
+**Positions held outside `Transform`:**
+
+| Class | Stored | Frame | Grade |
+|---|---|---|---|
+| `PhysicalLink` | `Position` | parent × hard point | PROVEN (captures) |
+| `LineRegion` | hash of a `lineregion` asset: `u16 2, u16 n, u32 0, n × (x, z)` | local XZ; `FUN_0045E970` adds the entity's X and Z once, with no rotation; 168 of 171 polygon centres in block 29 sit within 25 m of the origin | PROVEN (decomp + census) |
+| `Path` | hash of a `path` asset: `u16 2, u16 1, u32 n, n × vec3` | through the path entity's transform (`FUN_00824D90`, `0x5A641A`, `0x5A658D`), so it rotates with the entity, unlike `LineRegion` | PROVEN (decomp) |
+| `SphereRegion`, `CircleRegion` | one float, the radius | centred on the entity; both are tested in 3D (`Event.Boundary`, `0x5F3760`) | PROVEN (decomp) |
+| `PointLocation` | `Position` | identity in 27 of 27 sampled; consumer unread | INFERRED |
+| `PopulationSimpleSpawner` | `Position`, `HardPoint` | identity in 29 of 29 sampled; consumer unread | INFERRED |
+| `RoadIntersection`, `Road` | `hpPosition0..5`; `MinExtent`, `MaxExtent` | small values on entities thousands of metres out; consumer unread | INFERRED |
 
 ### 2.7 Name ↔ Transform pairing (layers_static)
 
