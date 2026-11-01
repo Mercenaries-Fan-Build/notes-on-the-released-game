@@ -745,12 +745,43 @@ Record (36 bytes):
             embedded, 4 when streamed
 0x08  u32   sample rate
 0x0C  u32   data size in bytes
-0x10  u32   frame count (samples per channel)
+0x10  u32   embedded: frame count (samples per channel). Streamed on PC: decoded PCM16 bytes.
+            Streamed on console: samples per channel
 0x14  8 B   0
-0x1C  u32   0 when embedded; unknown when streamed (non-zero in some records)
+0x1C  u32   0 when embedded; 0 on all 12,988 vo_stream records, non-zero on 14 of music's 145 and 5
+            of ambience's 20; on Xbox streams, the clip's 64 KB XMA block count, ceil(size / 65,536),
+            on 4,096 of 4,096
 0x20  u32   data offset: when embedded, RELATIVE TO THIS RECORD'S OWN START; when streamed, the
-            byte offset in the .pws file
+            byte offset in the .pws file, used as stored
 ```
+
+`FUN_00837830` reads `+0x05`, `+0x06`, `+0x08` and `+0x1C` into one struct (`0x00837883`–`0x0083788A`)
+for every bank and passes it to slot 1 of the sound object (`0x00837A56`). On a streamed bank `+0x20`
+and `+0x0C` go straight to slot 4 (`0x00837AE4`–`0x00837AFA`) with nothing added, and `+0x10` to slot 89
+at the join of both paths (`0x00837B9B`–`0x00837BA5`). PROVEN. The class behind those slots, and so what
+`+0x1C` and `+0x10` do, was not read. Whether a bank streams is `FUN_0082e8b0`'s answer, the bank's
+`+0x0A`, and not the record's format byte, which this function never compares.
+
+**A PC `.pws` (measured on `music`, `ambience` and `vo_stream`, 13,153 records):**
+
+- The file has no header. The first record's offset is 0 and its bytes are an IMA block header.
+- A clip is whole IMA blocks: `size` is a multiple of 36 mono and 72 stereo on every record.
+- A block holds 64 frames: the header sample and 63 nibbles. The 64th nibble is 0 in all 1,053,712
+  blocks of 600 `vo_stream` clips read, where every other position has about 3.66 bits of entropy.
+  `+0x10` agrees, at 128 bytes a mono block and 256 a stereo one, a 56,692-block `music` clip's being
+  16 bytes short of it. The engine reads it so: `FUN_0083efd0` (mono) writes the header as sample 0 and
+  loops 63 nibbles, low nibble first (`0x0083EFE6`, exit `0x0083F081`), and `FUN_0083f110` (stereo) does
+  the same per channel. `FUN_0083a510` and `FUN_0083a790`, their only callers, advance 64 samples per
+  block at strides 36 and 72. PROVEN. No OS codec is on this path. Decoding all 64 nibbles adds a sample
+  a block and lengthens a line by 1.5 %.
+- Clips start on 16-byte boundaries, 13,153 of 13,153, with 0 or 8 bytes between neighbours, and the
+  `vo_stream` file ends on one.
+
+**Console `.pws`:** Xbox streams are XMA2, format byte `0x05`, in 2,048-byte packets (`size` and offset
+divide by it on 4,096 of 4,096). PS3's are MP3, `0x0C`; `frames` equals its decoded sample count.
+A DLC bank's name is the alias its `.pws` opens under: `dlctest01_soundbootstrap.lua` opens
+`<mount>\AUDIOS\<NAME>.PWS` with `vo_` names taking `.<language>`, so `vo_stream_DLCTest.pws` is
+`VO_STREAM_DLCTEST.ENGLISH.PWS`. The package's file stem hashes to the bank's entry on all 7.
 
 **Record `+0x00`: no reader known (INFERRED).** `FUN_0082e790` computes a record's address (stride
 0x24) after matching the bank hash at wavebank `+0x04` (`FUN_0082e870`); `FUN_00837830` reads the
