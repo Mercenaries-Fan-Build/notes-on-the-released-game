@@ -1,0 +1,26 @@
+format: 2
+
+shipment:
+  name: blow-it-up-again
+  title: Blow It Up Again
+  version: 0.1.0
+  target: retail
+  authors: [Austin Kregel]
+  description: The Blow It Up Again DLC as a PC level, built from your own copy of the Xbox package.
+  quartermaster: ">=5.0.0, <6"
+  tags: [dlc, level]
+
+contributions:
+  # src/level holds what `dlc_port` converts from your own package. See README.md.
+  - kind: add_level
+    name: dlc01
+    display: Blow It Up Again
+    wad: src/level/dlc01.wad
+    streams:
+      - src/level/Audios/dlctest_streaming.pws
+      - src/level/Audios/vo_stream_dlctest.english.pws
+      - src/level/Audios/vo_stream_dlctest.french.pws
+      - src/level/Audios/vo_stream_dlctest.german.pws
+      - src/level/Audios/vo_stream_dlctest.italian.pws
+      - src/level/Audios/vo_stream_dlctest.russian.pws
+      - src/level/Audios/vo_stream_dlctest.spanish.pws
