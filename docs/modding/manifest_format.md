@@ -121,7 +121,7 @@ its size and sha256, and where a deploy step puts it. An output that produced no
 |---|---|---|
 | `overlay` | — | mounts the WAD as a patch overlay on `vz.wad` |
 | `game_folder` | `relative` | copies the file to that path under the game folder (the Code layer) |
-| `data_wad` | `relative`, `display` | places a new base WAD at `relative` (`data/<name>.wad`, [`add_language`](#add_language)); `display` is the label a language selector shows |
+| `data_wad` | `relative`, `display` | places a new WAD at `relative`: `data/<name>.wad` for [`add_language`](#add_language), `data/<name>-patch.wad` for [`add_level`](#add_level); `display` is the label a selector shows |
 | `language_patch` | `language`, `relative` | merges the WAD's blocks, with every installed Shipment's for that language, into `data/<language>-patch.wad`, which the engine mounts directly above `data/<language>.wad` (`FUN_004BFEF0`, `"%s\%s-patch.wad"` with the language table's entry) |
 | `shell_patch` | — | merges the WAD's blocks, with every installed Shipment's, into `data/shell-patch.wad`, which the engine mounts above `shell.wad` in the front end (`FUN_004BFDA0` with the name `shell`, which `FUN_004C1280` writes at `0x004C12DD`) |
 | `stream_copy` | `from`, `to` | copies the game file `from` to `to`, both relative to the game folder; `bytes` and `sha256` describe `from` as the build read it, and no bytes are in the output directory |
@@ -155,6 +155,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_script` | Script | `name`, `source` (`exports` optional) ([`add_script`](#add_script)) |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
+| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display`, `wad` (`streams` optional) ([`add_level`](#add_level)) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `add_placement` | Data | `layer`, `entity` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
@@ -628,6 +629,45 @@ same. The census is the retail test `english_wad_embedded_voice_over_wavebank_ce
   [`language_asi_hook_contract.md`](../reverse_engineer/language_asi_hook_contract.md).
 - Two Shipments adding the same language name conflict (M0207). The build needs the game stack, to
   read the `base` table.
+
+### `add_level`
+
+Adds a **level the game boots by name**, from a little-endian WAD you supply.
+
+```yaml
+  - kind: add_level
+    name: dlc01              # the name it boots by: the WAD's master script and <name>_base layer
+    display: Blow It Up Again  # the label a selector shows; not written into any WAD
+    wad: src/level/dlc01.wad
+    streams:                 # one per streamed wavebank of the WAD, named for its entry
+      - src/level/Audios/dlctest_streaming.pws
+```
+
+For a level `L` the engine opens `.\Data\L.wad`, which must exist, then `.\Data\L-patch.wad` above it,
+which may not, and no other level WAD (`FUN_004BFCE0`, `FUN_004BFDA0`). A level does not run alone,
+because its scripts and models use the base game's, so the build writes three placements:
+
+- `data_wad { relative: data/<name>-patch.wad, display }`: your WAD's blocks, stamped with `vz.wad`'s
+  `CSUM` row as every overlay is;
+- `stream_copy { from: data/vz.wad, to: data/<name>.wad }`, with the size and sha256 of the file read,
+  so the level's assets win and everything else resolves from the copy. This takes as much disk as
+  `vz.wad`, about 2.4 GB;
+- `game_folder { relative: data/Audios/<file> }` for each stream.
+
+`vz.wad` itself is never changed. A Shipment's overlay is not mounted while the level runs: the level
+slot holds only these two WADs.
+
+The build needs the game stack, and fails, listing each one, on:
+
+- a `wad` that holds no script `<name>` and layer `<name>_base`;
+- a script a script's `DEPS` names, or a texture a model's `MTRL` names, that neither the WAD nor the
+  game stack holds;
+- a streamed wavebank with no file in `streams`, or a file whose stem is no streamed bank's entry.
+
+What Lua asks for by a name it computes is not visible to a build.
+
+- **M0311** refuses what could only overwrite.
+- Two Shipments adding the same level conflict (M0207).
 
 ### `add_model`
 
@@ -2338,5 +2378,14 @@ is at no vendor; from then it is at every vendor in `shops`, because the loader 
 that carries retry locations (`xQ!L.lua:646-657`) — reaches outpost vendors before the PMC.
 
 Fix: none — the warning says when the item appears.
+
+### M0311
+
+**An `add_level` could only overwrite.** Its `name` is not a lowercase `[a-z0-9_]` token, or is a WAD the
+game ships (`vz`, `shell`, `loading`, `english`, `french`, `german`, `italian`, `spanish`, `japanese`,
+`russian`), its `wad` is no `.wad`, or a stream is no `.pws` or is one the game ships: `music`,
+`ambience`, or a `vo_stream` language. The build refuses the same names.
+
+Fix: pick a name the game does not use.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
