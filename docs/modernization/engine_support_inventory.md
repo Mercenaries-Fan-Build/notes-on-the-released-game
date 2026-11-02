@@ -353,6 +353,7 @@ keystone (6.1) it collapses into.
 | World | Placement → **gameplay components** | ⚠ | K3 | Placements realize render-only (`Transform+ModelRef`); `SpawnResolver.by_template` is empty. Nothing streamed becomes a vehicle/destructible/actor. |
 | World | Terrain heightmap → **fleet physics** | ⚠ | — | `StaticSoupPhysics` gets `set_collision(tris)` but **never `set_heightmap`**; vehicles/raycasts have no terrain → cars on open ground fall through. |
 | World | Streaming → **collision** → physics | ⚠ | K2 | `collision_tris` built once at boot, excludes terrain+props; two parallel collision reps (player `Vec` vs fleet `StaticSoupPhysics`) can desync. |
+| World | Ground cover (`scrub`) | ⚠ | — | Drawn from `ScrubObject` placements with retail's cull, fade, blend and vertical shear ([spec §7](../scrub_ground_cover_format.md)); `PgScrubLight*VP` wind is not applied, its clock not being decoded. |
 | World | LOD-budget governor → streaming | ⚠ | — | `GlobalLodGovernor` built but `set_lod_budget` **never called** → tier always 0, dead code. |
 | World | Destruction state → **mesh swap** | ⛔ | — | SEGM `state_mask` selected with a hardcoded bit; no state→mesh swap. Nothing can be destroyed. |
 | Actors | Population/`Pg.Spawn` → **actor archetype** | ⛔ | K3 | No `Character` archetype; NPCs spawn as inert factionless props (see K3). |

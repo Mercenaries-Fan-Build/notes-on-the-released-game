@@ -51,7 +51,16 @@ PTMS                  range_count × 8 B
 
 ### 2.2 `SCRB` mesh
 
-- **`INFO` (20 B):** *not decoded* (two hash-like words, then `30.0` and `50.0` in the samples read, then 0).
+- **`INFO` (20 B):** five words as `FUN_004a5230` reads them; §7 says what the depths do.
+
+  | Off | Type | Field |
+  |---|---|---|
+  | 0 | `u32` | hash-like, *not decoded* (kept at record `+0x1c0`) |
+  | 4 | `u32` | vertex shader: `pandemic_hash_m2` of a registered `PgScrub*VP` name |
+  | 8 | `f32` | alpha zero depth (record `+4`) |
+  | 12 | `f32` | cull depth (record `+8`) |
+  | 16 | `f32` | `WindParams.x` (record `+0xc`), zeroed by the loader for a material without the alpha-test bit |
+
 - **`MTRL`:** exactly one material record in the terrain `MTRL` record layout
   ([`terrain_cell_format.md`](terrain_cell_format.md) §4.2): 120 bytes with one texture (3,733 meshes)
   or 128 bytes with three (267).
@@ -64,7 +73,14 @@ PTMS                  range_count × 8 B
   | 28 | 0:F16x4/POS · 8:F16x4/TEX · 16:D3DCOLOR/COLOR · 20:F16x4/NORMAL | 210 |
   | 32 | 0:F16x4/POS · 8:F16x4/TEX · 16:F16x4/NORMAL · 24:F16x4/TANGENT | 267 |
 
-- **`IBUF`:** `info {u32 index_count}`, `data` `u16` indices. Primitive type *not decoded*.
+- **`IBUF`:** `info {u32 index_count}`, `data` `u16` indices: one triangle strip with degenerate
+  stitches (`FUN_004a5830` draws primitive type 5).
+
+The buffers of all 4,000 retail meshes hold **16 identical copies of one tuft**, in order, differing only
+in `TEXCOORD.zw`; no triangle joins two copies. `TEXCOORD.z` is the copy's number: the vertex shader
+reads that copy's matrix out of `BoneMatrixArray`, so one draw covers up to 16 instances
+(`ScrubMesh::tuft`, `tests/scrub_retail.rs`). The `TEXCOORD.w` differences are *not decoded*; no vertex
+shader of the family reads it, nor reads `COLOR` where a declaration carries it.
 
 ### 2.3 `INST` (24 B)
 
@@ -114,6 +130,8 @@ From the Ghidra decompilation of the unpacked retail `Mercenaries2.exe`:
 - `FUN_004a5670` walks a patch's ranges from `PTCH +0x34` (first) / `+0x36` (count), sums the `PTMS
   +4` counts, and converts each `INST` record's 3 × 4 halves to floats.
 - `FUN_004a5830` (the draw) resolves `PTMS +6` as the `SCRB` index (`× 0x1d0` into the mesh records).
+- `FUN_004a5230` reads a mesh's 20-byte `INFO` (§2.2).
+- `FUN_004a5480` builds `AlphaVec` (§7).
 
 ## 4. Frame and placement
 
@@ -164,3 +182,46 @@ cargo test -p mercs2_formats --test scrub_retail -- --nocapture
 | patch bounds (§2.4) | box within 1.6 cm of transformed meshes; sphere = box centre + half-diagonal |
 | placement frame (§4) | 1,043 placements on cell centres; instances on their cell's surface (median 0.000 m) |
 | HQ pyramid (§5) | 1,819 instances moved, 57 patches re-bounded, edited containers re-parse |
+| tufts (§2.2) | 4,000/4,000 meshes are 16 identical copies; every instance of a shearing mesh has up.y > 0 (lowest 0.052) |
+
+## 7. Drawing
+
+From `FUN_004a5830`, `FUN_004a5480` and the `PgScrub*VP` shaders. `depth` is the view-space z of the
+patch object's origin (element `_43` of its matrix times the view matrix at camera `+0xab0`), `radius`
+the patch sphere's.
+
+**Per range.** A mesh draws unless `depth − radius > cull`. It is classed blended (class 8: blending on,
+Z write off) when its material lacks the alpha-test bit and `depth + radius > alpha_zero`; otherwise it
+draws in its opaque class. Instances go out 16 at a time.
+
+**Fade.** `FUN_004a5480` makes `AlphaVec`, one plane per mesh, from `M · V`, where `M` is a fixed −90°
+rotation about X with row 1 scaled by `range = cull − alpha_zero` and translation `(0, 0, alpha_zero)`,
+and `V` is camera-to-world (`+0xaf0`). So `AlphaVec.xyz = −F / range` for camera forward `F` and
+`AlphaVec.w = −dot(O, AlphaVec.xyz)` with `O` at `alpha_zero` ahead of the eye. The vertex shaders write
+`COLOR0.w = dp4_sat(world, AlphaVec)`, which is
+
+```text
+alpha = saturate((alpha_zero − view_depth) / (cull − alpha_zero))
+```
+
+Alpha is 0 at `alpha_zero`, not at `cull`, and 1 one range nearer: a 50/70 mesh is whole to 30 m and gone
+by 50 m. PROVEN on the constant ring of retail capture `20261021_chris-jacobs-flying-winch`: `AlphaVec =
+(−0.02229, 0.01511, 0.04213, 102.30)` with its next word `WindParams.x = 0`, at eye `(2637.93, −2.43,
+−996.22)`. Its length gives range 20 and the eye gives alpha 1.5, so `alpha_zero = 30`, and the only
+alpha-tested mesh family around that camera with `info[4] = 0` is 30/50. The pixel shaders multiply it
+into their output alpha (`PgScrubLightFP`: `tex.a × COLOR0.w × c98.w`), which the alpha test compares
+against the material's ALPHAREF. A mesh that is not alpha-tested ignores it until it draws blended.
+
+**Position.** With `B` the instance's rows, `P = B · v`. A `*_ShearVertically` shader composes
+`(I + tan θ · c nᵀ) · B`: `n` is the normalised Y axis of `B`, `θ = acos(n.y)` and `c` the unit vector
+perpendicular to `n` toward world up. That moves a point by `(Y / n.y − n)` times its height along `n`,
+so a tuft on a slope keeps its base and stands straight up. Normals use `B`, unsheared. The vertex shaders
+then apply `LocalToWorld`.
+
+**Wind.** The `PgScrubLight*VP` family alone displaces the world position by
+`WindParams.x · 3 · v0.y · N`, with `N` a sum of sines of world position and a clock, `c222.x`: row 3,
+x, of `WindMatrix`, a 2D translation at `[render context + 0x178] + 0x20`. The clock moves by
+`−(wind direction) · (wind speed) · dt` per frame, from `Graphics.Atmosphere.SetWindDirection`
+(atmosphere `+0x17C`, `+0x180`, `+0x184`) and the frame time `DAT_01176048`. PROVEN on two captures, with
+direction (0.9578, 0.2873): speed 0.003, dt 0.016016 steps 4.60e-5; speed 0.001, dt 0.023248 steps
+2.23e-5. `mercs2_probe dump-render` prints all of it.

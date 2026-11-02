@@ -155,8 +155,8 @@ decomp** and, for the starred rows, **live-confirmed** from the freecam x32dbg c
 | FOV / proj params | `+0x48`,`+0x4c` | projection floats (near/FOV) read by frustum/proj consumers | `FUN_00493d50` (75791/93), `FUN_004a6590` (84517) |
 | viewport rect | `+0x960`,`+0xaa0` | sub-viewport index/array | `FUN_00466d40` line 52669 |
 | **view matrix** ★ | `+0xab0` | D3DX view matrix (built from `+0x10`) | `D3DXMatrixMultiply(…,cam+0xab0)` (84061/84208) |
-| proj matrix | `+0xaf0` | projection matrix | `D3DXMatrixMultiply(…,cam+0xaf0)` (84061) |
-| `+0xb10/+0xb18` | | proj/frustum scalars | `FUN_00493d50` (75750–57) |
+| **camera-to-world** ★ | `+0xaf0` | inverse of `+0xab0`: `+0xb10` is its forward row and `+0xb20` its translation, the camera position below | capture `20261021_clean-load-chris-jacobs-7-percent`, viewport 1: rows invert `+0xab0`, row 3 = the eye |
+| **proj matrix** ★ | `+0xb30` | projection matrix | same capture: `_11 = −2`, `_22 = 3.556`, `_34 = 1` |
 | **camera world pos** ★ | `+0xb20`,`+0xb24`,`+0xb28` | camera position (x,y,z) | pos reads `FUN_0049e320` (80203), dist² helpers `FUN_004aaab0`+twins (87367…) |
 | `+0xb58/+0xb68` | | fwd/at vector pair | `FUN_00487540` (69221/25) |
 | **view-proj matrix** ★ | `+0xb70` | combined view×proj (shader `ViewProj`) | `FUN_0049a3c0` (78674) |

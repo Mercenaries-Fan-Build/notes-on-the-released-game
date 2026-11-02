@@ -110,14 +110,17 @@ Record (stride `116 + 4·tex_count`):
 | Off | Type | Field |
 |---|---|---|
 | 0 | `u32` | word 0 — *not decoded*; not a float (read as one it takes values like `-8.8e17`, `3.2e37`) |
-| 4 | `f32[25]` | parameters — *not decoded* |
+| 4 | `f32[25]` | parameters; bytes 92..100 are the UV scale (§5.5), the rest *not decoded* here |
 | 104 | `u16` | flags (0 or 128 in retail) |
 | 106 | `u16` | tex_count (1…10) |
-| 108 | `u32[tex_count]` | texture hashes; `0xA3CD72A7` separates detail layers |
-| 108 + 4·tex_count | `u32[2]` | tail — *not decoded* |
+| 108 | `u32[tex_count]` | texture hashes; slot *i* is sampler stage *i* of the pixel shader (§5.5) |
+| 108 + 4·tex_count | `u32` | `pandemic_hash_m2` of the pixel shader's registered name |
+| 112 + 4·tex_count | `u32` | *not decoded* |
 
 The 256-byte blocks (64 words each) follow the last record; their count equals `material_count` in
-every cell (PROVEN 400/400). Contents *not decoded*.
+every cell (PROVEN 400/400). A block is the material's `User` vertex constants, 16 float4 registers:
+`FUN_004A8F30` stores a count of 16 and a pointer to the block at material `+0x16C`/`+0x170`, and
+detail layer *n* of a ground material is the matrix at register `4n` (§5.5).
 
 ### 4.3 `GEOM` patch
 
@@ -146,26 +149,32 @@ every combination once — and y = 0 (PROVEN 400/400). A cell therefore spans ±
 |---|---|---|
 | 0 | `u32` | draw_count — the first `draw_count` `PRMT` records |
 | 4 | `u32` | alt_draw_count — the remaining records |
-| 8 | 3 × 12 B | pass groups `{u32 draw_count, u16, u16, u16 alt_draw_count, u16 index}` |
+| 8 | 3 × 12 B | pass groups `{u32 draw_count, u16 first_draw, u16 terrain_end, u16 alt_draw_count, u16 index}` |
 
 Across all 8,859 retail draw groups: the pass groups' `draw_count`s sum to word 0, their
 `alt_draw_count`s (always 1) sum to word 1 (always 3), and `index` is the group's position 0, 1, 2.
-The two middle `u16`s are *not decoded*.
+
+A pass group is the draws of one distance tier. `FUN_004AAAB0` takes the tier from `(distance to the
+patch's sphere − radius) / TerrainFade.global_end`, clamped to 0..1 on PC, and draws `[first_draw,
+first_draw + draw_count)`, with the patch's fade constants set for `[first_draw, terrain_end)` and
+cleared for the rest. Tier 0 is the near one. A group can have no draws at a tier, and tier 0 does not
+always draw the most triangles.
 
 **`PRMT`:** `(draw_count + alt_draw_count)` records of 20 bytes:
 
 | Off | Type | Field |
 |---|---|---|
-| 0 | `u32` | hash — *not decoded* (a small set recurs across cells) |
-| 4 | `u32` | *not decoded* |
+| 0 | `u32` | `pandemic_hash_m2` of the vertex shader's registered name (`PgTerrainMeshVP2D`, `PgMeshVP`, …) |
+| 4 | `u32` | material index into `MTRL`, the only draw-to-material binding in the cell |
 | 8 | `u32` | start_index into the `IBUF` |
-| 12 | `u16` | prim_count |
+| 12 | `u16` | prim_count; `FUN_004AAAB0` skips a draw whose count is 0 |
 | 14 | `u16` | min index |
 | 16 | `u16` | max index |
 | 18 | `u16` | *not decoded* |
 
 min/max equal the smallest/largest index in the draw's range for 130,049 of the 130,224 retail draws.
-The alternate draws are all hash `0xA9EA4CF7`.
+The alternate draws are all `PgMeshShadowVP` (`0xA9EA4CF7`). Every one of the 103,647 draws names a
+material of its cell (PROVEN, `every_draw_names_its_material_and_its_shaders_pair`).
 
 **`STRM`:**
 
@@ -236,6 +245,50 @@ neighbour's edge vertices: on the PMC HQ cell's four edges, 89–98 samples per 
 along-edge position in both cells with heights equal to within one f16 step, and 0–6 samples per edge
 exist on one side only (retail T-junctions). Moving an edge vertex in one cell without its twin in
 the neighbour opens a crack.
+
+### 5.5 How a cell is shaded
+
+A cell draws two kinds of group, told apart by the pixel shader its draws' materials name.
+
+**Overlays** (the 28- and 32-byte decls and the 20-byte `TEX` one): roads, paving, kerbs and decals, as
+ordinary model materials on `PgMeshVP` / `PgMeshNoColorVP` and `PgDiffSpecNormFP` /
+`PgDiffSpecNormAmbOccFP`, with their authored texture coordinates and textures `[diffuse, specular,
+normal]`. The plaza at (2120, −1622) is one: cell `0x4514DE1F` material 113 binds
+`caracas_bld_plazaparquecentral01_ground01_nm`.
+
+**Ground** (the 20-byte `COLOR` decl): `PgTerrainMeshVP{,1D..4D}` + `PgTerrainMeshFP{,1D..4D}`, where the
+suffix counts detail layers. The vertex shader may have more layers than the pixel shader reads (1 of
+83,558 ground draws). Material slots are sampler stages:
+
+| Slot | Stage | Use |
+|---|---|---|
+| 0 | `GlobalMap` | the cell's own map, `vz_terrainglobal_r<row>_c<col>_0x<key>`, stretched over the 400 m cell |
+| 1 | `DetailMap` | a shared map (`0x3B030C8A`), signed about 0.5 |
+| 2, 4, 6, 8 | `Layer1..4Map_Diff` | the detail layers |
+| 3, 5, 7, 9 | none | `0xA3CD72A7`; the shaders declare no such stage |
+
+From `shader3.bin` (records 486..525), with `d` the distance from the camera and `p` the world position:
+
+```text
+Σ       = v.r + v.g + v.b + v.a                      vertex COLOR, all four channels
+global  = sat(max((d − global_start) / (global_end − global_start), 1 − Σ))
+k       = sat((1 − global) / (Σ + 0.00001))
+fade    = sat(1 − (d − detail_start) / (detail_end − detail_start))
+albedo  = Global(0.5 + scale·x, 0.5 + scale·z) · global          x, z cell-local; scale from MTRL, −0.0025
+        + 2·(Detail(p.xz / detail_size) − 0.5) · fade
+        + Layer[i](row0·(p,1), row1·(p,1)) · k · v[i]             i = 0..3, rows = User registers 4i, 4i + 1
+```
+
+Lighting multiplies `albedo` by the sun term plus a per-vertex ambient cube, with no specular and no
+normal map. The 0.5 in the global map's coordinates is measured, not read: the texel columns of
+neighbouring cells' maps meet under `u = 0.5 − x/400` and `v = 0.5 − z/400` (mean difference 4.1 and 2.1
+of 255) and under no other candidate (9 to 13). Where the shaders' `UVMatrix` gets it is *not decoded*.
+
+`global_start`, `global_end`, `detail_start`, `detail_end` and `detail_size` are the entity's
+`TerrainFade` record, which `FUN_0066CA40` reads and passes to each patch's constructor `FUN_004AA640`.
+Retail's templates hold `200, 400, 15, 20, 2` (three) and `−75, 300, 15, 20, 2` (one); an entity with no
+record gets `100, 150, 15, 20, 2` from `.rdata`. The vertex COLOR is not always a partition of unity: where
+Σ < 1 the global map takes the rest, and `b`/`a` count in Σ even when no layer reads them.
 
 ## 6. Editing rules
 

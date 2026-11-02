@@ -1,5 +1,10 @@
 # Terrain splat + texture-LOD — ground-truth spec (RCA 2026-07-02)
 
+> **Superseded for hi-res terrain.** How a cell's draws bind materials and how its ground is shaded is
+> in [`terrain_cell_format.md`](../terrain_cell_format.md) §4.4 and §5.5, read from `FUN_004AAAB0` and the
+> `PgTerrainMesh*` shader records. A draw's material is `PRMT` word 1; the `PRMG INFO +8` word this
+> project once read as a material index is a pass group's draw count.
+>
 > **RCA CORRECTION — 2026-07-02, headless-verified via `--terrain-probe` (`mercs2_engine`).**
 > Two load-bearing hypotheses below are **DISPROVEN by the data**. Do not build the low-res splat
 > on them.

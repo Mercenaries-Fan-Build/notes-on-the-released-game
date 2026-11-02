@@ -218,6 +218,17 @@ engine is ALREADY collecting per-cell instances into species batches; our job is
 Residuals (verification, not blockers): single-tree vs cluster per cell; `stream_handle→cell block`
 resolution (break `FUN_006b97e0`); live `DAT_00e90734` species count to validate step 3.
 
+### 4.0.2 Correction (2026-11-01, read from retail captures): trees are runtime entities of 30 templates
+
+`mercs2_probe dump-render` lists the 30 batches. Each batch's `+0x6D0` is a world template key and its
+`+0x00` the species' instance count, about 40,000 in all: `_global_env_palmtree01` `0x80004DAC` has
+1,763, `_global_env_palmtreebend05` `0x80006884` 845, `_jungle_env_smallcanopy01` `0x800089BE` 7,978.
+`+0x04` is the root of a quadtree. A resident row's id is a `SceneObject` key in the runtime range
+(`0x4005…`), assigned as a region streams in, sorted by template; `dump-entity` shows a full entity with
+the template's `ModelName`, `BoneCtrlWind`, health and physics. No layer's `Transform` record uses these
+templates and no block holds their world positions as floats, so the placement source is *not decoded*.
+The per-cell c3 models of §4.0.1 are a different, far smaller set.
+
 ### 4.1 Runtime list (holds for both layers once trees are located)
 
 At runtime trees are **not** a clean array — they are self-selected out of a mixed per-frame,
@@ -242,8 +253,8 @@ Cull math to mirror (all PROVEN):
 - `FUN_00858150` distance/LOD classify: `D3DXVec3TransformCoord(pos)` by view → `sqrt(x²+y²+z²)` →
   tier `0 cull / 1 partial / 2 full`.
 - `FUN_00857a90` AABB wrapper → `FUN_00857c00` 8-corner-vs-frustum-planes test.
-- Camera: `PTR_PTR_00dfc2f8 + vp*0xE80` (view @+0xab0, proj @+0xaf0, view-proj @+0xb70, world pos
-  @+0xb20).
+- Camera: `PTR_PTR_00dfc2f8 + vp*0xE80` (view @+0xab0, camera-to-world @+0xaf0, proj @+0xb30,
+  view-proj @+0xb70, world pos @+0xb20).
 
 ---
 
