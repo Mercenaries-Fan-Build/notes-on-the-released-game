@@ -183,6 +183,11 @@ Localized string database blocks (e.g., `english_P000_Q3.block`, `english_dlc01_
 >
 > The original BE claim is retained below only where it may still hold for **Xbox** blocks, which
 > were not re-measured. Do not assume it for PC.
+>
+> On the consoles (Xbox and PS3 DLC blocks) `STRS` is a big-endian u32 code-unit count followed by a
+> UTF-16**BE** heap, `heap_bytes == 2 × count` in all three Xbox retail tables. Converting to PC swaps the
+> count as a u32 and each code unit as a u16 (`be_to_le::convert::convert_strs_inplace`); left as it was,
+> the PC game read the DLC table and crashed (`0x04888CFB`).
 
 #### SYEK (keys)
 
@@ -434,7 +439,10 @@ Xbox flag `0x10` on DXT1 is a normal map with X and Y in red and green. All 2,77
 in the colour block and X in alpha. Bit `0x10` is clear on 2,872 of 2,901 PC twins and PC has no reader of it.
 
 **PS3** `INFO` is 25 bytes, big-endian, with no `NAME` row: width, height, depth and mips as PC, `+8` kind
-(2 plain, 4 cube), `+10` format (`0x86` DXT1, `0x88` DXT5, `0x85` A8R8G8B8), `+12` the f32, masks at `+17`.
+(2 plain, 4 cube), `+10` format (`0x86` DXT1, `0x88` DXT5, `0x85` A8R8G8B8), `+12` a flags byte, `+13` the
+f32, masks at `+17`. The flags byte is PC's `+8` less bit `0x20` on all 13,253 retail twins, and PC reads
+only bit 0. Bodies are PC's split, linear, in PC's byte order. A DXT1 with `0x10` set is a normal map; PC
+has it in DXT5 with `0x10` kept.
 Bodies are linear, in the same byte order as PC, and the masks equal PC's on all 13,253 shared textures.
 
 ### 4.4 Texture streaming index
@@ -802,6 +810,32 @@ Always-loaded `resident_P000_Q3` block. Type hashes: see `docs/type_hash_registr
 
 Extraction: `tools/extract_single_block.py --path "blocks\\VZ\\resident_P000_Q3.block"`.
 
+### 14.1 `lineregion` `data`
+
+A region polygon, read by slot 4 of the lineregion vtable `0x00BAA8B0`, `0x0045E8A0` (pc-v11), into an
+object whose count is at `+0x1C` and points at `+0x20`:
+
+| Offset | Type | Field |
+|---|---|---|
+| +0 | u16 | kind: 2 on all 625 retail PC regions and all 31 DLC regions; the loader skips it |
+| +2 | u16 | point count; the body is `8 + 8·count` bytes |
+| +4 | s16 | stored at `+0x18`; 0 on all 625 PC regions; its reader was not read |
+| +6 | u16 | skipped by the loader |
+| +8 | `count × {f32 x, f32 z}` | points, offset by the owning entity (below) |
+
+A console body is the same fields big-endian, so its header is four u16 swaps, not a u32 swap; a word
+swap trades kind and count, and the loader reads every region as 2 points. `be_to_le` converts all 625
+Xbox retail regions to their PC twins byte for byte (`mercs2_probe chunk-compare … --only lineregion`).
+
+An entity names its region with a `LineRegion` component (descriptor `0x017BCC68`, built by
+`FUN_00642260`), one u32: the region's asset hash, looked up as `(hash, 0x6310807F)`. `FUN_0045E9E0`
+finds the entity whose `LineRegion` names the region, adds floats 0 and 2 of the record
+`FUN_00665A60` copies for that entity (`[ESP+0x38]`, `[ESP+0x40]` after the call at `0x0045EA9F`) to
+every point, and stores the bounds at `+0x34..+0x40` and the centre and radius at `+0x24..+0x30`.
+`FUN_0045EC20` is the containment test: the bounds, then an even-odd crossing count over the points.
+`Player.AddBoundary` reaches the region the same way (PS3 `0x00559D98` → `FUN_001CFCF8`); on PC that
+call goes through a SecuROM thunk (`0x006A4870`).
+
 ---
 
 ## 15. Xbox 360 → PC mesh conversion (`decl` translation + `PHY2` Havok collision)
@@ -872,7 +906,15 @@ is `_convert_phy2_body` (Python) / `convert_phy2_be_to_le` (Rust):
    **intra-chunk u32 self-offsets** + `0xAAAAAAAA`/`0xBBBBBBBB` fills. **All 110
    DLC `PHY2` chunks carry this.** It is **u32-swapped**; the packfile extent is
    bounded by `havok_packfile_size` (max section end) so it is not mistaken for
-   packfile body.
+   packfile body. The exception is each vertex pool: `u16×3` vertices, named by an
+   `0xEEEEEEEE` block (count at +68, body offset at +76, 0 on a convex shape, whose
+   vertices are in the packfile), which swap as u16. A u32 sweep exchanges each pair.
+   An odd vertex count leaves 2 bytes of padding after the pool, and they differ
+   between the platforms.
+
+PS3's `layoutRules` are `4, 0, 1, 1` where Xbox's are `4, 0, 0, 1`, and its
+`hkpMoppCode` is chunked with an opcode PC does not have, so a PS3 packfile takes PC's
+rules and its MOPP is recomputed ([`mopp_bytecode_format.md`](reverse_engineer/mopp_bytecode_format.md)).
 
 **Two crashes this fixed** (both inside the exe's VM-based protection layer, so
 faulting addresses are reused obfuscation gadgets):

@@ -62,7 +62,8 @@ scale exponent. **Operands are big-endian.** All PROVEN from the VM switch unles
 | `0x09` | 2 | key_base **+=** `code[+1]` |
 | `0x0a` | 3 | key_base **+=** `BE16(+1)` |
 | `0x0b` | 5 | key_base **=** `BE32(+1)` (absolute set) |
-| `0x0c–0x0f` | — | INVALID |
+| `0x0c` | 3 | PS3 only, INVALID on PC: jump to chunk `BE16(+1)`, at `BE16(+1) * 512`. See "PS3 chunked code" |
+| `0x0d–0x0f` | — | INVALID |
 | `0x10–0x12` | 4+ | **SPLIT** axis (op−0x10). `code[+1]`=LEFT.max plane, `code[+2]`=RIGHT.min plane. LEFT child @ `pc+4`, RIGHT @ `pc+4+code[+3]`. *plane geometry PROVEN* |
 | `0x13–0x1c` | 4+ | **SPLIT** on 26-DOP diagonal planes. LEFT@+4, RIGHT@+4+code[+3]. *diagonal-plane geometry INFERRED* |
 | `0x1d–0x1f` | — | INVALID |
@@ -84,6 +85,18 @@ scale exponent. **Operands are big-endian.** All PROVEN from the VM switch unles
 
 **Split child layout:** LEFT child immediately follows the header (inline); RIGHT child at the encoded byte
 offset. A split visits both; a terminal / `0x00` ends the branch; CUT / REANCHOR / property ops are unary.
+
+## PS3 chunked code
+
+A PS3 `hkpMoppCode` has `m_buildType` 0 and holds its code in 512-byte chunks for the SPUs, each padded with
+`0xCD`. A split's child that lies in another chunk is a 3-byte `0x0C` jump, and the walk's key base carries
+across it. On one DLC cell, `dlc01_terrain_r07_c05` (6,024 triangles), the code is 228 chunks and 227 jumps, 222
+of them backward, and it walks to the same 6,024 keys as the Xbox code over the same mesh. The Xbox code is
+68,249 bytes where the PS3 code is 116,736.
+
+PC has no `0x0C`, so a PS3 collider's MOPP is recomputed from its mesh
+(`mercs2_formats::phy2_moppswap::rebake_phy2_mopps`), which requires the recomputed keys to equal the
+source's. `mopp::decode_chunked` walks the source.
 
 ## Split geometry — the plane operands + child-visit rule (PROVEN)
 Resolves the earlier "coordinate math INFERRED" note. Ground truth = the VM switch in

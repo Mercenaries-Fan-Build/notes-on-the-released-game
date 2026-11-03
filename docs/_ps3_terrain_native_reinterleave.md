@@ -39,18 +39,17 @@ pattern (`docs/_descriptor_walker_oracle.md` §Terrain, §Lowres terrain).
   decl byte sequences).
 - The native path produces **structurally correct PC vertex and IBUF bytes**
   for every converted block: PC vertex layout per pattern (position widened to
-  F16x4 LE, UV byte-swapped, D3DCOLOR reversed, NORMAL/TANGENT decoded via the
-  shared `dec3n_to_half4_le`), PC IBUF indices byte-swapped from BE u16 →
-  LE u16. **PROVEN** by `convert_block` succeeding on all 82 blocks (no
-  structural rejection downstream).
+  F16x4 LE, UV and tangent byte-swapped, colour R,G,B,A → D3DCOLOR B,G,R,A,
+  NORMAL decoded via the shared `dec3n_to_half4_le`), PC IBUF indices
+  byte-swapped from BE u16 → LE u16. The element values match the Xbox
+  conversion vertex for vertex (`terrain-vertex-compare`, below).
 
 ### Byte-exact PS3-LE vs Xbox-LE convergence (full block)
 
 **NOT achieved** and **not achievable at the walker level** for the terrain
 subset: PS3 and Xbox ship the same geometry in **different vertex orderings**
 and **different IBUF topologies** (PS3 = already-triangulated index list;
-Xbox = triangle strip with `0xFFFF` restarts, that `apply_terrainmesh_reencode`
-de-strips into a list with a different index order). The two platforms encode
+Xbox = triangle strip, one per draw of the 20-byte `PRMT`). The two platforms encode
 different byte sequences for the same mesh; `convert_block` preserves each
 platform's ordering, so PS3 → PC and Xbox-DOH → PC outputs of the same block
 have the same geometry but non-identical bytes. The byte-exactness guarantee
@@ -80,21 +79,34 @@ columns are what `convert_decl` emits for the Xbox-DOH decl bytes (the
 | 1 | 0x1602815C  | `0300000306060201`                                                   |         10 | POS F16x3 @0 + NORMAL DEC3N @6                               | NORMAL @8 F16x4                                            |         16 |
 | 2 | 0x7C569307  | `0300000303060802060a0201`                                           |         14 | POS F16x3 @0 + UV F16x2 @6 + NORMAL DEC3N @10                | UV @8 F16x2 + NORMAL @12 F16x4                             |         20 |
 | 3 | 0x7C569307  | `0300000303060802040a0304060e0201`                                   |         18 | POS F16x3 @0 + UV F16x2 @6 + COLOR D3DCOLOR @10 + NORMAL DEC3N @14 | UV @8 F16x2 + COLOR @12 D3DCOLOR + NORMAL @16 F16x4   |         24 |
-| 4 | 0x7C569307  | `0300000303060802060a0201030e0e04`                                   |         22 | POS F16x4 @0 + UV F16x2 @8 + NORMAL DEC3N @12 + TANGENT DEC3N @16 | UV @8 F16x2 + NORMAL @12 F16x4 + TANGENT @20 F16x4   |         28 |
-| 5 | 0x7C569307  | `0300000303060802040a0304060e020103120e04`                           |         26 | POS F16x4 @0 + UV F16x2 @8 + COLOR D3DCOLOR @12 + NORMAL DEC3N @16 + TANGENT DEC3N @20 | UV @8 F16x2 + COLOR @12 D3DCOLOR + NORMAL @16 F16x4 + TANGENT @24 F16x4 | 32 |
+| 4 | 0x7C569307  | `0300000303060802060a0201030e0e04`                                   |         22 | POS F16x3 @0 + UV F16x2 @6 + NORMAL DEC3N @10 + TANGENT F16x4 @14 | UV @8 F16x2 + NORMAL @12 F16x4 + TANGENT @20 F16x4   |         28 |
+| 5 | 0x7C569307  | `0300000303060802040a0304060e020103120e04`                           |         26 | POS F16x3 @0 + UV F16x2 @6 + COLOR UBYTE4 @10 + NORMAL DEC3N @14 + TANGENT F16x4 @18 | UV @8 F16x2 + COLOR @12 D3DCOLOR + NORMAL @16 F16x4 + TANGENT @24 F16x4 | 32 |
+
+A PS3 decl row is `(type, offset, usage, components)`; each pattern's layout is its own decl's rows (test
+`pattern_elements_follow_the_ps3_decl`). The tangent is PS3 usage 14, four halves; its w is the handedness, ±1,
+as on retail PC terrain (`mercs2_probe terrain-half-tally <wad> 6 3`).
+
+`mercs2_probe terrain-vertex-compare <ps3-converted wad> <xbox-converted wad> <out.tsv>` pairs the two
+conversions' terrain vertices by position and compares every decl element. On DLC01 every position, UV and
+normal is equal. Colour bytes differ by at most one step, which is how the two platforms' bakes round. Tangents
+agree within 1/64 with equal w. The exceptions are 158 of 97,984, which PS3 stores near zero and the Xbox decoder
+normalizes. The Xbox tangent's handedness is the sign of its top two bits as a signed 2-bit value (`dec3n_to_half4_le`,
+test `a_tangents_top_bits_are_its_handedness`).
 
 Element kind decoder details, consistent with the Xbox-DOH → PC path:
 - **PositionF16x3**: 6 BE bytes → PC 8-byte F16x4 LE (per-pair byteswap of 3
   halfs + append `0x3C00` LE = W=1.0).
-- **PositionF16x4**: 8 BE bytes → PC 8-byte F16x4 LE (per-pair byteswap).
+  Every retail PC terrain vertex has W = 1.0 (`mercs2_probe terrain-position-w`).
+- Each pattern's element PC offsets and PC stride follow its own PC decl (test
+  `pattern_elements_and_stride_follow_the_pc_decl`).
 - **UvF16x2**: 4 BE bytes → PC 4-byte F16x2 LE (per-pair byteswap).
-- **D3dColor**: 4 BE bytes → PC 4-byte D3DCOLOR = reverse of the 4 BE bytes
-  (matches the Xbox → PC net transform; the Xbox path's generic u32 swap is
-  itself a reversal, and `rebuild_terrain_vertices` then copies verbatim).
+- **D3dColor**: PS3 stores the bytes R, G, B, A; PC D3DCOLOR is B, G, R, A in
+  memory (test `a_colour_becomes_a_pc_d3dcolor`; the Xbox conversion of the same
+  vertices holds the channels in this order).
 - **Dec3nNormal**: 4 BE bytes read as a BE u32, decoded via the shared
   `dec3n_to_half4_le(u, ten_ten_ten=false)` (HEND3N 11-11-10) → PC 8-byte
   FLOAT16_4 LE.
-- **Dec3nTangent**: same, with `ten_ten_ten=true` (DEC3N 10-10-10-2).
+- **TangentF16x4**: 8 BE bytes → PC 8-byte F16x4 LE (per-pair byteswap), w kept.
 
 ## Integration
 
@@ -154,9 +166,12 @@ post-fix (native path integrated): blocks 2225  converted 1829  rejected 396
   the 6 1-to-1 patterns the oracle doc names.
 - `transcode_stride14_ground_vertex_byte_shape` — one real DLC01 PS3 vertex 0
   (`terrain_r00_c00` STRM 0) transcodes to a byte-shape-correct PC vertex:
-  POS LE F16x4 (byteswapped + W=0x3C00 LE), D3DCOLOR byte-reversed, NORMAL
+  POS LE F16x4 (byteswapped + W=0x3C00 LE), colour as a D3DCOLOR, NORMAL
   F16x4 at the right offset. The full numerical byte-exactness of NORMAL
   depends on DEC3N quantization; the trailing W bytes are tested.
+- `pattern_elements_follow_the_ps3_decl` — each pattern reads every element
+  where its PS3 decl row puts it, as that row's type and component count.
+- `a_colour_becomes_a_pc_d3dcolor` — PS3 R,G,B,A lands as PC B,G,R,A.
 - `classify_rejects_xbox_terrain_container` — an Xbox fetch-decl terrain
   container never takes the PS3 path (header byte `00` ≠ `03`).
 - `classify_rejects_non_terrain_type_hash` — the native path only activates

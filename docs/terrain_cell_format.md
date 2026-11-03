@@ -154,6 +154,11 @@ every combination once — and y = 0 (PROVEN 400/400). A cell therefore spans ±
 Across all 8,859 retail draw groups: the pass groups' `draw_count`s sum to word 0, their
 `alt_draw_count`s (always 1) sum to word 1 (always 3), and `index` is the group's position 0, 1, 2.
 
+A console `INFO` holds the same fields big-endian. Swapped as eleven whole words, each pass group's
+u16 pairs trade places, `first_draw` passes `terrain_end`, and `FUN_004AAAB0`'s unchecked second range
+reads past the group's records to a null vertex-shader entry (crash `0x004AADBA`); the converter swaps
+the counts as u32 and the pass groups field by field.
+
 A pass group is the draws of one distance tier. `FUN_004AAAB0` takes the tier from `(distance to the
 patch's sphere − radius) / TerrainFade.global_end`, clamped to 0..1 on PC, and draws `[first_draw,
 first_draw + draw_count)`, with the patch's fade constants set for `[first_draw, terrain_end)` and
@@ -170,7 +175,12 @@ always draw the most triangles.
 | 12 | `u16` | prim_count; `FUN_004AAAB0` skips a draw whose count is 0 |
 | 14 | `u16` | min index |
 | 16 | `u16` | max index |
-| 18 | `u16` | *not decoded* |
+| 18 | `u16` | not read by these draws |
+
+`FUN_004AAAB0` queues `DrawIndexedPrimitive(TRIANGLESTRIP, base 0, MinVertexIndex = min, NumVertices =
+min(max − min + 1, vertex count), start_index, prim_count)`; +18 reaches `NumVertices` only for a draw with
+no stream set, and this path sets one. Its value has no one rule: on cell `0x81348F94` it is `max − min` on
+256 of 404 draws, and it is the draw's distinct index count on all 20,230 draws of the DLC's Xbox terrain.
 
 min/max equal the smallest/largest index in the draw's range for 130,049 of the 130,224 retail draws.
 The alternate draws are all `PgMeshShadowVP` (`0xA9EA4CF7`). Every one of the 103,647 draws names a

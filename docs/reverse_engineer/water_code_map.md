@@ -30,7 +30,9 @@ when `DAT_01286310==0`), **`PgUnderwaterFP`**, `PgWaterWakeVP/FP`, `PgWaterHeigh
 Reached per-frame `FUN_0085a9e0 → FUN_00466d40(view+0x2b94)` from a registered water render-action
 (`LAB_0046a260`). Water singleton `DAT_00d6af80` (visible flag `+0xca4`). Pass order:
 
-1. `FUN_00486390(water)` — **RenderWakeMap** (Xbox 0x15ed0), first; wake/height gen into RTs. *(med)*
+1. `FUN_00486390(water)` — the projected-grid setup, first: the band of heights in the view frustum's XZ
+   rectangle, the projector, and the OWater::LOD clip that clears the visible flag when nothing intersects
+   (`docs/watermap_format.md`, "What the engine samples and draws"). Not RenderWakeMap.
 2. `FUN_00482fa0(water+0xa30)` — **RenderOcclusion** (0x15ee8); refs `WaterClip`, builds fmt-0x1a clip tex. *(med)*
 3. **RenderReflections** (0x15f00) = **`FUN_004677d0`** (via `FUN_00486fa0`) — builds mirrored view
    matrices (D3DXMatrixMultiply of camera vs the water plane at `+0xab0/+0xb70`) and re-renders scene

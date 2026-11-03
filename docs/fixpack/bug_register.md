@@ -356,6 +356,52 @@ since no T3 route is settled for the fix pack. An `.asi` Shipment built on `m2_h
 
 ---
 
+## BUG-014 — The billboard-tree Z-prepass draws with the previous draw's world matrix
+
+- **Tier:** T3 (exe) · **Status:** `built` · **Found:** in frame captures taken while investigating the DLC01
+  "tearing" (Death Race at Loc4 and the DLC hub bar, on PC and on Windows).
+- **Not the DLC01 tearing.** With this fix armed, every tree Z-prepass packet draws on an identity matrix of its own
+  (frames 4032–17454, PROVEN), and the tearing remains: below the horizon the screen stops being redrawn and earlier
+  frames persist, switched on and off by a small camera turn. That was the DLC port's own data: its PS3-converted
+  terrain read its stride-22 and stride-26 vertices two bytes off, so POSITION.w held the UV's first half
+  (`docs/_ps3_terrain_native_reinterleave.md`); with w = 1.0, as on every retail terrain vertex, it stops. Whether the pale, checkered sheets seen before the fix were
+  this defect's own symptom is not established.
+- **Symptom of this defect (from the captures):** the tree Z-prepass cards are drawn through another draw's world
+  matrix. In every pre-fix capture that was an occlusion box's: a unit cube scaled to an object's bounds (9× to 200×).
+- **Vanilla code.** The PC renderer stores each draw's world-matrix index in its packet (`u16 +0x38`, from the
+  global `0x01163740`; v1.0 `0x01164740`). The shadow loop (v1.1 `FUN_004A3E10`, v1.0 `FUN_004A3DB0`) and the
+  colour loop push a fresh identity matrix first; the **Z-prepass loop** (v1.1 `FUN_004A3EA0`, v1.0
+  `FUN_004A3E40`; its draws `FUN_004A1D70`/`FUN_004A1F30`, class 3, program `0x7E`) pushes none, and neither do its
+  draws. Its packets carry the matrix index last pushed before the loop. Its only caller, `FUN_00468EA0`, calls it
+  after each object's draw and, for objects with bit 2 of `+0x12`, its occlusion box (`FUN_0046EDF0`, which writes
+  the index only inside its visibility test). The matrix index is the only box-specific state that reaches the tree
+  packets: the box also writes `0x01163754` but resets it to `0xFFFF` itself. The Xbox 360 retail build has no tree
+  Z-prepass and its tree loops all push identity (`FUN_821F1AD0`, `FUN_821F1C70`), so the flaw is the PC
+  Z-prepass's (INFERRED: a port omission).
+- **Evidence:** profiler frame captures (`mercs2_profiler_frame_<n>.bin`, `mercs2_probe frame-capture`), DLC hub
+  bar, v1.1: frame 7751 box packet 318 pushes matrix 212 = diag(8.86, 7.57, 9.24) + offset, Z-prepass packets
+  319–329 use 212, the shadow cascades use fresh identities 221/229/242/292; frame 15026 the same with matrix 170
+  (scale 200.1); frames 8785 and 15159 the same.
+
+### Fix design
+
+Give the Z-prepass the identity matrix the other tree passes use, before its loop runs.
+
+- **Faithful variant (the shadow loop's own sequence):** detour the Z-prepass loop (`void __cdecl (void)`; it
+  saves its own registers) and, before calling the original, push identity: `i = counter++` (`u16 0xFF36CC`;
+  v1.0 `0xFF46CC`), copy the identity matrix (`0xDFBBD0`; v1.0 `0xDFCBD0`) to
+  `table + (parity · 0x1400 + i) · 0x40` (`0x018C61E0`, parity `0xFF364C`; v1.0 `0x018C71E0`, `0xFF464C`), then
+  `u16 0x01163740 = i`, `u16 0x01163742 = 1` (v1.0 `+0x1000`).
+- **Smallest variant:** store `0x00010000` to `0x01163740` (index 0 = the begin-frame's identity slot, and the
+  `+0x42` word 1) in the 13-byte pad before the loop and point the loop's only call at it: v1.1 `0x004A3E96`
+  `C7 05 40 37 16 01 00 00 01 00`, call byte `0x00468EFA` `A2`→`98`; v1.0 `0x004A3E36`
+  `C7 05 40 47 16 01 00 00 01 00`, call byte `0x00468E9A` `A2`→`98`. Relies on slot 0 staying identity all frame
+  (INFERRED).
+- **Verify:** with the fix, a frame capture shows every class-3 tree packet on an identity matrix that no other draw
+  family uses (v1.1, 14 captures).
+
+---
+
 ## Latent traps — real defects, NOT reachable from shipped content
 
 Recorded so the fix pack does not ship a fix for something no player can hit, and so a future modder does

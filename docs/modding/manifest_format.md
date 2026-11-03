@@ -121,9 +121,10 @@ its size and sha256, and where a deploy step puts it. An output that produced no
 |---|---|---|
 | `overlay` | — | mounts the WAD as a patch overlay on `vz.wad` |
 | `game_folder` | `relative` | copies the file to that path under the game folder (the Code layer) |
-| `data_wad` | `relative`, `display` | places a new WAD at `relative`: `data/<name>.wad` for [`add_language`](#add_language), `data/<name>-patch.wad` for [`add_level`](#add_level); `display` is the label a selector shows |
+| `data_wad` | `relative`, `display` | places a new WAD at `relative`, `data/<name>.wad`, for [`add_language`](#add_language); `display` is the label a selector shows |
 | `language_patch` | `language`, `relative` | merges the WAD's blocks, with every installed Shipment's for that language, into `data/<language>-patch.wad`, which the engine mounts directly above `data/<language>.wad` (`FUN_004BFEF0`, `"%s\%s-patch.wad"` with the language table's entry) |
 | `shell_patch` | — | merges the WAD's blocks, with every installed Shipment's, into `data/shell-patch.wad`, which the engine mounts above `shell.wad` in the front end (`FUN_004BFDA0` with the name `shell`, which `FUN_004C1280` writes at `0x004C12DD`) |
+| `level_patch` | `level`, `relative`, `display` | the level's patch WAD, at `data/<level>-patch.wad`. The engine mounts no `vz-patch.wad` in a level, so the deploy step merges every installed Shipment's overlay with `qm link`'s level patch last. `qm link`'s supersedes `qm build`'s, which says only that the level exists |
 | `stream_copy` | `from`, `to` | copies the game file `from` to `to`, both relative to the game folder; `bytes` and `sha256` describe `from` as the build read it, and no bytes are in the output directory |
 | `data_file` | `relative`, `base_sha256` | replaces the game data file at `relative` with the output file at the same relative path. `relative` is one of `data/shader3.bin` and `data/shader3Low.bin`. `base_sha256` is the sha256 of the original the output was built from (`--original-data`), and `sha256` / `bytes` describe the output file ([Shader stores](#shader-stores-and---original-data)) |
 
@@ -155,7 +156,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_script` | Script | `name`, `source` (`exports` optional) ([`add_script`](#add_script)) |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
-| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display`, `wad` (`streams` optional) ([`add_level`](#add_level)) |
+| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` optional) ([`add_level`](#add_level)) |
+| `level_asset` | Data (its level's patch) | `level`, `type`, `name`, `rungs` ([`level_asset`](#level_asset)) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `add_placement` | Data | `layer`, `entity` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
@@ -632,14 +634,13 @@ same. The census is the retail test `english_wad_embedded_voice_over_wavebank_ce
 
 ### `add_level`
 
-Adds a **level the game boots by name**, from a little-endian WAD you supply.
+Adds a **level the game boots by name**, compiled from the Shipment's [`level_asset`](#level_asset) rows.
 
 ```yaml
   - kind: add_level
-    name: dlc01              # the name it boots by: the WAD's master script and <name>_base layer
+    name: dlc01              # the name it boots by: its master script and <name>_base layer
     display: Blow It Up Again  # the label a selector shows; not written into any WAD
-    wad: src/level/dlc01.wad
-    streams:                 # one per streamed wavebank of the WAD, named for its entry
+    streams:                 # one per streamed wavebank of the level, named for its entry
       - src/level/Audios/dlctest_streaming.pws
 ```
 
@@ -647,27 +648,66 @@ For a level `L` the engine opens `.\Data\L.wad`, which must exist, then `.\Data\
 which may not, and no other level WAD (`FUN_004BFCE0`, `FUN_004BFDA0`). A level does not run alone,
 because its scripts and models use the base game's, so the build writes three placements:
 
-- `data_wad { relative: data/<name>-patch.wad, display }`: your WAD's blocks, stamped with `vz.wad`'s
-  `CSUM` row as every overlay is;
+- `level_patch { level, relative: data/<name>-patch.wad, display }`: the compiled blocks, stamped with
+  `vz.wad`'s `CSUM` row as every overlay is;
 - `stream_copy { from: data/vz.wad, to: data/<name>.wad }`, with the size and sha256 of the file read,
   so the level's assets win and everything else resolves from the copy. This takes as much disk as
   `vz.wad`, about 2.4 GB;
-- `game_folder { relative: data/Audios/<file> }` for each stream.
+- `game_folder { relative: DLC/<name>/Data/Audios/<file> }` for each stream: the level's own folder, never
+  the game's `data/Audios`. The level's sound bootstrap opens a stream at
+  `Net.DLCGetMountPoint() .. "\" .. Sound.GetAudioDir() .. "\" .. <NAME>.PWS`, and on PC the Shipment
+  that ships the level registers `Net.DLCGetMountPoint` to return `DLC\<name>`, as the consoles return
+  the DLC's install folder.
 
-`vz.wad` itself is never changed. A Shipment's overlay is not mounted while the level runs: the level
-slot holds only these two WADs.
+`vz.wad` itself is never changed. The level slot holds only these two WADs, so `qm link` compiles each
+level's whole patch for the installed set, and the deploy step merges every Shipment's overlay under it:
+
+- `vz.wad`'s scripts blocks are read with the level's assets in place of their twins, and the set's
+  scripts, effects and templates are linked into those.
+- A `patch_lua` on a script the level overrides reaches the level's script. Its source may not compile
+  (unluac writes `goto` for a stripped script's control flow), so the level's bytecode stays as it is and
+  the appended Lua runs at the end of its main chunk, in the same module. It reaches the module's globals,
+  not its locals.
+- A block the link touched ships whole, so a level asset in it leaves the level's own blocks.
 
 The build needs the game stack, and fails, listing each one, on:
 
-- a `wad` that holds no script `<name>` and layer `<name>_base`;
-- a script a script's `DEPS` names, or a texture a model's `MTRL` names, that neither the WAD nor the
+- `level_asset` rows that hold no script `<name>` and layer `<name>_base`;
+- a script a script's `DEPS` names, or a texture a model's `MTRL` names, that neither the rows nor the
   game stack holds;
+- a pixel shader a material names, or a vertex shader a model's group names, that retail does not
+  register;
 - a streamed wavebank with no file in `streams`, or a file whose stem is no streamed bank's entry.
 
 What Lua asks for by a name it computes is not visible to a build.
 
 - **M0311** refuses what could only overwrite.
 - Two Shipments adding the same level conflict (M0207).
+
+### `level_asset`
+
+One asset of an [`add_level`](#add_level) of this Shipment, in the PC container form of its type. It
+carries every byte of the asset, so any type the engine loads can be carried and nothing is re-encoded.
+A Shipment holds no WAD: the build compiles these rows, because a WAD shipped whole would shut every
+other Shipment out of the level.
+
+```yaml
+  - kind: level_asset
+    level: dlc01             # the add_level it belongs to
+    type: model              # as the WAD's type table names it
+    name: "0x86EDD514"       # a name, or a bare hash
+    rungs:                   # its LOD chain, coarsest first
+      - { block: dlc_al_veh_tank_m1a3_P000_Q3, file: src/level/model/0x86EDD514.0.ucfx }
+      - { block: dlc_al_veh_tank_m1a3_P001_Q2, file: src/level/model/0x86EDD514.1.ucfx }
+```
+
+- Every asset naming one `block` ships in that block, and the block's `_P00N` is the rung. A chain
+  starts at `_P000` and runs without a gap. The build writes each rung's chunk table word, the bytes of the
+  rungs before it.
+- A row reaches only its level, so it may hold a name the base game also uses, and Venezuela keeps its own.
+- **M0311** refuses a row whose `level` this Shipment does not add, whose `type` the type table does not
+  name, or whose rungs do not fit the rules above.
+- `dlc_port --shipment` writes these rows from a console package.
 
 ### `add_model`
 
@@ -2381,10 +2421,12 @@ Fix: none — the warning says when the item appears.
 
 ### M0311
 
-**An `add_level` could only overwrite.** Its `name` is not a lowercase `[a-z0-9_]` token, or is a WAD the
-game ships (`vz`, `shell`, `loading`, `english`, `french`, `german`, `italian`, `spanish`, `japanese`,
-`russian`), its `wad` is no `.wad`, or a stream is no `.pws` or is one the game ships: `music`,
-`ambience`, or a `vo_stream` language. The build refuses the same names.
+**An `add_level` could only overwrite, or a `level_asset` cannot compile.** An `add_level`'s `name` is not
+a lowercase `[a-z0-9_]` token, or is a WAD the game ships (`vz`, `shell`, `loading`, `english`, `french`,
+`german`, `italian`, `spanish`, `japanese`, `russian`), or a stream is no `.pws` or is one the game ships:
+`music`, `ambience`, or a `vo_stream` language. A `level_asset` names a level this Shipment does not add
+or a type the type table does not name, has no rungs, or has a rung whose block is not one path component
+or does not name that rung. The build refuses the same names.
 
 Fix: pick a name the game does not use.
 

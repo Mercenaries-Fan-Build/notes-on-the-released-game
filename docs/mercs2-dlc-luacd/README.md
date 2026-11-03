@@ -3,7 +3,9 @@
 Decompiled, human-readable Lua source for the **"Blow It Up Again" / DLC01** content
 that ships in the Xbox 360 DLC package. Companion to the base-game corpus in
 [`docs/mercs2-luacd/`](../mercs2-luacd/README.md) — this set is the **DLC-only**
-scripts (all 36 are net-new; none override a base-game script name).
+scripts. 24 are net-new; 12 override a base-game script under the same asset hash while keeping a
+`dlc01_*` entry name (`mrxplayer`'s entry is `dlc01_player`), which is why a by-name read of this set
+sees none as an override.
 
 ## Provenance (Xbox 360 DLC — big-endian source)
 

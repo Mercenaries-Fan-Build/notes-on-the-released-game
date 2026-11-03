@@ -1410,6 +1410,59 @@ and `English.wad`, `veh_largedieselold` and `veh_largedieselnew` play waves of
 wavebanks (`no_other_soundbank_plays_an_engine_loaded_banks_waves`). A writer that changes one of
 these wavebanks keeps every retail wave at its index.
 
+### 11.12 Console sound tables
+
+The Xbox 360 and PS3 bakes store the soundbank and sounddb of §11.3, §11.4 and §11.7 big-endian, field
+by field. A field PC holds as a `u32` but writes as a byte and three zero bytes is the same four bytes on
+both platforms; a pair of `u16`s is two big-endian `u16`s; the table version is little-endian on both.
+PROVEN: `be_to_le::audio::convert_soundbank` and `convert_sounddb` (`wad_simulator`), which walk these
+widths and refuse a byte no field claims, turn every sound table of `xbox-vz.wad` and `ps3-VZ.WAD` into
+its PC twin (`crates/mercs2_formats/tests/sound_console_retail.rs`, `retail` feature): 77 of 77
+sounddbs byte for byte, and 76 soundbanks that differ only in the two fields below, alike on both
+consoles.
+
+| Table | Offset | Field | Console |
+|---|---|---|---|
+| both | `+0x00` | version `0x1D` | `u32` little-endian |
+| sounddb | `+0x08`, `+0x0A` | cue count, category count | two `u16` |
+| sounddb | `+0x0C` | parameter count | `u16`, then a `u16` 0 |
+| sounddb | cue entry `+0x08` | soundbank cue index | `u16`, then a `u16` 0 |
+| soundbank | `+0x08`, `+0x0A` | group count, cue count | two `u16` |
+| soundbank | group `+0x0C`, `+0x14` | form, positional flag | a byte and three 0 |
+| soundbank | group `+0x2C`, `+0x48` (multi-wave) | loop, count, selection, `+0x2F`; flag bytes | bytes |
+| soundbank | wave and sound entry | `{hash, index, 0, weight}` | `u32`, `u16`, `u16`, `f32` |
+| soundbank | cue `+0x04` | `[0, form, limit, 0]` | bytes |
+| soundbank | single-track cue `+0x14`, `+0x16` | group index, `+0x16` | two `u16` |
+| soundbank | multi-track cue `+0x10`..`+0x15`, `+0x16` | counts; 0 | bytes; `u16`* |
+| soundbank | track `+0x00`..`+0x03`, sound `+0x00`..`+0x07` | counts, slot, selection | bytes |
+| soundbank | automation kinds 0–3 `+0x08` | mode | a byte and three 0 |
+| soundbank | automation kinds 5, 6, 8 `+0x08` | point count | a byte and three 0 |
+| soundbank | automation kind 4 `+0x08`..`+0x0D`, `+0x0E` | jitter flags; 0 | bytes; `u16`* |
+
+Every other field is a `u32` or an `f32`. Each width in the table is one that retail values tell apart from
+the other reading (a value whose bytes differ read either way: e.g. 14 of 588 ramp modes, 8 of 77 kind-4
+flag words, 1,302 of 1,776 positional flags in `vz.wad`), except the two marked *: they are 0 in every
+retail cue, so their width is INFERRED.
+
+The two fields that differ are each bake's own data. A single-track cue's `+0x16`, which nothing reads
+(§11.4), holds on each platform the other half of one `f32`: PC `0x3E99`, the console `0x999A`, of
+`0x3E99_999A` = 0.3; 127 cues. And a wave's index into a wavebank `vz.wad` does not hold, `vo_stream`
+of `English.wad`, differs on 34 waves: each platform baked that wavebank's records in its own order.
+A console soundbank that points into a PC wavebank it was not baked with therefore points at other
+records; one baked with its own wavebank does not.
+
+**A word swap of these tables.** Swapping every `u32` of the body trades each `u16` pair. A per-bank
+sounddb then reads 0 cues at `+0x08`: FindCue (`FUN_00835a70`) searches a table of at most 0x400 cues
+with `FUN_0083c610`, whose bound is that `u16` (`iVar3 = *(ushort *)(param_1 + 8) - 1`), so every guid
+the table routes misses (PROVEN from the decomp). Each single-track cue reads group 0 at `+0x14`, and a
+global sounddb's categories become its cues. The Xbox profile build's cue start (`FUN_828ce160`,
+`x360-preview-profile`) calls the start callback with status 2 and returns -1 when its instance setup
+(`FUN_828d3c40`) fails, which it does when FindCue returns nothing (PROVEN there). On PC the VO
+dispatcher `FUN_00515300` turns a VO cue event of status 0 into the Lua state `"cancel"` and of status
+1 into `"complete"` (strings `0x00BB376C`, `0x00BB3774`; PROVEN); that a cue FindCue misses reaches it
+as status 0 is INFERRED: the PC cue start `FUN_00834ad0` lies in no Ghidra function and the writer of
+the event list `FUN_005fadf0` copies from was not read.
+
 ## Provenance
 
 All addresses PC retail, base 0x400000. Anchors are (a) Pal self-named profiler-scope strings —

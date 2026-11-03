@@ -22,6 +22,10 @@ three-platform set.
 
 ## 1. Verdict
 
+**This verdict is disproved.** Both keys in the table below are half-swapped reads of registered PC names
+(`0xf931343a` is `PgDiffFP`, `0x343AF931`). Every shader key a DLC01 material names, 29 pixel and 32 vertex,
+is registered on PC, and `qm build` checks that for each level. The text below is the original analysis.
+
 **2 shader-key hashes referenced by DLC01 materials are PC-unregistered.**
 
 | Metric | Value |
