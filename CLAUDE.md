@@ -19,7 +19,7 @@ corpus of knowledge and one asset-format layer:
 3. **Unofficial fix-pack** — bug fixes on the retail engine, delivered as layered `-patch.wad`
    overlays.
 4. **Asset injection / modding / DLC port** — additive content via a `vz-patch.wad` overlay.
-5. **Online restore** — FESL/Theater emulator + TLS shim.
+5. **Online restore** — the `multiplayer-restored` Shipment + the self-hostable `multiplayer-server`.
 
 > Every data claim must be verified from the original game binary or shipped bytes. No guessing.
 > Where the exe can't be read statically, read it live in x32dbg — do not assume.
@@ -332,11 +332,14 @@ mandatory while iterating. Render a known baseline (e.g. `pmc_hum_mattias`) besi
 
 ### 3.5 Online restore (dead EA services)
 
-`coopserver/` — FESL / Theater / DNS emulator (Python) that revives matchmaking. `tlsterm/` —
-TLS termination shim. The game's FESL client is statically-linked **OpenSSL 0.9.8d (SSLv3/RC4)**,
-locked by the library — correct architecture is SSLv3 on the loopback game↔proxy leg + modern
-TLS on the proxy↔internet upstream (which `tlsterm` does). `webapp/` is a FastAPI + Alembic app
-over the corpus.
+- `shipments/multiplayer-restored/` (own repo) — the client Shipment. `multiplayer_restored.asi`
+  (Rust, `client/`) answers FESL and Theater inside the game process by detouring the game's ProtoSSL
+  entry points (found by byte signature), and reaches the server over HTTPS + a DTLS relay. Its `Mp` Lua
+  namespace goes through m2-sdk's Lua host. In-game test plan: its `TESTING.md`.
+- `src/multiplayer-server/` (own repo) — `mp-server`: accounts, sessions, lobby WebSocket, stats,
+  DTLS relay; the client↔server contract is the `mercs2_mp_api` crate.
+
+`webapp/` is a FastAPI + Alembic app over the corpus.
 
 ### 3.6 Legacy: UE5 / Python extraction pipeline (reference only)
 
