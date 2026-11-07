@@ -196,6 +196,16 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
     code context). Rules: the `mercs2_exemap::hashsites` / `hashjoin` module docs. Per-image output
     `output/_exemap_exports/hashes/`; tracked summary `docs/data/hash_candidates_by_consumer.tsv`.
     Context cracks are reviewed before they enter the rainbow files.
+  - Engine → Lua calls by name: `exemap lua-calls --functions <dir> --image <id>=<file>… --out <tsv>`
+    decodes every call each image makes through its by-name callers (`mercs2_exemap`'s
+    `data/lua_callers.tsv`: the module hash and function name it passes; the PC decomp drops those
+    register arguments, so the PC sites are read from the bytes). Output home:
+    `crates/mercs2_workshop/data/engine_lua_calls.tsv` (the Missions page's Events).
+  - Lua binding arguments: `exemap binding-args <image_id> --functions <jsonl> --luareg <tsv> --out <tsv>`
+    reads each binding's argument positions and types through the readers of `mercs2_exemap`'s
+    `data/lua_readers.tsv` (rules: the `bindingargs` module doc). Output home:
+    `crates/mercs2_workshop/data/binding_args.tsv`; argument names with evidence in `binding_names.tsv`
+    beside it (`proposed` until reviewed). The Missions page labels engine-call pins from both.
   - Clip names: `mercs2_probe clip-names docs/data/clip_name_proposals.tsv` proposes names for
     AnimationLookup clips from the rows that list them (grammar and evidence columns: its module doc,
     `crates/mercs2_probe/src/clip_names.rs`); the workshop's Animation card shows each proposal
