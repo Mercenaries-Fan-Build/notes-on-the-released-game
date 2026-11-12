@@ -138,7 +138,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `replace_texture` | Data | `target`, `image` |
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model`, `donor` (optional in the schema, required by `qm build`) (`group`, `textures`, `retarget` optional) |
-| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (`model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only) |
+| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (one hero or a list); `chatter` and `levels` optional ([below](#outfits-are-generated-by-the-link)); `model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only |
 | `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
@@ -182,7 +182,10 @@ inside a placement layer, not a standalone asset.
 
 `donor` is **optional on `add_outfit`**: omit it and the build hosts the outfit on the wearer's own
 hero model (`pmc_hum_mattias` / `pmc_hum_chris` / `pmc_hum_jen`), validated against the game stack
-(Plan 04, resolved Q2). Set `donor:` only for a variant host such as `pmc_hum_mattias_v3`.
+(Plan 04, resolved Q2); for a list of wearers, on the first listed hero's. The game ships one human
+skeleton, identical across its humanoid models, so a model hosted on any hero animates on every hero;
+the hosts differ in bone count and materials. Set `donor:` only for a variant host such as
+`pmc_hum_mattias_v3`.
 
 On `add_model` `donor:` is optional in the schema and **required by `qm build`** — a prop has no wearer to name its host, and its rig
 must match the geometry class, which is not safe to guess (the weight-transfer history shows a wrong
@@ -1564,9 +1567,7 @@ Every claim a Shipment makes carries a class:
 
 - **`Exclusive`** — one claimant; a second is a hard error. Raw blocks, function redefinitions, HQ
   starters, anything opaque.
-- **`KeyedSet { key }`** — union by key; a duplicate key is an error. Outfits key on
-  **`(wearer, slug)`**, not `slug` alone: retail reuses `Original` and `ChickenSuit` across all three
-  heroes.
+- **`KeyedSet { key }`** — union by key; a duplicate key is an error. New names key on the name.
 - **`OrderedList`** — append-only, with companion values the Quartermaster derives rather than
   trusting.
 - **`LastWins`** — later wins and load order is genuinely the answer. Texture replacement.
@@ -1787,8 +1788,18 @@ installed set.
   hero, in load order (a Shipment's own outfits in manifest order). The character map is regenerated
   to match, with the retail map's models that no wardrobe row offers after the added ones. The same
   set gives the same lists on every machine.
-- **The main campaign.** An outfit joins the `vz` wardrobe. A custom level runs its own wardrobe and
-  is left as it ships.
+- **`wearer`.** One hero (`wearer: mattias`) or a list (`wearer: [chris, jen, mattias]`); `jen` and
+  `jennifer` are one hero. A listed outfit has its own place in each hero's list and is saved by the
+  same name whichever hero wears it. A list names each hero, so a hero added later is not offered it
+  ([M0140](#m0140), [M0141](#m0141)).
+- **`levels`.** The levels whose wardrobes offer the outfit, e.g. `[vz, dlc01]`. Omitted, the main
+  campaign (`vz`) alone: a custom level runs its own wardrobe and is left as it ships unless an outfit
+  names it. A custom level saves no outfit name, so there it restores by the costume byte alone
+  ([M0143](#m0143), [M0263](#m0263)).
+- **`chatter`.** The chatter set the hero speaks with while wearing the outfit, e.g. `Obama_Obama01`:
+  set on the join, on a wardrobe change and on a co-op partner's change. Changing to an outfit
+  without one gives the hero its own set back (the `ChatterSet` of its templates, named by qm's
+  `data/chatter_sets.tsv`). The name must be one qm knows the game holds ([M0142](#m0142)).
 - **Always offered.** An added outfit is listed whatever the unlock count, and a hero with one opens
   the wardrobe even before the first retail unlock (where the game otherwise shows its custom-outfit
   tip). Retail outfits keep their unlock order.
@@ -1946,6 +1957,31 @@ the templates that start an effect.
 
 The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
 need the game stack and run in `qm lint --with-game` and in `qm build`.
+
+The outfit rules M0140–M0143 are errors and need no game; M0263 is an error of the load plan.
+
+### M0140
+
+**A `wearer` is not a wardrobe hero.** The wardrobe has one list per hero, keyed `mattias`, `chris`
+and `jennifer` (written `jen` or `jennifer`), so an outfit for any other name is offered to no one and
+the game reports nothing. The fix suggests the nearest hero.
+
+### M0141
+
+**A `wearer` list is empty or names a hero twice.** An empty list offers the outfit to no one; `jen`
+and `jennifer` are one hero.
+
+### M0142
+
+**A `chatter` set is not one qm knows the game holds.** `Human.SetChatterSet` takes any name, and an
+unknown one does nothing, with no message. The known sets are qm's `data/chatter_sets.tsv`, each with
+its evidence (a template's `ChatterSet` value or a retail script that sets it); case does not matter.
+Fix: use a listed set, or add one the game holds to that file with its evidence.
+
+### M0143
+
+**A `levels` list is empty or names a level twice.** An empty list offers the outfit in no wardrobe;
+omit `levels` for the main campaign alone.
 
 M0197 and M0198 are errors; M0310 is a warning. M0197 checks `qm`'s own names and the Shipment's
 with no game, and the game's script names in `qm lint --with-game` and in `qm build`. M0198 needs
@@ -2369,6 +2405,15 @@ Fix: what the message names; the effect's own form (`EffectForm::express`) shows
 `add_fx` and `replace_fx`, which `qm link` merges into the game's effects block and worldentity.
 
 Fix: use `add_fx` or `replace_fx`.
+
+### M0263
+
+**An outfit is offered in a level the set does not have.** A `levels` entry is neither `vz` nor a
+level an `add_level` of the installed set adds, so no wardrobe would offer the outfit there. `qm link`
+and `qm preflight` refuse the set; a standalone `qm build` does not check it, since another Shipment
+of the set may add the level.
+
+Fix: install the Shipment that adds the level, or drop it from `levels`.
 
 ### M0304
 
