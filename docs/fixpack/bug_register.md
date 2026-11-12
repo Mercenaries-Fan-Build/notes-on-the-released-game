@@ -402,6 +402,40 @@ Give the Z-prepass the identity matrix the other tree passes use, before its loo
 
 ---
 
+## BUG-015 — The HQ stockpile is saved but never restored (load guard tests the wrong key)
+
+- **Tier:** T2 (Lua) · **Status:** `built` · **Reported by:** user (2026-11-11, from the retail Lua)
+- **Symptom:** the HQ stockpile piles never shrink within a session (they show the most of each support
+  item, and of cash, you have held), but after loading a save they drop to what you hold now. The stock
+  itself is unaffected. Only the HQ display is lost.
+- **Root cause.** `wifpmcinterior.lua` (`vz` scripts block): `SaveSingleton` writes
+  `tStockpileQty = _tStockpileQty` (`:1626`). `LoadSingleton` restores it under
+  `if tSaveData.tSupportQty then` (`:1636-1637`), a key the save never writes. `tSupportQty` occurs
+  nowhere else in the base-game corpus, so `_tStockpileQty` keeps its module-load `{}` (`:243`) after every load.
+  `_UpdateStockpile` (`:1541-1597`, run from `_Kickoff` `:536` when the HQ interior loads) displays each
+  category at the larger of the live quantity and that mark (`:1555-1563`), and `_SetStockpileCategoryQty`
+  (`:1599-1614`) hides the pile meshes below it. The real counts come back separately
+  (`MrxPmc.LoadSingleton` / `MrxSupportData.LoadSingleton`, `xQ!L.lua:794-795`). The Xbox 360 script has
+  the same guard.
+- **Load order:** `WifPmcInterior.LoadSingleton` (`xQ!L.lua:799`) runs before the load enters the HQ
+  (`WifPmcInterior.Enter`, `:891`), so the first HQ view after a load shows the restored mark.
+- **Fix (built):** `mercs2-unofficial-patch` `src/lua/bug_015_stockpile_restore.lua`, a `patch_lua` append
+  to `wifpmcinterior` that redefines `LoadSingleton` as retail's body with the guard on `tStockpileQty`. No
+  save-format change: retail has always written the key.
+- **Evidence (2026-11-11):** every retail save fixture (`mercs2_formats/fixtures/saves`, `mercs2_probe
+  save-dump`) carries `tPmcInteriorData.tStockpileQty` (empty, or the 13 categories as numbers).
+  `mercs2_probe stockpile-restore <profile> --expect restored|dropped --wad <wad>` runs a WAD's
+  `wifpmcinterior` in `mercs2_luac`'s Lua 5.1.5: `LoadSingleton` with the save's table, then
+  `_UpdateStockpile(false)` holding nothing. With the `Mattias Nilsson_6A0E523C` fixture, retail `vz.wad`
+  shows every category at 0 (bug reproduced), the built overlay shows the saved mark. The probe's
+  `retail` test pins the retail outcome.
+  Not yet observed in-game, so not `verified`. Card: `verification/BUG-015.md` in the Shipment.
+- **DLC01:** `dlc01_pmcinterior.lua:2438-2440` and `dlc01_missionhub.lua:1751-1753` carry the same guard,
+  but dlc01's `GenerateSaveData` (`dlc01.lua:156-185`) writes no `tPmcInteriorData` and no dlc01 script
+  calls `WifPmcInterior.LoadSingleton`, so the copy is unreachable there.
+
+---
+
 ## Latent traps — real defects, NOT reachable from shipped content
 
 Recorded so the fix pack does not ship a fix for something no player can hit, and so a future modder does
