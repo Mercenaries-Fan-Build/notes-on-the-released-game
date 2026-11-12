@@ -202,7 +202,8 @@ Header is **little-endian packed** (PC-native). Zlib payload begins at `0x468`.
 | `0x24` | u32 | `timestamp` (Unix) | `0x6A45586A` |
 | `0x2C` | 16B | `active_contract` NUL-padded ASCII | `PmcCon001` |
 | `0x4C` | u32 | `flags_0x4C` (hero at byte `@0x4D`) | `0x00030300` |
-| `0x4F` | u8 | `upgrade_index` | `0..3` |
+| `0x4E` | u8 | `upgrade_index` (upgrade tier) | `0` |
+| `0x4F` | u8 | `costume_index` (worn outfit, wardrobe row − 1) | `0` |
 | `0x200` | UTF-16LE z | `save_name` slot label | `auto_6A447BF8` |
 | `0x24A` | u8 | `unlocked_costumes` | `1`-`5` |
 | `0x2F8` | u16 | `fuel_capacity` | varies |
