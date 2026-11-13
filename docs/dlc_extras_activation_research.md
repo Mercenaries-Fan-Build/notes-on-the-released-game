@@ -69,12 +69,13 @@ ASI bootstrap that calls `import("dlc01")`, registers `tMissionData`, and calls
 
 ## Extras Menu (Not Needed)
 
-The Extras menu gate (`IsOnlineConnected()` → dead EA servers) is bypassed entirely.
-The ASI hooks `IsOnlineConnected` to return `true` and `HasPlayerUnlockedCode` to return
-`true`, but DLC activation happens through the Lua bootstrap, not through the shell UI flow.
-
-The Extras menu itself is not functional and fixing it is low priority — DLC contracts
-auto-appear in Fiona's briefing list without needing the Extras UI.
+**Corrected 2026-11-10.** There is no `IsOnlineConnected()` gate on Extras: no Lua runs when the
+Extras page opens. On retail PC the page can never list DLC: its DLC button is shown only after the
+movie's AS2 `DLCAvailable(true)`, which only console native code calls (it enumerates locally installed
+DLC packages and adds each with `addDLC`); neither name exists in the PC v1.1 image. The online check the
+Extras page does make is for **Unlockables** (registration-code redemption). Full chain with evidence:
+[`ui/online_bonus_checking.md`](ui/online_bonus_checking.md) §9. DLC activation on PC therefore goes
+through Lua / `Sys.StartSingleplayer`, not the shell UI.
 
 ---
 

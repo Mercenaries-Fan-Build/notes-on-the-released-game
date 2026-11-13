@@ -138,8 +138,9 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `replace_texture` | Data | `target`, `image` |
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model`, `donor` (optional in the schema, required by `qm build`) (`group`, `textures`, `retarget` optional) |
-| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (`model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only) |
+| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (one hero or a list); `chatter`, `levels` and `briefing_safe` optional ([below](#outfits-are-generated-by-the-link)); `model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only |
 | `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
+| `load_sound` | Script | `in`; any of `soundbank`, `wavebank`, `stream` ([`load_sound`](#load_sound)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
 | `replace_sound_wave` | Data + Script | `wavebank`, `line`, `wave` (`language` on a `vo_*` wavebank) |
@@ -157,7 +158,7 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
 | `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` optional) ([`add_level`](#add_level)) |
-| `level_asset` | Data (its level's patch) | `level`, `type`, `name`, `rungs` ([`level_asset`](#level_asset)) |
+| `level_asset` | Data (its level's patch; for `level: vz` the overlay, or templates appended to the worldentity) | `level`, `type`, `name`, `rungs`, `templates`, `edits` ([`level_asset`](#level_asset)) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `add_placement` | Data | `layer`, `entity` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
@@ -182,7 +183,10 @@ inside a placement layer, not a standalone asset.
 
 `donor` is **optional on `add_outfit`**: omit it and the build hosts the outfit on the wearer's own
 hero model (`pmc_hum_mattias` / `pmc_hum_chris` / `pmc_hum_jen`), validated against the game stack
-(Plan 04, resolved Q2). Set `donor:` only for a variant host such as `pmc_hum_mattias_v3`.
+(Plan 04, resolved Q2); for a list of wearers, on the first listed hero's. The game ships one human
+skeleton, identical across its humanoid models, so a model hosted on any hero animates on every hero;
+the hosts differ in bone count and materials. Set `donor:` only for a variant host such as
+`pmc_hum_mattias_v3`.
 
 On `add_model` `donor:` is optional in the schema and **required by `qm build`** — a prop has no wearer to name its host, and its rig
 must match the geometry class, which is not safe to guess (the weight-transfer history shows a wrong
@@ -439,20 +443,17 @@ supersedes).
 **No `src/` file and no Data half.** `layer` / `replaces` are layer **names**, not assets you ship —
 the layer must already exist in the WAD (retail carries 900-odd of them, or a companion `edit_world` /
 `raw` ships one). The whole contribution is a Lua registration, baked into the Quartermaster-owned
-**`qm_modloader`** — the same expandable load space and one-line `wifpmcinterior` trampoline `add_ui`
-uses (see [`add_ui`](#add_ui) for how that works). So N `activate_layer` and `add_ui` mods share one
-loader and one trampoline, merge cleanly, and each mark runs under `pcall`. The resident script never
-grows with mod count.
+**`qm_modloader`** — the same expandable load space `add_ui` uses (see [`add_ui`](#add_ui) for how
+that works). So N `activate_layer` and `add_ui` mods share one loader and merge cleanly.
 
 ⚠ **Layer names are CASE-SENSITIVE**, and a wrong one is silent — `MarkForAddition` on a name no
 layer carries reaches nothing at runtime. **M0194** (advisory, needs the game stack) warns when the
 `layer` or any `replaces` name has no layer-typed ASET row, unless a companion contribution in the
 same install ships it.
 
-The trigger is the moment the mod loader runs — PMC-interior entry, every session — which is the one
-resident hook the linker is proven to merge. For a mission-timed switch (a layer that should flip at a
-specific objective) you still want a bespoke `patch_lua` in the contract; `activate_layer` is the
-turnkey "turn this overlay on" face.
+The trigger is qm's `world.begin` hook, when player-visible gameplay first starts in a world, once per
+Lua VM. For a mission-timed switch (a layer that should flip at a specific objective) you still want a
+bespoke `patch_lua` in the contract; `activate_layer` is the turnkey "turn this overlay on" face.
 
 ### `add_movie`
 
@@ -493,14 +494,15 @@ composed addition reaches the game without mods fighting over one script:
   asset (a new block entry *and* its primary type-35 ASET row — the two halves the DLC's own loader
   ships for a new importable module). Every UI mod's `FlashWidget` registration is baked into this
   one script. It is the *expandable load space*: it grows as mods are added.
-- The game's resident script (`wifpmcinterior`) gets only a **one-line trampoline** — it `import`s
-  `qm_modloader` when the PMC interior loads and runs it once. This line never changes no matter how
-  many UI mods are installed, so the resident script is not edited and re-edited per mod.
+- No game script is recompiled for it. qm's world entry, spliced onto the master script
+  ([qm's hooks](#qms-hooks)), loads `qm_modloader` with `dynamic_import`, and each registration runs
+  at qm's `world.begin` hook, once per Lua VM. That code never changes however many UI mods are
+  installed.
 - Installing several UI mods together merges cleanly: their registrations concatenate into one
   `qm_modloader`, in load order (the order `requires` and the installer's list give; see
-  [Composition](#composition)), so the same set always produces the same bytes,
-  and the single trampoline is shared. Each registration runs under `pcall`, so one bad movie cannot
-  wedge the loader.
+  [Composition](#composition)), so the same set always produces the same bytes. Each registration
+  runs under its own Shipment's name, so one that fails stops the game naming that Shipment (the
+  [error policy](#qms-hooks)).
 
 `add_ui` makes the movie *appear* (created, played, visible, and parked in `_QM.ui[name]` so you can
 reach it from Lua). Its on-screen **rect and hide trigger** are still yours — add a `patch_lua` that
@@ -520,12 +522,82 @@ Adds a new Lua module the game can `import`:
     name: ess                       # what Lua passes to import("ess")
     source: src/lua/ess.lua         # compiled to the game's LuaQ at build time
     exports: [Ess, OnStateChange]   # optional: the globals this module writes on purpose
+    load: { when: world.scripts_loaded, in: [gameplay] }   # optional: a library qm loads
 ```
 
 `name` is the module name the engine hashes to find the script: bare, no extension, and not a name a
 script of the game, of `qm`'s own loaders or of the Shipment's novel shop behaviours already has
-([M0197](#m0197)). `source` is the `.lua` file, compiled when the Shipment is built. The
-module runs when something first imports it, not at load.
+([M0197](#m0197)). `source` is the `.lua` file, compiled when the Shipment is built.
+
+**When the module runs.** The engine's `import("<name>")` does not run a module: it only binds one
+whose body has already run, and binds nothing for one that has not. A module's body runs when an
+executed script lists it in its compiled imports (its DEPS), or when something `dynamic_import`s it.
+A **library** that nothing in the game imports therefore declares `load:`.
+
+**`load: { when, in }`.** At the lifecycle hook `when`, in each session of `in` (`gameplay` or
+`front_end`), qm's loader `dynamic_import`s the module. The engine runs its body and hands back its
+environment, and the loader records it ready. `when` is a hook id of Quartermaster's catalogue
+(`crates/mercs2_quartermaster/data/hooks.tsv`). The loaders' entry points are `world.scripts_loaded`
+(gameplay, when the master script's chunk runs: `vz`, or a custom level's own master) and
+`shell.boot` (front end). `in` must list only sessions that hook fires in ([M0312](#m0312)). A
+library the engine cannot load, or one requested before its session's settle hook (`world.begin`,
+`shell.open`) and not ready when that hook fires, stops the game with a message naming the Shipment
+and the module. Libraries of one hook load in the set's load order, so a library loads after the
+libraries its Shipment `requires`.
+
+#### qm's hooks
+
+Every `qm link` splices qm's own Lua onto the end of retail scripts, mods or no mods: a hook
+dispatcher, the loaders' entry points, and one piece of code per hook of the catalogue
+(`crates/mercs2_quartermaster/data/hooks.tsv`) the link generates. Nothing is recompiled from the
+decompiled corpus; the code is compiled on its own and runs at the end of the retail chunk. Each hook
+prints `[qm] hook <id>: enter` every time it fires, which `pmc_blackbox.log` records.
+
+The link generates every hook of the catalogue, in the session it fires in, so any library can load
+at, or subscribe to, any of them. qm's own loaders use `world.scripts_loaded`, `world.begin` and
+`world.sound_exit` in gameplay, and `shell.boot`, `shell.open` and `shell.sound_exit` in the front end.
+
+The front end has two opening hooks. `shell.open` fires when the front-end shell opens, at its "Press
+Start" screen; `menu.open` fires once per shell, when the start press brings up the main menu (qm
+reads retail's own condition for that press, `mrxguishell.lua:318-320`). `shell.play` fires for New
+Game and for Continue alike: retail starts both through one function. The online hooks fire on the
+shell's lobby and join choices: `shell.lobby.enter` / `.exit` (LAN), `shell.friends_lobby.enter` /
+`.exit`, `shell.online`, and `shell.join.lan`, `.friends`, `.quickmatch`, `.optimatch`.
+
+`dynamic_import` answers asynchronously, so a library loaded at a hook is not ready during the hooks
+that follow at once. A library loaded at `world.scripts_loaded` is ready by `world.begin` (the settle
+check makes sure), but not by `world.load`: in a run of 2026-11-07, `world.load` fired 92 ms after the
+entry and 18 ms before the entry's library was ready. A game that loads into an HQ fires `hq.enter`
+just before `world.begin` (9 ms in the same run).
+Retail code reaches the dispatcher through the global `_G._QM`, never through `import`.
+
+**The error policy.** A hook handler or a library that fails stops the game; it never continues. The
+failure prints `[qm] FATAL <owner> at <hook>: <error>`, naming the Shipment (or `Quartermaster` for
+qm's own code). When retail's dialog can be shown (`MrxGuiDialogBox` has loaded and there is a local
+player), the game pauses under the dialog retail's own in-game prompts use (the one the death
+dialog opens), which takes keyboard, pad and mouse input, and choosing **Exit** exits the game. Otherwise the failure also prints
+`[qm] FATAL-NODIALOG <owner> at <hook>: <error>`. pmc_bb's log variants watch for that line on
+every run, with or without `PMC_VERBOSE_LOG`: they write it to `pmc_blackbox.log` (source `qm`),
+show it in a native message box, and end the game when the box is closed (exit code 3). pmc_bb's
+quiet variants (`crack_only`, `crack_asi`) cannot see it, so right after the print qm requests the
+`Exiting` game state itself.
+
+A host script must define each function a hook wraps, and must not `return` from its top level (a
+return there skips the code spliced after it). The link checks both against the bytecode it splices
+onto and fails, naming the hook and the script, when either does not hold. This applies to a custom
+level's master too ([`add_level`](#add_level)).
+
+**The load plan's libraries.** `qm link` records every module it adds in its `load-plan.json`
+(format 3), under `libraries`, from the list it splices: one row per module and session, in load
+order, the libraries first and then the modules only an `import` loads. A row holds `module`, `item`
+(the Shipment's request id; `null` for qm's own `qm_modloader` and `qm_shell_modloader`), `session`
+(`gameplay` or `front_end`), `when` (the hook qm's loader loads it at; `null` for a module only an
+`import` loads) and `settles` (whether the session's settle hook checks it is ready: the entry's
+libraries). A custom level loads the same set, so the one list covers it. Every link also places the
+plan in the game folder at `scripts/load-plan.json`, beside the Lua bridge, which reads it at startup:
+a `game_folder` placement, written with an empty list when the set has no library. `qm preflight`,
+which links nothing, and a plan that refuses the link write `libraries: null`. The plan's types are
+`mercs2_formats::load_plan`, which every reader parses.
 
 **`exports`.** A module that writes into `_G` competes with the engine's own writes to it (M0302,
 [Lua engine seams](lua_engine_seam_hardening.md)), so a write to `_G` or `_MODULES` is an error unless
@@ -669,6 +741,13 @@ level's whole patch for the installed set, and the deploy step merges every Ship
   the appended Lua runs at the end of its main chunk, in the same module. It reaches the module's globals,
   not its locals.
 - A block the link touched ships whole, so a level asset in it leaves the level's own blocks.
+- The level runs its own master `L`, never `vz`'s chunk, so qm's hooks that the catalogue hosts on
+  `vz` ([qm's hooks](#qms-hooks)) are spliced onto `L` instead, on every link. `L` must define the
+  functions those hooks wrap, as both retail masters do (`vz/xQ!L.lua`, `dlc01.lua`): `LoadSingleton`,
+  `SaveSingleton`, `SaveComplete` and `ResetSingleton`, which the engine calls by name on the master, and
+  `_StartPlayerVisibleGameplay`. It must not `return` from its top level. The link fails, naming the hook,
+  when either does not hold. The same holds for a script the level overrides that hosts a hook: it keeps
+  the functions the hook wraps (Blow It Up Again's 12 overrides do).
 
 The build needs the game stack, and fails, listing each one, on:
 
@@ -686,10 +765,10 @@ What Lua asks for by a name it computes is not visible to a build.
 
 ### `level_asset`
 
-One asset of an [`add_level`](#add_level) of this Shipment, in the PC container form of its type. It
-carries every byte of the asset, so any type the engine loads can be carried and nothing is re-encoded.
-A Shipment holds no WAD: the build compiles these rows, because a WAD shipped whole would shut every
-other Shipment out of the level.
+One asset of an [`add_level`](#add_level) of this Shipment, or of the main campaign (`level: vz`), in the
+PC container form of its type. It carries every byte of the asset, so any type the engine loads can be
+carried and nothing is re-encoded. A Shipment holds no WAD: the build compiles these rows, because a WAD
+shipped whole would shut every other Shipment out of the level.
 
 ```yaml
   - kind: level_asset
@@ -704,10 +783,69 @@ other Shipment out of the level.
 - Every asset naming one `block` ships in that block, and the block's `_P00N` is the rung. A chain
   starts at `_P000` and runs without a gap. The build writes each rung's chunk table word, the bytes of the
   rungs before it.
-- A row reaches only its level, so it may hold a name the base game also uses, and Venezuela keeps its own.
-- **M0311** refuses a row whose `level` this Shipment does not add, whose `type` the type table does not
-  name, or whose rungs do not fit the rules above.
+- A row of an `add_level` reaches only its level, so it may hold a name the base game also uses, and
+  Venezuela keeps its own.
+- **M0311** refuses a row whose `level` this Shipment does not add (and is not `vz`), whose `type` the type
+  table does not name, or whose rungs do not fit the rules above.
 - `dlc_port --shipment` writes these rows from a console package.
+
+**`level: vz`: the main campaign.** A row of level `vz` needs no `add_level`. Its asset ships in the
+Shipment's overlay, in `blocks\VZ\<block>.block`, with its own ASET row; its rungs are numbered after the
+overlay's other blocks. It only adds: the build refuses, listing each one, an asset whose name and type
+`vz.wad` holds, and a script a script's `DEPS` names, a texture a model's `MTRL` names or a shader that
+neither the Shipment's `level: vz` rows nor the game holds. Two Shipments adding one asset conflict
+(M0207). A streamed wavebank plays only from its stream, and the main campaign opens none of a
+Shipment's on its own, so the build also refuses one no [`load_sound`](#load_sound) of the Shipment opens
+a stream for.
+
+A row whose block `vz.wad` already has (a `chatter` container in `resident_P000_Q3`, the always-loaded
+block) cannot ship in a block of its own: an overlay block at that path would replace `vz.wad`'s whole.
+`qm link` adds it to the copy of that block it re-emits anyway (the scripts blocks), with an ASET row
+shaped like that block's own rows of its type; the block must be one the link re-emits, and the asset
+must have one rung. A standalone `qm build` logs that the row ships only through `qm link`. A bank's
+tables of one name (a `soundbank` and its `sounddb`) are one asset, not two claims of one.
+
+The worldentity is the one row that ships nothing: `vz.wad`'s worldentity holds every template of the
+game, so a row of `type: world_entity_data` lists the templates of its container to append to it.
+
+```yaml
+  - kind: level_asset
+    level: vz
+    type: world_entity_data
+    name: "0x50075B3B"
+    rungs: [{ block: resident_P000_Q3, file: src/level/world_entity_data/0x50075B3B.0.ucfx }]
+    templates:               # every template, by name; none is added that is not listed
+      - DLC_M1A3
+      - Vehicle Seat (DLC M1A3) (Driver)
+      - "Explosion (Super TOW) "
+```
+
+- `edits` (optional) sets fields of listed templates before they are appended, by template name, then
+  class, then field — a name or `"0xHHHHHHHH"`, quoted, since YAML reads a bare one as a number — as the
+  [template form](#add_fx) writes values. A class
+  the template holds more than one record of, a field the record lacks, or a value of the wrong type is
+  refused. Blow It Up Again lets the Hammerhead's driver leave, which the DLC forbade:
+
+  ```yaml
+      edits:
+        Vehicle Seat (2 Seat) (seat_front_left) DLC (armoredmonster):
+          EntranceToSeat: { CanExit: true }
+  ```
+- The container may be a console level's compact one: it is read by the class layouts of `vz.wad`.
+- Each template is appended under the key it has in the container, so the links between the listed
+  templates (a vehicle's seat, its weapons, their projectiles) stay as the level wrote them. Its name gets
+  the `Name` flag 0.
+- The build and the link refuse, listing every one: a name the container has no template of, or more
+  than one; a key the game's worldentity, or a template another Shipment appended, already uses; and a
+  template key of the container that a record of a listed template holds, that is not listed, and that the
+  game does not hold under the same name. That last check reads each 4-byte word of the records'
+  fixed-size payloads (names, point locations and packed 16-bit values are not read), so one
+  run lists every template the listed ones name; a template it adds can name more, which the next run
+  lists (Blow It Up Again's five vehicles took four runs, to 31 templates).
+- Two Shipments appending one template name conflict (M0207).
+- **M0311** refuses a `level: vz` worldentity row without `templates`, `templates` on any other row, a
+  worldentity row of more than one rung, a template named twice, and `edits` of a template `templates`
+  does not list.
 
 ### `add_model`
 
@@ -1248,8 +1386,8 @@ sessions whose loader loads it, and the block ships to each one's WAD:
 
 | `load_in` | the loader | the block ships in |
 |---|---|---|
-| `gameplay` | `qm_modloader`, run from `wifpmcinterior._OnEnter` (PMC-interior entry, every session) and unloaded after `MrxSoundBootstrap.ExitGame` | the Shipment overlay |
-| `front_end` | `qm_shell_modloader`, run after `MrxSound.EnterShellState` (the main menu opening) and unloaded after `ExitShellState` ([The front-end loader](#the-front-end-loader)) | the shell patch |
+| `gameplay` | `qm_modloader`, loaded at qm's `world.begin` hook (player-visible gameplay starting, once per world) and unloaded at `world.sound_exit`, after `MrxSoundBootstrap.ExitGame` | the Shipment overlay |
+| `front_end` | `qm_shell_modloader`, loaded at qm's `shell.open` hook, after `MrxSound.EnterShellState` (the front-end shell opening, at its "Press Start" screen, before the main menu), and unloaded at `shell.sound_exit`, after `ExitShellState` ([The front-end loader](#the-front-end-loader)) | the shell patch |
 
 `load_in` is required: it lists at least one session, each once (**M0221**). Each loader runs
 `MrxSoundBanks.LoadWaveBank(bank)` then `MrxSoundBanks.LoadSoundBank(bank)`, the calls
@@ -1263,6 +1401,33 @@ that has the guid, which is the game's (**M0220**). To change a game cue, use
 [`replace_sound_cue`](#replace_sound_cue). A bank named `vo_*` is refused (**M0215**): retail Lua
 appends the language to such a name before loading it. So is a bank or cue written as a bare hash:
 a new identity's hash is the hash of its name.
+
+### `load_sound`
+
+Has qm's loader load sound that the game or this Shipment already ships, in a session that does not load
+it: a DLC level's voice banks in the main campaign, for example.
+
+```yaml
+- kind: load_sound
+  soundbank: vo_resident_DLCTest
+  wavebank: vo_stream_DLCTest
+  stream: vo_stream_DLCTest
+  in: [gameplay]
+```
+
+- `soundbank`, `wavebank`: names as `MrxSoundBanks` takes them. A `vo_` name is localized as retail
+  localizes it, `<name>.<language>` (`mrxsoundbanks.lua:80-87`), so the bank must exist for every
+  language whose WAD is installed. Each must be held by the game, the language's WAD, or the Shipment's
+  own `level: vz` rows (**M0223**).
+- `stream`: one of this Shipment's [`add_level`](#add_level) streams, without `.pws` (for a `vo_` stream,
+  without `.<language>.pws`). It is opened from where that level installs it, `DLC\<level>\Data\Audios`,
+  by the path the DLC opens its own streams by (`dlctest01_soundbootstrap.lua:186-193`), under the alias
+  `<stream>.pws`, before any bank of the session loads, and closed after they unload.
+- `in`: the sessions whose loader loads them, `gameplay` and/or `front_end`, each once.
+
+They load at the session's settle hook (`world.begin` in gameplay, `shell.open` in the front end) and
+unload at its sound exit, as an `add_sound` bank does. A name written as a hash, a blank name, no name
+at all, an empty or repeating `in`, and a stream no `add_level` of the Shipment installs are **M0222**.
 
 ### Sound cue fields
 
@@ -1492,26 +1657,28 @@ registration loads a bank in the front end, the build links a second loader into
 scripts block (`blocks\Shell\resident_P000_Q3.block`, 28 scripts) and ships the block in the shell
 patch, with every ASET row copied from `shell.wad`:
 
-- **`qm_shell_modloader`** — a new script the Quartermaster mints into that block. It publishes
-  `_G._QMS` with `load_sounds()` and `unload_sounds()`, generated by the same code as the gameplay
-  loader's: each bank's `LoadWaveBank` (and, for an `add_sound` bank, `LoadSoundBank`), in load
-  order and then by bank name, each bank loaded once until it is unloaded (`_QMS.loaded`). No
-  callback is passed, so the batch callback retail's `EnterShellState` sets (`_StartShellMusic`)
-  stands.
-- **A trampoline appended to the front end's `mrxsound`** (its source from the corpus's `shell/`):
-  `EnterShellState` and `ExitShellState` each call retail's first, then `import("qm_shell_modloader")`
-  and `_QMS.load_sounds()` / `_QMS.unload_sounds()`. The front end calls them when the main menu
-  opens and closes (`mrxguishell.lua:505`, `:589`) and when the shell exits
-  (`mrxsoundshellbootstrap.lua:99`).
+- **`qm_shell_modloader`** — a new script the Quartermaster mints into that block, which qm's
+  front-end entry `shell.boot` loads with `dynamic_import`. Its body subscribes each bank to qm's
+  `shell.open` hook, after retail's `EnterShellState`, and to `shell.sound_exit`, after retail's
+  `ExitShellState` ([qm's hooks](#qms-hooks)), generated by the same code as the gameplay loader's:
+  each bank's `LoadWaveBank` (and, for an `add_sound` bank, `LoadSoundBank`), in load order and then
+  by bank name, each bank loaded once until it is unloaded (`_QM.sounds`). No callback is passed, so
+  the batch callback retail's `EnterShellState` sets (`_StartShellMusic`) stands. The front end calls
+  `EnterShellState` when the front-end shell opens (`mrxguishell.lua:505`): its first page is the
+  "Press Start" screen, and the main menu follows inside the same Flash movie with no Lua call of its
+  own (seen live 2026-11-10). It calls `ExitShellState` when the shell closes (`:589`) and when the
+  shell exits (`mrxsoundshellbootstrap.lua:99`).
+- **qm's front-end hooks**, spliced onto the retail bytecode of `shellbootstrap` (the entry) and
+  `mrxsound` (the shell's two sound-state hooks).
 
-`import` finds a script by the hash of its name and the script type through the engine's typed
-asset lookup, with no block or WAD in the key (`_SYS._IMPORT` = `0x005AE2D0`), so a script minted
-into the shell patch's copy of the block is found like the shell's own.
+A script minted into the shell patch's copy of the block is found like the shell's own: the engine
+finds a script by the hash of its name and the script type through its typed asset lookup, with no
+block or WAD in the key (`_SYS._IMPORT` = `0x005AE2D0`).
 
-The gameplay loader works the same way in `vz.wad`: `wifpmcinterior._OnEnter` calls retail's, then
-`_QM.load_sounds()` (each bank once per session, `_QM.loaded`) and `_QM.run()`; a trampoline
-appended to `mrxsoundbootstrap` makes `ExitGame` call retail's `UnloadBanks`, then
-`_QM.unload_sounds()`. The sound calls run with no `pcall` and no existence check.
+The gameplay loader works the same way in `vz.wad`: qm's world entry loads `qm_modloader`, which
+loads each bank at `world.begin` (each bank once per session, `_QM.sounds`) and unloads it at
+`world.sound_exit`, after `MrxSoundBootstrap.ExitGame` runs retail's `UnloadBanks`. The sound calls
+run with no `pcall` and no existence check.
 
 `MrxSoundBanks` reports no failure: its completion callback takes no argument
 (`mrxsoundbanks.lua:141-152`) and the engine's carries no flag, and a `LoadWaveBank` of a name no
@@ -1564,9 +1731,7 @@ Every claim a Shipment makes carries a class:
 
 - **`Exclusive`** — one claimant; a second is a hard error. Raw blocks, function redefinitions, HQ
   starters, anything opaque.
-- **`KeyedSet { key }`** — union by key; a duplicate key is an error. Outfits key on
-  **`(wearer, slug)`**, not `slug` alone: retail reuses `Original` and `ChickenSuit` across all three
-  heroes.
+- **`KeyedSet { key }`** — union by key; a duplicate key is an error. New names key on the name.
 - **`OrderedList`** — append-only, with companion values the Quartermaster derives rather than
   trusting.
 - **`LastWins`** — later wins and load order is genuinely the answer. Texture replacement.
@@ -1591,13 +1756,15 @@ they claim one target in a class that cannot be shared:
 | `add_fx_sprite` | `KeyedSet` on the frame key (`m2(name)`); the `fxdict` and the `vfx` atlas merge ([below](#sprites-and-the-vfx-atlas-are-merged)). A `raw` claiming either conflicts, and so does an `add_texture` named `vfx` |
 | `replace_fx` | `Exclusive` on the effect it resolves to, whether named or reached through a template: two Shipments editing one effect conflict. A template target is resolved by `qm link` against the game's worldentity and the set's additions, and a collision refuses the link as **M0207**. A `replace_fx` of an effect another Shipment adds composes with that `add_fx` when it requires that Shipment |
 | `replace_shader`, `add_shader` | `Exclusive` on each store stem (`m2` of the stem, so case does not matter) and on each registration name: a replace and an add of one stem, two adds of one stem, and two adds of one name all conflict. The classes of one `add_shader` may share a stem |
-| `patch_lua` (and the rows `add_outfit`, `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
+| `patch_lua` (and the rows `add_ui`, `activate_layer`, `add_shop_item` append) | compose, on **any** script — see below |
+| `add_outfit` | compose — `qm link` generates the wardrobe lists from every installed outfit ([below](#outfits-are-generated-by-the-link)) |
 | `replace_lua` | `Exclusive` — conflicts with another `replace_lua` **and** with a `patch_lua` of the same script |
 | `edit_stringdb`, `add_stringdb_keys`, `replace_stringdb_text` | compose — `qm link` merges every Shipment's writes to one table (below), in this Shipment and others |
 | `add_*` minting a name (`add_model`, `add_movie`, `add_script`, …) | `KeyedSet` — the same new name twice is a conflict |
 | `add_shop_item` with `behaviour.script` | `KeyedSet` on `behaviour.module`, the script it mints: two Shipments minting one module, or one minting it and another an `add_script` of that name, conflict. Items of one Shipment naming one module and one `script` mint it once |
 | `add_placement`, `add_layer` | `KeyedSet` on the layer (`add_layer`: its `template`), whose whole block each ships — another Shipment's `add_placement`, `add_layer` or `edit_world` on it conflicts |
 | `add_sound` | `KeyedSet` on the bank name and on each cue — the same bank or cue name added twice is a conflict |
+| `load_sound` | compose — it ships nothing, and claims only the scripts of its sessions' loaders |
 | `replace_sound_bank` | `Exclusive` on the bank's entry (`<bank>` or `<bank>.<language>`) and on every cue it declares |
 | `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
 | `replace_sound_wave` | `Exclusive` on the line; replacements of different lines, and of cues, in one bank compose ([below](#sound-banks-are-merged)) |
@@ -1660,11 +1827,13 @@ has one winner in the table the game loads.
 
 Each sound kind also claims the scripts its loaders live in, additive, for each session it loads in
 (an `add_sound`'s `load_in`; for an override of a bank retail Lua loads, the sessions retail loads
-its bank in; an override of a bank the engine loads claims none): gameplay claims
-`wifpmcinterior` and `mrxsoundbootstrap` in `vz.wad`; the front end claims `qm_shell_modloader` and
-`mrxsound` in `shell.wad`. A script claim names its level, so the front end's `mrxsound` is not
-`vz.wad`'s. Any number of sound Shipments share the loaders; a `replace_lua` of a host a sound
-Shipment loads through (`replace_lua wifpmcinterior` beside a `ui_hud` override) is a conflict.
+its bank in; an override of a bank the engine loads claims none): gameplay claims `qm_modloader`,
+`vz` and `mrxsoundbootstrap` in `vz.wad`; the front end claims `qm_shell_modloader`,
+`shellbootstrap` and `mrxsound` in `shell.wad` — the loader and the hosts of the hooks it loads at
+and runs on. `add_ui` and `activate_layer` claim gameplay's. A script claim names its level, so the
+front end's `mrxsound` is not `vz.wad`'s. Any number of sound Shipments share the loaders; a
+`replace_lua` of a host a sound Shipment loads through (`replace_lua mrxsoundbootstrap` beside a
+`ui_hud` override) is a conflict.
 
 ### Sound banks are merged
 
@@ -1685,10 +1854,12 @@ set's replacement's) and one wavebank, the retail waves at their indices followe
 Shipment's override waves in load order, each cue playing its own Shipment's wave.
 
 The link also bakes one loader per session over the set: `qm_modloader` in `scripts_vz`, and
-`qm_shell_modloader` in `shell.wad`'s scripts block, which it writes to
-`zz-quartermaster-link.shell-patch.wad` with the merged banks. `link_block_paths` always lists
-`blocks\Shell\resident_P000_Q3.block` after the `vz.wad` scripts blocks, so a deploy step drops each
-Shipment's own copy of the front end's scripts block and keeps the link's.
+`qm_shell_modloader` in `shell.wad`'s scripts block. Every link splices qm's hooks onto both
+sessions' hosts ([qm's hooks](#qms-hooks)), so it always writes `zz-quartermaster-link.wad` and
+`zz-quartermaster-link.shell-patch.wad` (the front end's scripts block, with the merged banks when
+there are any), and places its load plan at `scripts/load-plan.json`. `link_block_paths` always lists `blocks\Shell\resident_P000_Q3.block` after the
+`vz.wad` scripts blocks, so a deploy step drops each Shipment's own copy of the front end's scripts
+block and keeps the link's.
 
 ### Effects and templates are merged
 
@@ -1761,20 +1932,70 @@ script.
 The order the appends are concatenated in is the **load order**: a Shipment always comes after the
 Shipments it `requires`, and the order the installer lists them in breaks ties. The same order
 decides everything else ordered in a link — which of two string edits wins, the order `add_script`
-modules are minted. A stable order matters more than it looks: a saved costume is stored as a
-*position* in the outfit list, so if the order changed the indices, reinstalling mods would silently
-re-dress the player — or leave a saved index pointing at nothing and wedge the load.
+modules are minted, the order of added outfits in the wardrobe. A stable order matters more than it
+looks: the game saves a costume as a *position* in the outfit list, and a co-op partner and a save
+qm did not write restore from that position alone
+([below](#outfits-are-generated-by-the-link)).
 
-`add_script` modules and `import`: at link time `qm link` warns (**M0209**, a warning that never
-fails the link) about a **literal** `import("x")` / `import('x')` whose `x` is no shipped script, no
-`add_script` in the set and no module qm mints. **Dynamic imports are not checked**:
-`dynamic_import(...)`, `import(<expression>)`, a concatenated name (`import("a" .. b)`), the
-`import "x"` call without parentheses, and names reached through data such as a task's
-`sModuleName` all resolve at runtime, where the linker cannot see them.
+`add_script` modules and `import`: once a link has minted everything, it checks the module names
+every piece of Shipment Lua depends on, read from that source's **compiled** DEPS: what the engine
+loads, one entry per `import` or `inherit` call with a literal name, in any call form
+(`import("x")`, `import "x"`), inside functions too. In the front end the check runs against
+`shell.wad`'s scripts, so a front-end library that imports a gameplay-only module is caught.
+- [M0209](#m0209): a dependency nothing in the link's blocks provides.
+- [M0313](#m0313): an `add_script` with no `load:` that nothing that runs reaches.
 
-The same reasoning is why the availability count is derived from the final list length instead of
-written by each Shipment. Two mods that each append one outfit and each hard-code "one more outfit"
-produce the same number: both outfits are in the WAD, in the table, and one is unreachable.
+`qm link` refuses the set on either, with the plan written and `libraries: null`. A standalone
+`qm build` logs them as warnings, since another Shipment of the set may provide the module. The
+exception is an import of one of the Shipment's own modules that is minted only in the other
+session: no other Shipment may mint that name, so the build fails. `dynamic_import(<expression>)`,
+`import(<expression>)` and a concatenated name (`import("a" .. b)`) are not dependencies: they
+resolve at runtime, where the linker cannot see them.
+
+### Outfits are generated by the link
+
+The wardrobe saves the picked row `i` as the costume byte `i - 1`, and the join puts the byte back on
+through the player script's character map, whose entry `k` is the model of row `k + 1`. Both are lists
+by position, and the map is a local of the player script, so an outfit appended by hand restores as
+whichever model the map holds at that position. `add_outfit` therefore appends nothing: `qm link`
+reads the wardrobe and the character map from the bytecode it is linking, and generates them for the
+installed set.
+
+- **One list per hero.** The retail rows in retail order, then each installed outfit offered to that
+  hero, in load order (a Shipment's own outfits in manifest order). The character map is regenerated
+  to match, with the retail map's models that no wardrobe row offers after the added ones. The same
+  set gives the same lists on every machine.
+- **`wearer`.** One hero (`wearer: mattias`) or a list (`wearer: [chris, jen, mattias]`); `jen` and
+  `jennifer` are one hero. A listed outfit has its own place in each hero's list and is saved by the
+  same name whichever hero wears it. A list names each hero, so a hero added later is not offered it
+  ([M0140](#m0140), [M0141](#m0141)).
+- **`levels`.** The levels whose wardrobes offer the outfit, e.g. `[vz, dlc01]`. Omitted, the main
+  campaign (`vz`) alone: a custom level runs its own wardrobe and is left as it ships unless an outfit
+  names it. A custom level saves no outfit name, so there it restores by the costume byte alone
+  ([M0143](#m0143), [M0263](#m0263)).
+- **`chatter`.** The chatter set the hero speaks with while wearing the outfit, e.g. `Obama_Obama01`:
+  set on the join, on a wardrobe change and on a co-op partner's change. Changing to an outfit
+  without one gives the hero its own set back (the `ChatterSet` of its templates, named by qm's
+  `data/chatter_sets.tsv`). The name must be one qm knows the game holds ([M0142](#m0142)), and a
+  Shipment of the set must add `Human.SetChatterSet`, which the game does not register
+  ([M0264](#m0264)). The set's lines play only if their bank is loaded: a DLC set's are in the DLC's
+  voice banks, which [`load_sound`](#load_sound) loads.
+- **`briefing_safe: false`.** A briefing cutscene shows the hero in its own model while it plays, and
+  the outfit again after, as the DLC does for its own costumes (`bNoBriefing`,
+  `dlc01_briefing.lua:840-861`, `:2040-2049`); a co-op partner is told of both changes. Omitted, the
+  outfit is shown in briefings, as every retail outfit is. In a level whose briefing already honours
+  `bNoBriefing` (dlc01's) the row carries the flag and the level's own guard acts on it.
+- **Always offered.** An added outfit is listed whatever the unlock count, and a hero with one opens
+  the wardrobe even before the first retail unlock (where the game otherwise shows its custom-outfit
+  tip). Retail outfits keep their unlock order.
+- **Saves remember which outfit.** A save also records the worn outfit by name (the retail `Name`, or
+  the Shipment and `slug`). Loading it puts the costume byte back where that outfit now is, so a set
+  that changed between save and load still restores the right outfit; an outfit no longer installed
+  restores as the hero's own model. A save without that record (a retail save) keeps its byte, and a
+  co-op client restores from the byte the host sends.
+- **Refusals.** `qm link` refuses a `slug` equal to a retail outfit's `Name` for a hero it is offered
+  to, the same `slug` twice from one Shipment for one hero, and a `patch_lua` that appends its own
+  `_tOutfits` row while the set has outfits (the map would not restore it).
 
 ## The Code layer
 
@@ -1919,8 +2140,33 @@ in `qm lint --with-game` and in `qm build`, and `qm link` applies the same rules
 set. M0309 needs no game for an `add_fx` effect form and the game stack for a `replace_fx` and for
 the templates that start an effect.
 
-The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
-need the game stack and run in `qm lint --with-game` and in `qm build`.
+The sound and language rules below are errors. M0214–M0217, M0221 and M0222 need no game;
+M0218–M0220 and M0223 need the game stack and run in `qm lint --with-game` and in `qm build`.
+
+The outfit rules M0140–M0143 are errors and need no game; M0263 and M0264 are errors of the load plan.
+
+### M0140
+
+**A `wearer` is not a wardrobe hero.** The wardrobe has one list per hero, keyed `mattias`, `chris`
+and `jennifer` (written `jen` or `jennifer`), so an outfit for any other name is offered to no one and
+the game reports nothing. The fix suggests the nearest hero.
+
+### M0141
+
+**A `wearer` list is empty or names a hero twice.** An empty list offers the outfit to no one; `jen`
+and `jennifer` are one hero.
+
+### M0142
+
+**A `chatter` set is not one qm knows the game holds.** `Human.SetChatterSet` takes any name, and an
+unknown one does nothing, with no message. The known sets are qm's `data/chatter_sets.tsv`, each with
+its evidence (a template's `ChatterSet` value or a retail script that sets it); case does not matter.
+Fix: use a listed set, or add one the game holds to that file with its evidence.
+
+### M0143
+
+**A `levels` list is empty or names a level twice.** An empty list offers the outfit in no wardrobe;
+omit `levels` for the main campaign alone.
 
 M0197 and M0198 are errors; M0310 is a warning. M0197 checks `qm`'s own names and the Shipment's
 with no game, and the game's script names in `qm lint --with-game` and in `qm build`. M0198 needs
@@ -2056,6 +2302,23 @@ loader loads the bank — `gameplay`, `front_end` — and the bank's block ships
 
 Fix: list where the bank plays, each session once: `[gameplay]`, `[front_end]` or
 `[gameplay, front_end]`.
+
+### M0222
+
+**A `load_sound` cannot be loaded as written.** It names no soundbank, wavebank or stream; a name is
+blank, has surrounding whitespace, or is a hash (the loader loads sound by name); `in` is empty or lists
+a session twice; or its stream is installed by no `add_level` of the Shipment, or by several.
+
+Fix: name what to load by its name, list each session once, and name a stream of one of the Shipment's
+own levels.
+
+### M0223
+
+**A `load_sound` soundbank or wavebank is held by nothing.** A load of a bank no mounted WAD holds times
+out with no error. The name must be held, under its type, by the game, by the language's WAD for a `vo_`
+name (in every installed language), or by the Shipment's own `level: vz` rows.
+
+Fix: correct the name, or ship the bank's tables as `level: vz` rows.
 
 The shader rules below cover [`add_shader`](#add_shader), [`replace_shader`](#replace_shader) and
 [the shader import](#the-shader-import). M0230, M0231 and M0234 need no game (M0230 needs the
@@ -2345,6 +2608,24 @@ Fix: what the message names; the effect's own form (`EffectForm::express`) shows
 
 Fix: use `add_fx` or `replace_fx`.
 
+### M0263
+
+**An outfit is offered in a level the set does not have.** A `levels` entry is neither `vz` nor a
+level an `add_level` of the installed set adds, so no wardrobe would offer the outfit there. `qm link`
+and `qm preflight` refuse the set; a standalone `qm build` does not check it, since another Shipment
+of the set may add the level.
+
+Fix: install the Shipment that adds the level, or drop it from `levels`.
+
+### M0264
+
+**An outfit's `chatter` set needs a binding the game does not register.** qm applies a chatter set with
+`Human.SetChatterSet`, which the PC executable does not register; a plugin must add it (the Blow It Up
+Again Shipment's does). A Shipment of the set must declare `Human.SetChatterSet` in a `native_hook`'s
+`touches`, or the first join that applies the set fails.
+
+Fix: install the Shipment that adds the binding, or drop `chatter`.
+
 ### M0304
 
 **An `add_fx_sprite` image does not read as a sprite.** The file is not a PNG, does not decode, or
@@ -2408,16 +2689,21 @@ templates whose `0x62C7746E` is 0.
 
 ### M0310
 
-**A novel shop behaviour is offered only after the host enters the PMC interior** (warning). An
-`add_shop_item` whose `behaviour` carries a `script` mints a new module, and its catalog and reward
-rows are inserted by `qm_modloader`, which runs from the trampoline on `wifpmcinterior`'s `_OnEnter`
-(`wifpmcinterior.lua:386`). Until the host's first entry into the PMC interior in a session the item
-is at no vendor; from then it is at every vendor in `shops`, because the loader also clears
-`MrxRewardData.gtAllSupport`, the per-faction list cache `GetAllPotentialShopItems` fills
-(`mrxrewarddata.lua:1489-1528`). A session that starts in the world — an alternate spawn, or a save
-that carries retry locations (`xQ!L.lua:646-657`) — reaches outpost vendors before the PMC.
+**A novel shop behaviour's rows exist only from `world.begin`** (warning). An `add_shop_item` whose
+`behaviour` carries a `script` mints a new module, whose `Create` cannot run while the resident scripts
+load, so `qm_modloader` inserts the item's catalog and reward rows at qm's `world.begin` hook, when
+player-visible gameplay first starts in a world. From then the item is at every vendor in `shops`,
+because the loader also clears `MrxRewardData.gtAllSupport`, the per-faction list cache
+`GetAllPotentialShopItems` fills (`mrxrewarddata.lua:1489-1528`).
 
-Fix: none — the warning says when the item appears.
+A save is restored earlier, during the world load: `MrxSupportData.LoadSingleton` restores the rows
+that exist (`xQ!L.lua:795`, `mrxsupportdata.lua:2445-2457`), and the save table is cleared before
+`world.begin` (`xQ!L.lua:865`). qm keeps that table as it reaches `LoadSingleton` (its `world.load`
+hook) and applies the item's saved unlock status and stock when it inserts the row, as
+`MrxSupportData.LoadSingleton` would have. What stays true is the warning: Lua that reads
+`MrxSupportData.tSupportData` or `MrxRewardData` during the world load does not see the item.
+
+Fix: none — the warning says when the item exists.
 
 ### M0311
 
@@ -2425,9 +2711,100 @@ Fix: none — the warning says when the item appears.
 a lowercase `[a-z0-9_]` token, or is a WAD the game ships (`vz`, `shell`, `loading`, `english`, `french`,
 `german`, `italian`, `spanish`, `japanese`, `russian`), or a stream is no `.pws` or is one the game ships:
 `music`, `ambience`, or a `vo_stream` language. A `level_asset` names a level this Shipment does not add
-or a type the type table does not name, has no rungs, or has a rung whose block is not one path component
-or does not name that rung. The build refuses the same names.
+(other than `vz`) or a type the type table does not name, has no rungs, or has a rung whose block is not one
+path component or does not name that rung. The build refuses the same names. A `level: vz` row would
+replace what `vz.wad` holds: a worldentity row without `templates`, `templates` on another row, a
+worldentity of more than one rung or a template named twice; with the game, an asset or block path
+`vz.wad` has, a reference nothing resolves, or a template that cannot be appended
+([`level: vz`](#level_asset)).
 
 Fix: pick a name the game does not use.
+
+### M0312
+
+**An `add_script` `load:` that qm's loader cannot honour** (error). `when` names no hook of
+Quartermaster's catalogue (`data/hooks.tsv`); `in` is empty or lists a session twice; or `in` lists a
+session the hook does not fire in (`world.scripts_loaded` fires only in gameplay, `shell.boot` only in
+the front end). The library would never load there, and a consumer's `import` of it would bind
+nothing. The build refuses the same `load:`.
+
+Fix: name a catalogue hook, and list in `in` only the sessions it fires in.
+
+### M0209
+
+**A dependency nothing provides** (error at `qm link`; a warning in a standalone `qm build`). The
+compiled DEPS of a piece of Shipment Lua (a `patch_lua` append, an `add_script` module, a
+`replace_lua` source or a support module) names a module that no script of the link's blocks
+carries. That covers retail's scripts, the set's `add_script` modules and the modules qm mints;
+`qm_modloader` counts only when the link mints it. The import may be `import("x")`,
+`import "x"` or `inherit("x")`, at the top level or inside a function. The engine never runs a script
+whose dependency is missing, and an `import` of a name no loaded WAD holds crashes the game
+(`0x5AE362` on v1.1). The front end checks against `shell.wad`'s scripts only.
+
+Fix: ship the module (an `add_script` in this Shipment or one it requires), or correct the name.
+
+### M0313
+
+**An `add_script` nothing runs** (error at `qm link`; a warning in a standalone `qm build`). The
+module has no `load:`, and nothing that runs reaches it. `import` only binds a module whose body
+has already run; a body runs when something queues it. The link counts these as reaching a module:
+- a DEPS edge (`import`/`inherit`) from a retail script, a library, qm's loader, or a module
+  reached that way;
+- a literal by-name route in one of those: `sModuleName = "x"` (the task system `dynamic_import`s a
+  row's module when it activates), `dynamic_import("x", …)`, or `Sys.RequiredAsset("x", "script", …)`.
+
+A name built at runtime is not seen. A module only another unreached module imports is unreached too.
+
+Fix: give the module a `load:`, or import it from code that runs.
+
+### M0314
+
+**A module read before its body runs** (error at `qm link` and in a standalone `qm build`), or **a
+link that changes retail's load order** (warning). `import` binds the module's own table (its env).
+The engine's loader builds that table before it runs the module's body, and the body fills it. In a
+DEPS cycle the loader runs one module's body while a module it imports has only its table: whatever
+that body reads from the module is not there yet. The table fills when the module's body runs, so
+code called later sees it: the engine calls a module's `Init` after the body of every module it
+imports. qm models the loader (pc-v10 queue `0x59CD30`, step `0x59CD70`, pump `0x5A2BC0`) over the
+link's scripts, before and after the link, and reports two cases:
+
+- **error**: an import the link adds, where the engine runs the importer's body before the body of
+  the module it imports, and Shipment code of the importer uses the module at its top level
+  (outside every function): indexes it, calls a method on it, stores into it, takes its length or
+  calls it, directly or through a local it copied the module into. The message names the line.
+  Keeping the table in a local, or putting it in a table, is not a use; the table fills later.
+- **warning**: a link that changes the order the engine loads the scripts that were already
+  loading. Where an append's import lands in a retail script's DEPS is not the author's to choose,
+  and no reorder has been seen to break retail, so this reports what moved and refuses nothing.
+
+The error is not seen when the top-level code passes the module to a call that reads it (such as
+`pairs(m)`), or calls a function of its own that reads it; nor for a bare name the script reaches
+through a base it `inherit`s (its env's `__index` reads the base's table).
+
+The model loads in passes. The world loads `gamebootstrap`, then the level's master (`vz`, or a
+custom level's own); the front end loads `shellbootstrap`. Each pass finishes before the next is
+queued. Every script those passes leave unloaded loads in a pass of its own, from where they left
+off. That covers a script nothing else depends on, a library's `load:`, and a literal by-name route
+([M0313](#m0313)). The engine loads those by name at times the model cannot order, so each is
+checked alone.
+
+Run against the game, the model reproduces the order in which retail's 84-script DEPS cycle ran its
+bodies, and the order in which a library's own two-module cycle ran (the cycle gate,
+`tests/fixtures/live_gate/qm-cycle-gate`). Retail's own cycles never fire, because only what the
+link changes counts. An import of a module whose body has already run is fine, inside a cycle or
+not.
+
+Fix (the error): use the module inside a function that runs later, such as your `add_script`
+module's `Init`, rather than at the top level.
+
+### M0315
+
+**An `import` inside `pcall`** (warning, `qm lint`). The forms checked are
+`pcall(function() import("x") end)` (an import anywhere in the protected function's body, outside a
+function nested in it), `pcall(import, "x")`, and the same with `xpcall`. An import of a module no
+loaded WAD holds crashes the game natively (`0x5AE362` on v1.1), not with a Lua error, so the `pcall`
+never sees it.
+
+Fix: import the module plainly, and make sure something provides it ([M0209](#m0209)).
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
