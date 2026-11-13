@@ -459,18 +459,14 @@ the network initialization.
 
 **Partially, but not directly.**
 
-The DLC gate flow (from `dlc_extras_activation_research.md`):
-
-```
-1. User clicks "Extras" in main menu
-2. Shell Lua calls IsOnlineConnected()
-3. If false → dead end (EA servers offline)
-4. If true → query online_content entitlements from EA
-5. Server responds with DLC content IDs
-6. Shell displays DLC items
-7. For owned DLC: SetMasterScriptName(DLC_script)
-8. DLC master script registers contracts
-```
+~~The DLC gate flow (from `dlc_extras_activation_research.md`): Extras → shell Lua
+`IsOnlineConnected()` → `online_content` entitlement query → DLC items → `SetMasterScriptName`.~~
+**Corrected 2026-11-10:** that flow does not exist. No Lua runs when Extras opens; on PC the DLC
+page never fills, because only console native code lists installed DLC (AS2 `DLCAvailable` / `addDLC`,
+absent from the PC v1.1 image); no `online_content` query is tied to DLC. The Extras item that uses
+the online service is Unlockables (registration-code redemption). See
+[`ui/online_bonus_checking.md`](ui/online_bonus_checking.md) §9. The rest of this section reasons from
+the old flow.
 
 **What TeknoGods' server emulator likely provides:**
 - Step 3: `IsOnlineConnected()` → true (FESL auth succeeds)
