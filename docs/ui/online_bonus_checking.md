@@ -4,6 +4,9 @@ Binary analysis of how the Mercenaries 2 PC main menu gates online features and
 bonus/DLC content at the C++ level. All addresses are virtual addresses (VA) from
 the running process with image base 0x00400000.
 
+> **Corrected 2026-11-10.** The Extras page is not gated by Lua and never lists DLC on PC: see §9.
+> Sections 5, 9 and 10 described a Lua gate that does not exist. Addresses on this page are v1.0.
+
 ## Section Layout (Runtime)
 
 | Section    | Base       | Size      | Notes |
@@ -324,14 +327,14 @@ CDE928: [GetSubscriptionAbility] [00000000] ["subs"]
 
 ### Entitlement Query Flow
 
-1. Lua menu code would call `Net.IsOnlineConnected()` → returns `true` (via ASI hook
-   or real FESL connection) — **however, this call is never observed at runtime**
-2. If online, menu would enable "Extras" / bonus content options
-3. Menu code would call `Net.HasPlayerUnlockedCode()` → checks three global flags
+1. ~~Lua menu code calls `Net.IsOnlineConnected()`, enabling Extras, then
+   `Net.HasPlayerUnlockedCode()`~~ — wrong: no Lua runs on the Extras page (§9, corrected 2026-11-10);
+   the Unlockables item asks native code through the `onlineIsConnected` FSCommand.
 4. The actual entitlement check involves the `subs` service:
    - Client sends `GetEntitlementByBundle` transaction to FESL
    - Server responds with `entitlementStatus` and related fields
-   - Result is stored in `byte [0x00DFBD98]`
+   - ~~Result is stored in `byte [0x00DFBD98]`~~ — unproven: the callback sets a byte of the online
+     object (`+0x1a1`, INFERRED); no writer of `0x00DFBD98` (v1.1 `0x00dfad98`) is known yet
 5. The `GetPricingSelectionsByCode` transaction handles promotional/bonus codes
 
 ### DLC Session Fields
@@ -517,44 +520,33 @@ by `{NULL, NULL}` at **0x00B99BB0**.
 
 ## 9. Menu Visibility → Online Check Flow
 
-### Lua Side (Shell Scripts)
+### What the Extras page actually does (corrected 2026-11-10)
 
-The "Extras" menu in the main menu shell is gated by Lua code like:
+This section used to show a Lua snippet gating Extras on `Net.IsOnlineConnected()` and
+`Net.HasPlayerUnlockedCode()`. **No such Lua exists**: no shell script calls either function, and no
+Lua runs when Extras opens. (That is why the ASI hooks above were "never called".) What happens, read
+from `SHELL.gfx` (sha256 `ca06957d…`, AS2 dumped with `mercs2_probe gfx-actions`) and the PC v1.1
+unpacked image (`genuine_patched_unpacked.exe`, sha256 `819a96db…`):
 
-```lua
-if Net.IsOnlineConnected() then
-    -- enable "Extras" / "Bonus Content" menu items
-    if Net.HasPlayerUnlockedCode() then
-        -- show unlocked DLC content
-    end
-end
-```
-
-### Native Flow
-
-```
-Menu Click → Lua Shell → Net.IsOnlineConnected()
-                              │
-                     [original: read byte flag]
-                     [hooked: always true]
-                              │
-                              ▼
-                    true → enable Extras menu
-                              │
-                         Net.HasPlayerUnlockedCode()
-                              │
-                     ┌────────┴────────────┐
-                     │ Original             │ Hooked (ASI)
-                     │                      │
-                     │ 1. [0xDFBD74]!=0?    │ return true
-                     │ 2. [0x017C0BBF]!=0?  │
-                     │ 3. read [0xDFBD98]   │
-                     │    push to Lua       │
-                     └─────────────────────-┘
-                              │
-                              ▼
-                    true → show DLC items
-```
+- **Opening Extras sends no FSCommand.** The movie only lays out its buttons. The DLC button is hidden
+  unless the movie's `DLCVisibleVar` is true, and that is set only by the AS2 function `DLCAvailable`,
+  whose single call in the movie sits in an authoring-time `if testingVAR == true` block (`testingVAR`
+  starts false). On PC nothing calls `DLCAvailable` or `addDLC` from native code: neither string occurs in
+  the v1.1 image, in ASCII or UTF-16. **So the DLC page can never fill on retail PC.** On Xbox 360 (and
+  PS3 v1.03) native code enumerates locally installed DLC packages and calls `addDLC` / `DLCAvailable`;
+  that is the console "DLC appears in Extras" behaviour.
+- **The DLC buttons' FSCommands** (`onlineListDLCMaps` `0x54bba562`, `onlineSelectDLC` `0xd4f5c393`,
+  `onlineDownloadDLC` `0x5a3eb0bb`) are cases of the native online FSCommand switch (v1.1 `FUN_00614480`,
+  v1.0 `0x00614540`), each posting a request message; after the native switch the command is also offered
+  to the Lua handlers registered on the Flash widget (`FUN_0061c170`). Retail registers none of them.
+- **Unlockables** is the item that uses the online check: `onlineIsConnected("unlockables")` (answered
+  natively) and code entry `onlineLTIUnlockables <code>` → FESL `subs` with pricing id
+  `PS-REG-PC-MERCENARIES2-UNLOCK-1`; the separate entitlement query is `GetEntitlementByBundle` with bundle
+  `REG-PC-MERCENARIES2-UNLOCK-1`. In Lua, `Net.HasPlayerUnlockedCode` (v1.1 `0x005cb6a0`) gates only the
+  PMC wardrobe's bonus outfit (`vz/wifpmcinterior.lua:1417,1426`, `dlc01/dlc01_pmcinterior.lua:2043`).
+  Which write reaches its flag (v1.1 `0x00dfad98`) is not yet traced. v1.1 equivalents of this page's
+  v1.0 addresses: `0x00DFBD74` → `0x00dfad74`, `0x017C0BBF` → `0x017bfbbf`, `0x00DFBD98` → `0x00dfad98`,
+  `0x005CB6B0` → `0x005cb6a0`.
 
 ### The IsOnlineEnabled / IsMatchmakingInternet Function (0x5CACC0)
 
