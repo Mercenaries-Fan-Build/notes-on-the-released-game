@@ -629,9 +629,9 @@
    "addr": "00614540",
    "ghidra_name": "FUN_00614540",
    "class": "ExternalInterface",
-   "role": "FSCommand fallback parser: 3.4KB arg parser forwarding unhandled fscommands to the Lua GUI layer (mrxgui \"_LTIFscommand\" dispatch)",
+   "role": "Online FSCommand switch (v1.0; v1.1 FUN_00614480): cases onlineListDLCMaps 0x54bba562, onlineSelectDLC 0xd4f5c393, onlineDownloadDLC 0x5a3eb0bb, onlineLTIUnlockables 0x434e3b14, onlineViewAchievements 0x3ba57947 post request messages; onlineIsConnected 0x58e77dd5 is answered directly. It does not forward to Lua: after it returns, the caller hands the command to the Lua handlers registered on the Flash widget (v1.1 FUN_0061c170)",
    "confidence": "med",
-   "evidence": "sole caller FUN_0060de80; matches Lua-side _LTIFscommand docs",
+   "evidence": "re-read 2026-11-10 (pc-v11 FUN_00614480, call at 0x0060e19c, FUN_0061c170 after it); each m2 hash occurs once in the v1.1 image; the old 'forwards to _LTIFscommand' role was wrong",
    "layer": "engine_integration"
   },
   {
