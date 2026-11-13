@@ -220,13 +220,16 @@ of what currently fails, not a plan — plans live under `.claude/plans/`.
    Xbox DOH (and the deployed `output/data/Audios/*.pws` matches). The PS3
    route produces a smaller WAD with worse coverage; it is not currently a
    drop-in replacement for the Xbox-sourced overlay.
-7. **Quartermaster lifecycle hooks do not cover DLC01 levels.** The QM hook
+7. **Quartermaster lifecycle hooks in DLC01 levels.** The QM hook
    catalogue (2026-10-19 session) found, from the decompiled Lua:
    - The engine resolves the level master script by name at call time
      (`DAT_01175B78`, PROVEN), so a DLC01 level calls `dlc01`'s
      `Init`/`LoadSingleton`/`ResetSingleton`/`_StartPlayerVisibleGameplay`
      (`dlc01.lua:95`, `:384`, `:267`, `:680`), not `vz`'s. Every
-     master-script hook needs a `dlc01` copy.
+     master-script hook needs a `dlc01` copy. `qm link` puts every hook the
+     catalogue hosts on `vz` onto a level's own master (`add_level`, decided
+     2026-11-07), and refuses a master that defines no function a hook wraps or
+     returns from its top level (`manifest_format.md`, "qm's hooks").
    - The DLC hub has its own `_GlobalEnter`/`_GlobalExit`
      (`dlc01_missionhub.lua:1929-1963`) and never calls
      `MrxHq.GlobalEnter`, so an `hq.enter` hook in `mrxhq` stays silent there;
