@@ -138,8 +138,9 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `replace_texture` | Data | `target`, `image` |
 | `add_texture` | Data | `name`, `image` (`normal_map:` optional) |
 | `add_model` | Data | `name`, `model`, `donor` (optional in the schema, required by `qm build`) (`group`, `textures`, `retarget` optional) |
-| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (one hero or a list); `chatter` and `levels` optional ([below](#outfits-are-generated-by-the-link)); `model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only |
+| `add_outfit` | Data + Script (Script only without `model`) | `name`, `slug`, `display`, `wearer` (one hero or a list); `chatter`, `levels` and `briefing_safe` optional ([below](#outfits-are-generated-by-the-link)); `model` optional — omit it to wear a model the game ships, named by `name`; `donor`, `textures`, `retarget`, `single_group` optional, with `model` only |
 | `add_sound` | Data + Script | `bank`, `category`, `load_in`, `cues` ([sound cue fields](#sound-cue-fields)) |
+| `load_sound` | Script | `in`; any of `soundbank`, `wavebank`, `stream` ([`load_sound`](#load_sound)) |
 | `replace_sound_bank` | Data + Script | `bank`, `category`, `cues` (`language` on a `vo_*` bank) |
 | `replace_sound_cue` | Data + Script | `bank`, `category`, `cue` (`language` on a `vo_*` bank) |
 | `replace_sound_wave` | Data + Script | `wavebank`, `line`, `wave` (`language` on a `vo_*` wavebank) |
@@ -1267,6 +1268,33 @@ that has the guid, which is the game's (**M0220**). To change a game cue, use
 appends the language to such a name before loading it. So is a bank or cue written as a bare hash:
 a new identity's hash is the hash of its name.
 
+### `load_sound`
+
+Has qm's loader load sound that the game or this Shipment already ships, in a session that does not load
+it: a DLC level's voice banks in the main campaign, for example.
+
+```yaml
+- kind: load_sound
+  soundbank: vo_resident_DLCTest
+  wavebank: vo_stream_DLCTest
+  stream: vo_stream_DLCTest
+  in: [gameplay]
+```
+
+- `soundbank`, `wavebank`: names as `MrxSoundBanks` takes them. A `vo_` name is localized as retail
+  localizes it, `<name>.<language>` (`mrxsoundbanks.lua:80-87`), so the bank must exist for every
+  language whose WAD is installed. Each must be held by the game, the language's WAD, or the Shipment's
+  own `level: vz` rows (**M0223**).
+- `stream`: one of this Shipment's [`add_level`](#add_level) streams, without `.pws` (for a `vo_` stream,
+  without `.<language>.pws`). It is opened from where that level installs it, `DLC\<level>\Data\Audios`,
+  by the path the DLC opens its own streams by (`dlctest01_soundbootstrap.lua:186-193`), under the alias
+  `<stream>.pws`, before any bank of the session loads, and closed after they unload.
+- `in`: the sessions whose loader loads them, `gameplay` and/or `front_end`, each once.
+
+They load at the session's settle hook (`world.begin` in gameplay, `shell.open` in the front end) and
+unload at its sound exit, as an `add_sound` bank does. A name written as a hash, a blank name, no name
+at all, an empty or repeating `in`, and a stream no `add_level` of the Shipment installs are **M0222**.
+
 ### Sound cue fields
 
 Every field is required; none has a default. A cue is one PCM16 wave played by one single-wave group
@@ -1600,6 +1628,7 @@ they claim one target in a class that cannot be shared:
 | `add_shop_item` with `behaviour.script` | `KeyedSet` on `behaviour.module`, the script it mints: two Shipments minting one module, or one minting it and another an `add_script` of that name, conflict. Items of one Shipment naming one module and one `script` mint it once |
 | `add_placement`, `add_layer` | `KeyedSet` on the layer (`add_layer`: its `template`), whose whole block each ships — another Shipment's `add_placement`, `add_layer` or `edit_world` on it conflicts |
 | `add_sound` | `KeyedSet` on the bank name and on each cue — the same bank or cue name added twice is a conflict |
+| `load_sound` | compose — it ships nothing, and claims only the scripts of its sessions' loaders |
 | `replace_sound_bank` | `Exclusive` on the bank's entry (`<bank>` or `<bank>.<language>`) and on every cue it declares |
 | `replace_sound_cue` | `Exclusive` on the cue; replacements of different cues of one bank compose ([below](#sound-banks-are-merged)) |
 | `replace_sound_wave` | `Exclusive` on the line; replacements of different lines, and of cues, in one bank compose ([below](#sound-banks-are-merged)) |
@@ -1799,7 +1828,15 @@ installed set.
 - **`chatter`.** The chatter set the hero speaks with while wearing the outfit, e.g. `Obama_Obama01`:
   set on the join, on a wardrobe change and on a co-op partner's change. Changing to an outfit
   without one gives the hero its own set back (the `ChatterSet` of its templates, named by qm's
-  `data/chatter_sets.tsv`). The name must be one qm knows the game holds ([M0142](#m0142)).
+  `data/chatter_sets.tsv`). The name must be one qm knows the game holds ([M0142](#m0142)), and a
+  Shipment of the set must add `Human.SetChatterSet`, which the game does not register
+  ([M0264](#m0264)). The set's lines play only if their bank is loaded: a DLC set's are in the DLC's
+  voice banks, which [`load_sound`](#load_sound) loads.
+- **`briefing_safe: false`.** A briefing cutscene shows the hero in its own model while it plays, and
+  the outfit again after, as the DLC does for its own costumes (`bNoBriefing`,
+  `dlc01_briefing.lua:840-861`, `:2040-2049`); a co-op partner is told of both changes. Omitted, the
+  outfit is shown in briefings, as every retail outfit is. In a level whose briefing already honours
+  `bNoBriefing` (dlc01's) the row carries the flag and the level's own guard acts on it.
 - **Always offered.** An added outfit is listed whatever the unlock count, and a hero with one opens
   the wardrobe even before the first retail unlock (where the game otherwise shows its custom-outfit
   tip). Retail outfits keep their unlock order.
@@ -1955,10 +1992,10 @@ in `qm lint --with-game` and in `qm build`, and `qm link` applies the same rules
 set. M0309 needs no game for an `add_fx` effect form and the game stack for a `replace_fx` and for
 the templates that start an effect.
 
-The sound and language rules below are errors. M0214–M0217 and M0221 need no game; M0218–M0220
-need the game stack and run in `qm lint --with-game` and in `qm build`.
+The sound and language rules below are errors. M0214–M0217, M0221 and M0222 need no game;
+M0218–M0220 and M0223 need the game stack and run in `qm lint --with-game` and in `qm build`.
 
-The outfit rules M0140–M0143 are errors and need no game; M0263 is an error of the load plan.
+The outfit rules M0140–M0143 are errors and need no game; M0263 and M0264 are errors of the load plan.
 
 ### M0140
 
@@ -2117,6 +2154,23 @@ loader loads the bank — `gameplay`, `front_end` — and the bank's block ships
 
 Fix: list where the bank plays, each session once: `[gameplay]`, `[front_end]` or
 `[gameplay, front_end]`.
+
+### M0222
+
+**A `load_sound` cannot be loaded as written.** It names no soundbank, wavebank or stream; a name is
+blank, has surrounding whitespace, or is a hash (the loader loads sound by name); `in` is empty or lists
+a session twice; or its stream is installed by no `add_level` of the Shipment, or by several.
+
+Fix: name what to load by its name, list each session once, and name a stream of one of the Shipment's
+own levels.
+
+### M0223
+
+**A `load_sound` soundbank or wavebank is held by nothing.** A load of a bank no mounted WAD holds times
+out with no error. The name must be held, under its type, by the game, by the language's WAD for a `vo_`
+name (in every installed language), or by the Shipment's own `level: vz` rows.
+
+Fix: correct the name, or ship the bank's tables as `level: vz` rows.
 
 The shader rules below cover [`add_shader`](#add_shader), [`replace_shader`](#replace_shader) and
 [the shader import](#the-shader-import). M0230, M0231 and M0234 need no game (M0230 needs the
@@ -2414,6 +2468,15 @@ and `qm preflight` refuse the set; a standalone `qm build` does not check it, si
 of the set may add the level.
 
 Fix: install the Shipment that adds the level, or drop it from `levels`.
+
+### M0264
+
+**An outfit's `chatter` set needs a binding the game does not register.** qm applies a chatter set with
+`Human.SetChatterSet`, which the PC executable does not register; a plugin must add it (the Blow It Up
+Again Shipment's does). A Shipment of the set must declare `Human.SetChatterSet` in a `native_hook`'s
+`touches`, or the first join that applies the set fails.
+
+Fix: install the Shipment that adds the binding, or drop `chatter`.
 
 ### M0304
 
