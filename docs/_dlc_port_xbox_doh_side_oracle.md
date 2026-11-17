@@ -96,8 +96,8 @@ dlc_port --x360-stfs <ps3-be-scff> \
 3. **CSUM + ASET layout is the output WAD's.** The per-block UCFX CSUM
    trailer that `convert_block` writes is already in the oracle's LE body;
    nothing rewrites it. The output WAD's top-level CSUM header is rebuilt
-   by `build_patch_wad_multi` using the PS3 side's `csum_value` /
-   `csum_meta` as it would on any other `dlc_port` run — the oracle hit
+   by `build_patch_wad_multi` from the PS3 side's `csum_value` and the
+   output's own largest block entry count (its `meta`), as it would on any other `dlc_port` run — the oracle hit
    path does not touch WAD-level CSUM. The INDX tier byte is inherited
    from the PS3 side's `packed_field >> 24`, since the output WAD lives in
    the PS3 output's address space; the page count is recomputed from the
