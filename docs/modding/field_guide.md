@@ -602,6 +602,28 @@ And do not waste time on f16 vertex precision: max round-trip error at tank scal
 
 ---
 
+## Trap 18 — You added an asset to vz's resident block and Play never reaches the world
+
+**The symptom.** Play from the menu sits on the loading spinner forever. The shell exits, no level
+Lua ever runs (`MrxSoundBootstrap.Init` never prints), the game keeps drawing, nothing crashes.
+
+**Why.** The FFCS header's CSUM row `meta` (file offset `0x2C`) sizes the engine's block-entry install
+ring, and the ring only ever grows to the largest `meta` of the WADs mounted. Retail vz.wad's is
+7018 — exactly its resident block's entry count. A patch WAD whose resident holds one entry more
+(any type: a chatter set, a texture, a 268-byte animation) and whose own `meta` is not raised is
+retried every frame and never installed, so the level's scripts never exist
+(`docs/format_reference.md`, CSUM row).
+
+**The fix.** Write `meta` = the largest entry count of any block in the WAD. `mercs2_formats`'
+`build_patch_wad_multi` does this itself (`patch_wad::csum_meta_for`); `wad_simulator` reports any
+block the mounted stack's ring cannot hold (`NEVER INSTALLED`).
+
+**The related trap.** Re-emitting a base block whole (qm does, for every Lua link into vz's resident)
+must ship the blocks its rows name as LOD rungs too, or the writer drops those rungs and the assets
+render at their coarsest tier — the PMC courtyard paving smears.
+
+---
+
 ## The tools (these exist — use them, don't reinvent them)
 
 All under `tools/wad_simulator` (a Rust cargo workspace). Run with `cargo run -p <crate> [--bin <b>] -- <args>`.
