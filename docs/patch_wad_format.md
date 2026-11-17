@@ -159,7 +159,7 @@ Each chunk row is 12 bytes: `tag(4) + offset_or_value(4) + meta(4)`.
 |-----|------|-------------------|----------------|
 | 0 | `INDX` | File offset to INDX data | Number of block entries |
 | 1 | `DATA` | File offset to block data | Always 36 (0x24) |
-| 2 | `CSUM` | Hash/identifier (NOT a file offset) | Number of CSUM entries |
+| 2 | `CSUM` | Hash/identifier (NOT a file offset) | Largest entry count of any block in this WAD — sizes the engine's block-entry install ring; must be ≥ every block's entry count (see `format_reference.md` §CSUM) |
 | 3 | `ASET` | File offset to ASET data | Number of ASET rows |
 | 4 | `PTHS` | File offset to PTHS data | Number of path strings |
 
@@ -278,7 +278,8 @@ This confirms that the patch system applies to **all** WAD types:
 |--------|-------|
 | Cannot remove blocks | Only add or replace; cannot delete original blocks |
 | Must match ASET hashes | Replaced blocks must contain assets with the same hashes |
-| CSUM unknown | The FFCS-level CSUM field's purpose is unclear; may need matching |
+| CSUM meta must cover every block | The CSUM row's `meta` sizes the engine's block-entry install ring (the largest `meta` of every mounted WAD); a block with more entries than that is retried forever and its level never starts. Write the largest entry count of any block in the patch (`patch_wad::csum_meta_for`) |
+| Re-emitting a base block keeps its rungs only if they ship | A re-emitted block's rows name other base blocks as `_P001`..`_P003` rungs (vz resident's PMC-courtyard textures name `resident-pmcoutpost_fountain_P001`..`_P003`). Ship those blocks too, with `source_block_index`, so the writer re-points the rungs; otherwise it sentinels them and the assets render at their coarsest tier |
 
 ---
 
@@ -339,7 +340,7 @@ For a patch containing a single block (e.g., `scripts_vz`):
                   Magic "FFCS", version 2, chunk_count 7
                   INDX row: offset=0x8000, meta=1
                   DATA row: offset=0x208000, meta=36
-                  CSUM row: offset=TBD, meta=0 (or 1)
+                  CSUM row: offset=the base WAD's value, meta=largest block entry count
                   ASET row: offset=0x800C, meta=N (assets in this block)
                   PTHS row: offset=after_aset, meta=1
                   0x48 blob (144 bytes, exact copy)
@@ -410,6 +411,11 @@ This further supports the patch WAD system: the engine has built-in support for 
    - `0x00000000` (null)
    - A computed hash of the patch's compressed block data
    - A copy of the original WAD's CSUM value
+
+   The row's `meta` is answered: the largest entry count of any block (see the CSUM row in
+   `format_reference.md`). The value is returned by the WAD class's vtable getter `0x00874D20`, whose
+   callers are not traced; patch WADs carrying 0 (the Modkit's merge) and the base's value (qm) both
+   load.
 
 2. **Is the DATA `meta` field (always 36 / 0x24) validated?** Every WAD uses the value 36. This may be a fixed constant or may encode something about the DATA region.
 
