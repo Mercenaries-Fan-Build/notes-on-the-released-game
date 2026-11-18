@@ -1567,7 +1567,7 @@ cue that plays the line through a group of another soundbank, whose length its o
 could not recompute.
 
 Which banks play a line is the game's answer, so the [load plan](#placementjson) of a set with a
-`replace_sound_wave` needs the game folder (`--game`), and without one refuses, naming the item. Two
+`replace_sound_wave` reads them from the game folder's WADs (`--game`). Two
 Shipments replacing one line conflict (M0207); `qm link` merges a line's banks with the set's other
 cue and line overrides ([Sound banks are merged](#sound-banks-are-merged)).
 
@@ -1859,7 +1859,10 @@ sessions' hosts ([qm's hooks](#qms-hooks)), so it always writes `zz-quartermaste
 `zz-quartermaster-link.shell-patch.wad` (the front end's scripts block, with the merged banks when
 there are any), and places its load plan at `scripts/load-plan.json`. `link_block_paths` always lists `blocks\Shell\resident_P000_Q3.block` after the
 `vz.wad` scripts blocks, so a deploy step drops each Shipment's own copy of the front end's scripts
-block and keeps the link's.
+block and keeps the link's. After those it lists the blocks the scripts blocks carry as LOD rungs
+(the resident block's rows name `resident-pmcoutpost_fountain_P001`..`_P003`), which ship wherever a
+scripts block is re-emitted; they are read from the game's `vz.wad` and `shell.wad`, so every plan
+reads the game folder (`--game`).
 
 ### Effects and templates are merged
 
