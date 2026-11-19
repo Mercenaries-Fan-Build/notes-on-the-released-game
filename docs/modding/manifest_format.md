@@ -157,8 +157,9 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_script` | Script | `name`, `source` (`exports` optional) ([`add_script`](#add_script)) |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
-| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` optional) ([`add_level`](#add_level)) |
-| `level_asset` | Data (its level's patch; for `level: vz` the overlay, or templates appended to the worldentity) | `level`, `type`, `name`, `rungs`, `templates`, `edits` ([`level_asset`](#level_asset)) |
+| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` or `from` optional) ([`add_level`](#add_level)) |
+| `level_asset` | Data (its level's patch; for `level: vz` the overlay, or templates appended to the worldentity) | `level`, `type`, `name`, `rungs` or `from`, `templates`, `edits` ([`level_asset`](#level_asset)) |
+| `fetch_package` | Data (downloaded and converted on the player's machine at build; never shipped) | `id`, `format`, `url`, `sha256`, `size` ([`fetch_package`](#fetch_package)) |
 | `edit_state_machine` | Data | `target`, `states` |
 | `edit_world` | Data | `layer`, `edits` |
 | `add_placement` | Data | `layer`, `entity` ([`add_placement` and `add_layer`](#add_placement-and-add_layer)) |
@@ -763,6 +764,18 @@ What Lua asks for by a name it computes is not visible to a build.
 - **M0311** refuses what could only overwrite.
 - Two Shipments adding the same level conflict (M0207).
 
+`from: <id>` instead of `streams` takes the whole level from a [`fetch_package`](#fetch_package): at build
+every asset the package converts to becomes a `level_asset` row of this level, and its streams the level's
+streams. With `from`, `streams` is empty and no `level_asset` row of this level is written by hand
+(**M0316**).
+
+```yaml
+  - kind: add_level
+    name: dlc01
+    display: Blow It Up Again
+    from: biua_ps3
+```
+
 ### `level_asset`
 
 One asset of an [`add_level`](#add_level) of this Shipment, or of the main campaign (`level: vz`), in the
@@ -788,6 +801,18 @@ shipped whole would shut every other Shipment out of the level.
 - **M0311** refuses a row whose `level` this Shipment does not add (and is not `vz`), whose `type` the type
   table does not name, or whose rungs do not fit the rules above.
 - `dlc_port --shipment` writes these rows from a console package.
+- `from: <id>` instead of `rungs` takes the asset's rungs from a [`fetch_package`](#fetch_package)'s
+  conversion, found by `type` and `name` (a name is hashed; a bare hash is used as it is). The build fails,
+  naming the row, when the package converts no such asset. A row has exactly one of `rungs` and `from`
+  (**M0311** for neither, **M0316** for both). `templates` and `edits` work as with `rungs`.
+
+  ```yaml
+  - kind: level_asset
+    level: vz
+    type: model
+    name: pmc_hum_obama
+    from: biua_ps3
+  ```
 
 **`level: vz`: the main campaign.** A row of level `vz` needs no `add_level`. Its asset ships in the
 Shipment's overlay, in `blocks\VZ\<block>.block`, with its own ASET row; its rungs are numbered after the
@@ -846,6 +871,40 @@ game, so a row of `type: world_entity_data` lists the templates of its container
 - **M0311** refuses a `level: vz` worldentity row without `templates`, `templates` on any other row, a
   worldentity row of more than one rung, a template named twice, and `edits` of a template `templates`
   does not list.
+
+### `fetch_package`
+
+Content the **player's machine downloads and converts at build**, which the Shipment never ships. A
+console DLC's assets belong to their publisher: the Shipment carries only where to get the package and
+how to check it, and `qm build` makes the components on the player's machine.
+
+```yaml
+  - kind: fetch_package
+    id: biua_ps3             # what `from:` names; a lowercase [a-z0-9_] token, unique in the Shipment
+    format: ps3_dlc_pkg      # the converter: a PS3 PSN .pkg of a Mercenaries 2 DLC (dlc_port)
+    url: http://zeus.dl.playstation.net/cdn/UP0006/BLUS30056_00/1ntHdj11R8gYK1qjpRcpRGHI3bEQBhL6i616GVXFV8bh78m4U6iSVyAiYJ4q9RNv6JnuURsk8CN8WWTLSdJU9cT631f4tHSHg7XBs.pkg
+    sha256: d62081de1b9efbc484766fb586adba04b03edd5f8571ed03cf6e722bd70263e4
+    size: 407578320
+```
+
+- **`qm lint`** checks the fields and never touches the network, so a Shipment without the package's
+  components lints clean.
+- **`qm build` and `qm link`** keep the file in qm's cache as `packages/<sha256>.pkg` and download it there
+  when it is absent. On every build the file's size and sha256 must match the row; a mismatch fails the
+  build, naming the URL and both values, and a cached file that fails is never downloaded over.
+  `--package <id>=<path>` uses a local copy instead, checked the same way.
+- The cache is `QM_CACHE_DIR` when set, else `%LOCALAPPDATA%\mercs2_quartermaster` on Windows,
+  `~/Library/Caches/mercs2_quartermaster` on macOS, and `$XDG_CACHE_HOME/mercs2_quartermaster` (or
+  `~/.cache/mercs2_quartermaster`) elsewhere.
+- The conversion reads the player's `vz.wad` (`--game`): its class layouts lay out the package's compact
+  containers, and an asset `vz.wad` already holds is left to it. It writes the components into a staging
+  copy of the Shipment in the cache, which is reused while the manifest, the package, `vz.wad` and qm's
+  version are unchanged, and every `from:` row is resolved against it before the build reads the rows.
+  The build's output still goes to `--out` (default `<shipment>/_build`).
+- `qm preflight` reads no component, so it needs neither the package nor the conversion.
+- A `load_sound` stream installed by an `add_level` with `from:` is checked against the converted
+  streams at build ([M0222](#m0222)).
+- **M0316** refuses a malformed field, a package no `from:` names, and a `from:` that names no package.
 
 ### `add_model`
 
@@ -2809,5 +2868,21 @@ loaded WAD holds crashes the game natively (`0x5AE362` on v1.1), not with a Lua 
 never sees it.
 
 Fix: import the module plainly, and make sure something provides it ([M0209](#m0209)).
+
+### M0316
+
+**A `fetch_package` or a `from:` the build cannot resolve** (error, `qm lint`). Each of these is refused,
+without the network:
+
+- a `fetch_package` whose `id` is not a lowercase `[a-z0-9_]` token or is repeated, whose `url` is not
+  `http://` or `https://`, whose `sha256` is not 64 lowercase hex digits, or whose `size` is 0;
+- a `fetch_package` no `add_level` or `level_asset` names with `from:`;
+- a `from:` that names no `fetch_package` of the Shipment;
+- a `level_asset` with both `rungs` and `from`;
+- an `add_level` with `from:` that also lists `streams`, or whose level has `level_asset` rows written by
+  hand.
+
+Fix: give each package one `id`, name it from the rows it supplies, and let `from:` replace the rows and
+streams it would write.
 
 [template]: https://github.com/Mercenaries-Fan-Build/mercs2-shipment-template
