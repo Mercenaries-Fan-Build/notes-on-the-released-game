@@ -889,18 +889,36 @@ how to check it, and `qm build` makes the components on the player's machine.
 
 - **`qm lint`** checks the fields and never touches the network, so a Shipment without the package's
   components lints clean.
-- **`qm build` and `qm link`** keep the file in qm's cache as `packages/<sha256>.pkg` and download it there
-  when it is absent. On every build the file's size and sha256 must match the row; a mismatch fails the
-  build, naming the URL and both values, and a cached file that fails is never downloaded over.
-  `--package <id>=<path>` uses a local copy instead, checked the same way.
+- **`qm build` and `qm link`** first check every `fetch_package` row by the same rules as M0316, before
+  touching the cache or the network. They keep the file in qm's cache as `packages/<sha256>.pkg` and
+  download it there when a conversion needs it and it is absent. The download goes into a `.part` file
+  of its own, takes at most `size` bytes, and is renamed into place only when its size and sha256 match
+  the row; otherwise it is deleted and the build fails, naming the URL and both values. A
+  `Content-Length` other than `size`, a body encoded other than plainly or with gzip, a redirect to
+  anything but an `http://` or `https://` URL, and more than 5 redirects fail the download; each
+  redirect followed is printed. The whole download, redirects included, must finish within 300 s plus
+  `size` at 64 KiB/s (BIUA's package: about 1 h 49 min). A cached file that does not match is an error
+  naming it; delete it and the next build downloads it again.
+- `--package <id>=<path>` uses a local copy instead: a regular file, checked the same way, on every
+  build. Each `<id>` must name a `fetch_package` of the Shipment, or of one of the Shipments `qm link`
+  is given, and may be given once.
+- The file must start with its `format`'s magic (`ps3_dlc_pkg`: a PS3 package's `7F 50 4B 47`) before
+  anything reads it whole.
 - The cache is `QM_CACHE_DIR` when set, else `%LOCALAPPDATA%\mercs2_quartermaster` on Windows,
   `~/Library/Caches/mercs2_quartermaster` on macOS, and `$XDG_CACHE_HOME/mercs2_quartermaster` (or
   `~/.cache/mercs2_quartermaster`) elsewhere.
 - The conversion reads the player's `vz.wad` (`--game`): its class layouts lay out the package's compact
-  containers, and an asset `vz.wad` already holds is left to it. It writes the components into a staging
-  copy of the Shipment in the cache, which is reused while the manifest, the package, `vz.wad` and qm's
-  version are unchanged, and every `from:` row is resolved against it before the build reads the rows.
-  The build's output still goes to `--out` (default `<shipment>/_build`).
+  containers, and an asset `vz.wad` already holds is left to it. The converted components are kept in
+  the cache as `converted/<key>/`, keyed by qm's version, the package's sha256 and `vz.wad`'s sha256
+  only, so editing the manifest or `src/` converts nothing again; a conversion appears there only once
+  it is complete. A stream name in the package that is not a plain file name fails the conversion.
+- Each build makes a fresh staging copy of the Shipment in the cache, `staging/<shipment>/<run>/`: the
+  Shipment's `src/` (minus `src/level`) copied, and the converted components hard-linked in, so the
+  cache must be on a filesystem with hard links. A symlink, or anything but a folder or a regular file,
+  under `src/` fails the build, naming it. Every `from:` row is resolved against the staging copy before
+  the build reads the rows, and the build deletes the Shipment's older staging copies that no other qm
+  is using. `vz.wad` is hashed once per run, however many Shipments `qm link` is given. The build's
+  output still goes to `--out` (default `<shipment>/_build`).
 - `qm preflight` reads no component, so it needs neither the package nor the conversion.
 - A `load_sound` stream installed by an `add_level` with `from:` is checked against the converted
   streams at build ([M0222](#m0222)).
@@ -2875,7 +2893,8 @@ Fix: import the module plainly, and make sure something provides it ([M0209](#m0
 without the network:
 
 - a `fetch_package` whose `id` is not a lowercase `[a-z0-9_]` token or is repeated, whose `url` is not
-  `http://` or `https://`, whose `sha256` is not 64 lowercase hex digits, or whose `size` is 0;
+  an `http://` or `https://` URL with a host, whose `sha256` is not 64 lowercase hex digits, or whose
+  `size` is 0 (`qm build` and `qm link` refuse these too, before they touch the cache);
 - a `fetch_package` no `add_level` or `level_asset` names with `from:`;
 - a `from:` that names no `fetch_package` of the Shipment;
 - a `level_asset` with both `rungs` and `from`;
