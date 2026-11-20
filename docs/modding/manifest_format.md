@@ -157,7 +157,8 @@ A link output's patch WAD merges last. The kinds are `Destination` in `mercs2_qu
 | `add_script` | Script | `name`, `source` (`exports` optional) ([`add_script`](#add_script)) |
 | `edit_stringdb` | Data | `target`, `strings` |
 | `add_language` | Data (new base WAD `data/<name>.wad`) | `name`, `display`, `strings` (`base` optional) |
-| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` or `from` optional) ([`add_level`](#add_level)) |
+| `add_level` | Data (`data/<name>-patch.wad` above a copy of `vz.wad`) | `name`, `display` (`streams` or `from`, and `mission`, `details`, `date` optional) ([`add_level`](#add_level)) |
+| `add_shop_item` | Script | `id`, `name`, `icon`, `shops`; `behaviour` (support) or `equipment_type` (equipment); `levels` optional, default `[vz]` ([`add_shop_item`](#add_shop_item)) |
 | `level_asset` | Data (its level's patch; for `level: vz` the overlay, or templates appended to the worldentity) | `level`, `type`, `name`, `rungs` or `from`, `templates`, `edits` ([`level_asset`](#level_asset)) |
 | `fetch_package` | Data (downloaded and converted on the player's machine at build; never shipped) | `id`, `format`, `url`, `sha256`, `size` ([`fetch_package`](#fetch_package)) |
 | `edit_state_machine` | Data | `target`, `states` |
@@ -488,7 +489,9 @@ The block goes where the front end or gameplay can load it, from the WAD retail 
 | neither (a new movie) | the overlay |
 | only `Loading.wad` (`loadingscreen_standalone`, `fonts_*`) | refused: qm writes no patch for it |
 
-The shell patch carries `shell.wad`'s CSUM row, so building a `shell.wad` movie needs the game.
+The shell patch carries `shell.wad`'s CSUM row, so building a `shell.wad` movie needs the game. When the
+installed set has a level, `qm link` ships its own edit of `SHELL` ([`add_level`](#add_level)) and refuses an
+`add_movie` or `add_ui` of `SHELL`.
 
 **M0192** (advisory, needs the game stack) fires when `name` matches no shipped movie, to catch the
 novel-name case above before it ships something the game never shows. It does **not** fire on
@@ -725,10 +728,27 @@ Adds a **level the game boots by name**, compiled from the Shipment's [`level_as
 ```yaml
   - kind: add_level
     name: dlc01              # the name it boots by: its master script and <name>_base layer
-    display: Blow It Up Again  # the label a selector shows; not written into any WAD
+    display: Blow It Up Again  # the map name on the Extras page
+    mission: Blow It Up Again Pack                          # optional
+    details: Blow it up again with four new explosive missions!  # optional
+    date: 2008-11-25                                        # optional, YYYY-MM-DD
     streams:                 # one per streamed wavebank of the level, named for its entry
       - src/level/Audios/dlctest_streaming.pws
 ```
+
+**Extras ▸ Downloadable Content lists every installed level**; picking one, then a hero, starts it. `qm link`
+does this for the set; a Shipment writes nothing for it.
+
+- The page shows `display`, `date` as `month/day/year`, `mission` and `details`, as literal text. Without
+  `date` it shows `//`; without `mission` or `details`, an empty line. The page sorts the list itself (SHELL's
+  `sortDLCbyDate` / `sortDLCbyName`), four entries to a screen.
+- `qm link` edits the game's own SHELL movie, read from `shell.wad`, so the page is reachable on PC and its
+  hero pick starts the level. The edit is qm's `data/shell_extras.tsv`; a SHELL that is not retail's fails the
+  link. The edited SHELL ships in the shell patch, so a Shipment replacing SHELL with `add_movie`/`add_ui`
+  beside a level is refused.
+- qm's front-end loader adds the entries when the page opens and starts the level chosen. A name it did not
+  list fails, naming it.
+- **M0311** refuses a `date` that is not a `YYYY-MM-DD` calendar date.
 
 For a level `L` the engine opens `.\Data\L.wad`, which must exist, then `.\Data\L-patch.wad` above it,
 which may not, and no other level WAD (`FUN_004BFCE0`, `FUN_004BFDA0`). A level does not run alone,
@@ -884,6 +904,36 @@ game, so a row of `type: world_entity_data` lists the templates of its container
 - **M0311** refuses a `level: vz` worldentity row without `templates`, `templates` on any other row, a
   worldentity row of more than one rung, a template named twice, and `edits` of a template `templates`
   does not list.
+
+### `add_shop_item`
+
+An item for sale at the `shops` vendors. `qm link` appends its catalog row to `mrxsupportdata`
+(`behaviour`, support catalog) or `wifequipmentdata` (`equipment_type`), and a reward row per vendor
+to `mrxrewarddata`.
+
+```yaml
+- kind: add_shop_item
+  id: dlcm1a3
+  name: "[vehicle.dlc_m1a3]"
+  icon: vehicles_tank_m1a2
+  shops: [pmc]
+  type: heavy
+  cash_cost: 250000
+  unlocked: true
+  behaviour: { module: mrxcratedelivery, cargo: DLC_M1A3, delivery_vehicle: "Mi26 (PMC) (Driver)" }
+  levels: [vz, mylevel]
+```
+
+- `levels`: where the item is sold. `vz` is the main campaign; any other entry names an installed
+  Shipment's `add_level`. Default `[vz]`.
+- Each level runs its own worldentity. `behaviour.cargo` and `behaviour.delivery_vehicle` must name a
+  template of the worldentity of every listed level: the campaign's, with every `level: vz`
+  template, or the custom level's own. A template added with a `level: vz` row is in the campaign
+  only.
+- `qm link` refuses the set, naming the item, the level and the template, when a listed level's
+  worldentity has no such template, when an entry names no installed level, or when `levels` is empty.
+- A novel behaviour (`behaviour.script`) mints its module in every level; its row goes into the
+  loader of each listed level.
 
 ### `fetch_package`
 
