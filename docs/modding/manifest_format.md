@@ -467,7 +467,7 @@ The engine references movies by **fixed name**, so how a movie reaches the scree
 
 - **Replace** a shipped movie by using its exact name (`SHELL`, `pause_menu`, `MINIMAP`, a
   `*_briefing`, …). Same name → same hash → last-wins, and every UI site that already names it now
-  serves yours. This is the proven UI-mod path.
+  serves yours.
 - **Add a new** movie under a novel name and load it from Lua. The engine binds a movie to a
   `FlashWidget` by NAME — the shipped `loadingscreen_standalone` movie is loaded exactly this way
   (`mrxgui.lua`): `w = FlashWidget:new(); w:SetSwfFile("<name>"); w:Play(); w:SetVisible(true)`.
@@ -476,6 +476,19 @@ The engine references movies by **fixed name**, so how a movie reaches the scree
   attaches and *when* it shows (a boot overlay, a hotkey toggle, a HUD element parent). Use
   **`add_ui`** below to have the Quartermaster bake that boilerplate for you; reach for a bare
   `add_movie` + `patch_lua` only when you need full control of the trigger.
+
+The block goes where the front end or gameplay can load it, from the WAD retail ships the movie in
+(qm's `data/retail_movies.tsv`):
+
+| Retail ships `name` in | The block goes to |
+|---|---|
+| `shell.wad` (`SHELL`, `LTI_precache`) | `shell-patch.wad`, which the front end mounts |
+| `vz.wad` (`pause_menu`, `MINIMAP`, `*_briefing`) | the overlay, which gameplay mounts |
+| both (`loadingscreen`, `GFxFontLib`) | both |
+| neither (a new movie) | the overlay |
+| only `Loading.wad` (`loadingscreen_standalone`, `fonts_*`) | refused: qm writes no patch for it |
+
+The shell patch carries `shell.wad`'s CSUM row, so building a `shell.wad` movie needs the game.
 
 **M0192** (advisory, needs the game stack) fires when `name` matches no shipped movie, to catch the
 novel-name case above before it ships something the game never shows. It does **not** fire on
