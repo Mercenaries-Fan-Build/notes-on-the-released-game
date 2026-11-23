@@ -2,7 +2,7 @@
 
 **Scope:** the byte format of the instanced ground-cover packages (grass, rocks, clutter) in PC retail
 `vz.wad`, how they are placed, and how to keep them on the ground when a terrain cell is edited.
-Written as an open specification. Companion to [`terrain_cell_format.md`](terrain_cell_format.md).
+Written as an open specification. Companion to [`terrain_cell_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/terrain_cell_format.md).
 
 **Status:** layout PROVEN on all 1,026 retail containers (a decoder built from this spec re-encodes
 every one byte-for-byte); field sizes and counts are the retail loader's own (§3). Fields marked
@@ -23,7 +23,7 @@ every one byte-for-byte); field sizes and counts are the retail loader's own (§
 
 ## 2. Container
 
-A UCFX container with the conventions of [`terrain_cell_format.md`](terrain_cell_format.md) §3
+A UCFX container with the conventions of [`terrain_cell_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/terrain_cell_format.md) §3
 (20-byte rows `{tag, u0, size, x2, x3}`, bodies packed in row order, `CSUM` trailer). 6 retail
 containers have no rows at all (28 bytes: header with `n = 0`, then `CSUM`). The other 1,020 have
 exactly this tree:
@@ -62,7 +62,7 @@ PTMS                  range_count × 8 B
   | 16 | `f32` | `WindParams.x` (record `+0xc`), zeroed by the loader for a material without the alpha-test bit |
 
 - **`MTRL`:** exactly one material record in the terrain `MTRL` record layout
-  ([`terrain_cell_format.md`](terrain_cell_format.md) §4.2): 120 bytes with one texture (3,733 meshes)
+  ([`terrain_cell_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/terrain_cell_format.md) §4.2): 120 bytes with one texture (3,733 meshes)
   or 128 bytes with three (267).
 - **`STRM`:** `info {decl rows incl. terminator, stride, vertex_count}`, `decl` (`D3DVERTEXELEMENT9[]`
   + `D3DDECL_END`), `data`. Three declarations across the 4,000 retail meshes:
@@ -153,7 +153,7 @@ cover is stored in blocks without a terrain cell yet sits on a cell like the res
 
 ## 5. Following an edited cell
 
-When a cell's heights change (see [`terrain_cell_format.md`](terrain_cell_format.md) §6), every
+When a cell's heights change (see [`terrain_cell_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/terrain_cell_format.md) §6), every
 container placed on it must follow:
 
 1. For each instance, find the cell's render triangles (every draw group) under its cell-local XZ, and
