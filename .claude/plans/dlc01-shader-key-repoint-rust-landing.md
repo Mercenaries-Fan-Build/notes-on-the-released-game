@@ -30,7 +30,7 @@ pub fn repoint_container_shader_keys(
 ) -> Result<usize, String>;
 ```
 
-Record offsets (confirmed in `docs/shader_store_format.md` section 6):
+Record offsets (confirmed in [`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) section 6):
 - `+104` u16 flags, `+106` u16 tex_count (count is in the high half of the LE u32 marker)
 - `+108 + 4*tex_count` u32 pixel-shader key (the repoint target)
 - Record stride `116 + 4*tex_count`
