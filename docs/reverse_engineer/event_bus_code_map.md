@@ -3,7 +3,7 @@
 **Scope:** the PC-side event/RPC bus in `Mercenaries2.exe` (unpacked image, base 0x400000), reversed
 to **recover the router/dispatch that the prior Xbox-based analysis left as stubs**. Scoreboard row
 13; companion JSON `docs/data/keystone_code_map.json`. Xbox oracle: `docs/mercs2-pdb-analysis/networking.md`
-(NetEventCallback), `docs/modernization/pangea_engine_alignment.md` §Keystone B, `mercs2_core/src/event.rs`.
+(NetEventCallback), [`docs/modernization/pangea_engine_alignment.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/pangea_engine_alignment.md) §Keystone B, `mercs2_core/src/event.rs`.
 
 ## Result in one line
 
