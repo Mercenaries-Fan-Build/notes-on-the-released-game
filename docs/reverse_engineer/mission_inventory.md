@@ -321,7 +321,7 @@ Notes on the graph:
   this inventory maps against.
 - [`mission_contract_flow_code_map.md`](mission_contract_flow_code_map.md) — the native side of the
   flow / task lifecycle.
-- [`docs/modding/lua_engine_seam_hardening.md`](../modding/lua_engine_seam_hardening.md) — the F1–F11
+- [`docs/modding/lua_engine_seam_hardening.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/lua_engine_seam_hardening.md) — the F1–F11
   failure modes that shape mod-author choice between recipes.
 - [`mission_progression_graph.md`](mission_progression_graph.md) — how the flow rules are
   evaluated, the full rule-by-rule graph, and the retail trace that pins it.
