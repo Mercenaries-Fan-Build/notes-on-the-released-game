@@ -3,7 +3,7 @@
 **Scope:** what it takes to regenerate Mercenaries 2 static-world (terrain/building/road) **collision**
 for rebuilt or edited geometry, as part of the from-source terrain-block rebuild. Consolidates the
 2026-08-14 double-blind investigations (two blind agents per question) and the MOPP-bake-oracle work.
-Companion to [`physics_code_map.md`](physics_code_map.md), [`physics_havok_spec.md`](../modernization/physics_havok_spec.md),
+Companion to [`physics_code_map.md`](physics_code_map.md), [`physics_havok_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/physics_havok_spec.md),
 and the memory notes `terrain-collision-is-mopp-baked-mesh`, `mopp-bake-oracle-hct-recipe`.
 
 **Status:** collision representation = PROVEN (WAD-wide census). Bake oracle = PARTIALLY PROVEN
