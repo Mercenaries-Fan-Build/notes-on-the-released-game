@@ -173,7 +173,7 @@ CAUTION (verified, to avoid a wrong claim): the strings `AlertLowThreshold`, `Al
 - `docs/mercs2-pdb-analysis/pangea-engine-core.md` — `PgGameSystem`, component budgets, the per-type budget table that lists `Ai*`/`Squad*`/`Cover*`.
 - `docs/mercs2-pdb-analysis/world-streaming.md` — AI hibernation / "AI Hibernated" / "AI Pedestrians" object counts tie into streaming/LOD.
 - `docs/mercs2-pdb-analysis/audio-pal.md` — chatter/shout propagation ("ShoutEnemy Propagation", "Show Triggered Chatter") couples perception to VO.
-- Existing project ECS docs: `docs/ecs_components.md` and `docs/mercs2-ecs/` (native component registry) — many `Ai*`/`Squad*`/`Cover*`/`Perception`/`Stimulus` names here are ECS component types.
+- Existing project ECS docs: [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) and `docs/mercs2-ecs/` (native component registry) — many `Ai*`/`Squad*`/`Cover*`/`Perception`/`Stimulus` names here are ECS component types.
 
 ## Evidence & confidence
 
