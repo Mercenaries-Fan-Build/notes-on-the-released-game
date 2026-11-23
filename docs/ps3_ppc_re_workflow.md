@@ -12,7 +12,7 @@ saved projects are rows of `scripts/ghidra_projects.tsv`.
 | `ps3-v101-eu` | EU disc 1.01 (`BLES00323`) | `ps3-v101-de` |
 
 The game's `VZ.WAD` needs none of this: it is a plain big-endian `SCFF` file
-([`format_reference.md` §2](format_reference.md#2-ffcs-wad-container)).
+([`format_reference.md` §2](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md#2-ffcs-wad-container)).
 
 ## 1. The ELF
 
