@@ -730,7 +730,7 @@ onward never fires. That last one is not in the map's confirm-live list and prob
   `output/_ghidra/securom_dump/mercs2_unpacked.exe` (a **live memory dump**, so indirect slots are
   already resolved and the ECS descriptor tables are already populated);
   `output/jul08_prototype/mercs2_xenon_p.pe_full_strings.txt`; `docs/mercs2-luacd/`;
-  `docs/destruction_orchestrator_format.md`; `cargo run -p mercs2_workshop -- --states` against the
+  [`docs/destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md); `cargo run -p mercs2_workshop -- --states` against the
   real `vz.wad`; `tools/pandemic_hash.py --m2`.
 
 ## P2.0 — Scoreboard
@@ -1091,7 +1091,7 @@ audio calls — unrelated). **M is the right rating for the name; H for the role
 **Pass 1's premise for downgrading `FalloffState` to L is false.** Pass 1 wrote: *"The value occurs
 nowhere — not in the exe, and not in the project's uncracked-hash harvest. There is no known
 occurrence for the crack to explain."* It occurs in **shipped game data**:
-`docs/destruction_orchestrator_format.md:81` lists `0xCE603754` among the destruction state-name
+[`docs/destruction_orchestrator_format.md:81`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md) lists `0xCE603754` among the destruction state-name
 hashes, and I dumped it out of the real `vz.wad`. Pass 1 searched the exe and one harvest file and
 generalised.
 
