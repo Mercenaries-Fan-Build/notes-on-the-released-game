@@ -35,7 +35,7 @@ witness: |
 > (see front-matter `witness`). §2's format facts hold up well — the 18 type-hash counts in §2.3 and
 > the five `cdbsizes.ini` figures in §3.5 reproduce **exactly**, and the CSUM algorithm verifies with
 > 0 failures across all 55,428 chunks. Two things are wrong and fixed inline: **§2.4 (ASET row
-> layout)** repeats a reading that `docs/aset_format.md` retracted the same day, and **§3.4** carries
+> layout)** repeats a reading that [`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) retracted the same day, and **§3.4** carries
 > stale placement counts. §§1, 4–7 are synthesis/plans not checkable from WAD data and were left as
 > written.
 
@@ -213,7 +213,7 @@ a dense 0..35 — id 2 is absent in retail `vz.wad`.*
 ### 2.4 ASET Row Layout (16 bytes, verified)
 
 **CORRECTION (2026-07-21) — the `+4` and `+8` descriptions below are the reading that
-`docs/aset_format.md` RETRACTED on 2026-07-21** (it had been marked "Verified: Yes" for two months
+[`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) RETRACTED on 2026-07-21** (it had been marked "Verified: Yes" for two months
 and was wrong). `secondary_ref` does **not** hold a "streaming dependency hash", and
 `packed_block_ref` low16 is **not** a "sub-entry offset". Both u32s hold **block indices**; together
 they encode the asset's whole LOD chain as four packed 16-bit block references
@@ -234,7 +234,7 @@ Measured 2026-07-21 (`docaudit -- ffcs`), which is what disproves the old readin
 `secondary_ref == 0xFFFFFFFF` in 22,196 and `packed_block_ref` lo16 `== 0xFFFF` in 19,847. Of the
 **10,798** rows whose lo16 is non-sentinel, **all 10,798** are valid INDX block indices (`< 11,370`) —
 a "sub-entry offset" would not be bounded by the block count, a sibling LOD block index is. See
-`docs/aset_format.md` and `AsetEntry::lod_chain` in `mercs2_formats::ffcs`.
+[`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) and `AsetEntry::lod_chain` in `mercs2_formats::ffcs`.
 
 30,645 rows total in retail `vz.wad` *(confirmed)*. Block index (hi16 of +8) verified by decompressing
 blocks and matching entry `name_hash` values *(confirmed)*.
@@ -366,14 +366,14 @@ This is the mechanism our DLC port exploits: inject DLC blocks into `vz-patch.wa
 
 *Corrected 2026-07-21 (`docaudit -- layers`): the header count 62,458 contradicted this doc's own
 62,624 Transform row; 62,624 is right. Name matches rose to 62,143 and ECS records to 14,335 under the
-Rust loader (`mercs2_formats::placement`). See `docs/placement_data_format.md` §2.10 for the full
+Rust loader (`mercs2_formats::placement`). See [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) §2.10 for the full
 before/after table and the parser fixes behind it. "43" is the number of distinct COMP type-names, not
 a per-sub-block count.*
 
 ~~**~3,620 conditional placements**~~ **37,867 conditional placements** across 746 `vz_state` overlay files:
 
 *Corrected 2026-07-21 (`docaudit -- vzstate`): the "~3,620" was ~10× low — an artefact of the
-retracted "flgs record" heuristic in `docs/placement_data_format.md` §3.3. vz_state placements are the
+retracted "flgs record" heuristic in [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) §3.3. vz_state placements are the
 same 42-byte `Transform` COMP records as layers_static; 744 of 746 blocks carry one, totalling
 37,867 records.*
 - Encode game state variants (pristine/ruined/destroyed/staging)
@@ -757,9 +757,9 @@ UE5 Recreation                                      Full Game Understanding
 | Coordinate transforms | `tools/mercs2_coords.py` |
 | Lua bytecode scanner | `tools/lua_bytecode_scan.py` |
 | Havok packfile parser | `tools/hk_packfile.py` |
-| Type hash registry | `docs/type_hash_registry.md` |
-| Format reference | `docs/format_reference.md` |
-| Placement format | `docs/placement_data_format.md` |
+| Type hash registry | [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) |
+| Format reference | [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) |
+| Placement format | [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) |
 | Ghidra pre-analysis | `scripts/ghidra_mercs2_preanalysis.py` |
 | Ghidra annotation | `scripts/ghidra_mercs2_annotate.py` |
 
@@ -791,10 +791,10 @@ UE5 Recreation                                      Full Game Understanding
 
 | Document | What It Covers | Key Section Links |
 |----------|---------------|-------------------|
-| `format_reference.md` | Master binary format specs | §2.1 FFCS, §3 sges, §4 UCFX, §4.0 CSUM |
+| [`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) | Master binary format specs | §2.1 FFCS, §3 sges, §4 UCFX, §4.0 CSUM |
 | `placement_data_format.md` | 42-byte records, coordinates, rotations | §2.5 Transform, §3.3 flgs, §5 Coordinates |
 | `type_hash_registry.md` | All 35 type hashes with distribution | §2.3 Master Type Table |
-| `aset_format.md` | ASET 16-byte row layout | §2.4 Row Layout |
+| [`aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) | ASET 16-byte row layout | §2.4 Row Layout |
 | `mercs1_engine_analysis.md` | Mercs 1 API and architecture | §1.2 Subsystems, §2 Lua API, §3 Asset Loading |
 | `saboteur_engine_comparison.md` | Format evolution confirmation | §1 Hash, §2 Archive, §9 sges |
 | `dlc_extras_activation_research.md` | DLC activation approaches | §5 Ranked Approaches, §6 Plan |
