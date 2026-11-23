@@ -364,7 +364,7 @@ The Xbox decomp confirms the PC-side finding that Havok ctors are tiny: e.g. `hk
 - `docs/mercs2-pdb-analysis/jobs-threading.md` — the `HavokIntegrateJob` / `hkpMultiThreadedSimulation` / PIMP job system that runs the physics step on worker threads.
 - `docs/mercs2-pdb-analysis/pangea-engine-core.md` — base engine, memory (`HavokPoolMemoryEnable`), and reflection plumbing.
 
-Existing project docs that overlap: `docs/reverse_engineer/comprehensive_engine_understanding.md`, `docs/skeleton_status.md`, `docs/character_systems_plan.md` (ragdoll/character), and `docs/coordinate_systems.md`.
+Existing project docs that overlap: `docs/reverse_engineer/comprehensive_engine_understanding.md`, `docs/skeleton_status.md`, `docs/character_systems_plan.md` (ragdoll/character), and [`docs/coordinate_systems.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/coordinate_systems.md).
 
 ## Evidence & confidence
 
