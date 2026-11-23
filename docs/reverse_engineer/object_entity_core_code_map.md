@@ -21,7 +21,7 @@ this map only pins where the `Object.*` cfunc lands and hands off.
 | [`physics_code_map.md`](physics_code_map.md) | the Havok body itself, `hkpCharacterProxy`, ragdoll — this map only pins the *handle* lookup `FUN_00432740` |
 | [`player_code_map.md`](player_code_map.md) | the player object, the ≤2 roster, the profile singleton; the `Players` container's **contents** |
 | [`ecs_reflection_registry_code_map.md`](ecs_reflection_registry_code_map.md) | the reflection/type registry internals, `CopyFromStream` descriptors, the component-instance resolver `FUN_005857E0` |
-| [`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md) | the entity-as-bag-of-components reframe, spawn/template instantiation, the render-node split |
+| [`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) | the entity-as-bag-of-components reframe, spawn/template instantiation, the render-node split |
 | [`scripting_host_binding_code_map.md`](scripting_host_binding_code_map.md) | how `luaL_Reg` tables are installed and dispatched |
 
 **Sources.** PC: the 27k-fn Ghidra decomp `output/_ghidra/mercs2_unpacked.exe_decomp.txt` (unpacked
@@ -150,7 +150,7 @@ all — both are pure Lua tag work.
 | **Container iterate** | **`FUN_006499F0(&container, arg, whichIndex)`** + **`FUN_00649A80(&cursor)`** | `0x00649A11: lea eax,[ebp+0x34]` / `jne` → `0x00649A16: lea eax,[ebp+0x50]` — the third argument **selects the hash index**; cursor pooled under critsec `DAT_00EDBAA4`, free-list `PTR_DAT_00EDBAC0` | H |
 | **`RuntimeSceneObject`** (position/orientation) | **`0x00DF9C90`**, id 316, stride **56**, cap 256 | `FUN_00665AF0`: `0x00665AF6: B9 90 9C DF 00  mov ecx, 0xdf9c90`; name via `[vtable 0x00BC4138 + 0x34]` | H |
 | **Transform read / write** | **`FUN_00665AF0`** / **`FUN_006658B0`** (thunk → `FUN_004245B1`) | read copies 8 dwords, skips and bumps dword 3; write paired with it in `SetPosition`/`SetYaw`/`SetTransformToObject` | H (read) / M (write) |
-| **`Name` registry** | **`0x00DF6B88`**, id 1, stride 4 | `Object.SetName` `FUN_005CCAF0` writes it; default string `s_Unknown_00BAA594`; the spawn name registry of [`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md) §3 | H |
+| **`Name` registry** | **`0x00DF6B88`**, id 1, stride 4 | `Object.SetName` `FUN_005CCAF0` writes it; default string `s_Unknown_00BAA594`; the spawn name registry of [`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) §3 | H |
 | **`ModelName`** | **`0x00DF6C08`**, id 2, stride 4 | `Object.SetModelName` `FUN_005CCD00`, `AddQualityRef` `FUN_005D1B00`, `GetModelName`, `IsAwake`; same container `Player.SetOutfit` uses | H |
 | **`Label`** | **`0x00DF8108`**, id 119, stride 4 | `AddLabel`/`RemoveLabel`/`HasLabel`/`AddToDisposer`/`RemoveFromDisposer`; multi-valued — the label hash goes in the `subKey` slot | H |
 | **`"disposable"` reserved label** | **`0xF956736B`** | `0x005D29B9: 68 6B 73 56 F9  push 0xf956736b`; `pandemic_hash_m2("disposable") == 0xF956736B` — **recomputed, exact** | H |
@@ -229,7 +229,7 @@ already has `FUN_0064A770`, `FUN_0064A7E0`, both registries and the `[vtable+0x3
 simply never applied the key to the `0x80` array, which is why its census is an undercount.
 
 **Independent validation of the census.** Two component hashes recorded in
-[`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md) from an
+[`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) from an
 entirely unrelated derivation reproduce from the name string alone:
 `pandemic_hash_m2("RuntimeHealth") == 0xF9B9B2A5` and
 `pandemic_hash_m2("RuntimeNodeHealth") == 0x76927BF5`. Per [[aset-name-export]] a bare hash match is
@@ -762,7 +762,7 @@ FUN_00649180(&PTR_PTR_00DF6B88, guid, key2, key2, &name);
 ```
 
 This is the **same registry `Pg.Spawn` resolves against**
-([`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md) §3) — so
+([`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) §3) — so
 `Object.SetName` is not cosmetic: it makes the object findable by `Pg.GetGuidByName`. Note the local
 is overwritten with `"Unknown"` *before* the add in the decompiled text; whether the actual string
 argument survives in a register is **open** — the Lua string is fetched by `FUN_0059FB00` into
@@ -896,7 +896,7 @@ docs that had copied it (`mercs2-ecs/07_gameplay_state_health_mission.md`, `merc
 ```
 
 `cvtsi2ss` is an integer conversion, so this cannot be a float reinterpretation.
-[`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md) §2 described
+[`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) §2 described
 `RuntimeNodeHealth (0x76927BF5)` as "one **float** per destructible node" — wrong on storage, and
 corrected. The container stride of **4** is consistent: the container holds a 4-byte handle per
 entity and the per-node `u16`s live in the pointed-to node table, so "one value per destructible
@@ -1419,7 +1419,7 @@ binding table.
   transition), [`weapons_combat_code_map.md`](weapons_combat_code_map.md),
   [`physics_code_map.md`](physics_code_map.md), [`player_code_map.md`](player_code_map.md),
   [`ecs_reflection_registry_code_map.md`](ecs_reflection_registry_code_map.md),
-  [`../modernization/object_assembly_model.md`](../modernization/object_assembly_model.md),
+  [`../modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md),
   [`scripting_host_binding_code_map.md`](scripting_host_binding_code_map.md).
 - **No Xbox marriage column.** The Xbox PDB carries no `Object`-namespace symbols
   (`docs/mercs2-pdb-analysis/`), so unlike the vehicle/physics rows there is no symmetric join to
