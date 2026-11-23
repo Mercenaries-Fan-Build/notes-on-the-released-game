@@ -37,8 +37,8 @@ This audit catalogs uses of packed vector semantics (`u8×4`, `u16×2`, `u32×2`
 
 ## Cross-reference docs (read-only context)
 
-- `docs/format_reference.md` — UCFX chunk taxonomy  
-- `docs/placement_data_format.md` — 42-byte Transform (COMP), vz_state `flgs`  
+- [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — UCFX chunk taxonomy  
+- [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) — 42-byte Transform (COMP), vz_state `flgs`  
 - `docs/pandemic_audio_system_design.md` — soundbank sections & u8×4 offsets  
 - `docs/audio_crash_analysis.md` — periodic u8×4 bug history  
 
