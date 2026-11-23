@@ -12,7 +12,7 @@ actors, and the shared raycast/query API. Scoreboard **row 22**. Binds the Xbox-
 Sibling maps: [`vehicle_code_map.md`](vehicle_code_map.md) (the nine actor classes + the custom
 drive model — **not redone here**), [`world_streaming_code_map.md`](world_streaming_code_map.md)
 (terrain GUID map, hibernation), [`asset_formats_code_map.md`](asset_formats_code_map.md) §7 (the
-PHY2 Havok packfile on disk). Modernization spec: [`physics_havok_spec.md`](../modernization/physics_havok_spec.md).
+PHY2 Havok packfile on disk). Modernization spec: [`physics_havok_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/physics_havok_spec.md).
 
 **Binary:** unpacked SecuROM image `output/_ghidra/securom_dump/mercs2_unpacked.exe`, base `0x400000`.
 Bodies read from `output/_ghidra/mercs2_unpacked.exe_decomp.txt` / `all_functions_decomp.txt`.
@@ -267,7 +267,7 @@ built through this layer onto the Havok constraint ctors above.
 
 ## 7. Reconciliation with `mercs2_engine` (row 22 = ❌ sim)
 
-Per [`engine_support_inventory.md`](../modernization/engine_support_inventory.md), row 22 Physics is
+Per [`engine_support_inventory.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/engine_support_inventory.md), row 22 Physics is
 **absent as simulation**. The engine today has a **terrain-heightmap capsule sampler only** (a
 kinematic ground-follow probe, [[world-terrain-loader]] / [[world-streaming-spec]]) — no rigid
 bodies, no broadphase, no character-proxy state machine, no constraints, no raycast/query layer, no
@@ -376,6 +376,6 @@ PTR_s_RagdollController_017c0544 = s_RagdollController_00bc5eb0;  // <- anchor
 - Xbox ground truth + RTTI→PC pairing: `docs/mercs2-pdb-analysis/{havok-physics,physics-game,symbol-map}.md`
   (204/287 RTTI classes vtable-resolved).
 - Cross-refs: [`vehicle_code_map.md`](vehicle_code_map.md) §3 (actors/drive), [`world_streaming_code_map.md`],
-  [`asset_formats_code_map.md`](asset_formats_code_map.md) §7 (PHY2), [`physics_havok_spec.md`](../modernization/physics_havok_spec.md),
+  [`asset_formats_code_map.md`](asset_formats_code_map.md) §7 (PHY2), [`physics_havok_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/physics_havok_spec.md),
   memory [[phy2-havok-chunk-not-u32]].
 - Confidence stated per row (H = vtable-proven/body-read; M = string/partial; L = inferred).
