@@ -41,9 +41,9 @@ Central index for Mercenaries 2 Xbox 360 → PC DLC port work. **Phase 0 outcome
 | Doc / tool | Content |
 |------------|---------|
 | [`tools/dlc_port.py`](../tools/dlc_port.py) | Xbox DOH → PC `vz-patch.wad` + optional bootstrap |
-| [`docs/patch_wad_format.md`](patch_wad_format.md) | FFCS overlay, local `block_index`, last-opened-wins |
-| [`docs/aset_format.md`](aset_format.md) | ASET row layout + type table |
-| [`docs/type_hash_registry.md`](type_hash_registry.md) | All 35 `type_hash` values |
+| [`docs/patch_wad_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/patch_wad_format.md) | FFCS overlay, local `block_index`, last-opened-wins |
+| [`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) | ASET row layout + type table |
+| [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) | All 35 `type_hash` values |
 | [`Makefile`](../Makefile) | `dlc-port`, `dlc-port-assets-only`, `dlc-phase0`, `inventory-dlc-patch` |
 
 ### `dlc_port.py` flags (bisect / Row 13)
