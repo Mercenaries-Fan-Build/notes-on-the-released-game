@@ -296,7 +296,7 @@ has direct callers → both are reached through the entity vtable, exactly as
   `hkpMoppBvTreeShape`/`hkpMoppCode`** in every cell's `PHY2` — one per cell, 400/400 — and **zero**
   `hkpSampledHeightFieldShape` / `hkpTriSampledHeightFieldBvTreeShape` instances are serialized in
   `vz.wad` ([`terrain_collision_regeneration.md`](terrain_collision_regeneration.md) §1;
-  [`../terrain_cell_format.md`](../terrain_cell_format.md) §8). The render ground is a triangle mesh
+  [`../terrain_cell_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/terrain_cell_format.md) §8). The render ground is a triangle mesh
   too; there is no height grid on disk. The heightfield ctor `FUN_00a0e3d0` exists but no disk bytes
   feed it; whether the engine builds a runtime-only heightfield for a "fast" query is open
   ([`terrain_collision_regeneration.md`](terrain_collision_regeneration.md) §1). How "Fast" and
@@ -341,7 +341,7 @@ Lua-binding **name** strings survive, so the descriptors + cfunc VAs are H.
 | `ActivateFactionRegionMusic` cfunc | `ActivateFactionRegionMusic` (`0x002bf08`) | **`0x005E1CC0`** (entry `0xB98DA0`) | walk; binding-only | H (VA) |
 | `SetRootFactionRegionMusic` cfunc | `SetRootFactionRegionMusic` (`0x002bf34`) | **`0x005E1C40`** (entry `0xB98D90`) | walk; binding-only | H (VA) |
 | `BuildingDestruction` descriptor | `BuildingDestruction` (`0x0031550`) | `FUN_00642590` (str `s_BuildingDestruction_00bc52b4`) | string-anchored | H |
-| `DestructionLink` / `…TypeEnum` | `DestructionLink` (`0x0032298`) | descriptor region-adjacent (`FUN_006422d0` cluster); orchestrator = `FUN_004cf340` | string-anchored; orchestrator cross-ref `docs/destruction_orchestrator_format.md` | H / xref |
+| `DestructionLink` / `…TypeEnum` | `DestructionLink` (`0x0032298`) | descriptor region-adjacent (`FUN_006422d0` cluster); orchestrator = `FUN_004cf340` | string-anchored; orchestrator cross-ref [`docs/destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md) | H / xref |
 
 ### Annotated excerpts (read first-hand by the cluster pass)
 
@@ -397,7 +397,7 @@ layer, each object's part shown while the object is intact or while it is ruined
 `TinyGeometryObject` placement loads it. Retail places **1,208**, in 340 layers: the `vz_*_tiny`
 satellites of `layers_static` and the `vz_state` layers. The container format is decoded in full in
 `mercs2_formats::tiny_model` (all 1,208 round-trip byte for byte); the Shipment kind that writes one is
-[`add_tiny_geometry`](../modding/manifest_format.md#add_tiny_geometry). Grades: **PROVEN** = read in
+[`add_tiny_geometry`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md#add_tiny_geometry). Grades: **PROVEN** = read in
 the disassembly or the data this pass; **INFERRED** = reasoned from what was read.
 
 ### The slot list (PROVEN)
