@@ -168,4 +168,4 @@ The Rust engine already implements a directional depth shadow map with PCF (`mer
 shadow pass) — a modern single-cascade take. This map shows the original is a **4-tile atlas**
 (cascades/splits) with per-mesh-type caster VPs, an alpha-tested receiver path for foliage, a
 distance-LOD gate, and a BlobShadow cheap fallback — the gap between the current single-cascade PCF
-and faithful behaviour, per [rendering_fx_lighting_gap.md](../modernization/rendering_fx_lighting_gap.md) §D.
+and faithful behaviour, per [rendering_fx_lighting_gap.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/rendering_fx_lighting_gap.md) §D.
