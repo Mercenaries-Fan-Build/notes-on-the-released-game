@@ -64,7 +64,7 @@ contracts, tutorials are all the same set of Lua scripts across all three.
 
 Source: [`memory/ps3-dlc-crack-and-klicensee.md`](../memory/ps3-dlc-crack-and-klicensee.md),
 [`memory/multiplatform-compile-backend-assessment.md`](../memory/multiplatform-compile-backend-assessment.md),
-[`docs/modding/cross_platform_lua_porting_guide.md`](./modding/cross_platform_lua_porting_guide.md).
+[`docs/modding/cross_platform_lua_porting_guide.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/cross_platform_lua_porting_guide.md).
 
 ---
 
@@ -334,7 +334,7 @@ Both are *encode-time* choices; no engine feature is missing to close the gap.
 ## 6. Container / asset format — endianness and byte-swap
 
 **PROVEN.** Source: [`docs/xbox360_dlc_analysis.md`](./xbox360_dlc_analysis.md),
-[`docs/aset_format.md`](./aset_format.md),
+[`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md),
 [`memory/multiplatform-compile-backend-assessment.md`](../memory/multiplatform-compile-backend-assessment.md).
 
 Structural summary of the WAD/asset stack across all three:
@@ -356,13 +356,13 @@ Structural summary of the WAD/asset stack across all three:
 **★ Trap for ASET porters:** the Xbox layout is *mirrored* — every u32 has its
 two u16 halves swapped versus PC. Applying the PC decode rule to a 360 WAD gives
 you nonsense. Also: the Xbox ASET chunk is mixed-endian — `type_id` is stored LE
-inside otherwise-BE rows. See [`docs/aset_format.md`](./aset_format.md) §"Xbox
+inside otherwise-BE rows. See [`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) §"Xbox
 layout is MIRRORED".
 
 **PS3 base-game WAD: plain `SCFF`, no envelope.** `ps3-VZ.WAD` is a big-endian
 `SCFF` file from offset 0, like the Xbox one. The "encrypted `0x80800`-byte
 envelope" was read from a 1 GiB slice cut from inside a `VZ.WAD`, not from the
-start of one ([`format_reference.md` §2](./format_reference.md#2-ffcs-wad-container)).
+start of one ([`format_reference.md` §2](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md#2-ffcs-wad-container)).
 
 ---
 
@@ -371,7 +371,7 @@ start of one ([`format_reference.md` §2](./format_reference.md#2-ffcs-wad-conta
 **PROVEN at scale.** Sources: [`docs/mercs2-luacd-xbox/_structural_diff_report.md`](./mercs2-luacd-xbox/_structural_diff_report.md),
 [`docs/mercs2-dlc-luacd/_ps3_xbox_structural_diff.md`](./mercs2-dlc-luacd/_ps3_xbox_structural_diff.md),
 [`docs/_lua_corpus_coverage_audit.md`](./_lua_corpus_coverage_audit.md),
-[`docs/modding/cross_platform_lua_porting_guide.md`](./modding/cross_platform_lua_porting_guide.md).
+[`docs/modding/cross_platform_lua_porting_guide.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/cross_platform_lua_porting_guide.md).
 
 **As of 2026-10-02 every shipped Lua chunk on PC and Xbox has been extracted, decompiled, and structurally diffed cross-platform** using the Rust `lua_structural_dump` tool. 671 common PC↔Xbox pairs (plus 36 Xbox↔PS3 DLC pairs). The complete picture:
 
@@ -418,7 +418,7 @@ The PC KBM menu-interaction layer that consoles don't need. Pause-screen alone d
 
 `"LTI"` is Pandemic's internal name for the PC frontend / options / input-binding UI subsystem; source lives at `D:\Projects\Mercs2_PC\mercs2\LTI\Src\PgLtiRendererPc.cpp` (literal `_Pc` suffix in the module name). Spans ~70 PC-only Lua entry points covering video options (`LTIVideoSetGamma`, `LTIVideoSetRes`, `LTIVideoSetVSync`, …), KBM input binding, joystick binding, audio sliders, mouse controls, start screen, text input, general settings, localization. **PS3 EBOOT has 0 LTI-UI hits; Xbox retail decomp 0.** Consoles delegate these to the platform's native system menu (Xbox 360 blade, PS3 XMB).
 
-Related Lua: `mrxguiltiprecache` + `mrxguiltiprecachelayout` ship on PC only (in both resident and shell blocks); `mrxbriefing` and `wifpmcinterior` on PC reference an `LTILibName` global Xbox lacks. See [`docs/modding/cross_platform_lua_porting_guide.md#42-the-lti-subsystem--pcs-entire-frontendoptions-ui-backbone--is-pc-only`](./modding/cross_platform_lua_porting_guide.md).
+Related Lua: `mrxguiltiprecache` + `mrxguiltiprecachelayout` ship on PC only (in both resident and shell blocks); `mrxbriefing` and `wifpmcinterior` on PC reference an `LTILibName` global Xbox lacks. See [`docs/modding/cross_platform_lua_porting_guide.md#42-the-lti-subsystem--pcs-entire-frontendoptions-ui-backbone--is-pc-only`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/cross_platform_lua_porting_guide.md).
 
 ### 7b.3 Language-loader WADs — per-SKU
 
@@ -668,7 +668,7 @@ and a way to acquire the counterpart bytes for a diff.
 - `docs/xbox360_dlc_analysis.md` — Xbox DOH / STFS format vs PC.
 - `docs/dlc_pc_port_status.md` — PC-side status of the DLC port.
 - `docs/movies_pc_vs_ps3_catalog.md` — full per-file Bink cutscene diff.
-- `docs/aset_format.md` §"Xbox layout is MIRRORED" — the u16-swap trap.
+- [`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) §"Xbox layout is MIRRORED" — the u16-swap trap.
 - `docs/contract_analysis_{chi_all,gur_pir,oil_vza,pmc_jet_mec}.md` —
   per-region mission-script cross-platform diffs.
 - `docs/reverse_engineer/sky_post_hdr_code_map.md` §7 — motion blur / velocity.
