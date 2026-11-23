@@ -201,7 +201,7 @@ Container for all of these is **`0x017BEF78`** (Array A). Raw disassembly:
 that is written, and the value `GetHealth` returns.
 
 > **VERDICT: the health record is `{ +0x00: f32 max, +0x04: f32 current }`.**
-> The field order is **`{max, current}`**. `docs/modernization/object_assembly_model.md`'s
+> The field order is **`{max, current}`**. [`docs/modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md)'s
 > `RuntimeHealth {cur, max}` has the two fields **swapped** and needs fixing.
 
 This is settled by three mutually-corroborating readings (Get reads +4, GetMax reads +0, Set
@@ -572,7 +572,7 @@ in the raw disassembly. Statically resolving all of them:
 | `GetPhysicsType` | `0x017BC1D8/228/278/2C8/318` | `0x01B,0x01C,0x01D,0x01F,0x020` | A#8–12 |
 
 **§8.2 is closed.** 30 cfuncs, 19 distinct containers, each with its reflection type id ready to
-join to `docs/ecs_components.md`. The map's "~20 rows" estimate was conservative.
+join to [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md). The map's "~20 rows" estimate was conservative.
 
 Consequence for §7.1 reimpl guidance: "102 paged containers, `0x80` stride" understates the model.
 There are **two** container classes with **different layouts** — array B keeps its hash sub-object
@@ -596,7 +596,7 @@ Both now read, and both agree:
 | `SetHealth` `0x005CBEE0` | `0x017BEF78` | clamps to `[esi]`, stores `[esi+4]` | ceiling **+0x00**, written **+0x04** |
 
 > **VERDICT: `{ +0x00: f32 max, +0x04: f32 current }`.** The map is **CONFIRMED**.
-> `docs/modernization/object_assembly_model.md` §2 `RuntimeHealth {cur, max}` has the fields
+> [`docs/modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) §2 `RuntimeHealth {cur, max}` has the fields
 > **swapped and should be corrected**. Confirm-live item **§8.6 is closed** — three independent
 > readings, no breakpoint required. The component is type id **`0x0EA`** at `0x017BEF78`.
 
@@ -805,7 +805,7 @@ contiguous runs, and nothing else**:
 
 Pass 1's geometry for **both** arrays is CONFIRMED to the byte, including the lone `0x88` step.
 
-**Independent validation of the census.** `docs/modernization/object_assembly_model.md` records two
+**Independent validation of the census.** [`docs/modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) records two
 component hashes from an entirely different derivation. This method reproduces both from the name
 string alone:
 
@@ -1338,7 +1338,7 @@ Re-derived independently this pass from `0x017BEF78` = **`RuntimeHealth`** (id `
 
 > **VERDICT: `{ +0x00: f32 max, +0x04: f32 current }`.**
 > `object_entity_core_code_map.md` §5.1 is **CONFIRMED**.
-> `docs/modernization/object_assembly_model.md` §2's `RuntimeHealth (0xf9b9b2a5, {cur,max})` has the
+> [`docs/modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md) §2's `RuntimeHealth (0xf9b9b2a5, {cur,max})` has the
 > two fields **swapped and should be corrected**. Three mutually-corroborating readings, no
 > breakpoint. The map's §8.6 is **closed**.
 
@@ -1384,7 +1384,7 @@ holds a 4-byte handle per entity, and the per-node `u16`s live in the pointed-to
   `ModifierKey`, `Label`, `ModelName`, `CheatInfiniteAmmo`…). The budgets file had them all along;
   the registry extractor simply never walked their array.
 
-**`docs/ecs_components.md`** — a *serialized-record* doc, not a registry doc. 23 of its 26 names are
+**[`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md)** — a *serialized-record* doc, not a registry doc. 23 of its 26 names are
 in the census; 12 strides agree exactly under its `payload = stride` convention. Three disagreements
 worth adjudicating: `DestructionLink` (doc payload 16 vs stride **12**), `PhysicalLink` (44 vs
 **40**), `LandingZone` (272 vs **8**, cap 32 — a 34× gap, most likely an 8-byte handle into a
@@ -1396,7 +1396,7 @@ exactly**, and three of its "unknown component" hashes are now resolved: `0x4E2B
 Its open item *"RuntimeLayerId — not found as an explicit ASCII string"* is resolved: id 255,
 `0x017BF478`, hash `0x2284FE19`, stride 4.
 
-**`docs/modernization/object_assembly_model.md`** — all four of its component hashes verify exactly
+**[`docs/modernization/object_assembly_model.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/object_assembly_model.md)** — all four of its component hashes verify exactly
 (`Health 0x06BE1ABF`, `RuntimeHealth 0xF9B9B2A5`, `RuntimeNodeHealth 0x76927BF5`,
 `Model 0x5B724250`, the last with its "4-byte handle" claim confirmed by stride 4). Its "**~231
 component types**, each = a 0x50-byte descriptor" is an undercount and a wrong universal: **334
