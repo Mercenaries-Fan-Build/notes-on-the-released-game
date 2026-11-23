@@ -4,7 +4,7 @@
 
 World placements use **42-byte records**, but **two different layouts** share the stride:
 
-1. **layers_static Transform** (COMP `data`): entity_key + XYZ + quaternion — documented in `docs/placement_data_format.md`.
+1. **layers_static Transform** (COMP `data`): entity_key + XYZ + quaternion — documented in [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md).
 2. **vz_state `flgs`**: different field map — `docs/vz_state_analysis.md` §4.2.
 
 `placement_extractor.py` reads Transform COMP for static world; vz_state reads `flgs` directly.
