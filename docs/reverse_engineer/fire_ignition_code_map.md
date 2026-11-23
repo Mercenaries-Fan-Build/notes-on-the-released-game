@@ -620,8 +620,8 @@ being purely authored.
 ### 4.1 The state machine's `StartEmitter` command (cited + engine side new)
 
 [`state_machine_destruction_code_map.md`](state_machine_destruction_code_map.md) §3 and
-[`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md) already establish the
-vocabulary, and [`../modernization/vehicle_model_spec.md`](../modernization/vehicle_model_spec.md) §5
+[`../destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md) already establish the
+vocabulary, and [`../modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §5
 the state roles. Restated, not re-derived:
 
 | hash | state | what it does |
@@ -896,7 +896,7 @@ arithmetic with no code literal and no string in the image (the dword occurs **z
 `mercs2_unpacked.exe`; only `0x381BE6A4` and `0xCA261E5B` do, twice each). But the older worry that
 "the value occurs nowhere, so there is nothing for the crack to explain" is **false**: it occurs in
 shipped destruction data, dumpable from `vz.wad` with the `--states` command above and listed in
-[`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md):81. Its **role** is
+[`../destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md):81. Its **role** is
 now demonstrated rather than guessed — `0xCE603754`'s entire job is to spawn the panel as a detached
 prop and vanish, i.e. a panel that falls off, with `DetachState` literally as its sibling — and
 `DanglingState` cracking in the adjacent slot of the same five-state machine is independent mutual
@@ -1338,8 +1338,8 @@ it is dead. Whichever silo takes it, the correct implementation is three faithfu
 - **Cited, not re-derived**: [`particle_fx_code_map.md`](particle_fx_code_map.md),
   [`state_machine_destruction_code_map.md`](state_machine_destruction_code_map.md),
   [`weapons_combat_code_map.md`](weapons_combat_code_map.md),
-  [`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md),
-  [`../modernization/vehicle_model_spec.md`](../modernization/vehicle_model_spec.md) §5,
+  [`../destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md),
+  [`../modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §5,
   [`../mercs2-ecs/01_combat_weapons_projectiles.md`](../mercs2-ecs/01_combat_weapons_projectiles.md),
   [`../mercs2-ecs/05_presentation_audio_fx.md`](../mercs2-ecs/05_presentation_audio_fx.md),
   [`diagnostics_code_map.md`](diagnostics_code_map.md) (the `0x006D5640` stub).
