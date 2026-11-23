@@ -150,7 +150,7 @@ registry: one long run of register calls into pool `DAT_01977a38`.
 2. **The name registrations** via **`FUN_0085ac90(logical_name, name.sho, variant)`**: 339 sites in
    `FUN_0084f130` itself and 43 in the water registrar, 21 in the islands below, and 145 `_li`
    alternates; the registry makes 411 distinct registrations across the configurations
-   ([`shader_store_format.md` §9](../shader_store_format.md#9-registration)). Families in
+   ([`shader_store_format.md` §9](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md#9-registration)). Families in
    order: PgBlurH/V FP, PgAntiAliasingFP, `PgMesh*VP` (NoTangent/NoColor/Morph/Refract/AmbientWind/Fast),
    `PgSkin1*VP`, `PgSkin*VP`, PgDiffRefract FP, all shadow caster VPs, then (further in) the lit material
    FP family, terrain/road/blob/decal/water/sky/post.
@@ -160,7 +160,7 @@ registry: one long run of register calls into pool `DAT_01977a38`.
 class`** (the variant/class index), inline-`strcpy` the **sho** into `record+0xb`, then a `vtbl+8` call:
 the family's load handler, which resolves the store record and assigns the registry index. The record's
 vtable is its family (45 of them); see
-[`shader_store_format.md` §9](../shader_store_format.md#9-registration). The variant arg is **the LOD index on Xbox terrain (0–3)** and the
+[`shader_store_format.md` §9](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md#9-registration). The variant arg is **the LOD index on Xbox terrain (0–3)** and the
 **light-class on PC lit material FPs (0=base / 1=`_pl` / 2=`_sl` / 3=`_pl_sl`)** — see
 [lighting_code_map.md](lighting_code_map.md) §4. The load handler assigns each record a u16 index at
 `rec+0x08` (`FUN_0085ab70` pixel, `FUN_0085abd0` vertex); the draw picks a material's pixel shader as
@@ -178,7 +178,7 @@ device slot (+0x2d28) and the two D3D create indices are proven.** Each created 
 under the record id in a 0x1200-slot table (`FUN_0085b810`). The id is
 `pandemic_hash_m2(stem + "_3.sho" | "_3l.sho")` of the registered `.sho` name, looked up by
 `FUN_0085b6f0`. The records of all loaded stores must stay below 0x1200, and on a duplicate id the
-first loaded record wins. Full spec: [shader_store_format.md](../shader_store_format.md).
+first loaded record wins. Full spec: [shader_store_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md).
 
 **Per-family sub-registrars** (callees of `FUN_0084f130`): water `FUN_00484380`, and islands reached
 through `jmp [stub]` thunks — decal `FUN_02475bc0` (via `0x0049c8b0`), FX `FUN_005726e0` (via
@@ -351,7 +351,7 @@ float preamble; `flags:u16 @+0xA0` (store at `0x858b97`; what the bits do is
 inter-record stride `116 + tex_count*4`. Slot order 0=diffuse, 1=specular/gloss, 2=normal, 3+=extra.
 This is the engine side of the project's `convert_mtrl` walker (memory
 [[mtrl-flags-count-transposition]]) and the `0x84DD5B` overrun (count>10). See also
-[[fun-858790-mtrl-parse-stdcall]] and `docs/modernization/material_shader_spec.md`.
+[[fun-858790-mtrl-parse-stdcall]] and [`docs/modernization/material_shader_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/material_shader_spec.md).
 
 ## 8. Texture streaming
 
@@ -372,7 +372,7 @@ fully mapped from the streaming-buffer chain (all decomp-verified):
 **externalTextures vs inplaceTextures = the residency split:** the resident ASET block ships only a
 coarse mip tail (`inplaceTextures`, fixed budget ~2728 B BC1 / 1360 B BC3); higher mips
 (`externalTextures`) are lone `BODY` UCFX chunks in the finer c3-cell LOD blocks of the texture's own
-cell subtree. `INFO`'s four masks say which mips each rung holds (`format_reference.md` §4.3). See memory
+cell subtree. `INFO`'s four masks say which mips each rung holds ([`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §4.3). See memory
 [[texture-high-mip-streaming]], [[engine-streaming-buffer-sizing-chain]] and `docs/engine_load_path_map.md`.
 
 **The status nibble** (page record `+4`, top 4 bits, read by provider slot `+0x30`, `0x8755d0`): 1 queued, 2
@@ -392,7 +392,7 @@ the level. `node+0x5c` rises only at `0x874278` or `0x875e43`, and `FUN_00875d80
 `0x4b1234`, `0x4b1215`, ring `count` 1 (`docs/streaming_livelock_analysis.md`).
 
 No `INFO` field, mask or `BODY` size reaches this: `FUN_004b1000` ignores the reader and neither it nor
-`FUN_00750a30` writes `res+0x16` or `node+0x5a`. They crash or corrupt (`format_reference.md` §4.3). The other
+`FUN_00750a30` writes `res+0x16` or `node+0x5a`. They crash or corrupt ([`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §4.3). The other
 undrained conditions are block-level: `FUN_00875b00` returns 0 while `node+0x4c` exceeds the largest free
 run, the dangling-rung case; `FUN_00872e60` is false while `node+0x50` will not fit and nothing can be
 evicted; `FUN_00873530` re-queues while `node+0x50+0x54` exceeds the budget; `FUN_00875cc0` returns 3 while
