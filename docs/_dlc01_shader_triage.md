@@ -10,7 +10,7 @@ is therefore not computable at the raw store-ID level.
 
 The porting-blocker question lives one layer up, at the **material binding**
 layer: MTRL records reference a pixel shader by `pandemic_hash_m2(<logical
-PS name>)` (`docs/shader_store_format.md` §6; `FUN_00858790` reads the key
+PS name>)` ([`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §6; `FUN_00858790` reads the key
 and probes the shader pool via `FUN_008242b0(0x800)`). That key space is
 the same across PC and Xbox 360 (Phase 3.C §2.1/2.2). PS3 DLC01 content is
 byte-identical to Xbox 360 DLC01 content at the ASET and Lua layers
