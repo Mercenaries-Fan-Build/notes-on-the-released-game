@@ -93,11 +93,11 @@ The sidebar loads `mesh.obj` / `mesh.gltf` from discovered `review/` folders und
 ## Docs
 
 - [AGENTS.md](AGENTS.md) — the operational guide: mandates, topology, programs, workflow.
-- [docs/format_reference.md](docs/format_reference.md) — FFCS / sges / UCFX / textures / Havok layouts.
-- [docs/aset_format.md](docs/aset_format.md) — ASET decode.
-- [docs/modernization/00_charter.md](docs/modernization/00_charter.md) — the engine-reimpl charter, and
-  [engine_support_inventory.md](docs/modernization/engine_support_inventory.md) — the 32-row scoreboard.
-- [docs/modding/field_guide.md](docs/modding/field_guide.md) + [docs/asset_injection_playbook.md](docs/asset_injection_playbook.md) — modding.
+- [docs/format_reference.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — FFCS / sges / UCFX / textures / Havok layouts.
+- [docs/aset_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) — ASET decode.
+- [docs/modernization/00_charter.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/00_charter.md) — the engine-reimpl charter, and
+  [engine_support_inventory.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/engine_support_inventory.md) — the 32-row scoreboard.
+- [docs/modding/field_guide.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/field_guide.md) + [docs/asset_injection_playbook.md](docs/asset_injection_playbook.md) — modding.
 - [docs/fixpack/bug_register.md](docs/fixpack/bug_register.md) — the fix-pack backlog.
 - [tools/README.md](tools/README.md) — the Python CLIs.
 
