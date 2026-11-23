@@ -122,7 +122,7 @@ via `FUN_0085b810`. **All 556 blobs retain an intact CTAB** (creator `Microsoft 
 identify or decode.** There are **60 non-skinned `objectData` VS** = the static-prop set to splice.
 The record `id` is `pandemic_hash_m2(stem + "_3.sho")` (`"_3l.sho"` in `shader3Low.bin`) of the
 registered `.sho` file name minus `.sho` (`FUN_0085b6f0`). Route-1 additive registration therefore has a
-real key; see [shader_store_format.md](../shader_store_format.md). Tooling: Rust `shader3` +
+real key; see [shader_store_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md). Tooling: Rust `shader3` +
 `sm3asm` modules and the `shaderforge` bin in `tools/wad_simulator/crates/mercs2_formats`.
 
 #### 2.1b Two runtime-validation rules — ✅ splice LIVE-VERIFIED (R0 PASS, 2026-08-04)
@@ -451,5 +451,5 @@ committing a seam. **No resume; no conditional bp on hot fns** (`x32dbg-mcp-no-r
 - `docs/reverse_engineer/foliage_instancing_plan.md` — the veg-specific plan + full spine map (the substrate).
 - `docs/reverse_engineer/render_core_code_map.md`, `lighting_code_map.md`, `prop_lod_imposter_code_map.md` — render code maps.
 - `docs/reverse_engineer/render_distance_and_density_levers.md` + memory `crowd-fog-couple-asi`, `entity-density-config-plus-laa-patch` — the density levers already applied (LAA, 2× pools, fog couple).
-- `docs/modernization/material_shader_spec.md`, `skinning_animation_spec.md`, memory `blendindices-per-group-palette` — material/skin/palette semantics (the skinned-instancing barrier).
+- [`docs/modernization/material_shader_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/material_shader_spec.md), `skinning_animation_spec.md`, memory `blendindices-per-group-palette` — material/skin/palette semantics (the skinned-instancing barrier).
 - `docs/external_tools_review.md §5` — D3D9/rendering tools (3DMigoto shim, PIX/RenderDoc).
