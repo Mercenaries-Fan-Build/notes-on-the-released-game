@@ -229,7 +229,7 @@ of what currently fails, not a plan — plans live under `.claude/plans/`.
      master-script hook needs a `dlc01` copy. `qm link` puts every hook the
      catalogue hosts on `vz` onto a level's own master (`add_level`, decided
      2026-11-07), and refuses a master that defines no function a hook wraps or
-     returns from its top level (`manifest_format.md`, "qm's hooks").
+     returns from its top level ([`manifest_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md), "qm's hooks").
    - The DLC hub has its own `_GlobalEnter`/`_GlobalExit`
      (`dlc01_missionhub.lua:1929-1963`) and never calls
      `MrxHq.GlobalEnter`, so an `hq.enter` hook in `mrxhq` stays silent there;

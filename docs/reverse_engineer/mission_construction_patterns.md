@@ -11,7 +11,7 @@ date: 2026-09-22
 — how offering (how the player finds it), lifecycle (what class runs it), and persistence (what
 survives save/reload) combine, and how to reassemble those parts to construct custom gamemodes
 without hitting the seam-hardening failure modes documented in
-[`docs/modding/lua_engine_seam_hardening.md`](../modding/lua_engine_seam_hardening.md).
+[`docs/modding/lua_engine_seam_hardening.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/lua_engine_seam_hardening.md).
 
 This is the peer of [`mission_contract_flow_code_map.md`](mission_contract_flow_code_map.md), which
 maps the *native* mission surface (Pg cfuncs, `Sys.RequestGameState`, layer streaming, context
@@ -203,10 +203,10 @@ save-persistence is not; a modkit dashboard element wants to expose the mission 
   to a recipe. Answer "which shipped missions match Recipe X" by looking there.
 - [`mission_contract_flow_code_map.md`](mission_contract_flow_code_map.md) — the native side:
   which cfuncs (Pg.LoadLayer etc.) each of these patterns ultimately reaches.
-- [`docs/modding/lua_engine_seam_hardening.md`](../modding/lua_engine_seam_hardening.md) — F1–F11
+- [`docs/modding/lua_engine_seam_hardening.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/lua_engine_seam_hardening.md) — F1–F11
   failure modes at the Lua↔engine seam; every mod that picks a heavy pattern above needs to know
   which of them apply to its choice.
-- [`docs/modding/manifest_format.md`](../modding/manifest_format.md) — where the `requires:`
+- [`docs/modding/manifest_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md) — where the `requires:`
   block and future `save_schema:` block on mission contributions land, per the seam-hardening
   proposal.
 - [[custom-mission-add-script-loading-screen-wedge]] — the WAITFORSTREAMING wedge that only bites

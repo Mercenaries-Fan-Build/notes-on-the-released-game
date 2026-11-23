@@ -465,7 +465,7 @@ VAs are from `output/_ghidra_x360/xenon_decomp_named.c` (base `0x82000000`); sni
 - `docs/mercs2-pdb-analysis/rendering-shaders.md` — the `PgSkin*VP` / `PgMesh*MorphVP` skinning/morph vertex shaders and `BoneMatrixArray` overlap with the rendering shader set.
 - `docs/mercs2-pdb-analysis/vehicles.md` — vehicle bone controllers/named bones (`ControlledWheelBone`, `SuspBone`, `RotorHubBoneName`, `VisRudderBone`, `WinchBone`, `VehicleAnimationSet`).
 - `docs/mercs2-pdb-analysis/pangea-engine-core.md` — `PgSysAnimation` and the Pangea asset/table layer (`PgAnimationTable`, `PgFaceFx*Asset`).
-- Existing project docs that overlap: `docs/character_systems_plan.md`, `docs/mercs2-ecs/` (ECS component registry), `docs/format_reference.md`.
+- Existing project docs that overlap: `docs/character_systems_plan.md`, `docs/mercs2-ecs/` (ECS component registry), [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md).
 
 ## Evidence & confidence
 

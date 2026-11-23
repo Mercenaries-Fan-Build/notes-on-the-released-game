@@ -27,7 +27,7 @@ first-hand and cited as `ghidra/FUN_xxxx`), the pimp/scheduler maps
 [`docs/mercs2-luacd/07_player_core_cheats_managers.md`](../mercs2-luacd/07_player_core_cheats_managers.md).
 Our-own-diagnostics reconciliation: memory [[loadprobe-tool-and-0x874e7d-hardclose]],
 [[pmc-bb-native-lua-logging]], [[lua-trace-asi-surface-b-oracle]], [[mercs2-workshop-devtool]], and
-`docs/modernization/engine_support_inventory.md` row 32.
+[`docs/modernization/engine_support_inventory.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/engine_support_inventory.md) row 32.
 
 **Method / honesty model.** Same discipline as the sibling maps. The Xbox side is **code-fact** (the
 debug menu is fully decompiled with quoted bodies). The PC side splits three ways and the row says

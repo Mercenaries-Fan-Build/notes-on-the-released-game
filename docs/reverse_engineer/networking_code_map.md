@@ -29,7 +29,7 @@ cross-references [`world_streaming_code_map.md`](world_streaming_code_map.md) (`
   §3.6 (`NETEVENT_*` / `Net.SendCustomEvent` / `NetEventCallback` co-op sync pattern).
 - The **most deeply-reversed slice** — the working online restore — is memory:
   [[mercs2-online-restore-and-patch-architecture]], [[fesl-bversion-builder]], [[fesl-ca-key-patch-required]].
-- Pangea alignment gap: [`../modernization/pangea_engine_alignment.md`](../modernization/pangea_engine_alignment.md)
+- Pangea alignment gap: [`../modernization/pangea_engine_alignment.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/pangea_engine_alignment.md)
   §"Keystone B" (the wire protocol flagged "not known" — the gap this map closes).
 - PC bodies read first-hand from the 27k-fn decomp, cited `ghidra/FUN_xxxx`.
 
@@ -852,7 +852,7 @@ port the dead EA services. Two separate things stand in for row 28:
   `0x00BB8154`).
 - Cross-refs: `event_bus_code_map.md` (Keystone B — the shared bus + router), `faction_reputation_code_map.md`
   §8 (`Net*Faction*`), `world_streaming_code_map.md` (NetSafe→streaming),
-  `docs/modernization/pangea_engine_alignment.md` §Keystone B (the wire-protocol gap).
+  [`docs/modernization/pangea_engine_alignment.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/pangea_engine_alignment.md) §Keystone B (the wire-protocol gap).
 
 ## Appendix A — the Net.* Lua surface
 

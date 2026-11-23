@@ -4,7 +4,7 @@
 Scoreboard row 7 (was ❌ none). Binds the Xbox PDB names
 ([world-streaming.md](../mercs2-pdb-analysis/world-streaming.md) §Water) to PC addresses. Companion
 JSON `docs/data/sky_decal_water_code_map.json`. Ties into the water-and-swimming scope memory and
-[watermap_format.md](../watermap_format.md). Source module confirmed `PgWaterWin32.cpp` (path @0xbac038).
+[watermap_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/watermap_format.md). Source module confirmed `PgWaterWin32.cpp` (path @0xbac038).
 
 ## 0. Boundary
 
@@ -32,7 +32,7 @@ Reached per-frame `FUN_0085a9e0 → FUN_00466d40(view+0x2b94)` from a registered
 
 1. `FUN_00486390(water)` — the projected-grid setup, first: the band of heights in the view frustum's XZ
    rectangle, the projector, and the OWater::LOD clip that clears the visible flag when nothing intersects
-   (`docs/watermap_format.md`, "What the engine samples and draws"). Not RenderWakeMap.
+   ([`docs/watermap_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/watermap_format.md), "What the engine samples and draws"). Not RenderWakeMap.
 2. `FUN_00482fa0(water+0xa30)` — **RenderOcclusion** (0x15ee8); refs `WaterClip`, builds fmt-0x1a clip tex. *(med)*
 3. **RenderReflections** (0x15f00) = **`FUN_004677d0`** (via `FUN_00486fa0`) — builds mirrored view
    matrices (D3DXMatrixMultiply of camera vs the water plane at `+0xab0/+0xb70`) and re-renders scene

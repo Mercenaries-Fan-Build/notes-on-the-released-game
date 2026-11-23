@@ -2,7 +2,7 @@
 
 Captures the **ordered stream of Lua → engine C-binding calls** (name + args) that the original
 Mercenaries 2 emits at runtime. This is **Surface B** of the modernization regression harness
-(`docs/modernization/00_charter.md`): the script ↔ engine boundary.
+([`docs/modernization/00_charter.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/00_charter.md)): the script ↔ engine boundary.
 
 A reimplemented engine — even one running a **newer Lua** — is correct iff, for the same scenario,
 its scripts emit the **same ordered sequence of `(binding, args)`**. We don't care *how* the new VM

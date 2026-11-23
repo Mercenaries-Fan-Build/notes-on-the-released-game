@@ -477,8 +477,8 @@ All prototypes are Xbox 360 STFS containers with SCFF (big-endian FFCS) data.
 
 ## Related Documentation
 
-- [`docs/patch_wad_format.md`](patch_wad_format.md) — Patch WAD structure and creation guide
+- [`docs/patch_wad_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/patch_wad_format.md) — Patch WAD structure and creation guide
 - [`docs/modding_deep_dive.md`](modding_deep_dive.md) — DRM, hash systems, Lua format
 - [`docs/exe_cross_validation.md`](exe_cross_validation.md) — EXE binary analysis
 - [`docs/dlc_pc_port_status.md`](dlc_pc_port_status.md) — DLC porting tool status
-- [`docs/format_reference.md`](format_reference.md) — Binary format specifications
+- [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — Binary format specifications

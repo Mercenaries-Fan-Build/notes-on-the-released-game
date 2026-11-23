@@ -22,7 +22,7 @@ inside the spawn definition — they are wired together by hashes and handles.
 - A submesh attaches to its node via **`INDX`** — ★CORRECTED 2026-07-12: `INDX` is keyed by
   **sub-object** ordinal (not mesh-group) and yields a **`seg_id` into `SEGM`**, whose `bone` field is
   the HIER node. It is NOT a direct mesh-group→node map. See
-  [`modernization/vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §2.
+  [`modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §2.
 
 ## Concrete Mi-26 layout (verified)
 The model is split across blocks (the `[[override-source-must-match-aset-block]]` pattern).
@@ -33,7 +33,7 @@ The model is split across blocks (the `[[override-source-must-match-aset-block]]
 > **streamed geometry refinements** carrying `GEOM` + `INDX` and nothing else — which is exactly why
 > the row below says "No HIER" and reads as a stub. Their `INDX` rows index the **resident** block's
 > `SEGM`. Calling `P000_Q3` "minimal" and treating `P001_Q2` as *the* geometry inverts the
-> relationship. See [`modernization/vehicle_model_spec.md`](modernization/vehicle_model_spec.md) §1.
+> relationship. See [`modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §1.
 
 | Block | Role | Contents |
 |---|---|---|

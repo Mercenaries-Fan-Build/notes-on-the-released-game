@@ -22,7 +22,7 @@ first-hand and cited as `ghidra/FUN_xxxx`), the ECS registry
 `tools/wad_simulator/crates/mercs2_formats/src/tag_registry.rs` (MESH/TINY/SEGM handler VAs),
 `docs/game_config/cdbsizes.ini` (pool budgets), and the static-layer list
 `docs/mercs2-luacd/src/vz/xQ!L.lua` (the `_tiny` region layers). Gap context:
-[`docs/modernization/rendering_fx_lighting_gap.md`](../modernization/rendering_fx_lighting_gap.md) §A.
+[`docs/modernization/rendering_fx_lighting_gap.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/rendering_fx_lighting_gap.md) §A.
 Companion memory: [[world-lod-and-destruction-scope]], [[world-streaming-spec]],
 [[cdbsizes-component-pool-config]], [[multi-material-draw-groups]].
 
@@ -293,7 +293,7 @@ vz_pirate_isles_tiny, vz_pmc_tiny
 The mechanism, the registry, the draw and the shaders are in
 [`world_streaming_code_map.md` §4.5](world_streaming_code_map.md#45-tiny-stand-ins-one-far-distance-model-per-200-m-cell-of-a-layer);
 the container format is `mercs2_formats::tiny_model`; a Shipment adds one with
-[`add_tiny_geometry`](../modding/manifest_format.md#add_tiny_geometry). Whether a satellite or map
+[`add_tiny_geometry`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md#add_tiny_geometry). Whether a satellite or map
 view swaps any of this in is not established (§8).
 
 The `RtGenericLOD`/`Proxy` runtime is a real but small-scale (32-object) system for specific

@@ -628,7 +628,7 @@ def _class_of(model_name):
 def _deep_vocab(neighbour_words, cls):
     v = set(RIGGER_BASE) | set(CLASS_WORDS.get(cls, [])) | set(CLASS_WORDS[""]) | set(neighbour_words)
     # every word the game's own asset names spell -- authored vocabulary, not a dictionary
-    p = Path("docs/data/aset_names.csv")
+    p = Path("tools/wad_simulator/docs/data/aset_names.csv")
     if p.exists():
         for r in csv.DictReader(open(p)):
             for t in re.split(r"[_\W]+", (r.get("name") or "").lower()):

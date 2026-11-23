@@ -1165,7 +1165,7 @@ pointer, then `call 0x0064A770`. Element sizes: `ControllerPlayer` `0x0C`, `Vehi
 **107** `Required { name, corpus_calls }` rows — but `install` is **not** unfilled: 67 direct
 `b.real(...)`, 14 loop-installed mode gates, 3 loop-installed scalar setters, 24 via
 `super::record_all(...)`, and **zero** real stubs. The map appears to have read the file's stale
-header comment. (`docs/modernization/wave0_seam_review.md:40` Seam G -> `mercs2_player`, and that
+header comment. ([`docs/modernization/wave0_seam_review.md:40`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/wave0_seam_review.md) Seam G -> `mercs2_player`, and that
 crate really is an empty scaffold — both CONFIRMED.)
 
 ---

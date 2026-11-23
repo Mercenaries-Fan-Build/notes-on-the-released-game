@@ -74,7 +74,7 @@ The SceneObject container's listener (vtable `0xBB3824`, installed at `0x51668E`
     `0x4D1C10`) set or clear "shown" on a controlled node only. `SetState` (`0x4D1C70`) pops node then
     state; the target `0xCDE0B80F` takes the state the entity's `OSMStateParameter` records (pool
     `0xDF8B90`) name for the node — its own, then its template's — else `PristineState`. It is a
-    template parameter, not a saved state (`docs/modernization/vehicle_model_spec.md` §5a).
+    template parameter, not a saved state ([`docs/modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §5a).
   - A node is visible unless it or an ancestor is controlled and not shown (`FUN_00690AC0`).
   - `FUN_00476BB0` then rebuilds `+0x294`: `[+0x29C]` = vis(node 0), and `(vis, inherit)` for every
     node whose visibility differs from its parent's. Later Show / Hide do not rebuild it.

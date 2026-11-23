@@ -358,7 +358,7 @@ caller — `0x005B8E9C`, which lies inside `[0x005B8CB0, 0x005B8EE0)` = `Minimap
 binding (H).
 
 **Three ctor fingerprints worth keeping** (all H, hashes resolved against
-`docs/data/aset_block_strings.json` / `aset_discovered_names.json`):
+[`docs/data/aset_block_strings.json`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_block_strings.json) / [`aset_discovered_names.json`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/crates/mercs2_workshop/data/aset_discovered_names.json)):
 
 - `TextWidget` seeds its font to asset hash **`0x339761F4` = `font_16`** and registers it through
   `thunk_FUN_024EEE40(*(DAT_01175FB0 + 0x60), hash)`.
@@ -883,7 +883,7 @@ So the two names share one body, and the tag-3 gate in `MinimapSetFocusLocation`
 ## 8. Reconciliation with `mercs2_ui` and `mercs2_script`
 
 `tools/wad_simulator/crates/mercs2_ui` (silo 15,
-[`../modernization/reimplementation_parallelization_plan.md`](../modernization/reimplementation_parallelization_plan.md)
+[`../modernization/reimplementation_parallelization_plan.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/reimplementation_parallelization_plan.md)
 row 15) already models a retained-mode widget tree and a marker registry. Status of the three
 corrections this map raised, **re-checked against the crate on 2026-07-26** (read-only, no edits):
 
@@ -1030,7 +1030,7 @@ edit that file**; the correction is stated here and should be applied there in i
 - **Binding tables:** `mods/lua_trace_asi/reference/binding_map.json` (live `.rdata` walk,
   [[lua-trace-asi-surface-b-oracle]]) — 114/114 and 38/38, corroborated by
   [`../lua_engine_bindings_audit_deep_dive.md`](../lua_engine_bindings_audit_deep_dive.md).
-- **Asset hashes:** `docs/data/aset_block_strings.json`, `docs/data/aset_discovered_names.json`
+- **Asset hashes:** [`docs/data/aset_block_strings.json`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_block_strings.json), [`docs/data/aset_discovered_names.json`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/crates/mercs2_workshop/data/aset_discovered_names.json)
   (`font_16`, `MiniMap_Icon_Marker_A/B`). A 32-bit hash match alone is weak evidence
   ([[aset-name-export]]); here each hash is corroborated by the *role* of the ctor that registers it.
 - **Script traffic:** fresh census over the 370 `.lua` files in `docs/mercs2-luacd/src` (qualified

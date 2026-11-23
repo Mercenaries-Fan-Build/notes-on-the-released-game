@@ -314,7 +314,7 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 
 ### Source data
 - Singleton `watermap` (`0x4D7D30C4`) in `resident`, `watr` payload **495,669 B**
-- **257×257** grid, **32 m** cells, **8192×8192 m** XZ span (see [`watermap_format.md`](watermap_format.md))
+- **257×257** grid, **32 m** cells, **8192×8192 m** XZ span (see [`watermap_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/watermap_format.md))
 
 ### Decoded layers (retail PC)
 | Layer | Format | Role | Status |
@@ -457,7 +457,7 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 ## 12. Effects + SCRB materials → Niagara + UE Materials
 
 ### Source data
-- **1** fxdict (`0xFA46D8A8`) — global FX parameter dictionary in **`resident`** block (not the `effects` block file — see [`fxdict_format.md`](fxdict_format.md))
+- **1** fxdict (`0xFA46D8A8`) — global FX parameter dictionary in **`resident`** block (not the `effects` block file — see [`fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md))
 - **314** effect entries (`0x5608BD5A`) — particle/VFX definitions in `effects` block
 - **1,026** scrub packages (`0x600B904E`) — SCRB+MTRL compiled shaders in c3 cells
 - **1,033** `ScrubObject` ECS placements — scrub hash per instance
@@ -469,7 +469,7 @@ Each `vz_state` file encodes a **conditional world overlay** — entities that a
 - **Placements →** `ANiagaraActor` via extended populate script
 
 ### Gap
-- **Partial decode:** [`fxdict_parser.py`](../tools/fxdict_parser.py) + [`effect_block_probe.py`](../tools/effect_block_probe.py) — INFO+DICT stride and effect chunk tags documented in [`fxdict_format.md`](fxdict_format.md); parameter names still hash-only
+- **Partial decode:** [`fxdict_parser.py`](../tools/fxdict_parser.py) + [`effect_block_probe.py`](../tools/effect_block_probe.py) — INFO+DICT stride and effect chunk tags documented in [`fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md); parameter names still hash-only
 - No Niagara template library; no `effect_extractor.py` catalog JSON yet
 - SCRB → UE material auto-conversion not feasible — probe with [`material_probe.py`](../tools/material_probe.py)
 

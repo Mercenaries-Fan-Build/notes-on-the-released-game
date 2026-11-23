@@ -28,7 +28,7 @@ pump the input tick hangs off), the config-loader anchor in
 ExternalInterface KB/M-remap screen drivers). Config ground truth:
 [`docs/game_config/Mercs2.ini`](../game_config/Mercs2.ini). Our-engine reconciliation: memory
 [[input-system-mercs2ini-gilrs]] (the built data-driven 25-action set), [[shadow-pc-absolute-mouse-input]]
-(the raw-input oddity + look/aim pattern), and `docs/modernization/engine_support_inventory.md` row 18.
+(the raw-input oddity + look/aim pattern), and [`docs/modernization/engine_support_inventory.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/engine_support_inventory.md) row 18.
 
 **Method / honesty model.** Same discipline as the sibling maps. The PC DirectInput path is
 **code-fact** (device create/poll/acquire read with quoted bodies, DirectInput8 vtable offsets and the

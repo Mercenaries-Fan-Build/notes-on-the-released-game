@@ -1199,8 +1199,8 @@ harvest-dlc-strings:
 roster-names:
 	@echo "Mining model-root names from the game vehicle/weapon rosters (structured, own error bar)"
 	@"$(REPO_ROOT)/tools/wad_simulator/target/release/aset_external_mine" \
-	  --names "$(REPO_ROOT)/docs/data/aset_names.csv" \
-	  --roster "$(REPO_ROOT)/docs/data/lua_vehicle_hashes.csv" \
+	  --names "$(REPO_ROOT)/tools/wad_simulator/docs/data/aset_names.csv" \
+	  --roster "$(REPO_ROOT)/tools/wad_simulator/docs/data/lua_vehicle_hashes.csv" \
 	  --roster "$(REPO_ROOT)/docs/data/spawnable_templates.csv" \
 	  --emit "$(REPO_ROOT)/docs/data/aset_roster_names.json"
 	@echo "-> docs/data/aset_roster_names.json (run 'make fold-aset-rainbow' to publish to census/workshop)"

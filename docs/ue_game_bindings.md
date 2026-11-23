@@ -75,7 +75,7 @@ Environment:
 
 ## Visibility model
 
-Three tiers (see [`placement_data_format.md`](placement_data_format.md) §10):
+Three tiers (see [`placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) §10):
 
 1. **Base world** — `layers_static` + c3 cells → always visible (`Mercs2_BaseWorld`).
 2. **vz_state overlays** — act / pristine / staging / contract → Data Layers; default preset `act1_default` (Act1 + pristine on; Act2/3 and destroyed/staging off).

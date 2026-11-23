@@ -135,7 +135,7 @@ are the answer; if a Messenger connect (TCP 13505, `0x96DDA0`) is attempted inst
 
 | Mechanism | State | Evidence |
 |---|---|---|
-| `shell-patch.wad` overlay mounts above `shell.wad` | P (code), engine name `%s-patch.wad` | `manifest_format.md:126` (`FUN_004BFDA0`, `0x004C12DD`); last-wins proven in-game for stringdb (`wad-mount-order-last-wins` memory) |
+| `shell-patch.wad` overlay mounts above `shell.wad` | P (code), engine name `%s-patch.wad` | [`manifest_format.md:126`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md) (`FUN_004BFDA0`, `0x004C12DD`); last-wins proven in-game for stringdb (`wad-mount-order-last-wins` memory) |
 | qm Lua injection into **shell** scripts | **Only for sound**: qm links an append onto shell `mrxsound` + mints `qm_shell_modloader` into `blocks\Shell\resident_P000_Q3.block` | `link.rs:130` `SHELL_SCRIPT_BLOCKS`, `:1359-1381`; `manifest_format.md:1277-1296`. `patch_lua` itself resolves only `SCRIPT_BLOCKS` (vz) (`link.rs:122-126`). Live front-end proof: G |
 | `import` finds a script by name hash, any block | P (doc) | `manifest_format.md:1293-1295` (`_SYS._IMPORT 0x5AE2D0`) |
 | `add_movie`/`add_ui` (cfx_pack mint + FlashWidget trampoline) | vz-only routing; `add_ui` hooks `wifpmcinterior` | `gfx_menu_replay_scoping.md` §1.3, §5.2 |

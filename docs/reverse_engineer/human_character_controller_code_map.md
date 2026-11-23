@@ -12,7 +12,7 @@ action verbs travel down.
 `hkpCharacterProxy` swept-capsule controller, the 5-state on-foot machine, `HumanPhysics::Activate`,
 the ragdoll — is already fully recovered in [`physics_code_map.md`](physics_code_map.md); clip
 selection is already fully recovered in [`animation_code_map.md`](animation_code_map.md) +
-[`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md); the
+[`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md); the
 player↔character binding is already recovered in [`player_code_map.md`](player_code_map.md). Those
 are **cited**, not repeated.
 
@@ -21,7 +21,7 @@ are **cited**, not repeated.
 | Belongs to | Not here |
 |---|---|
 | [`physics_code_map.md`](physics_code_map.md) | `HumanPhysics::Activate` `FUN_004255c0` (7 capsules + phantom + proxy), `hkpCharacterProxy` `FUN_0094f2c0` + `hkpCharacterContext` `FUN_0094d2e0` and the 5-state machine (OnGround `FUN_0094ce90` / InAir `FUN_0094d7b0` / Jumping `FUN_00951ef0`), the ragdoll builder `FUN_009463a0`, the grapple/winch **constraint** layer |
-| [`animation_code_map.md`](animation_code_map.md) · [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md) | the ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` → `ASTO` clip-list picker and its 14 key columns. This map supplies the **upstream state graph** that produces two of those columns, not the picker |
+| [`animation_code_map.md`](animation_code_map.md) · [`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md) | the ActionTable `0x6802C321` → AnimationLookup `0xE00B080C` → `ASTO` clip-list picker and its 14 key columns. This map supplies the **upstream state graph** that produces two of those columns, not the picker |
 | [`player_code_map.md`](player_code_map.md) | the player object, `player+0x20` = attached character GUID, `FUN_006a4060` attach-by-marker-component, the 107-cfunc `Player` table |
 | [`weapons_combat_code_map.md`](weapons_combat_code_map.md) | weapon state, damage, `RuntimeWeapon`. The 9 `Human.Inventory.*` cfuncs are a **marker-delimited sub-table inside this same array** (§3.1) and are not among the 21 |
 | [`vehicle_code_map.md`](vehicle_code_map.md) | seats and ride mechanics; `ForceExitSeatNoSnap` only *calls into* them |
@@ -378,7 +378,7 @@ does not return a `char*`; it returns the name-hash.**
 
 ### 2.1 The join to clip selection
 
-[`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md) §1
+[`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md) §1
 documents the resident **ActionTable `0x6802C321`** (1020 rows, 14 columns) whose first three key
 columns are **`Stance, Action, AimState`**. This map reaches the same constants from the *opposite*
 direction — literals inside Lua bindings and the engine's own state setter — which is why
@@ -564,7 +564,7 @@ The Action column goes from ~2 named to **296 of 303**, from this container's st
 7 residual ActionTable Action hashes (`0xA3C54951`, `0xDA882AB8`, `0xF2F71296`, `0xF37538A1`,
 `0x1930E5FF`, `0xA7E56A1B`, `0xBBA5334E`) survived a brute force over all 826,229 ASCII runs in
 resident block 3185 and belong to
-[`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md),
+[`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md),
 not here.
 
 > **Correction (old claim struck): `0x27DE7135` is `pandemic_hash_m2("*")` — a WILDCARD, not a "NONE
@@ -1267,7 +1267,7 @@ edge to `mercs2_player`, exactly as the crate split assumed.
   The old "no symmetric Xbox↔PC marriage to make" claim is **refuted** (§Sources).
 - **Cross-refs:** [`physics_code_map.md`](physics_code_map.md) (character proxy, state machine,
   ragdoll, grapple constraints), [`animation_code_map.md`](animation_code_map.md) +
-  [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md)
+  [`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md)
   (ActionTable → AnimationLookup → ASTO; §2.4 retires that doc's Stance-column open item),
   [`player_code_map.md`](player_code_map.md) (§9 settles its §9.2; §5 and §7.2 correct its
   `DAT_00DFBD77` and `DAT_00EDBAA4` readings),

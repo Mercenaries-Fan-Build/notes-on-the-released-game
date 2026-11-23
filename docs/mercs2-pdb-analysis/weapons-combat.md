@@ -236,7 +236,7 @@ Material/asset key strings tied to projectile/weapon damage (lines 5801–5874):
 - `docs/mercs2-pdb-analysis/vehicles.md` — `WeaponRecoilVehicle`, `VehicleAmmo`, `iEquippedVehicleWeaponGuid`, manned/emplaced weapons (`MannedWeaponNode`, `UseHeavyWeapon`, `wpn_emplacedgun`).
 - `docs/mercs2-pdb-analysis/pangea-engine-core.md` — `PgWeaponSystem` runs within the Pangea game-system/ECS update loop; the descriptor table (component pool sizes) is the ECS registry.
 - `docs/mercs2-pdb-analysis/rendering-shaders.md` — `WeaponEffects`, `MuzzleFlashTemplate`, tracer/shell effects, reticle textures.
-- Project ECS docs `docs/ecs_components.md` and `docs/mercs2-ecs/` — the WAD-side counterparts of these weapon component classes.
+- Project ECS docs [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) and `docs/mercs2-ecs/` — the WAD-side counterparts of these weapon component classes.
 - Weapon-stat WAD blocks: the project memory note "weapon-definitions-wpn-blocks" documents that editable weapon stats live in `wpn_<name>_P000_Q3.block` blocks; the field names above (`iClipSize`, `ScatterPerShot`, `Velocity`, `DamageRadius`, etc.) are the human-readable labels for those reflection blobs.
 - `docs/mercs2-luacd/` — Lua-side weapon/store wrappers; the engine fields here are the native backing of the Lua `all_weapons` stubs.
 

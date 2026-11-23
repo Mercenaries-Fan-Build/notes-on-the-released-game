@@ -9,7 +9,7 @@ game-state machine** that every mission transition runs through (`Sys.RequestGam
 **80 cfuncs**) and the neighbouring **`Junk` table** (`0x00B99E28`, 24 cfuncs).
 
 This is the map for the biggest structural hole in the project: mission/contract has **no scoreboard
-row, no crate, and no map** (`docs/modernization/engine_support_inventory.md` §Boot rows K1 call it
+row, no crate, and no map** ([`docs/modernization/engine_support_inventory.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/engine_support_inventory.md) §Boot rows K1 call it
 out as ⛔ four times; there is no `mercs2_mission` crate in `tools/wad_simulator/crates/`).
 
 **Boundaries with sibling maps** (cited, not re-derived):

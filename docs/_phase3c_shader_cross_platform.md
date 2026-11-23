@@ -53,7 +53,7 @@ id = pandemic_hash_m2(stem + "_3l.sho")   # shader3Low.bin, shaderVTLow.bin, sha
 ```
 
 Where `stem` is the registered `.sho` file name minus `.sho`. This is settled in
-`docs/shader_store_format.md` §4 (anchor: `FUN_0085b6f0`, which copies the registered name,
+[`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §4 (anchor: `FUN_0085b6f0`, which copies the registered name,
 cuts its last four chars, appends `DAT_00be87e8 = "_3l.sho"` or `DAT_00be87f0 = "_3.sho"` based
 on `DAT_00dfc345`, and hashes via `FUN_00824270 → pandemic_hash_m2`). **Not** a D3DCompile
 output hash or MD5-of-source. Phase 1 §2's "likely D3D shader-signature hash" guess is
@@ -73,7 +73,7 @@ stem under both suffixes, intersected with each bin's record ids:
 | **Total** | **1,023** | **939 (91.8%)** |
 
 The 84 unresolved are shader stems that have no `*.sho` string in the exe. Reproduces
-`shader_store_format.md` §4 byte-for-byte. Script: `scratchpad/pc-names.log`.
+[`shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §4 byte-for-byte. Script: `scratchpad/pc-names.log`.
 
 ### 2.2 Xbox 360 — PROVEN
 
@@ -274,7 +274,7 @@ Open (INFERRED or UNRESOLVED):
 - Whether the 28 unnamed Xbox hashes and 84 unnamed PC hashes overlap by name (both samples
   depend on the exe not shipping the string, but both exes may well omit the same shader name).
 - The 2 duplicate ids inside the PC bin set (1,021 unique of 1,023) — expected because VT and
-  R2VB share one record id per quality tier per `shader_store_format.md` §1 (never resident
+  R2VB share one record id per quality tier per [`shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §1 (never resident
   together), but not re-verified this session.
 
 ---
@@ -293,4 +293,4 @@ Logs: `/tmp/{toc-scan,ps3-toc,console-toc,pc-names,pc-xbox-diff,size-hist}.log`.
 
 Oracles used: the PC exe (`output/_ghidra/securom_dump/mercs2_unpacked.exe`), PS3 ELF
 (`game-files/ps3-version/EBOOT.elf`), Xbox and PS3 shader bins; `tools/pandemic_hash.py` for the
-hash itself; the already-settled `docs/shader_store_format.md` §4 for the PC suffix convention.
+hash itself; the already-settled [`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §4 for the PC suffix convention.

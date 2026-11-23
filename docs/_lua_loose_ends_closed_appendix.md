@@ -125,7 +125,7 @@ collision only.
 - `docs/mercs2-luacd/src/**` (PC Lua corpus)
 - `docs/mercs2-luacd-xbox/src/**` (Xbox Lua corpus)
 - `output/_ghidra/mercs2_unpacked.exe_decomp.txt` (PC Ghidra decomp, 27k fns)
-- `docs/data/aset_discovered_names.json` + `aset_external_names.csv` (ASET name tables)
+- [`docs/data/aset_discovered_names.json`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/crates/mercs2_workshop/data/aset_discovered_names.json) + `aset_external_names.csv` (ASET name tables)
 
 ---
 

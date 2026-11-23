@@ -919,7 +919,7 @@ desynced on `pop edi`): `0x005BB3F8` -> a **Lua-supplied string** (see §2); `0x
 
 **M4 — `LTIupdateSupportQuickSlot` absent from every `.gfx`. CONFIRMED, and the extraction is now
 proven complete.** Pass 1 could not verify `output/gfx_movies/` against the WADs.
-`docs/data/aset_export.csv` lists **83** assets of `type_hash 0xFE0E8320` (`cfx_pack`): vz.wad 64 +
+[`docs/data/aset_export.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_export.csv) lists **83** assets of `type_hash 0xFE0E8320` (`cfx_pack`): vz.wad 64 +
 shell.wad 16 + Loading.wad 3; `output/gfx_movies/` holds exactly 64 + 16 + 3, mapping 1:1 including
 the hash-named ones. Searched as raw bytes *and* as NUL-delimited exact tokens over the full
 decompressed payload of all 83: `LTIupdateSupportQuickSlot`, `updateSupportQuickSlot`,

@@ -175,7 +175,7 @@ engine code consuming the tuning (PC `FUN_00658f60` field-by-field loader for Ca
 how far it unrolls defaults for strings. Consoles handle larger populations by **having
 more ECS slots**, not by **running cheaper per-vehicle physics**.
 
-**Implication for the modernization reimpl (`docs/modernization/00_charter.md`):** the
+**Implication for the modernization reimpl ([`docs/modernization/00_charter.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/00_charter.md)):** the
 tuning gold set is single-source. Any platform's WAD is a valid oracle; the Rust vehicle
 system (`docs/reverse_engineer/vehicle_code_map.md` §4 → `mercs2_vehicle`) only needs to
 match ONE set of 99 dwords per Car template, 69 per Boat, 22 per Heli, 30 per Tank. No

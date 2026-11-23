@@ -575,7 +575,7 @@ Structural checks     ★★★★☆     ★★★★☆       ★★★★☆ 
 Format coverage       ★★☆☆☆     ★★★☆☆       ★★★★☆       ★★★★★
 ```
 
-The single highest-impact change is **C.1.1**: Transform COMP record parsing with position float validation in `placement.rs`. This directly addresses the spatial hash crash pattern and transforms the thinnest module (2 lines of logic) into a content-aware validator using format knowledge that is fully documented in `docs/placement_data_format.md`.
+The single highest-impact change is **C.1.1**: Transform COMP record parsing with position float validation in `placement.rs`. This directly addresses the spatial hash crash pattern and transforms the thinnest module (2 lines of logic) into a content-aware validator using format knowledge that is fully documented in [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md).
 
 ---
 

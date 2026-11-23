@@ -312,7 +312,7 @@ are all in writable `.data`, patchable live).
 
 Addresses in this section are VAs in the runtime image
 (`mercenaries-one-source/_ghidra/_ghidra/securom_dump/image.bin`, file offset = VA − `0x400000`) and
-the decomp `output/_ghidra/mercs2_unpacked.exe_decomp.txt`. `docs/modding/manifest_format.md` cites
+the decomp `output/_ghidra/mercs2_unpacked.exe_decomp.txt`. [`docs/modding/manifest_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modding/manifest_format.md) cites
 this section for the `language` values of the sound kinds and for what `add_language` forks.
 
 ### 10.1 The engine language table

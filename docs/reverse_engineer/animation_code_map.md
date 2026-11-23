@@ -384,7 +384,7 @@ and the space. Open → §9.
 > ([[model-hier-bone-naming]]); `trnm` binds tracks to these hashes (§1).
 >
 > **The data-driven clip picker (the row-20 "controller" / state machine).** VERIFIED e2e
-> ([[human-animation-selection-system]], [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md)):
+> ([[human-animation-selection-system]], [`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md)):
 > `ActionTable 0x6802C321` (Stance/Action/AimState/Direction/… → Handle) → `AnimationLookup
 > 0xE00B080C`, queried by `FUN_00743CD0` with a key of the Handle, the template's `HumanAnimationSet`
 > (Gender + `CharacterName = pandemic_hash_m2(merc)`) and its equipment → the winning row's `Animation`
@@ -487,7 +487,7 @@ native driver, the RTTI-named Havok runtime, and the honest gaps so none of it i
   (223 symbols; hka/hkb/FaceFX class + string tables), [`symbol-map.md`](../mercs2-pdb-analysis/symbol-map.md).
 - Solved corpora: [[wavelet-decode-solved-live-capture]], [[human-animation-selection-system]],
   [[blendindices-per-group-palette]], [[model-hier-bone-naming]], [[mattias-locomotion-clips-identified]];
-  [`../modernization/human_animation_selection.md`](../modernization/human_animation_selection.md);
+  [`../modernization/human_animation_selection.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/human_animation_selection.md);
   `mercs2_formats::{animgroup,anim_select,havok}`.
 - Cross-refs: [`scheduler_tick_code_map.md`](scheduler_tick_code_map.md) (layer-4 tick),
   [`pimp_job_system_code_map.md`](pimp_job_system_code_map.md) (MT jobs),

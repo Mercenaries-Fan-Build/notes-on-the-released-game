@@ -305,7 +305,7 @@ The comment at line 1709-1711 explicitly acknowledges this gap:
 # mixed-content body; pass through to preserve string integrity.
 ```
 
-Per `docs/ecs_components.md` §vz_state, these contain component *definitions*
+Per [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) §vz_state, these contain component *definitions*
 (enum tables, field metadata) rather than per-entity records. The body is
 indeed text-heavy, but any embedded u32 hashes or type codes will remain BE.
 
@@ -396,7 +396,7 @@ When the walker encounters:
   - `"Name"` → passthrough (ASCII, endian-neutral)
   - `"LightObject"` → swap key + 13×f32 (stride 56)
   - `"ModelName"` → swap 2×u32 (stride 8)
-  - etc. for each known COMP type from `docs/ecs_components.md`
+  - etc. for each known COMP type from [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md)
   - Unknown component names → use `schm` payload_stride to determine
     record stride, then apply generic u32-aligned swapping
 
@@ -424,7 +424,7 @@ the UCFX descriptor table. The descriptor row gives `(offset, size)` for the
 `flgs` body. The distinction between "header region" (entity names) and
 "record region" (42-byte placement records) should come from:
 1. The preceding CHDR descriptor's child count metadata
-2. Known `flgs` record format documentation (`docs/placement_data_format.md`)
+2. Known `flgs` record format documentation ([`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md))
 3. The `schm` from the Transform COMP in the same container
 
 ### D.4 Fail-loud on unknown schemas
@@ -468,7 +468,7 @@ The current converter applies `_convert_u32_array(body_be)` to all STRM data
 (line 1838), which is correct for f32 positions/normals/UVs but will
 **corrupt f16 or u8 vertex attributes**.
 
-From `docs/format_reference.md` §13, terrain tile vertices use a 16-byte
+From [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §13, terrain tile vertices use a 16-byte
 stride with `f16×3 + f16 + f16×3 + f16`. The u32 swap on f16 data would
 swap pairs of f16 values, producing wrong coordinates.
 

@@ -129,7 +129,7 @@ Curated from [awesome-game-file-format-reversing](https://github.com/) and suppl
 ### Kaitai Struct — MEDIUM PRIORITY
 - **URL:** https://kaitai.io/
 - **What it does:** Declarative language for describing binary data structures, with code generation for multiple languages including Python.
-- **Relevance:** We could formally specify our FFCS, sges, UCFX, and placement record formats in Kaitai's `.ksy` format. This would auto-generate parsers, produce interactive web visualizations of binary data, and serve as machine-readable documentation alongside our `docs/format_reference.md`. Particularly valuable for the complex UCFX chunk hierarchy.
+- **Relevance:** We could formally specify our FFCS, sges, UCFX, and placement record formats in Kaitai's `.ksy` format. This would auto-generate parsers, produce interactive web visualizations of binary data, and serve as machine-readable documentation alongside our [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md). Particularly valuable for the complex UCFX chunk hierarchy.
 - **Priority:** MEDIUM — Documentation and validation tool.
 
 ---
@@ -373,7 +373,7 @@ Curated from [awesome-game-file-format-reversing](https://github.com/) and suppl
 ### 010 Editor + Game Templates — **HIGH PRIORITY**
 - **URL:** https://www.sweetscape.com/010editor/ (editor), templates: [010GameTemplates](https://github.com/Nenkai/010GameTemplates), [010-Editor-Templates](https://github.com/tge-was-taken/010-Editor-Templates), [bt](https://github.com/neptuwunium/bt)
 - **What it does:** Professional hex editor with powerful binary template system. The game template collections contain hundreds of format templates.
-- **Relevance:** 010 Editor templates are the most popular way to document and visualize game binary formats. We should create `.bt` templates for FFCS, sges, UCFX, and placement records. This would let anyone with 010 Editor interactively explore our binary data, and serves as executable documentation alongside `docs/format_reference.md`. The existing template collections may also contain templates for related formats.
+- **Relevance:** 010 Editor templates are the most popular way to document and visualize game binary formats. We should create `.bt` templates for FFCS, sges, UCFX, and placement records. This would let anyone with 010 Editor interactively explore our binary data, and serves as executable documentation alongside [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md). The existing template collections may also contain templates for related formats.
 - **Priority:** HIGH — Best-in-class binary format documentation tool.
 
 ### ImHex — **HIGH PRIORITY**
@@ -397,7 +397,7 @@ Curated from [awesome-game-file-format-reversing](https://github.com/) and suppl
 ### bitfield — LOW PRIORITY
 - **URL:** https://github.com/wavedrom/bitfield
 - **What it does:** Renders bit field diagrams from JSON descriptions.
-- **Relevance:** Could generate visual diagrams of our binary format structures for documentation. Nice complement to `format_reference.md` tables.
+- **Relevance:** Could generate visual diagrams of our binary format structures for documentation. Nice complement to [`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) tables.
 - **Priority:** LOW — Documentation enhancement.
 
 ### pics (File Format Dissections) — LOW PRIORITY

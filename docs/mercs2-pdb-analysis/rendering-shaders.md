@@ -392,7 +392,7 @@ Render-side runtime types (`RtLightAnimation`, `ParticleEmitter`, `ObjectMateria
 - `docs/mercs2-pdb-analysis/` — sibling per-system docs (e.g. world/streaming, audio, physics-Havok, animation/characters). The Havok `hk*` classes in the RTTI table belong to the physics doc; the `Fx*`/FaceFX cluster belongs to a characters/animation doc.
 - Project docs that overlap this subsystem:
   - `docs/scaleformgfx-cfx-blind-swap.md` and memory note "scaleformgfx CFX blind-swap" — the `PgScaleform*` shaders / UCFX assets documented here.
-  - `docs/ecs_components.md` and `docs/mercs2-ecs/` — `ObjectMaterial`, `MaterialController`, particle/atmosphere components on the ECS side.
+  - [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) and `docs/mercs2-ecs/` — `ObjectMaterial`, `MaterialController`, particle/atmosphere components on the ECS side.
   - Memory note "World-load 0x84DD5B texture-handle corruption" / "MTRL flags/count transposition" — the `MaterialKeyTable` / `numMaterials` / `subMaterials` / `Read*Texture*` symbols are the engine side of the MTRL/texture WAD-conversion work.
   - `docs/engine_load_path_map.md` and "Engine streaming buffer-sizing chain" memory — `LoadTexture`/`ReadTextureBody`/`SwapMipTextures` feed the texture-streaming path analyzed there.
 

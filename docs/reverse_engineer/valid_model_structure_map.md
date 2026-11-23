@@ -15,7 +15,7 @@ census** — the two things not already covered elsewhere.
 >   from the exe (VA-anchored, Validated/Registered status) + a curated model-path
 >   semantics guide (§3: GEOM walker `FUN_00478120` → PRMG `FUN_00478270`; MTRL;
 >   `decl`; the **PRMT field-semantics conflict**; SEGM = draw-group→bone binding).
-> - [`docs/format_reference.md`](../format_reference.md) — FFCS WAD / `sges` /
+> - [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — FFCS WAD / `sges` /
 >   UCFX blob / CSUM (§4.0) / **INDX MESH-group→HIER-node map (§4.2)** / texture /
 >   Havok / terrain.
 >
@@ -129,7 +129,7 @@ bound by the material expects** — this is a primary from-scratch failure point
 `material_index` MUST be `< MTRL material count`. A single-material container whose
 geometry references index ≥1 makes the engine read past the material array.
 
-**Field 0 is `material_index`. This is settled** — `docs/modernization/texture_extraction_notes.md`
+**Field 0 is `material_index`. This is settled** — [`docs/modernization/texture_extraction_notes.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/texture_extraction_notes.md)
 §2 tested the competing `{seg_id, index_start, index_count, packed}` reading against the bytes,
 found it did NOT match, and records `u32 material_index @0` as CONFIRMED double-blind. The §6a
 table's "field semantics UNRESOLVED" entry below, and `segm_group_bone_binding.md` §1.2's
@@ -174,7 +174,7 @@ models).
 | MESH/PRMG/PRMT | 2 / 2 / 2 | 1 / 1 / 1 | LOD/group expectations |
 | destruction chunks | SEGM/SWIT/STAT/CHDR | none | crashes destructible template reader |
 | decl / stride | game-exporter decl | hand-written DECL20/DECL40 | **shader rejects unknown decl** |
-| shader | vehicle/scene shaders | pixel-shader key `0xCAEFE1FE` (`PgDiffSpecNormFP`) on every material; `0x0A164785` is only the first preamble word, which selects no shader ([shader_store_format.md](../shader_store_format.md) §6) | wrong shader for the render path |
+| shader | vehicle/scene shaders | pixel-shader key `0xCAEFE1FE` (`PgDiffSpecNormFP`) on every material; `0x0A164785` is only the first preamble word, which selects no shader ([shader_store_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §6) | wrong shader for the render path |
 | provenance | game exporter | invented | "every deviation is a bug" |
 
 The from-scratch material is *structurally* plausible (flags 0x80, count 3, stride
@@ -250,10 +250,10 @@ is why the DLC skins ship as wardrobe overrides rather than brand-new hashes.
 | `NODE` | hierarchy node records (per HIER entry) | keep |
 | `MTRL` | material table, N×128B records | keep; only repoint texture hashes |
 | `GEOM`→`MESH`→`PRMG`→{`STRM`{info,decl,data}, `AREA`, `IBUF`{info,data}, `PRMT`} | geometry (see §1) | **rebuild geometry; keep decl** |
-| `INDX` | **★CORRECTED 2026-07-12:** sub-object → **seg_id** map (u16). One entry per `MESH`/`SKIN` sub-object (NOT per PRMG group); the value indexes **`SEGM`**, not `HIER`. Node = `SEGM[seg_id].bone`. See `../modernization/vehicle_model_spec.md` §2 | keep; **must have exactly `sub_object_count` rows** |
+| `INDX` | **★CORRECTED 2026-07-12:** sub-object → **seg_id** map (u16). One entry per `MESH`/`SKIN` sub-object (NOT per PRMG group); the value indexes **`SEGM`**, not `HIER`. Node = `SEGM[seg_id].bone`. See [`../modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §2 | keep; **must have exactly `sub_object_count` rows** |
 | `SEGM` | **★RE-CORRECTED 2026-07-12:** the segment table — 4B `{u16 bone (LE), u8 seg_id, u8 state_mask}`. `state_mask` is the **LOD-tier bitmask** (not a "group"); byte order is **LE, not BE**; `SEGM[i].seg_id == i`. The RESIDENT block's SEGM serves the whole LOD chain | **keep verbatim**; if authoring, size it for ALL rungs |
 | `PRMT` | ★**RESOLVED 2026-07-30 — `[0]` is `matidx`**, not prim-type. `texture_extraction_notes.md` §2 disproved the prim-type/`seg_id` reading against the bytes (CONFIRMED double-blind); see the PRMT section in §1 above. Our `inject_static`/`model_inject` writes `6`, which is therefore a **material index**, not a primitive type — wrong on every template, and an overrun risk (`0x004CC064`) on any template with ≤6 materials. **Preserve the template group's original PRMT `[0]`; never write 6.** | rewrite geometry range; keep `[0]` verbatim |
-| `SWIT` | **★CORRECTED:** a FLAT list of node **hashes** that participate in destruction swaps — not per-state "node-index sets". The states themselves live in the `NODE`/`STAT`/`CHDR`/`CEXE` machine (`PristineState` `SHOW`s `0x255EAB53`, `DestroyedState` `SHOW`s `0x75F1F74D`; `SHOW`/`HIDE` act on the whole SUBTREE). See `../modernization/vehicle_model_spec.md` §5 | keep verbatim |
+| `SWIT` | **★CORRECTED:** a FLAT list of node **hashes** that participate in destruction swaps — not per-state "node-index sets". The states themselves live in the `NODE`/`STAT`/`CHDR`/`CEXE` machine (`PristineState` `SHOW`s `0x255EAB53`, `DestroyedState` `SHOW`s `0x75F1F74D`; `SHOW`/`HIDE` act on the whole SUBTREE). See [`../modernization/vehicle_model_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vehicle_model_spec.md) §5 | keep verbatim |
 | `STAT` | destruction state records (state machine states) | keep verbatim |
 | `STAM` | state-machine table (destruction/anim states) | keep verbatim |
 | `CHDR` | ECS chunk-header / component container | keep verbatim |

@@ -62,7 +62,7 @@ So `ui_shell` appearing as `wavebank` *and* `soundbank` *and* `sounddb` in the s
 a collision — three distinct keys. That distinction removes ~570 false positives that a
 hash-only grouping reports for `vz.wad`.
 
-> **⚠ CORRECTION — `docs/type_hash_registry.md` / `mercs2_formats::aset_type_ids` are wrong for
+> **⚠ CORRECTION — [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) / `mercs2_formats::aset_type_ids` are wrong for
 > 12 of the 36 type ids.** The real table, read from the WAD and byte-identical in all four WADs,
 > is below. Validated by sampling up to 3 ASET rows per `type_id` per WAD, decompressing the owning
 > block and confirming it carries a UCFX entry `(asset_hash, types[type_id])`: **139 hit / 0 miss**
@@ -482,7 +482,7 @@ Pass `--wad` in **mount order** — the tool does not infer it.
 ## Appendix B — the 112 duplicate keys
 
 Format: `asset_hash | name | type | payload bytes (one side) | locations (wad#block) | verdict`.
-`(unresolved)` = the name is not in `docs/data/aset_names.csv`; for the six divergent textures the
+`(unresolved)` = the name is not in [`docs/data/aset_names.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_names.csv); for the six divergent textures the
 real names are recovered from the containers' `NAME` chunks and listed in §A.4.
 
 ```
@@ -602,19 +602,19 @@ real names are recovered from the containers' `NAME` chunks and listed in §A.4.
 
 ## Appendix C — corrections this work produced
 
-1. **`docs/type_hash_registry.md` / `mercs2_formats::aset_type_ids::type_id_for_type_hash` are
+1. **[`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) / `mercs2_formats::aset_type_ids::type_id_for_type_hash` are
    wrong for 12 of 36 type ids.** ★ **The CODE half is fixed as of 2026-08-01** — `types.rs`,
    `type_name` and `aset_type_ids` are regenerated from the in-WAD table and pinned by
    `mercs2_formats/tests/type_ids_match_the_wad.rs`, which reads offset `0x48` at test time rather
-   than encoding a fourth copy. `docs/type_hash_registry.md` itself is still uncorrected. The authoritative table is in the WAD at file offset `0x48`
+   than encoding a fourth copy. [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) itself is still uncorrected. The authoritative table is in the WAD at file offset `0x48`
    (count = header dword 8). Correct table in §A.1; validated 139 hit / 0 miss. Most visibly:
    `0xC122545A` is id **8** (not 26), `0x5647C35D` is id **17** (not 8), `0xEA4829D5` is id **26**
-   (not 20), `0xE8DF4D87` is id **10** (not 4). `docs/data/aset_export.csv`'s `type_name` /
+   (not 20), `0xE8DF4D87` is id **10** (not 4). [`docs/data/aset_export.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_export.csv)'s `type_name` /
    `type_hash` columns inherit those errors — its `type_id` and `asset_hash` columns are correct.
-2. **"Asset lookups search patch WAD first (reverse-order)"** in `docs/patch_wad_format.md` and
+2. **"Asset lookups search patch WAD first (reverse-order)"** in [`docs/patch_wad_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/patch_wad_format.md) and
    `docs/dlc_loader_cross_reference.md` was marked *inferred from the Mercs 1 source*. It is now
    **proven in the Mercs 2 PC binary** (§B.3) — and additionally proven from shipped data (§A.4).
-3. **`loading-patch.wad` does not sit at the top of the stack.** `docs/patch_wad_format.md` §5
+3. **`loading-patch.wad` does not sit at the top of the stack.** [`docs/patch_wad_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/patch_wad_format.md) §5
    speculates it has "special handling" and is "likely loaded first, before the main game WADs" —
    it *is* loaded first, which means it is ranked **lowest**, so `shell.wad` / `vz.wad` /
    `English.wad` override it, not the other way around.

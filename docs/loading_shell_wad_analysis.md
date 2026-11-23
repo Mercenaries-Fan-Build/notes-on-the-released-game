@@ -361,4 +361,4 @@ Both WADs can be processed through the standard stage 2 pipeline. The `scaleform
 | `0xC122545A` | Singleton in `musicdata` (name_hash == type_hash) | Music playlist/sequencing format |
 | `0xE8DF4D87` | Singleton in `musicdata` | Music track definition table |
 
-These match observations from vz.wad (see `docs/type_hash_registry.md`). The font-metric hypothesis is strengthened by shell.wad having dedicated `_shell_*_font` blocks that use this type.
+These match observations from vz.wad (see [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md)). The font-metric hypothesis is strengthened by shell.wad having dedicated `_shell_*_font` blocks that use this type.

@@ -126,7 +126,7 @@ Ambient traffic density is config-driven, already anchored in
 `PopulationDynamicRoad` (road-traffic density); enums `TrafficControlEnum` / `RtSpeedLimit` /
 `SpawnerRadiusTypeEnum`; civilians flagged `_vehcivilian` (vehicle) vs `_flagcivilian` (foot).
 Per-entity `HibernationControl` gates spawn-in distance (see
-[`world_streaming_spec.md`](../modernization/world_streaming_spec.md)). Traffic vehicles are
+[`world_streaming_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/world_streaming_spec.md)). Traffic vehicles are
 placed by the spawner along the road graph (§2), then driven by the AI states (§4). The
 `VehicleSpawnList` / `VehiclesOnScreen` on-screen-cap consumers were not pinned on PC this pass.
 

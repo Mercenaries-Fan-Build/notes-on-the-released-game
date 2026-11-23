@@ -137,7 +137,7 @@ extracted retail movies are established as a **golden reference set** by
 `mercs2_probe gfx-golden` ([`gfx_golden.rs`](../../tools/wad_simulator/crates/mercs2_probe/src/gfx_golden.rs))
 (parser [`mercs2_formats::gfx`](../../tools/wad_simulator/crates/mercs2_formats/src/gfx.rs)) →
 [`gfx_golden_set.md`](gfx_golden_set.md) + [`gfx_golden_set.json`](../data/gfx_golden_set.json), with
-the authoring guide in [`gfx_authoring_feature_spec.md`](gfx_authoring_feature_spec.md). It measured
+the authoring guide in [`gfx_authoring_feature_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/reverse_engineer/gfx_authoring_feature_spec.md). It measured
 the feature answers this review left open: gradients are real but rare (3 movies, `SHELL`/`Statistics`/
 `pause_menu`, paired with `GFx_DefineExternalGradientImage`); **bitmaps are always external** (0
 embedded, 1,296 `GFx_DefineExternalImage` refs across 50 movies); fonts are imported (29 movies) not

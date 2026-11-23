@@ -29,6 +29,6 @@
 
 ## Known limitations (this iteration)
 
-- No `EntranceLink` trigger volumes yet — ECS portal rows are still partial (`docs/ecs_components.md`).  
+- No `EntranceLink` trigger volumes yet — ECS portal rows are still partial ([`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md)).  
 - No Lua-driven `RuntimeLayer.Activate` — see `output/placements/pmc_lua_string_harvest.csv` for string leads.  
 - `populate_pmc_base` uses **editor hide**, not World Partition **Data Layers** / runtime streaming.

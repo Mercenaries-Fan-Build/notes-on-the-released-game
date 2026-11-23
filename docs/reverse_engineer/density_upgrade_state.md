@@ -137,7 +137,7 @@ name→blob hash needed to decode. Static-mesh VS is `PgMeshVP` / `PgMeshVPAmbie
 (`stem + "_3l.sho"` in `shader3Low.bin`), where `stem` is the registered `.sho` file name minus `.sho`.
 The reader is `FUN_0085b6f0`. A bare name hash is not the id; the suffixed stem is. This gives Route-1
 additive registration a real key. The full format and loader limits are in
-[shader_store_format.md](../shader_store_format.md).
+[shader_store_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md).
 
 **The five build pieces that remain (in order):**
 1. **Shader splice — ✅ DONE and LIVE-VERIFIED (R0 PASS, 2026-08-04).** The CTAB-driven operand-redirect

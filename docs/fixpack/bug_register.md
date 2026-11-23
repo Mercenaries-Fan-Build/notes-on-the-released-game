@@ -482,7 +482,7 @@ your call on whether these are in scope.
 
 ## ★ Where the game's text actually lives (measured, not assumed)
 
-Surveyed via `stringdb_dump` + `docs/data/aset_export.csv` (type_id 7):
+Surveyed via `stringdb_dump` + [`docs/data/aset_export.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_export.csv) (type_id 7):
 
 | WAD | stringdb blocks | Notes |
 |---|---|---|
@@ -570,7 +570,7 @@ Also present and worth a look: `vz.wad::allcaps_P000_Q3` — the exe's language 
 
 ### ⚠ Do not trust `type_id` tables when building fix-pack assets
 
-The duplicate survey found `docs/type_hash_registry.md` and `mercs2_formats::aset_type_ids` are
+The duplicate survey found [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) and `mercs2_formats::aset_type_ids` are
 **wrong for 12 of 36 type ids** (e.g. `0xC122545A` is id 8, not 26). The authoritative table lives
 **inside each WAD at file offset `0x48`** (count = header dword 8 = 36), identical across all four
 WADs, validated 139 hit / 0 miss. `aset_export.csv`'s `type_name`/`type_hash` columns inherit the
@@ -601,7 +601,7 @@ equal-length in-place swaps the old Python tool could do.
 
 ### ★ Format corrections discovered while building it
 
-[`docs/format_reference.md`](../format_reference.md) §4.1 states stringdb SYEK/SRTS bodies are
+[`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §4.1 states stringdb SYEK/SRTS bodies are
 **"natively big-endian on all platforms"** and that the SRTS header is `total_string_bytes`.
 **Both are wrong for the PC build.** Measured across all six language blocks in retail `shell.wad`:
 
@@ -614,4 +614,4 @@ equal-length in-place swaps the old Python tool could do.
   **silently skips the table.**
 
 `tools/build_shell_string_patch.py`'s UTF-16**LE** assumption was the correct one.
-✅ `format_reference.md` §4.1 has been corrected (2026-07-22) on all three points.
+✅ [`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §4.1 has been corrected (2026-07-22) on all three points.

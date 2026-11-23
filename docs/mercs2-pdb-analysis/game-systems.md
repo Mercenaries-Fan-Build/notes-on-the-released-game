@@ -382,7 +382,7 @@ The PC doc resolved `SaveData`/`autoSave`/`CashValue` etc. to PC functions. On X
 - Existing project docs that overlap this system's scope:
   - `docs/support-store-system-map.md` / memory note "Support/store supply-drop system map" — the cash economy / store (`AddCash`/`SetCash`/`nCashCost`).
   - `docs/contract_analysis_*.md` (e.g. `contract_analysis_oil_vza.md`, `contract_analysis_pmc_jet_mec.md`) — contract/mission content (`ContractActivated`/`Completed`/`Cancelled`).
-  - `docs/ecs_components.md` and `docs/mercs2-ecs/` — the `CashValue`/`FactionValue`/`FactionZone`/`RuntimeObjectiveMarker` ECS components.
+  - [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) and `docs/mercs2-ecs/` — the `CashValue`/`FactionValue`/`FactionZone`/`RuntimeObjectiveMarker` ECS components.
   - `docs/dlc_mission_loading.md` — mission/PDA flow (`AddPdaMissionDetails`, `GetMissionStates`).
 
 ## Evidence & confidence

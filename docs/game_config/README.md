@@ -13,7 +13,7 @@ our `placement.rs` parses.
 
 Why this matters: the pool sizes are a direct readout of **what the world is made of, by scale**, and
 they **corroborate the streaming architecture** we arrived at in
-`docs/modernization/world_streaming_spec.md` §10 / 2b.
+[`docs/modernization/world_streaming_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/world_streaming_spec.md) §10 / 2b.
 
 ### Corroboration — LOD is a rare special case; hibernation is the pervasive residency mechanism
 

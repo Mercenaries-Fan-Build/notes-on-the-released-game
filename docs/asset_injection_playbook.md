@@ -144,7 +144,7 @@ This is where the four content classes diverge:
 | **Static world prop** | Lua `Pg.Spawn(name_or_hash, x, y, z)` at a coordinate/marker. **Spawn-by-hash works natively** — a *number* arg to `Pg.Spawn` is used directly as the m2 hash, no patch. | [name-registry-spawn-by-hash](memory/name-registry-spawn-by-hash.md) |
 | **Wardrobe skin** | Append `{Name,Model,PlayerVisibleName}` to `_tOutfits[sHero]` in `wifpmcinterior.lua`; lift the `GetAvailableCostumes()` gate; applied via `Player.SetProfileCostume` + `Player.SetOutfit`. Pure Lua. | [dlc-skin-swap-via-pmc-wardrobe](memory/dlc-skin-swap-via-pmc-wardrobe.md), [wifpmcinterior.lua:155](docs/mercs2-luacd/src/vz/wifpmcinterior.lua#L155) |
 | **Store / stockpile item (Eva)** | Add a `tSupportData` catalog entry (`sName,nCashCost,nFuelCost,nMaxStock,sType,oSupport`) + register in `MrxRewardData.GetAllPotentialShopItems` + unlock (`tUnlockStatus={Pmc=1}`). `nCashCost=0`→free. **Requires full resident-block-3185 replacement + Lua recompile.** | [01_support_economy_delivery.md](docs/mercs2-luacd/01_support_economy_delivery.md), [heli experiment](docs/heli_store_injection_experiment.md) |
-| **Layers_static placement** (baked, alternative to Pg.Spawn) | Add a `Transform`+`Name`+`ModelName{key,model_hash}` COMP triple. Faithful but injecting a *new* placement into retail is untested — prefer Lua `Pg.Spawn` for new objects. | [world_streaming_spec.md §2A](docs/modernization/world_streaming_spec.md) |
+| **Layers_static placement** (baked, alternative to Pg.Spawn) | Add a `Transform`+`Name`+`ModelName{key,model_hash}` COMP triple. Faithful but injecting a *new* placement into retail is untested — prefer Lua `Pg.Spawn` for new objects. | [world_streaming_spec.md §2A](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/world_streaming_spec.md) |
 
 **Lua deployment**: resident scripts load from the block, **not per-hash** — a new/edited script
 needs full block-3185 replacement (`build_patch_wad --block-index 3185` carries all ~7018 entries),
@@ -233,7 +233,7 @@ Truly novel: no dog exists, and we disturb **nothing** existing. Chosen path = a
 - The engine's placed objects are **`SceneObject`** components (`0xb6185886`, stride 0x1c — "base
   placement/transform entity record"). The ~62k `layers_static` props ARE SceneObjects: a `Transform`
   COMP + `Name` COMP + `ModelName` COMP sharing one `u32 entity_key`
-  ([world_streaming_spec.md §2A](docs/modernization/world_streaming_spec.md)). The engine simply
+  ([world_streaming_spec.md §2A](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/world_streaming_spec.md)). The engine simply
   loads and renders whatever placements it finds — no template registry needed for a static prop.
 - `Pg.Spawn(name,…)` is the *other* mechanism (named entity **templates**, bit-31 handles in the name
   registry `0x00DF6B88`); creating a new template = ECS `worldentity` singleton authoring (deeper —

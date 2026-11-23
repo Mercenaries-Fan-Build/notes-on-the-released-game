@@ -1017,10 +1017,10 @@ Mercs 2 switched to **raw deflate** (`sges` blocks with `zlib` windowBits `-15`)
 
 ## Related Documentation
 
-- [`docs/format_reference.md`](format_reference.md) — Master binary format reference (FFCS, sges, UCFX, textures, Havok)
+- [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — Master binary format reference (FFCS, sges, UCFX, textures, Havok)
 - [`docs/luadisass_findings.md`](luadisass_findings.md) — Lua disassembly integration notes
 - [`docs/external_resources.md`](external_resources.md) — Community tools and RE resources
 - [`docs/game_data_analysis.md`](game_data_analysis.md) — Game data directory structure and block taxonomy
-- [`docs/aset_format.md`](aset_format.md) — ASET chunk row layout
-- [`docs/placement_data_format.md`](placement_data_format.md) — Placement record format (42-byte transforms)
-- [`docs/ecs_components.md`](ecs_components.md) — ECS component documentation (ObjectScript, etc.)
+- [`docs/aset_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/aset_format.md) — ASET chunk row layout
+- [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md) — Placement record format (42-byte transforms)
+- [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) — ECS component documentation (ObjectScript, etc.)

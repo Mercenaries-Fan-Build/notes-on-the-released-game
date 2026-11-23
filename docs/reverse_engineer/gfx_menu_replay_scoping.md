@@ -557,7 +557,7 @@ if (bVar8) { log "SWF file is compressed."; wrap the GFile in a GZLibFile (zlib 
 **Docs**
 - `docs/reverse_engineer/scaleform_gfx_class_map.md` (2026-07-26) — SDK 2.0.48, loader/player addresses,
   FlashWidget bridge, movie lifecycle
-- `docs/reverse_engineer/gfx_authoring_feature_spec.md` (2026-07-07) — golden tag-support surface, CFX vs GFX
+- [`docs/reverse_engineer/gfx_authoring_feature_spec.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/reverse_engineer/gfx_authoring_feature_spec.md) (2026-07-07) — golden tag-support surface, CFX vs GFX
 - `docs/reverse_engineer/gfxforge_tooling_review.md` (2026-07-07)
 - `docs/ui/shell_menu_lua_anatomy.md` (2026-06-19) — SetSwfFile/event handlers, stringdb labels
 - `docs/mercs2-luacd/05_gui_hud_shell.md` (2026-06-19) — `.gfx` asset→Lua map, `GetShellGfxFilename`
@@ -566,7 +566,7 @@ if (bVar8) { log "SWF file is compressed."; wrap the GFile in a GZLibFile (zlib 
 - `docs/reverse_engineer/disc_media_inventory.md` (2026-06-27) — `shell_*.bik` 600×720/30fps/0-audio
 - `docs/fixpack/wad_duplicate_inventory.md` (2026-08-01) — LAST-WINS (`FUN_00874E20`), `%s-patch.wad`
   basename, override-under-base-hash
-- `docs/type_hash_registry.md` (2026-08-01) — `0xFE0E8320` scaleformgfx / type_id 23
+- [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) (2026-08-01) — `0xFE0E8320` scaleformgfx / type_id 23
 
 **Memory / mandates**
 - `scaleform-gfx-2048-lib-map`, `scaleformgfx-cfx-blind-swap` (verbatim-copy rule),

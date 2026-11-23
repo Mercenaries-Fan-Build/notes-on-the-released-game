@@ -329,7 +329,7 @@ These are areas where the two agent analyses disagree or provide different data.
 - [`docs/exe_analysis_agent_a.md`](exe_analysis_agent_a.md) — Full Agent A analysis
 - [`docs/exe_analysis_agent_b.md`](exe_analysis_agent_b.md) — Full Agent B analysis
 - [`docs/modding_deep_dive.md`](modding_deep_dive.md) — Comprehensive modding feasibility analysis
-- [`docs/format_reference.md`](format_reference.md) — Binary format specifications
+- [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) — Binary format specifications
 - [`tools/pandemic_hash.py`](../tools/pandemic_hash.py) — Hash implementation (both variants)
 - [`tools/sges_compress.py`](../tools/sges_compress.py) — sges block compressor
 - [`tools/sges_decompress.py`](../tools/sges_decompress.py) — sges block decompressor

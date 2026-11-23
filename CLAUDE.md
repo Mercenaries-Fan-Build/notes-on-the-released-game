@@ -101,8 +101,8 @@ Each is a correction after a real failure. They override defaults.
   identity (verify with `tools/pandemic_hash.py --m2`). Registry insert is **first-wins**, so a
   fabricated 32-bit constant that collides silently drops *your* asset. A hash match alone is not
   evidence a name is real.
-- **★ Cracked names go into the rainbow files** — tracked home is
-  `docs/data/aset_discovered_names.json`, match indent, not a side `--emit` fragment.
+- **★ Cracked names go into the rainbow files** — tracked home is the wad repo's
+  `tools/wad_simulator/crates/mercs2_workshop/data/aset_discovered_names.json`, match indent, not a side `--emit` fragment.
   `tools/rainbow_table.json` is gitignored; `rainbow_table.json.bak` is a tracked ~75 MB file
   (not scratch).
 - **★ Use Rust tooling, not Python.** Pipeline is the Rust `wad_simulator` workspace; Python
@@ -183,18 +183,18 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
     encrypted — disassemble directly. Memory: `binding-only-is-not-a-wall-disassemble.md`.
 
 - **Format decoders** — tools and corresponding doc per format:
-  - MOPP (Havok BV-tree): `mercs2_formats::mopp` + `docs/reverse_engineer/mopp_bytecode_format.md`.
+  - MOPP (Havok BV-tree): `mercs2_formats::mopp` + `tools/wad_simulator/docs/reverse_engineer/mopp_bytecode_format.md`.
   - Havok anim: `mercs2_formats::havok` + `havok_extract` + period-correct HCT 5.5
     `AssetCc2.exe` (external oracle). Memory: `havok-anim-toolchain-roundtrip-proven.md`.
   - Wavelet anim: `tools/hk_anim/wavelet.py`, Rust successor in `havok_extract`.
   - Name registry / spawn-by-hash: `pandemic_hash_m2` keys events, templates, tunables, spawn.
     PC impl `Hash_String FUN_00824270`; rainbow at `tools/rainbow_table.json.bak` +
-    `docs/data/aset_discovered_names.json`.
+    `tools/wad_simulator/crates/mercs2_workshop/data/aset_discovered_names.json`.
   - Hash reverse map: `exemap hash-sites <image_id>` (every constant's sites and roles, data-section
     hash tables, function strings incl. X360 string addresses and PS3 TOC loads) →
     `exemap hash-join <image_id>…` (hash consumers by chance test, candidates, names proven by
     code context). Rules: the `mercs2_exemap::hashsites` / `hashjoin` module docs. Per-image output
-    `output/_exemap_exports/hashes/`; tracked summary `docs/data/hash_candidates_by_consumer.tsv`.
+    `output/_exemap_exports/hashes/`; tracked summary `tools/wad_simulator/docs/data/hash_candidates_by_consumer.tsv`.
     Context cracks are reviewed before they enter the rainbow files.
   - Engine → Lua calls by name: `exemap lua-calls --functions <dir> --image <id>=<file>… --out <tsv>`
     decodes every call each image makes through its by-name callers (`mercs2_exemap`'s
@@ -206,7 +206,7 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
     `data/lua_readers.tsv` (rules: the `bindingargs` module doc). Output home:
     `crates/mercs2_workshop/data/binding_args.tsv`; argument names with evidence in `binding_names.tsv`
     beside it (`proposed` until reviewed). The Missions page labels engine-call pins from both.
-  - Clip names: `mercs2_probe clip-names docs/data/clip_name_proposals.tsv` proposes names for
+  - Clip names: `mercs2_probe clip-names tools/wad_simulator/docs/data/clip_name_proposals.tsv` proposes names for
     AnimationLookup clips from the rows that list them (grammar and evidence columns: its module doc,
     `crates/mercs2_probe/src/clip_names.rs`); the workshop's Animation card shows each proposal
     beside the playing clip, and Accept writes it to the name homes.
@@ -217,9 +217,9 @@ The shipped PC exe is symbol-less and SecuROM-wrapped. Toolchain:
 
 ### 3.2 The 64-bit Rust/wgpu engine reimplementation
 
-**Charter:** `docs/modernization/00_charter.md`. **Scoreboard** (authoritative live status —
+**Charter:** `tools/wad_simulator/docs/modernization/00_charter.md`. **Scoreboard** (authoritative live status —
 update it, don't re-survey, don't duplicate here):
-`docs/modernization/engine_support_inventory.md`.
+`tools/wad_simulator/docs/modernization/engine_support_inventory.md`.
 
 Rebuild Mercs2 as a native 64-bit, maintainable, faithful, faster open engine consuming the
 original assets. Locked decisions: **Rust** on the `wad_simulator` workspace (D2);
@@ -247,7 +247,7 @@ all mechanism crates + `mercs2_script`. `mercs2_game` depends on only `mercs2_en
 `mercs2_engine::app` (a `Game` trait + `run<G: Game>`). ECS World is the single source of truth —
 host shares the live `Rc<RefCell<hecs::World>>` via `attach_world`.
 
-**Parallelization plan:** `docs/modernization/reimplementation_parallelization_plan.md` carves
+**Parallelization plan:** `tools/wad_simulator/docs/modernization/reimplementation_parallelization_plan.md` carves
 work into 16 silos.
 
 ### 3.3 The unofficial fix-pack (retail engine)
@@ -290,7 +290,7 @@ legally-owned copy is never force-cracked: `drm_free` (a `mercs2_nodrm_v*.exe` i
 ### 3.4 Asset injection / modding / DLC port (additive, via `vz-patch.wad`)
 
 **Authoritative process:** `docs/asset_injection_playbook.md`.
-**Field guide of corpus-cited traps:** `docs/modding/field_guide.md` — read it. This engine
+**Field guide of corpus-cited traps:** `tools/wad_simulator/docs/modding/field_guide.md` — read it. This engine
 "almost never tells you what you did wrong" — a typo is a valid hash that resolves to nothing,
 silently.
 
@@ -319,13 +319,13 @@ skinned + posed from packed bytes. Use it instead of in-game screenshots. `--no-
 mandatory while iterating. Render a known baseline (e.g. `pmc_hum_mattias`) beside the import.
 
 **Character/skin/DLC references:**
-- Rig/skeleton: `docs/modding/character_kit.md`, memory `pandemic-shared-human-rig-mercs2-saboteur`
+- Rig/skeleton: `tools/wad_simulator/docs/modding/character_kit.md`, memory `pandemic-shared-human-rig-mercs2-saboteur`
   (Mercs2 and Saboteur share one human skeleton — identical bone name-hashes and bind pose).
   Cross-game port is a name-hash JOIN, not a weight transfer.
 - Skinned custom-character import: `retarget:` on `add_outfit`; dense foreign rigs > 48 bones
   need `single_group: true`; skins bind only when shipped fully-resident. BLENDINDICES are
   per-group palette-relative.
-- Store items: `docs/modding/character_kit.md` + `smuggler` (faction keying matters — Eva's PMC
+- Store items: `tools/wad_simulator/docs/modding/character_kit.md` + `smuggler` (faction keying matters — Eva's PMC
   shop queries faction `"Pmc"`).
 - `Pg.Spawn` of a novel template: name→handle into registry `@0xDF6B88` is the SDK ASI route;
   the entity template body into the live worldentity pools is a separate injection.
@@ -444,8 +444,8 @@ The m2-sdk Shipment (C headers, tests, release) is `shipments/mercs2-sdk/`.
 - **Container stack:** FFCS `.wad` (magic `FFCS`; chunks INDX/DATA/CSUM/ASET/PTHS) → `sges`
   blocks (raw deflate, `zlib` windowBits `-15`, multi-segment, 64 KB sentinel; identical to
   The Saboteur) → entry table → **UCFX** (`CHDR/COMP/GEOM/MESH/PRMG/STRM/IBUF/MTRL/SEGM/PHY2/…`).
-  CSUM = CRC-32 (poly `0xEDB88320`). Master ref: `docs/format_reference.md`; ASET decode:
-  `docs/aset_format.md`.
+  CSUM = CRC-32 (poly `0xEDB88320`). Master ref: `tools/wad_simulator/docs/format_reference.md`; ASET decode:
+  `tools/wad_simulator/docs/aset_format.md`.
 - **ASET `(block, sub)`:** both words hold block indices —
   `packed_block_ref` = [hi16 `_P000` | lo16 `_P001`], `secondary_ref` = [hi16 `_P002` | lo16
   `_P003`]. Single-block only when BOTH are sentinel (`AsetEntry::is_single_block()`), never
@@ -472,15 +472,15 @@ The m2-sdk Shipment (C headers, tests, release) is `shipments/mercs2-sdk/`.
 ## 7. Where knowledge lives
 
 - **The corpus** (§0) — search it first, always.
-- **`docs/modernization/`** — reimpl: `00_charter.md`, `engine_support_inventory.md` (scoreboard),
-  `reimplementation_parallelization_plan.md`, `world_streaming_spec.md`, per-subsystem specs.
-- **`docs/reverse_engineer/`** — per-subsystem PC code maps,
-  `mopp_bytecode_format.md`, `ghidra_knowledge_inventory.md`.
-- **`docs/format_reference.md`** / `aset_format.md` — binary layouts (source of truth; add
+- **`tools/wad_simulator/docs/modernization/`** (wad repo) — reimpl: `00_charter.md`, `engine_support_inventory.md`
+  (scoreboard), `reimplementation_parallelization_plan.md`, `world_streaming_spec.md`, per-subsystem specs.
+- **`docs/reverse_engineer/`** — per-subsystem PC code maps, `ghidra_knowledge_inventory.md`.
+- **`tools/wad_simulator/docs/`** (wad repo) — the format specs the tooling implements: `format_reference.md`,
+  `aset_format.md`, `reverse_engineer/mopp_bytecode_format.md`, … — binary layouts (source of truth; add
   discoveries here).
 - **`docs/fixpack/`** — `bug_register.md`, `wad_duplicate_inventory.md`.
-- **`docs/modding/`** — `field_guide.md`, `character_kit.md`, `manifest_format.md`,
-  `asset_injection_playbook.md` (top-level).
+- **`tools/wad_simulator/docs/modding/`** (wad repo) — `field_guide.md`, `character_kit.md`, `manifest_format.md`;
+  `docs/asset_injection_playbook.md` (this repo, top-level).
 - **`MEMORY.md`** — persistent-memory router (per-domain). Full list in `MEMORY-CATALOGUE.md`.
 
 When you discover a new binary structure, add it to the appropriate `docs/` file — those are the

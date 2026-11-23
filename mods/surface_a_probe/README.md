@@ -2,8 +2,8 @@
 
 Captures the **original game's PARSED structs at a known load-path boundary**, so the 64-bit Rust
 reimplementation's parsers can be diffed **byte-for-byte** against ground truth. This is **Surface A**
-of the modernization regression harness (`docs/modernization/00_charter.md`; full design in
-`docs/modernization/surface_a_oracle_design.md`).
+of the modernization regression harness ([`docs/modernization/00_charter.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/00_charter.md); full design in
+[`docs/modernization/surface_a_oracle_design.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/surface_a_oracle_design.md)).
 
 The sibling **Surface B** binding-call oracle is `mods/lua_trace_asi/`. Surface B gates the
 script→engine boundary; Surface A gates the asset→struct boundary. **Implementation is free;
