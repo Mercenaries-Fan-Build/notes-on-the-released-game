@@ -4,7 +4,7 @@
 The bone census + workshop bone resolver read `tools/rainbow_table.json` (via
 `worldutil::rainbow_names`), NOT the ASET export. So a name cracked by the ASET pipeline
 (`aset_export` / `aset_external_mine --roster` / convention derivation) lives in
-`docs/data/aset_names.csv` but stays invisible to the census until it is folded here.
+`tools/wad_simulator/docs/data/aset_names.csv` but stays invisible to the census until it is folded here.
 
 This folds every VERIFIED preimage from `aset_names.csv` (a name whose `pandemic_hash_m2`
 equals its `asset_hash`) into the rainbow table. Idempotent; only verified names are added,
@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fnv import m2  # noqa: E402
 
-ASET = Path("docs/data/aset_names.csv")
+ASET = Path("tools/wad_simulator/docs/data/aset_names.csv")
 RAINBOW = Path("tools/rainbow_table.json")
 
 
