@@ -13,7 +13,7 @@ base `0x00400000` (PC retail, unpacked), Xbox base `0x82000000` (Jul-08 Profile 
 body was fetched from the corpus, not inferred), [`../engine_load_path_map.md`](../engine_load_path_map.md),
 [`ghidra_knowledge_inventory.md`](ghidra_knowledge_inventory.md) Part B/C,
 [`../comprehensive_engine_understanding.md`](../comprehensive_engine_understanding.md) §2,
-[`../format_reference.md`](../format_reference.md), [`../ecs_components.md`](../ecs_components.md),
+[`../format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md), [`../ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md),
 [`../exe_analysis_agent_b.md`](../exe_analysis_agent_b.md) §4. Xbox: the descriptor mechanism from
 [`../mercs2-pdb-analysis/world-streaming.md`](../mercs2-pdb-analysis/world-streaming.md) §"How it
 works" and the Havok field-binders from
@@ -253,7 +253,7 @@ Loops the block, dispatching `NAME`(0x454d414e, → `Chunk_ReadCString` into a 0
 = kind, `INFO +10`'s low byte**, `u32 @+0x24` and `@+0x20`, then u16s `@+0x2c/+0x2e/+0x30/+0x32` (the mip
 masks of rungs `_P003`..`_P000`, indexed by the rung slot). The BODY arm branches on `@+0x2a == 1` (build
 the rung's mips via `FUN_0085cbd0`: `first` = lowest set mask bit, `n` = popcount, `w >> first`) vs `== 2`
-(6-face cubemap path, `FUN_0085ccd0`, loop `< 6`, ignoring masks and slot). This is the concrete engine reader behind `format_reference.md` §4.3's
+(6-face cubemap path, `FUN_0085ccd0`, loop `< 6`, ignoring masks and slot). This is the concrete engine reader behind [`format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) §4.3's
 tool-view (`w@+0, h@+2, mip@+6, fourcc@+14, total@+22`) — the tool offsets are relative to the INFO
 *body*, the exe offsets are relative to the texture *resource object*.
 
@@ -381,7 +381,7 @@ migrate old packfile field-names to the current names during deserialize
 
 Both builds share the **binder names** (`FUN_0089c0c0`/`FUN_00957240`), which is the marriage; the
 Xbox build has no matching named function to re-confirm the 0x30 stride, so cite the PC VA for it.
-The **BE→PC converter** encodes the full packfile layout ([`../format_reference.md`](../format_reference.md)
+The **BE→PC converter** encodes the full packfile layout ([`../format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md)
 §15.2, [[phy2-havok-chunk-not-u32]]): 48B header + `__classnames__`/`__types__`/`__data__` sections,
 section-aware conversion with per-class field widths from `hk_class_layouts.py` (the `hka*`
 animation classes are registered → correct u16/u8 widths; `hkp*` physics classes are **unregistered
