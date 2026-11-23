@@ -78,6 +78,6 @@ read the resident block).
    `DAT_00dfc345` per-pixel-light gate against a live decal draw.
 
 Corpus already carried the two components ([docs/mercs2-ecs/08_misc_uncategorized.md](../mercs2-ecs/08_misc_uncategorized.md)),
-the type hash ([type_hash_registry.md](../type_hash_registry.md) §0x3B0AABF8), and the shader table;
-[rendering_fx_lighting_gap.md](../modernization/rendering_fx_lighting_gap.md) §G is the reimpl target
+the type hash ([type_hash_registry.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) §0x3B0AABF8), and the shader table;
+[rendering_fx_lighting_gap.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/rendering_fx_lighting_gap.md) §G is the reimpl target
 (a projected-decal pass + the decaltable-driven material set).
