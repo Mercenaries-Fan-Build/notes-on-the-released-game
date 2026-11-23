@@ -107,8 +107,8 @@ These are corrections the user has made, each after a real failure. They overrid
   (verify with `tools/pandemic_hash.py --m2`). Registry insert is **first-wins**, so a fabricated
   32-bit constant that collides silently drops *your* asset. A hash match alone is not evidence a name
   is real.
-- **★ Cracked names go into the rainbow files** — the tracked home is
-  `docs/data/aset_discovered_names.json`, matching indent, **not** a side `--emit` fragment.
+- **★ Cracked names go into the rainbow files** — the tracked home is the wad repo's
+  `tools/wad_simulator/crates/mercs2_workshop/data/aset_discovered_names.json`, matching indent, **not** a side `--emit` fragment.
   `tools/rainbow_table.json` is **gitignored**; `rainbow_table.json.bak` is a **tracked 75 MB** file
   (not scratch).
 - **★ Use Rust tooling, not Python.** The pipeline is the Rust `wad_simulator` workspace; Python under
@@ -188,7 +188,7 @@ The shipped PC exe is symbol-less and SecuROM-packed; three assets make RE tract
     un-splicing of all splice sites is *parked* (zero functional gain — working DRM-free builds exist).
 
 - **Recently-proven RE milestones (don't re-derive):**
-  - **★ MOPP bytecode DECODED + native compiler proven in-game** (`docs/reverse_engineer/mopp_bytecode_format.md`).
+  - **★ MOPP bytecode DECODED + native compiler proven in-game** (`tools/wad_simulator/docs/reverse_engineer/mopp_bytecode_format.md`).
     The Havok 5.5 `hkpMoppCode` BV-tree instruction set is fully decoded; decoder+encoder landed in
     `mercs2_formats::mopp` (validated against 43 real vz.wad buffers; from-scratch native bytecode
     accepted by the retail Havok VM live). A portable, no-DLL MOPP compiler regenerates game-valid
@@ -208,7 +208,7 @@ The shipped PC exe is symbol-less and SecuROM-packed; three assets make RE tract
 
 ### 3.2 The 64-bit Rust/wgpu engine reimplementation (the north star)
 
-**Charter:** `docs/modernization/00_charter.md`. **Do not re-survey — read the charter + the
+**Charter:** `tools/wad_simulator/docs/modernization/00_charter.md`. **Do not re-survey — read the charter + the
 scoreboard.**
 
 Rebuild Mercs2 as a **native 64-bit, maintainable, faithful, faster** open engine consuming the
@@ -241,7 +241,7 @@ the game drives it. **ECS World is the single source of truth** — the host sha
 `Rc<RefCell<hecs::World>>` via `attach_world`; name/position/health/economy are migrated off shadow
 tables onto real components (`mercs2_core::GuidMap`).
 
-**Status — the 32-row scoreboard is `docs/modernization/engine_support_inventory.md` (authoritative;
+**Status — the 32-row scoreboard is `tools/wad_simulator/docs/modernization/engine_support_inventory.md` (authoritative;
 update it, don't re-survey).** One-line read: a faithful streaming-world **renderer + spine** (rows
 1–18 green/yellow) **plus a now-built gameplay fleet** — physics, animation, vehicles, weapons, audio
 migrated to tested crates and **wired into the fixed tick** (`mercs2_game::gameplay::GameplaySystems`;
@@ -250,7 +250,7 @@ effort is **not** new subsystems but the **connection layer** — feeding the wi
 entities via the spawn/population/mission-Lua path (K1 persistent mission-Lua host, K2 single world
 path on the playable boot, K3 actor-realization archetype). ECS coverage is the visible gap: **4 native
 components vs 231 registry classes** (the `schm` field-schema deser exists; wiring the rest is the
-unblock). Work is carved into **16 silos** (`docs/modernization/reimplementation_parallelization_plan.md`)
+unblock). Work is carved into **16 silos** (`tools/wad_simulator/docs/modernization/reimplementation_parallelization_plan.md`)
 so N owners don't collide.
 
 ### 3.3 The unofficial fix-pack (retail engine)
@@ -287,7 +287,7 @@ deconflicted at runtime via `DxWrapperOwnsPlugins`. The logging build is `pmc_bb
 ### 3.4 Asset injection / modding / DLC port (additive, via `vz-patch.wad`)
 
 **Authoritative process:** `docs/asset_injection_playbook.md`. **Field guide of 17 corpus-cited traps:**
-`docs/modding/field_guide.md` — read it; this engine "almost never tells you what you did wrong" (a
+`tools/wad_simulator/docs/modding/field_guide.md` — read it; this engine "almost never tells you what you did wrong" (a
 typo is a valid hash that resolves to nothing, silently).
 
 Four-stage pipeline: **A0** DCC preprocess (Blender headless, `tools/fbx_preprocess.py`; tri budget
@@ -428,7 +428,7 @@ lua-bridge ASI), `mercs2_poc`.
 - **Container stack:** FFCS `.wad` (magic `FFCS`; chunks INDX/DATA/CSUM/ASET/PTHS) → `sges` blocks
   (raw deflate, `zlib` windowBits `-15`, multi-segment, 64 KB sentinel; identical to The Saboteur) →
   entry table → **UCFX** (`CHDR/COMP/GEOM/MESH/PRMG/STRM/IBUF/MTRL/SEGM/PHY2/…`). CSUM = CRC-32
-  (poly `0xEDB88320`). Master ref: `docs/format_reference.md`; ASET decode: `docs/aset_format.md`.
+  (poly `0xEDB88320`). Master ref: `tools/wad_simulator/docs/format_reference.md`; ASET decode: `tools/wad_simulator/docs/aset_format.md`.
   - **ASET `(block, sub)` is settled by measurement:** both words hold block indices —
     `packed_block_ref` = [hi16 `_P000` | lo16 `_P001`], `secondary_ref` = [hi16 `_P002` | lo16 `_P003`].
     Single-block only when BOTH are sentinel (`AsetEntry::is_single_block()`), never `is_primary()` alone.
@@ -456,15 +456,16 @@ lua-bridge ASI), `mercs2_poc`.
 ## 7. Where knowledge lives
 
 - **The corpus** (§0) — search it first, always.
-- **`docs/modernization/`** — the reimpl: `00_charter.md`, `engine_support_inventory.md` (the
-  scoreboard), `reimplementation_parallelization_plan.md`, `world_streaming_spec.md`, per-subsystem specs.
+- **`tools/wad_simulator/docs/modernization/`** (wad repo) — the reimpl: `00_charter.md`, `engine_support_inventory.md`
+  (the scoreboard), `reimplementation_parallelization_plan.md`, `world_streaming_spec.md`, per-subsystem specs.
 - **`docs/reverse_engineer/`** — per-subsystem PC code maps (each tagged to a scoreboard row),
-  `mopp_bytecode_format.md`, `ghidra_knowledge_inventory.md`.
-- **`docs/format_reference.md`** / `aset_format.md` — binary layouts (the source of truth; add
+  `ghidra_knowledge_inventory.md`.
+- **`tools/wad_simulator/docs/`** (wad repo) — the format specs the tooling implements: `format_reference.md`,
+  `aset_format.md`, `reverse_engineer/mopp_bytecode_format.md`, … — binary layouts (the source of truth; add
   discoveries here).
 - **`docs/fixpack/`** — `bug_register.md`, `wad_duplicate_inventory.md`.
-- **`docs/modding/`** — `field_guide.md`, `character_kit.md`, `manifest_format.md`,
-  `asset_injection_playbook.md` (top-level).
+- **`tools/wad_simulator/docs/modding/`** (wad repo) — `field_guide.md`, `character_kit.md`, `manifest_format.md`;
+  `docs/asset_injection_playbook.md` (this repo, top-level).
 - **`MEMORY.md`** — the persistent-memory router (per-domain). Full list in `MEMORY-CATALOGUE.md`.
 
 When you discover a new binary structure, add it to the appropriate `docs/` file — those are the source
