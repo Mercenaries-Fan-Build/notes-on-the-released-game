@@ -2,7 +2,7 @@
 
 These scripts parse the proprietary **FFCS** `.wad` packs used by Mercenaries 2.
 
-**Binary layouts, unknown header fields, and pipeline JSON sidecars** are summarized in **[`docs/format_reference.md`](../docs/format_reference.md)** (save profile header, FFCS, `sges`, UCFX, textures, Havok, CERP, PWS, ECS manifest).
+**Binary layouts, unknown header fields, and pipeline JSON sidecars** are summarized in **[`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md)** (save profile header, FFCS, `sges`, UCFX, textures, Havok, CERP, PWS, ECS manifest).
 
 ## FFCS layout (discovered)
 
@@ -90,9 +90,9 @@ Makefile targets: `build-pmc-base-set`, `extract-demo-ffcs`, `filter-pmc-base`, 
 | [`wavebank_extractor.py`](wavebank_extractor.py) | Embedded IMA ADPCM (`0x02`) → WAV under `extracted/audio/wavebanks/` |
 | [`ima_adpcm.py`](ima_adpcm.py) | Codec helper for wavebank extractor |
 | [`audio_ue5_manifest.py`](audio_ue5_manifest.py) | Hash → WAV path + UE content paths (`scan_decoded_wavebanks()`) |
-| [`fxdict_parser.py`](fxdict_parser.py) / [`fxdict_codec.py`](fxdict_codec.py) | Resident **fxdict** INFO+DICT → JSON ([`docs/fxdict_format.md`](../docs/fxdict_format.md)) |
+| [`fxdict_parser.py`](fxdict_parser.py) / [`fxdict_codec.py`](fxdict_codec.py) | Resident **fxdict** INFO+DICT → JSON ([`docs/fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md)) |
 | [`effect_block_probe.py`](effect_block_probe.py) | `effects` block UCFX chunk survey |
-| [`watermap_decode.py`](watermap_decode.py) / [`watermap_probe.py`](watermap_probe.py) | `watr` grid decode + PNG ([`docs/watermap_format.md`](../docs/watermap_format.md)) |
+| [`watermap_decode.py`](watermap_decode.py) / [`watermap_probe.py`](watermap_probe.py) | `watr` grid decode + PNG ([`docs/watermap_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/watermap_format.md)) |
 | [`build_ue_game_binding.py`](build_ue_game_binding.py) | Merge placements/graphs → `ue5_import/ue_game_binding.json` (`make ue-bind-manifest`; [`docs/ue_game_bindings.md`](../docs/ue_game_bindings.md)) |
 | [`road_graph_extractor.py`](road_graph_extractor.py) | Road/RoadIntersection ECS → `placements/road_graph.json` (`make road-graph`) |
 | [`destruction_link_resolver.py`](destruction_link_resolver.py) | DestructionLink pairs → `placements/destruction_graph.json` (`make destruction-graph`) |
@@ -150,7 +150,7 @@ Findings on `vz.wad` DATA: many **zlib** candidates, **DXT5** tag occurrences, a
 /usr/bin/python3 tools/cerp_precache.py index0.precache --out output/cerp_index0.json
 ```
 
-Default mode prints **magic, version, size**, and a **hex preview** of the first `--bytes` (default 256). With **`--json`** and/or **`--out`**, writes the same fields as structured JSON (`magic`, `version`, `size`, `header_hex_preview`, `valid`); see [`docs/format_reference.md`](../docs/format_reference.md#6-cerp-precache).
+Default mode prints **magic, version, size**, and a **hex preview** of the first `--bytes` (default 256). With **`--json`** and/or **`--out`**, writes the same fields as structured JSON (`magic`, `version`, `size`, `header_hex_preview`, `valid`); see [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md#6-cerp-precache).
 
 ## ECS / Lua symbol harvest
 
@@ -374,5 +374,5 @@ See [docs/dlc_pc_activation_checklist.md](../docs/dlc_pc_activation_checklist.md
 
 Block offsets are determined by scanning `sges` markers in order (same order as `paths.txt`).
 
-See `docs/quickbms_notes.md`, `docs/game_extractor_notes.md`, and **`docs/format_reference.md`** for cross-tool workflows and binary field reference.
+See `docs/quickbms_notes.md`, `docs/game_extractor_notes.md`, and **[`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md)** for cross-tool workflows and binary field reference.
 
