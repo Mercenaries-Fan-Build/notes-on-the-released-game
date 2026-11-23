@@ -87,7 +87,7 @@ Optional `--blocks-dir output/extracted/batch_vz/blocks` parses pre-decompressed
 
 | ASET type | type_hash | Count | Location | Role |
 |-----------|-----------|-------|----------|------|
-| **fxdict** | `0xFA46D8A8` | 1 | **`resident`** block | Global parameter dictionary (INFO+DICT, 630×20 B records, name `"fx"`) — see [`fxdict_format.md`](fxdict_format.md) |
+| **fxdict** | `0xFA46D8A8` | 1 | **`resident`** block | Global parameter dictionary (INFO+DICT, 630×20 B records, name `"fx"`) — see [`fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md) |
 | **effect** | `0x5608BD5A` | 314 | `effects` block | Particle/VFX definitions (all entries) |
 | **scrub** | `0x600B904E` | 1,026 | c3 cells | Compiled shader + material packages (SCRB+MTRL+STRM+INFO) |
 
@@ -118,14 +118,14 @@ ScrubObject / particle entities in layers_static (skipped by populate_world toda
 ### 2.3 Suggested tooling order
 
 1. **`effect_extractor.py`** — parse `effects` block UCFX; emit `effect_catalog.json` (hash, fxdict param refs, texture hashes)
-2. ~~**`fxdict_parser.py`**~~ — **done** — decode INFO+DICT → JSON ([`fxdict_format.md`](fxdict_format.md)); use with `extract_single_block.py` on resident
+2. ~~**`fxdict_parser.py`**~~ — **done** — decode INFO+DICT → JSON ([`fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md)); use with `extract_single_block.py` on resident
 3. **`scrub_material_index.py`** — map scrub hash → MTRL texture list (join with texture_index.json); interim: [`material_probe.py`](../tools/material_probe.py)
 4. **Niagara template library** — base modules: sprite burst, mesh debris, smoke ribbon, muzzle flash
 5. **`populate_effects.py`** — place Niagara actors from placement JSON where entity names contain `particle`, `fx_`, `explosion`
 
 ### 2.4 Gaps
 
-- fxdict INFO+DICT **decoded** (630×20 B records); per-parameter **names** still hash-only — see [`fxdict_format.md`](fxdict_format.md) confidence table
+- fxdict INFO+DICT **decoded** (630×20 B records); per-parameter **names** still hash-only — see [`fxdict_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md) confidence table
 - effect record stride / field map **partial** (`effect_block_probe.py`); no consolidated `effect_catalog.json` yet
 - SCRB shader bytecode not disassemblable to UE material graphs automatically
 - No correlation yet between effect hash and scrub hash for composite VFX
@@ -314,6 +314,6 @@ wavebank-extract-ui-hud:
 ## 7. See also
 
 - [`pandemic_audio_system_design.md`](pandemic_audio_system_design.md) — PalSoundEngine load path
-- [`type_hash_registry.md`](type_hash_registry.md) — all resolved type names
+- [`type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) — all resolved type names
 - [`gameplay_data_ue5_mapping.md`](gameplay_data_ue5_mapping.md) — placements, ECS, Data Layers
 - [`loading_shell_wad_analysis.md`](loading_shell_wad_analysis.md) — `ui_hud` block audio co-location
