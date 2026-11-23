@@ -458,7 +458,7 @@ So `837e9bf8` is the global AI driving/combat state registry, and the `BoatStop`
 - `docs/mercs2-pdb-analysis/physics.md` (inferred filename) — the Havok `Tt*`/`hkp*` substrate (`TtSimulate`, `TtCollide`, `hkpAction`, `hkpPhysicsSystem`) underlying the vehicle physics actors.
 - `docs/mercs2-pdb-analysis/ai.md` (inferred filename) — the `.data` AI driving states (`CarDriveRoads`, `HeliPickup`, `TankAttack`) and `PgAiActHeli.cpp`.
 - `docs/mercs2-pdb-analysis/weapons.md` (inferred filename) — `VehicleAmmo`, `TurretControl`/`TurretAim`, and `(TtPgTankTurretAction`; weapon source `PgWeaponProjectile.cpp` is in the source-path table.
-- Existing project docs: `docs/mercs2-ecs/` and `docs/ecs_components.md` document the runtime ECS component registry; `VehiclePart`/`RuntimeVehiclePart`/`VehicleHealth`/`VehicleAmmo` here are the vehicle-side counterparts (component/part names) of that registry.
+- Existing project docs: `docs/mercs2-ecs/` and [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) document the runtime ECS component registry; `VehiclePart`/`RuntimeVehiclePart`/`VehicleHealth`/`VehicleAmmo` here are the vehicle-side counterparts (component/part names) of that registry.
 
 ## Evidence & confidence
 
