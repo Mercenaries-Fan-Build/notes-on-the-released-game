@@ -50,7 +50,7 @@ Slot = offset in the 0x210 runtime emitter. Attribute slot layout: `+0 value, +4
 | TRFM `rot*` | `+0x74,+0x80,+0x8C` | degrees | `×0.0174533` | PROVEN | `0x0049175D`, `0x00491780`, `0x004917A0` |
 | TRFM `pos*` / `scl*` | `+0x50..`, `+0x98..` | metres / factor | evaluated each update | PROVEN | `FUN_004916f0` |
 
-`effect_container_format.md` §3's "handler" column: `0x4935C0` loads a curve into the table at effect `+0x20`
+[`effect_container_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/effect_container_format.md) §3's "handler" column: `0x4935C0` loads a curve into the table at effect `+0x20`
 (emitter time), `0x4935E0` into `+0x60` (stream, age), `0x493620` into `+0x40` (particle-age linear, empty in
 retail: EFCT words 5 and 6 are 0), `0x493600` and `0x493640` load the var. PROVEN (`hall.asm`, `ldr2.asm`).
 
@@ -255,6 +255,6 @@ Job order, rate → grant → spawn → sim → render list, is INFERRED from th
 
 - `particles.rs`: `from_effect` blend from `PTYP` bit 0 is wrong; use the COLR sign. Its drag (`v *= 1 − drag·dt`) is the
   wrong law. Wind from FRCE is wrong. `gravity` magnitude ignores `forcegravity`.
-- `effect_container_format.md`: §2 "how the renderer indexes the slots" is answered; `PTYP` meaning; §6 binary16; `scale`,
+- [`effect_container_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/effect_container_format.md): §2 "how the renderer indexes the slots" is answered; `PTYP` meaning; §6 binary16; `scale`,
   §5.2 names and §7 force parameters (body values are load-time only for `FUN_0048a820`'s fields).
 - `particle_fx_code_map.md` §6, §7 and `pimp_job_system_code_map.md` (the `0x724xxx` trio).
