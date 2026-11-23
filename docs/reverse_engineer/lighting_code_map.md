@@ -124,7 +124,7 @@ The permutation family registers inline in the global shader registry **`FUN_008
 §4). Every shader is inserted by **`FUN_0085ac90(logical_name, name.sho, light_class)`**, `__thiscall`
 on a static record object in `ECX`, whose 3rd arg **is** the light class (proven: `param_4 →
 record+0x8c`; name→FNV key via `FUN_00824270`; the index is assigned in the pixel registry of pool
-`DAT_01977a38`, [`shader_store_format.md` §9](../shader_store_format.md#9-registration)):
+`DAT_01977a38`, [`shader_store_format.md` §9](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md#9-registration)):
 
 **`light_class ∈ {0 = base, 1 = _pl (point), 2 = _sl (spot), 3 = _pl_sl (both)}`** — matches
 [particle_fx_code_map.md](particle_fx_code_map.md) §4 and `particle_fx_shadow_code_map.json`.
@@ -179,7 +179,7 @@ registry's index table `0x0197ba40`, with `light` forced to 0 when `DAT_00dfc345
 classes are consecutive registrations. (`FUN_0085abd0` assigns **vertex**-registry indices; the pixel
 one is `FUN_0085ab70`. `FUN_0085aff0` is the base **vertex** family's constant binder, which resolves 15
 constant names into the record at `+0x94..+0x108` — see
-[`shader_store_format.md` §10](../shader_store_format.md#10-constant-binding).) **How the nearest
+[`shader_store_format.md` §10](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md#10-constant-binding).) **How the nearest
 lights load into shader constants is stripped / vtable-gated → confirm-live.**
 
 ## 6. Sun / directional / ambient
