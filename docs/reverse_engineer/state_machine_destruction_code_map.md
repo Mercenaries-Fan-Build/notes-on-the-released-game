@@ -16,7 +16,7 @@ This is the row-30/31 companion to the streaming spine
 machine to this doc. The **SEGM state/LOD mask** (the geometry-side draw gate the machine drives) is
 in the prop-LOD map §5 and is only cross-referenced here.
 
-**Sources.** Core format: [`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md)
+**Sources.** Core format: [`../destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md)
 (the `FUN_004cf340` chunk-family RE — INFO/NODE/STAT/CHDR/CEXE/SWIT, the 11-command Enter/Exit
 vocabulary, the previously-unresolved state + message hashes) and
 [`asset_formats_code_map.md`](asset_formats_code_map.md) §3.3. Xbox oracle:
@@ -145,7 +145,7 @@ streaming map (§4). It is the destruction analog of those proximity-driven life
 
 ## 2. The orchestrator parser — `FUN_004cf340` (H, already established, verified here)
 
-Fully documented in [`../destruction_orchestrator_format.md`](../destruction_orchestrator_format.md);
+Fully documented in [`../destruction_orchestrator_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/destruction_orchestrator_format.md);
 re-confirmed here by call-graph (parser callees = the shared chunk-reader `FUN_00464780`, the
 allocator pair `FUN_0084ac20`/`FUN_0084dce0`/`FUN_0084d760`, and the FFCS bookkeeping helper
 `FUN_00401860`). Recap of the format the runtime consumes:
