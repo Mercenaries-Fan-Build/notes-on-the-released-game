@@ -72,7 +72,7 @@ matching only 54 of the 107 rows — the numbers in §3 were right, the recipe f
 not. (A *reference* count without the `(` over both corpora gives 1439 and matches 95/107, so the
 census is specifically call sites over both corpora.)
 
-Lua layer: [`../modernization/vanilla_boot_load_order.md`](../modernization/vanilla_boot_load_order.md)
+Lua layer: [`../modernization/vanilla_boot_load_order.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vanilla_boot_load_order.md)
 (the `MrxPlayer` boot chain), `docs/mercs2-luacd/07_player_core_cheats_managers.md`.
 Companion memories: [[money-fuel-datatype-and-cap]], [[lua-trace-asi-surface-b-oracle]].
 
@@ -629,7 +629,7 @@ see the corrected recipe in Sources.
 - **`GetPlayerStart` `0x005DEC60`** (43 B) — `0x005DEC77 push 0x00D28A90` = the string literal
   **`"PlayerLocation_Start"`**, then `call 0x0085D9F0` and return. The engine does not resolve the
   spawn point; Lua does, via `Pg.GetGuidByName`. This is the `★ HERO SPAWN LOCATION` step in
-  [`vanilla_boot_load_order.md`](../modernization/vanilla_boot_load_order.md) — now pinned to a body.
+  [`vanilla_boot_load_order.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vanilla_boot_load_order.md) — now pinned to a body.
   **But it is the fallback, not the authority** — see §8.
 - **`GetMaximumPlayers` `0x005DDA60`** — pushes `DAT_017C0DD0` verbatim, and nothing enforces it
   (§2.3).
@@ -932,7 +932,7 @@ already resident goes through this on-demand path.
 
 ## 8. The Lua layer above it (cited, not re-derived)
 
-[`vanilla_boot_load_order.md`](../modernization/vanilla_boot_load_order.md) already pins the boot
+[`vanilla_boot_load_order.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vanilla_boot_load_order.md) already pins the boot
 chain; the engine anchors this map adds are marked ★. Source, re-read line by line this pass:
 `docs/mercs2-luacd/src/resident/mrxplayer.lua`.
 
@@ -1050,7 +1050,7 @@ these three names are simply not strings in either image. **No hash was invented
 
 ## 10. Reconciliation with `mercs2_player` (silo 17 — currently an empty scaffold)
 
-`docs/modernization/wave0_seam_review.md:40` Seam G assigns the `Player` namespace (107, 2nd-highest
+[`docs/modernization/wave0_seam_review.md:40`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/wave0_seam_review.md) Seam G assigns the `Player` namespace (107, 2nd-highest
 traffic) to its own crate, **decided but unbuilt** — `crates/mercs2_player/src/lib.rs` really is an
 empty 34-line scaffold. This map is the reference for filling it.
 
@@ -1153,8 +1153,8 @@ What the retail engine says the crate must model:
   [`save_serialize_code_map.md`](save_serialize_code_map.md) (`[0x1176054]`, `.profile`),
   [`camera_code_map.md`](camera_code_map.md), [`vehicle_code_map.md`](vehicle_code_map.md),
   [`scripting_host_binding_code_map.md`](scripting_host_binding_code_map.md),
-  [`../modernization/vanilla_boot_load_order.md`](../modernization/vanilla_boot_load_order.md),
-  [`../modernization/wave0_seam_review.md`](../modernization/wave0_seam_review.md) Seam G.
+  [`../modernization/vanilla_boot_load_order.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/vanilla_boot_load_order.md),
+  [`../modernization/wave0_seam_review.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/wave0_seam_review.md) Seam G.
 - **Validation history:** `validation/player_validation.md` (Pass 1 blind + Pass 2 register-closing).
   Every finding folded in here was **re-derived from the image before being written**, and one Pass-1
   finding was **refused** on that basis: its X5 (`GetControlledObject` uses container `0x00DF81D8`,
