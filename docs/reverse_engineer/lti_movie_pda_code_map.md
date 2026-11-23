@@ -953,7 +953,7 @@ provably discarded.
    `updateSupportQuickSlot` — appear in **none of the 83 shipped `.gfx` movies**, `Map.gfx` (the movie
    the handler is attached to) and `SUPPORT.gfx` included. Method: inflate each movie
    (`zlib.decompress(bytes[8:])`) and search the decompressed payload for the NUL-terminated token.
-   The extraction is provably complete against the shipped WADs — `docs/data/aset_export.csv` lists
+   The extraction is provably complete against the shipped WADs — [`docs/data/aset_export.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_export.csv) lists
    **83** assets of `type_hash 0xFE0E8320` (`cfx_pack`): vz.wad 64 + shell.wad 16 + Loading.wad 3, and
    `output/gfx_movies/` holds exactly 64 + 16 + 3. (Raw-grepping the WADs proves nothing — they are
    compressed.) Same story for `LTIMovieStart`.
@@ -1292,7 +1292,7 @@ Also worth a row: `_GuiInternal.CallFlashScriptFunction` `0x005BB170` (§2.1b).
 
 ## 11. Reconciliation with the Rust reimpl
 
-`docs/modernization/wave0_seam_review.md` Seam G left `LTILibName` **unassigned**. It should belong to
+[`docs/modernization/wave0_seam_review.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/wave0_seam_review.md) Seam G left `LTILibName` **unassigned**. It should belong to
 **`mercs2_ui`**, not to a render crate: despite LTI being the render module in the original tree, all
 52 bindings are screen drivers.
 
@@ -1388,7 +1388,7 @@ What the retail engine says a reimplementation must model:
   header is followed by a zlib stream) and searched for exact NUL-delimited tokens; the two VSync
   handlers were additionally **lifted from AVM1 bytecode** (`defineFunction2` = opcode `0x8E`, body
   decoded against the nearest preceding `constantPool`) for §9.2. Extraction completeness is checked
-  against `docs/data/aset_export.csv`: 83 assets of `type_hash 0xFE0E8320` (vz.wad 64 + shell.wad 16
+  against [`docs/data/aset_export.csv`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/data/aset_export.csv): 83 assets of `type_hash 0xFE0E8320` (vz.wad 64 + shell.wad 16
   + Loading.wad 3) and `output/gfx_movies/` holds exactly 64 + 16 + 3.
 - **Shipped data as a check on code-derived inferences**: `docs/game_config/Mercs2.ini`
   (`Gamma=50`, `PresentImmediate=1`, `FirstRun=0`, `[Joystick] Invert/Rumble/Sensitivity`),
