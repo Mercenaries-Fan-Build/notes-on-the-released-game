@@ -642,7 +642,7 @@ Full table: `output\data\trim_wad_manifest.txt`.
 
 **Road payload +8 ≡ runtime `[entity+8]`?**
 
-- If the engine treated a **Road payload** pointer as a Transform entity, `[entity+8]` would be **`road_lane_hash_0`** (u32 at payload **+0x08** per `decode_road_payload` / `docs/ecs_components.md`).
+- If the engine treated a **Road payload** pointer as a Transform entity, `[entity+8]` would be **`road_lane_hash_0`** (u32 at payload **+0x08** per `decode_road_payload` / [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md)).
 - **No** Road record in block **18** stores `0x4E093685` at that offset → **not explained by mis-swapped Road hashes on disk**.
 - **Matches instead:** `[entity+8]` with entity base **`Transform_record + 26`** (22 bytes into the 38-byte payload after the u32 key). Example: record **209** key `0x00155E12` has sane **Y** at **`+0x08`** (`−15.5` m) but **`[base+26+8]` → `+0x34`** = `0x4E093685`.
 
@@ -888,7 +888,7 @@ Python `_ECS_COMP_DEFAULT_STRIDE` + `_convert_numeric_records` apply to **Road**
 
 ### Fourth bug fixed 2026-05-30b: compact strides were payload-only, not record size
 
-`docs/ecs_components.md`: **record stride = 4 + payload_stride** (e.g. Road payload 40 → record **44**).
+[`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md): **record stride = 4 + payload_stride** (e.g. Road payload 40 → record **44**).
 Both Python `_ECS_COMP_DEFAULT_STRIDE` and Rust `compact_default_stride()` incorrectly stored **payload-only**
 values (40 for Road). Blocks **with `schm`** used `4 + payload_stride` in Rust (correct); blocks **without `schm`**
 used the wrong compact default (misaligned numeric swap).
@@ -978,7 +978,7 @@ DLC blocks often have **both** `flgs` placements and **Transform** COMP data in 
 
 ### Block taxonomy (2197-block full port, after excluding 0,4,12,15,16,17)
 
-From Xbox DLC inventory (`docs/xbox360_dlc_analysis.md`), `tools/inventory_dlc_patch.py` buckets, and `docs/type_hash_registry.md`. **Spatial hash @ `0x516B10` reads entity Transform XYZ (+4/+8/+0xC)** — types that register world entities at VZ load matter most.
+From Xbox DLC inventory (`docs/xbox360_dlc_analysis.md`), `tools/inventory_dlc_patch.py` buckets, and [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md). **Spatial hash @ `0x516B10` reads entity Transform XYZ (+4/+8/+0xC)** — types that register world entities at VZ load matter most.
 
 | Bucket / path pattern | ~count (2196 port) | type_hash / role | Registers XYZ at VZ load? |
 |------------------------|-------------------|------------------|---------------------------|
@@ -1509,7 +1509,7 @@ PhysicalLink/PointLocation `Blob32@0`, …). But a base-only oracle run and the 
 the patch and retail produce byte-identical violation signatures. **The DLC introduces
 zero stored position/float corruption relative to retail.**
 
-The 372 are **retail-present false positives**: per `docs/ecs_components.md`, `Road`'s
+The 372 are **retail-present false positives**: per [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md), `Road`'s
 world Vec3 endpoints are at `+0x10`/`+0x1C` (offset 0 is lane/ref data), and
 `PhysicalLink`'s `Blob32@0` is physics-link data — not world positions, so blanket
 world-bounds/unit checks mislabel them. Accordingly `ecs_float_violations` is **advisory,
@@ -1546,7 +1546,7 @@ structural deltas (identical pre/post sges fix → not artifacts; all absent in 
 
 | Patch-only delta | Count | Where | Read |
 |------------------|-------|-------|------|
-| `STRM decl stride 1712992 out of range [8,256]` | 334 | `block[367]`(81), 256/315/338/349/517/993… | `decl+4` reads a constant absurd stride → DLC STRM decl layout/byte-swap deviates from retail (mesh geometry, not placement). **Resolved:** the Xbox `decl` is a 12-B→8-B *format translation*, not a swap — see [`format_reference.md` §15.1](format_reference.md). |
+| `STRM decl stride 1712992 out of range [8,256]` | 334 | `block[367]`(81), 256/315/338/349/517/993… | `decl+4` reads a constant absurd stride → DLC STRM decl layout/byte-swap deviates from retail (mesh geometry, not placement). **Resolved:** the Xbox `decl` is a 12-B→8-B *format translation*, not a swap — see [`format_reference.md` §15.1](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md). |
 | `Havok packfile endianness byte = 0 (expected 1 = LE)` | 15 | `block[903]` `dlc01/vehiclenameanimgroup` | **embedded** Havok header `layoutRules` u32-swapped, **not** zero-padding (see below) |
 | ECS `Name`/`ModelName` non-printable | 25 | various | string-field byte-swap corruption |
 
