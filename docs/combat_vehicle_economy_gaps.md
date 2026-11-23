@@ -13,7 +13,7 @@
 | Faction enum | `EFaction` | Same |
 | Vehicle meshes + Havok animgroups | Extraction pipeline | `vehiclenameanimgroup_*` / `vehicleclassanimgroup_*` blocks |
 | Vehicle tokens (names) | Save/Lua harvest | `tools/savefile_parser.py` → `[vehicle.*]` tokens |
-| Audio for weapons/vehicles | type_hash **wavebank**, **soundbank**, **sounddb** | `docs/type_hash_registry.md` |
+| Audio for weapons/vehicles | type_hash **wavebank**, **soundbank**, **sounddb** | [`docs/type_hash_registry.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/type_hash_registry.md) |
 | Lua economy hooks | `Player.GetCash` / `SetCash` | `docs/lua_engine_bindings_audit.md` (binding confirmed, values in scripts) |
 
 ## Extract from WAD (required for faithful gameplay)
