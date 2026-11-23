@@ -20,7 +20,7 @@ what is proven and flags what stays open.
 handler) and its Notable-strings save block. On-disk ground truth:
 [`../../tools/wad_simulator/crates/mercs2_formats/src/save.rs`](../../tools/wad_simulator/crates/mercs2_formats/src/save.rs)
 + [`../../tools/wad_simulator/crates/mercs2_formats/SAVE_FORMAT.md`](../../tools/wad_simulator/crates/mercs2_formats/SAVE_FORMAT.md)
-+ [`../../tools/savefile_parser.py`](../../tools/savefile_parser.py) + [`../format_reference.md`](../format_reference.md)
++ [`../../tools/savefile_parser.py`](../../tools/savefile_parser.py) + [`../format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md)
 §1. Lua orchestration: [`../mercs2-luacd/`](../mercs2-luacd/) (`mrxpmc.lua`, `mrxplayer.lua`,
 `mrxmissionflow.lua`, `mrxstate`/loading `LoadSingleton`). Companion memory:
 [[shell-menu-and-save-browser]], [[money-fuel-datatype-and-cap]].
