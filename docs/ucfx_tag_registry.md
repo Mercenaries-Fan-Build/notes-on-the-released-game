@@ -319,7 +319,7 @@ Confidence is flagged where the sources disagree or the claim is inference.
   `{tag, u0, size, x2, x3}`. `u0 == 0xFFFFFFFF` ⇒ **marker/container row** (x2 = reverse
   ordinal, x3 = subtree descendant count); otherwise payload at `data_off + u0`. Marker rows are
   the "-1 sentinel" convention — never do pointer arithmetic on them. See
-  `docs/format_reference.md` and `tools/wad_simulator/docs/modernization/accessory_bone_binding_A.md`.
+  [`docs/format_reference.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md) and `tools/wad_simulator/docs/modernization/accessory_bone_binding_A.md`.
 - `CSUM` = 8-byte trailer (`CSUM` + u32 CRC-32, init=0, no final XOR) over the container body.
   **Recompute on every rewrite** — the engine rejects stale checksums.
 - Lowercase vs uppercase: same rule as ucfb / the RIFF registry — lowercase tags are **private
@@ -365,7 +365,7 @@ group (STRM/PRMT/IBUF/BSHI/BSHP/AREA/INFO) → leaf readers `FUN_004a4770` (STRM
 **PRMT — ★RESOLVED 2026-07-30. Field 0 is `matidx`.** `convert.rs` models PRMT as 16B
 *draw-call* records `[u32 matidx][u32 start_index][u16 count][u16 base_vertex][u16 max_vtx][u16 span]`,
 and the collision-mesh PRMT arm (FUN_004a8690) independently reads `u32 matidx + 2×u32 + 4×u16` —
-**two sources already agreeing on field 0.** `docs/modernization/texture_extraction_notes.md` §2
+**two sources already agreeing on field 0.** [`docs/modernization/texture_extraction_notes.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/texture_extraction_notes.md) §2
 then tested the competing `{seg_id, index_start, index_count, packed}` reading against the bytes,
 found it did NOT match, and records `u32 material_index @0` as CONFIRMED double-blind. That closes it.
 
@@ -383,7 +383,7 @@ Preserve the template group's original field 0; never write `6`. See
 ## 4. Texture path (`FUN_00750a30`)
 
 - `INFO`: dims/mips/format header — `u16 w,h`, mip count, `u32 D3DFORMAT fourcc`, `u32 total
-  size` (+ per-level u16s). Offsets per `docs/format_reference.md §4.3`; converter
+  size` (+ per-level u16s). Offsets per [`docs/format_reference.md §4.3`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md); converter
   `convert_texture_info`.
 - `BODY`: raw DXT mip chain (X360 sources are GPU-tiled → `apply_texture_untile`). **Streamed
   high mips are lone BODY chunks in the finer c3-cell LOD blocks of the texture's own subtree**;
@@ -441,7 +441,7 @@ Behavior/placement graph cluster (`FUN_004cf340`, ECS_PlacementParse):
   12600B, zero slack — empirically verified), loaded into count×0x20 **in-memory** records (the
   decomp's 0x20 is the alloc stride, not the disk stride). Hash namespace is shared with effect
   `TEXT` chunks.
-- **Effect tree** — specified in [`effect_container_format.md`](effect_container_format.md)
+- **Effect tree** — specified in [`effect_container_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/effect_container_format.md)
   (314/314 retail effects re-encode byte for byte). The short form:
 - `EFCT` (**missing from registry**): nine u16 — emitter count, magic `0x0226`, force count,
   then three `(entries, words)` table reservations (linear curves; an empty third table; COLR/TEXT/
@@ -483,7 +483,7 @@ Behavior/placement graph cluster (`FUN_004cf340`, ECS_PlacementParse):
   dispatched. Converter ground truth: `TRNS` = NUL-terminated ASCII state-name strings, **never
   swapped** (rosetta-oracle verified). `trns` (lowercase, FUN_0067e470) still unidentified.
 - Stringdb `KEYS`/`STRS` twins (`SYEK`/`SRTS` in tags.rs) are **natively big-endian on all
-  platforms** — never swap (`format_reference.md §4.1`).
+  platforms** — never swap ([`format_reference.md §4.1`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md)).
 
 ## 9. Non-WAD tag groups decoded: reversed-ASCII protocol keywords
 
@@ -572,7 +572,7 @@ ASCII-looking immediates rather than FourCCs — still unclassified.
    absent because their engine dispatch is not a LE `cmp eax,imm32` (BE-compared or jump-table),
    so the scan missed them. Handler hunt = follow-up. Same for converter-known `evnt`
    (`[u32 count]` then per event `[f32 time][name NUL][category NUL]` — decoded over all 2,263
-   retail chunks in [`anim_clip_format.md`](anim_clip_format.md)), `trnm` (`[u16 count][u16 flags][u32 lead][count × u32 hashes]`), `watr`
+   retail chunks in [`anim_clip_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/anim_clip_format.md)), `trnm` (`[u16 count][u16 flags][u32 lead][count × u32 hashes]`), `watr`
    (watermap), `CERP` (precache), `SYEK`/`SRTS` (native-BE stringdb).
 2. **Registry label fix:** `Subsystem::EntityRuntime` → "MP session message dispatcher" (§9.1);
    per-tag decoded notes for all three non-WAD groups.
@@ -595,7 +595,7 @@ Consumed by the Rust engine today: geometry via `model_cubeize` (GEOM/PRMG/STRM/
 `info`/IBUF/PRMT/POFF) in `game_world.rs::load_one_c3_cell` / `load_terrainmesh_tile` +
 `mesh.rs::build_indexed_state`; materials via `texture.rs::parse_mtrl`; skeleton via
 `skeleton.rs` (HIER/SEGM); textures via `wad::extract_texture[_hires]` (INFO/BODY); terrain per
-`format_reference.md §13`. **Converted/validated but not yet engine-loaded:** TRCK/VALU/KEYS
+[`format_reference.md §13`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/format_reference.md). **Converted/validated but not yet engine-loaded:** TRCK/VALU/KEYS
 (anim clips — `LoadedModel.clips` is empty), PHY2 (collision), the FX cluster, and the
 ECS/placement clusters (streaming runtime consumes placements upstream). Validators live in
 `wad_simulator/chunk_invariants.rs`, `mercs2_formats/chunk_validate.rs`, `aset_validate.rs`;
