@@ -445,7 +445,7 @@ But this depends on engine cooperation we haven't yet verified.
 
 ### 7.2 Short-Term (This Week)
 
-4. **Implement COMP byte-swap for DLC blocks**: The placement format is well-understood (42-byte records, documented in `docs/placement_data_format.md`). Swap the f32 fields in `ucfx_be_to_le.py`.
+4. **Implement COMP byte-swap for DLC blocks**: The placement format is well-understood (42-byte records, documented in [`docs/placement_data_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/placement_data_format.md)). Swap the f32 fields in `ucfx_be_to_le.py`.
 
 5. **Try MrxLayerManager approach**: Even without correct geometry, try loading `dlc01_commonlocations` and `dlc01_base` via Lua to see if the engine processes the placement data. If entities spawn (even at garbage positions), it proves the mechanism works.
 
