@@ -95,7 +95,7 @@ All 219 affected records are 1-tex. Measured via
 A 1-tex PC substitute keeps the texture-slot count honest, which is required
 by `Mtrl_Parse` (`FUN_00858790`): the parser reads `tex_count` and lays
 out exactly that many `{hash, 0xF011157A, 0}` 12-byte texture records
-(`docs/shader_store_format.md` section 6). A substitute whose expected
+([`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) section 6). A substitute whose expected
 texture layout matches a 1-tex record is byte-safe.
 
 **Substitute:** `PgDiffFP` = `0x343af931` (`pandemic_hash_m2("PgDiffFP")`,
