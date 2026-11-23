@@ -2,7 +2,7 @@
 
 **Scope:** scoreboard **row 12 — ECS / reflection registry** — the stream-deserialized
 component-descriptor mechanism that backs **all ~231 native component classes**. This is *Keystone A*
-of the engine (`docs/modernization/pangea_engine_alignment.md`): one registration template
+of the engine ([`docs/modernization/pangea_engine_alignment.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/pangea_engine_alignment.md)): one registration template
 instantiated once per class, wiring a shared `CopyFromStream` deserialize vtable, the golden-ratio
 seed `0x9e3779b9`, a pool budget, a record stride, a shared method vtable, and a class-name string,
 then calling one shared registrar. Every world-content type — terrain, regions, physics actors,
