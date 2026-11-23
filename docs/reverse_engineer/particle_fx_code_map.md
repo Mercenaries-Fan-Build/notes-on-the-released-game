@@ -5,7 +5,7 @@ from the unpacked SecuROM image (`output/_ghidra/securom_dump/mercs2_unpacked.ex
 a multi-agent fan-out. Companion: [shadow_code_map.md](shadow_code_map.md). Machine-readable table
 (addr, subsystem, stage, role, confidence, evidence): **`docs/data/particle_fx_shadow_code_map.json`**.
 
-This complements what we already had: the binary formats in [fxdict_format.md](../fxdict_format.md),
+This complements what we already had: the binary formats in [fxdict_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md),
 the ECS component schemas in [docs/mercs2-ecs/05_presentation_audio_fx.md](../mercs2-ecs/05_presentation_audio_fx.md),
 and the Xbox PDB symbol names in [rendering-shaders.md](../mercs2-pdb-analysis/rendering-shaders.md).
 This doc binds those to **PC addresses**.
@@ -35,7 +35,7 @@ rather than guessing a caller. This mirrors how the GFx map handled SecuROM-relo
 **`vfx` atlas** (`asset 0x89E211AF`) and **`particle_mask`** (`asset 0x07B71436`), both texture type
 `0xF011157A`, and the **fxdict** singleton (`asset 0x86BF6C5B`, type `0xFA46D8A8`); after the pools,
 the fxdict again and the **effect** table (`asset 0xD2E54786`, type `0x5608BD5A`). PROVEN by the
-decomp. The atlas and the fxdict are documented in fxdict_format.md §3.2, §3.4. It also
+decomp. The atlas and the fxdict are documented in [fxdict_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md) §3.2, §3.4. It also
 allocates 3× the FX runtime pool via `FUN_004937d0` (0x1DD90 bytes: 40000/15000-entry particle
 arrays + two 720000-byte double buffers). Both binary loaders have `callers=[]` because they are
 the **type-registered load callbacks** invoked through the asset-system vtable.
@@ -89,7 +89,7 @@ carry no authored schema and are what the render pass iterates.
 **32 B runtime record**: `+0x00 key, +0x10 u, +0x14 = (1.0 − v − h), +0x18 w, +0x1c h` (the `1.0`
 is `DAT_00B9B664`). The record `{key, u, v, w, h}` is a sprite rectangle of the `vfx` atlas, `v`
 measured from the bottom, and `+0x14` is its top edge measured from the top
-([fxdict_format.md](../fxdict_format.md) §3.2). Lookup is `FUN_00491510`: a binary search on
+([fxdict_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md) §3.2). Lookup is `FUN_00491510`: a binary search on
 `+0x00` with a signed compare, returning `rec+0x10`, and a static `(0, 0, 1, 1)` — the whole atlas —
 for a key it misses. PROVEN by the decomp.
 
@@ -106,7 +106,7 @@ for a key it misses. PROVEN by the decomp.
 | EMIT | 0x54494D45 | FUN_0048cc30 → FUN_00493150 | emitter data @ effect+0x20; ANIM/AKEY key curves |
 | ATRB | 0x42525441 | FUN_00492af0 | param-hash → scalar setters; emitter+0x1EC/+0x1F0 |
 | TEXT | 0x54584554 | FUN_00492af0 → FUN_004911a0 | 16-B descriptor → effect stream table; f16 pack |
-| COLR | 0x524C4F43 | FUN_00492af0 | copies exactly 800 B = 100 keys × `{u8×4 colour, binary16, u16 0}`; reserves 200 stream-table words (`*desc = 200`); stream index → emitter+0x1D8 ([effect_container_format.md](../effect_container_format.md) §6) |
+| COLR | 0x524C4F43 | FUN_00492af0 | copies exactly 800 B = 100 keys × `{u8×4 colour, binary16, u16 0}`; reserves 200 stream-table words (`*desc = 200`); stream index → emitter+0x1D8 ([effect_container_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/effect_container_format.md) §6) |
 
 GEOM/TRFM/AKEY are consumed inside the EMIT path, not as top-level tags.
 
@@ -116,7 +116,7 @@ stream/descriptor table `[+0x60]`=16-B descriptor base, `[+0x64]`=data, `[+0x70]
 append `[+0x70]*0x10 + [+0x60]`. If the EFCT header count words are read as u16 instead of
 byteswapped as u32, the count zeroes → NULL `[+0x60]` alloc → `mov edx,[edi+0x70]; add edx,[edi+0x60];
 mov [edx+0x4],ecx` faults at **0x00493102** (the COLR branch). This is the exact byteswap contract in
-fxdict_format.md §4.
+[fxdict_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/fxdict_format.md) §4.
 
 **Where effects land:** the fxdict **singleton** (searchable param dict) + 314 **EffectTemplate
 runtime objects** (type 0x5608BD5A, class 0xABAA1F3C), each holding the parsed emitter pool (+0x84)
@@ -179,7 +179,7 @@ These have no PC string anchor and are vtable-gated. Recorded with the exact vta
 four `0x24`-byte vertices (`0x90` bytes) and adds 6 to the u16 at `[+0x1D70C] + 2`. Each vertex starts with the
 8 bytes `thunk_FUN_024EEBB0` returns for the emitter's stream at an index from the particle's age byte
 (`+0x21`) — the frame's rectangle as four binary16 (INFERRED: the stream entry `FUN_004911a0` wrote,
-[effect_container_format.md](../effect_container_format.md) §2) — and carries the corner index 0–3
+[effect_container_format.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/effect_container_format.md) §2) — and carries the corner index 0–3
 in byte `+0x20`, which `PgFXVP` reads as `BLENDINDICES` to pick the corner (§4). PROVEN by the
 decomp for the layout and the corner byte.
 
@@ -191,6 +191,6 @@ callback (defines reflected fields), *not* the runtime integrator.
 The engine's own runtime is CPU billboard particles (additive/alpha, colour-over-life gradient from
 COLR, gravity/drag from FRCE) driven by authored EffectTemplates — which is exactly the model the
 Rust engine's `mercs2_engine::particles` already implements from the parsed `fxdict`/effect chunks
-(see [rendering_fx_lighting_gap.md](../modernization/rendering_fx_lighting_gap.md) §E). This map
+(see [rendering_fx_lighting_gap.md](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/modernization/rendering_fx_lighting_gap.md) §E). This map
 confirms the data path feeding it and pins the confirm-live break points needed to validate the
 sim/emit numbers against the original.
