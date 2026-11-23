@@ -120,7 +120,7 @@ Xbox 360 shaders are baked into the XEX binary itself (XGraphics ISA), not into 
 TOC format: `u32 count` + `count × (hash:u32, offset:u32, size:u32, flag:u32)` — 16-byte
 records. **Hash scheme**: `pandemic_hash_m2(stem + "_3.sho")` for `shader3.bin` and
 `pandemic_hash_m2(stem + "_3l.sho")` for `shader3Low.bin`. Documented in
-`docs/shader_store_format.md` §4; 939 of 1,023 PC bin ids resolve against the 543 `.sho`
+[`docs/shader_store_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/shader_store_format.md) §4; 939 of 1,023 PC bin ids resolve against the 543 `.sho`
 strings in the exe.
 
 **Xbox 360 (single shader bin, in JTAGRip dir):**
@@ -552,7 +552,7 @@ because streaming audio takes proportionally less space than video — and PC au
 
 ### 3.7 Xbox audio container — PROVEN
 
-Full byte-level investigation at [`docs/_wavebank_container.md`](_wavebank_container.md).
+Full byte-level investigation at [`docs/_wavebank_container.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/_wavebank_container.md).
 
 **Multi-UCFX pack structure** (verified against `scratchpad/xbox-wb/block_03187_raw.bin`,
 10,058,248 B):
