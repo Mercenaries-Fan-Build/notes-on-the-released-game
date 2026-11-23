@@ -714,7 +714,7 @@ Evidence:
 - Both retail `vz.wad` and `vz-patch.wad` use `page_idx` starting at 65
   (= `DATA_OFFSET / PAGE_SIZE` = `0x208000 / 0x8000`). If there were a global
   namespace, the patch would need to start at `78294` (retail's last page + 1).
-- `docs/patch_wad_format.md` §4: the engine opens base and patch WADs into
+- [`docs/patch_wad_format.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/patch_wad_format.md) §4: the engine opens base and patch WADs into
   separate `_Library[]` slots and searches in reverse. Each library maintains
   its own INDX.
 
