@@ -306,7 +306,7 @@ The identical shape registers `PhysicsActorWinch` @`829f5400`, `PhysicsActor` @`
 - [animation-skeleton.md](animation-skeleton.md) — ragdoll <-> animation skeleton mapping (`ragdollToAnimationSkeletonMapper`, bone indices).
 - [vehicles.md](vehicles.md) — vehicle `PgPhysicsActor*` (Car/Tank/Helicopter/Jet/Boat) and winch/tow gameplay.
 - [weapons-combat.md](weapons-combat.md) — `GrappleBullet`/`projectile_grapple` projectile side of the grappling hook.
-- Existing project docs that overlap: `docs/ecs_components.md` and `docs/mercs2-ecs/03_controllers_physics.md` (ECS-side physics/controller components); `docs/coordinate_systems.md`.
+- Existing project docs that overlap: [`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md) and `docs/mercs2-ecs/03_controllers_physics.md` (ECS-side physics/controller components); [`docs/coordinate_systems.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/coordinate_systems.md).
 
 ## PC decompilation cross-reference
 
