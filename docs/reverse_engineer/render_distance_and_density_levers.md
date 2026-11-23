@@ -238,7 +238,7 @@ are pursuit **times** and **max level**, not distances.
   Building-spawner specific; does not generalise to ambient population.
 - Ambient density values live in `PopulationDensity` / `PopulationFlow` / `PopulationDynamicRoad`
   **COMP records in the WAD**, attached to Sphere/Circle population regions and consumed at world-load
-  by `FUN_0066f300`. They are **not** in `layers_static`'s harvested COMP set (`docs/ecs_components.md`
+  by `FUN_0066f300`. They are **not** in `layers_static`'s harvested COMP set ([`docs/ecs_components.md`](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/blob/main/docs/ecs_components.md)
   lists 43 types / 10,030 records; these are absent), so they ship in the vz_state overlays and/or the
   resident region set. **vz_state COMP extraction is unimplemented** — this is the tooling gap.
 - No loose config file carries them. `data/cdbsizes.ini` sets **pool ceilings only**.
