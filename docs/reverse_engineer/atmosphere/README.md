@@ -632,3 +632,11 @@ thunks in the sky and atmosphere code were resolved from the capture, none touch
 
 **Captured values.** Time, `L+0x20`, the light block's rows, and `L+0x120` at four moments are in the
 wad repo's `crates/mercs2_ue/data/atmosphere_captures.tsv`, with each row's capture file.
+
+**A settled capture is a shipped record.** PROVEN (`mercs2_ue`'s retail test). The `23fe7f38/pmc`
+capture's light block is the record `pmc` (`0x30E4A26F`) of `rgn_atmo_interior` (`0x000C73BB`): rows
+3..8 equal that record's `AmbientCube<i> × AmbientColor`, each with its multiplier, and row 2 its
+`RimColor × RimColorMultiplier`, within 2e-5; `L+0x120` equals its `ScatterHGg`; `L+0x20` equals the
+fit above at its `LightTime` 0.51. Row 1 over the record's `LightMultiplier × LightIntensity` is
+(1.030, 1.009, 0.940), the tint. The template `Atmosphere (interior)` (`0x80008333`) carries the same
+record.
