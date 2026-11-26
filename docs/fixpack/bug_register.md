@@ -436,6 +436,43 @@ Give the Z-prepass the identity matrix the other tree passes use, before its loo
 
 ---
 
+## BUG-017 — The tree step's round-robin cursor survives a level change (crash loading a level with fewer tree batches)
+
+- **Tier:** T3 (exe) · **Status:** `built` · **Reported by:** user (2026-11-24: the game crashed on selecting a
+  hero for the *Blow It Up Again* level from Extras, after a Venezuela game in the same session)
+- **Symptom:** an unhandled access violation reading `0x00000028` on the main thread, v1.0 `0x004A2911`
+  (`8B 4E 28`, `mov ecx,[esi+0x28]`, `ESI` = 0), about one second after `Loading dlc01 level with dlc01
+  masterscript`. It needs a level with more tree batches to have been loaded earlier in the same process.
+- **Not reachable in retail.** Retail has one level, so the batch count never drops. Every added level with fewer
+  tree species than the level loaded before it can hit it.
+- **Vanilla code** (v1.1, v1.0 in brackets). The per-frame update `FUN_004C96F0` \[`FUN_004C9740`\] calls the tree
+  step `FUN_004A40C0` \[`FUN_004A4060`\], `void __stdcall (float)`. For up to 6 batches a call the step takes
+  `record = cursor · 0x710 + [0x01174A30]` \[`[0x01175A30]`\], runs the query `FUN_004A28B0` \[`FUN_004A2850`\] on
+  it, and only then stores `cursor = (cursor + 1) % batches`. The cursor is `0x0198C884` \[`0x0198D884`\], the
+  batch count `0x00E8F734` \[`0x00E90734`\]. The first record of a call is therefore read with the cursor as the
+  previous call left it. The query passes the record's pointer at `+4` to its body (v1.0 `0x004A28FB`, reached
+  through the forwarder `FUN_004A28F0`), which reads `+0x24` and `+0x28` through it without a NULL test.
+- **Nothing resets the cursor.** Its address occurs three times in each image, all in the step: the read, the
+  reload and the store (v1.0 `0x004A4166`, `0x004A41A0`, `0x004A41B8`; v1.1 `0x004A41C6`, `0x004A4200`,
+  `0x004A4218`; byte search of the in-world dumps of `v10-cracked-pmcbb` and `v11-patched-securom`). A reset
+  through a block clear of that memory is not excluded by a byte search.
+- **Evidence.**
+  - Batch counts: `mercs2_probe foliage` lists 30 species in retail `vz.wad`'s foliage chunk `0x27E02A15` and 10
+    in the DLC level's (`dlc01-patch.wad` `a48ced09…`). `[0x00E90734]` is 30 in the in-world v1.0 dump. That the
+    DLC level's count is 10 at run time is INFERRED from its chunk.
+  - Records: in that dump, records 0, 1 and 29 of the table hold an id and a heap pointer at `+4`; the two slots
+    after the 30th hold zeros there (`mercs2_probe dump-read`). At both crashes `[EDI+4]` was 0.
+  - Load order, one process, same files (log `a464cc24…`): `dlc01` first loads to `GlobalExit - Complete`;
+    Venezuela next loads; `dlc01` after Venezuela crashes at `0x004A2911`. An earlier run (log `8fb22436…`)
+    crashed the same way on Venezuela then `dlc01`.
+- **Fix (built):** `mercs2-unofficial-patch` `native/src/bug_017_tree_step_cursor.c`: a detour on the step sets a
+  cursor that is not below the batch count to 0, then runs the original. Sites from m2-sdk
+  (`m2_render_tree_step_sites`, m2-sdk 0.6.5; `mercs2_formats::tree_step_sites`), which resolve at the addresses
+  above in the four reference builds. Not yet observed in-game, so not `verified`. Card:
+  `verification/BUG-017.md` in the Shipment.
+
+---
+
 ## Latent traps — real defects, NOT reachable from shipped content
 
 Recorded so the fix pack does not ship a fix for something no player can hit, and so a future modder does
