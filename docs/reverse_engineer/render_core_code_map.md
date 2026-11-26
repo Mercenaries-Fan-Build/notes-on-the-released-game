@@ -361,8 +361,8 @@ fully mapped from the streaming-buffer chain (all decomp-verified):
 | Xbox role | PC binding | What it does | Conf |
 |---|---|---|---|
 | `LoadTexture` (resource-load FSM) | **`FUN_00874fb0`** (`__fastcall`) | two-phase async loader: open → read 0x48-B header → copy INDX (`FUN_00875140`/`008751d0`) → request body | high |
-| `ReadTextureData`/`ReadTextureBody`/`getCompTexLOD3D` (residency LOD select) | **`FUN_00875760`** (`__thiscall`) | counts present LOD levels **backward** from `descriptor+10` (4-entry u16 table, `0xFFFF` sentinel), picks page from `descriptor+4+lods*2`, decodes the 0xC-B page record at `param_1[0x113]+page*0xc` | high (parse) / med (getCompTexLOD3D name-inference) |
-| request→node | **`FUN_008759c0`** | `node[6]=src[9]`; `node+0x36 bit2 = dxt flag`; `node+0x58` = block index; `node+0x5a` = rung slot, the index `FUN_00750a30` takes the mip mask with; geometry `node+0x40/44/48` | high |
+| `ReadTextureData`/`ReadTextureBody`/`getCompTexLOD3D` (residency LOD select) | **`FUN_00875760`** (`__thiscall`) | `descriptor` is the asset's in-memory ASET row (`param_1[0x114] + i*0x10`); its `+4..+0xB` read as four u16 block indices `[_P003, _P002, _P001, _P000]` (the low/high halves of `secondary_ref`, then of `packed_block_ref`), so rung `_P00N` is **slot `3-N`**. Counts present rungs backward from `+10`, takes the block index at `+4 + slot*2`, decodes that block's 0xC-B INDX row at `param_1[0x113]+block*0xc`, sets its status to 1, and puts `(packed_field & 0x0F000000) >> 24` — the tier — at request `+0x24` | high (parse) / med (getCompTexLOD3D name-inference) |
+| request→node | **`FUN_008759c0`** | `node[6]=src[9]`, i.e. **`node+0x18` = tier**; `node+0x36 bit2 = dxt flag`; `node+0x58` = block index; `node+0x5a` = rung slot, the index `FUN_00750a30` takes the mip mask with; geometry `node+0x40/44/48` | high |
 | `CreateTexture` / alloc+async-read (**buffer-sizing root**) | **`FUN_00875b00`** | `alloc = FUN_0084ac20(node+0x4c,0) → node+0x60`; `FUN_008273f0(PTR_DAT_0117634c, node+0x40, +0x44, +0x48, 1, node+0x60, dxtflag)`. **Dest buffer = `page_count(u24 @page+4) << 15`** (32-KB pages); gate checks only free-list → `0xC0000023` BUFFER_TOO_SMALL if the page descriptor under-claims | high (hand-verified) |
 | async-read shim | **`FUN_008273f0`** | tail-calls IO ptr `(*_DAT_0244f9b4)(…)` = NTSTATUS syscall | high |
 | `SwapMipTextures` / sub-resource walk | **`FUN_00875cc0` → `FUN_00875d80`** | walks `node+0x60` sub-records (0x10-B, advance `record[+0xc]`), pushes onto completion ring `DAT_0117662c` (returns 3 if full) = the mip-body install/swap-in | high |
@@ -381,6 +381,28 @@ dropped rung, over any non-zero status, so a resident rung's 3 can become 4. Sta
 `FUN_008739e0` (`0x873af6`) calls the slot with `node+0x58`, the block index, and drops the node on 4 or
 when `node+0x20` and `node+0x24` are both 0; anything else goes on to priority selection and issue.
 Disassembly-verified by an adversarial audit, statically.
+
+**The tier is the eviction class.** `node+0x18` (the block's INDX tier, = `N` of `_P00N` on every retail
+block) is read by the manager, not by any consumer:
+
+- `FUN_00873e80` inserts a node into the resident list sorted by tier, ascending.
+- `FUN_00872e60` (the fit check `FUN_00872db0` runs before `FUN_00875b00`) frees room for a request of tier
+  `t` only by evicting resident nodes of one tier — the tier of the first node it examines — and only when
+  that tier is **greater** than `t`; it returns false on the first candidate of another tier or of tier
+  `<= t`. A coarse rung can push out finer ones, never the reverse.
+- `FUN_008738f0` finishes completed reads in tier order: a node whose tier exceeds the lowest tier of a
+  node still pending ahead of it waits.
+- `FUN_008739e0`'s priority selection prefers the lowest tier.
+
+So a patch block carrying a finer rung under tier 0 joins the resident class: coarse requests cannot evict
+it and it can evict other assets' finer rungs. Live (`23fe7f38/pmc`): nodes `0x0148B874` (block 2612, tier
+0, slot 3), `0x0148AEB4` (5411, tier 2, slot 1) and `0x01486E1C` (8297, tier 2, slot 1) carry their
+block's tier at `+0x18`; 185 finer-rung blocks are resident (tier 1: 53, 2: 66, 3: 66).
+
+**What a rung install reads of the block.** `FUN_00875d80` (v1.1 `0x875fd0`) walks the block's entry table
+and reads each entry's name `+0`, type `+4` and size `+0xc`; it never reads the third word `+8`. It
+dispatches each entry through `FUN_00874c70(entry, node+0x3c, block, slot)` and hands `FUN_00873300` the
+data cursor and the size. Nothing in the request chain reads the block's PTHS path.
 
 **The rung gate.** The ring consumer `0x4b1160`, the only pop site, takes an item only when
 `((res+0x16 >> 6) & 7) - 1 == node+0x5a`, so rungs install coarsest first. A mismatch re-pushes the item
